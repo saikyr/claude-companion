@@ -40,7 +40,8 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   const tools = await text('.ph-tools');
   check(/Holy 17\/33\/0 · active/.test(tools) && /Shadow 17\/0\/33/.test(tools), 'the spec switcher names each spec by its biggest tree');
   const cards = await text('.cards.c4');
-  check(/Weights: Holy/i.test(cards) && /default for Holy/i.test(cards), 'Holy uses the Holy weights by default (most points in Holy)');
+  check(/Stat weights\s*Holy/i.test(cards) && /default for Holy/i.test(cards), 'Holy uses the Holy weights by default (most points in Holy)');
+  check(await page.$eval('.ph-tools .seg button.on', (b) => /^Holy/.test(b.innerText)), 'the spec being shown is marked in the switcher');
 
   // ---- the slot list: every slot, what it has, the best gain now
   const rows = await page.$$eval('.slotrow', (els) => els.map((e) => ({ slot: e.querySelector('.sn').innerText, t: e.innerText })));
@@ -106,7 +107,8 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   await page.click('[data-gearview="up"]');
   await page.click('[data-gearspec="2"]');
   const cards2 = await text('.cards.c4');
-  check(/Weights: Shadow/i.test(cards2), 'the Shadow spec uses the Shadow weights');
+  check(/Stat weights\s*Shadow/i.test(cards2), 'the Shadow spec uses the Shadow weights');
+  check(await page.$eval('.ph-tools .seg button.on', (b) => /^Shadow/.test(b.innerText)), 'switching marks Shadow in the switcher');
 
   // ---- Stat weights page
   await page.click('[data-gearspec="1"]');

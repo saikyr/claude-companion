@@ -91,12 +91,12 @@
     if (!set) {
       const worn = {};
       Object.values((A.CH.snap || {}).equipped || {}).forEach((e) => { if (e && e.item) worn[e.slot] = { id: idOf(e.item), key: e.item, st: ownStats(A.item(e.item), idOf(e.item)) }; });
-      return { key: 'worn', label: 'what you wear now', short: 'What you wear', worn };
+      return { key: 'worn', label: 'what you wear now', short: 'what you wear', worn };
     }
     const worn = {};
     arr(set.items).forEach((x) => { if (x && x.id > 0) { const mine = A.byId(x.id); worn[x.slot] = { id: x.id, key: mine && mine.key, st: ownStats(mine, x.id) }; } });
     const lost = set.numLost ? `; the game listed ${set.numLost} of its items as missing when it saved` : '';
-    return { key: String(set.id), label: `your “${set.name}” set (${why}${lost})`, short: `“${set.name}” set`, worn };
+    return { key: String(set.id), label: `your “${set.name}” set (${why}${lost})`, short: `your ${set.name} set`, worn };
   }
 
   // ---------------------------------------------------------------- where an item comes from
@@ -118,6 +118,7 @@
     const how = (A.GD.how || {})[id] || '';
     if (size >= 20 || rows.some((r) => r[0] === 'quest' && ((A.GD.quests || {})[r[2]] || {}).type === 'Raid')) return 'raid';
     if (isPvp(id)) return 'pvp';
+    if (/^World Drop/.test(how)) return 'world';
     if (size || /^(Boss Drop|Dungeon)/.test(how)) return 'dungeon';
     if (/^Quest/.test(how) || rows.some((r) => r[0] === 'quest' || r[0] === 'container')) return 'quest';
     if (/^Profession/.test(how) || rows.some((r) => r[0] === 'craft')) return 'crafted';
@@ -224,8 +225,10 @@
 
   // ---------------------------------------------------------------- what you still need for an item
   // Reputation and profession gates from the tooltip, the recipe line and the reward quest; only unmet ones show.
-  const STANDING = ['', 'Hated', 'Hostile', 'Unfriendly', 'Neutral', 'Friendly', 'Honored', 'Revered', 'Exalted'];
-  const REP_AT = [[42000, 8], [21000, 7], [9000, 6], [3000, 5], [0, 4]];
+  // standing names and where each starts: data/rules.js
+  const RULES = window.GAMERULES || {};
+  const STANDING = RULES.standing || [];
+  const REP_AT = (RULES.repFloor || []).map((n, i) => [n, i]).filter(([n, i]) => n != null && i >= 4).reverse();
   const NEEDS = new Map();
   function needs(c) {
     const ck = c.id + '|' + (A.CH.snap || {}).taken;
@@ -434,7 +437,7 @@
     // ---- upgrades now
     h += `<h3>Upgrades at level ${lvl} <span>· better than ${esc(base.short)}</span></h3>`;
     if (sl.blocked) h += `<div class="empty">You wear a two-hander: an off hand only counts with a one-hand weapon (see Main hand).</div>`;
-    else if (!sl.ups.length) h += `<div class="empty">Nothing you can use at level ${lvl} beats what ${esc(base.short)} has here.</div>`;
+    else if (!sl.ups.length) h += `<div class="empty">Nothing you can use at level ${lvl} is better than ${esc(base.short)} here.</div>`;
     else {
       const counts = {};
       sl.ups.forEach((y) => { const k = kindKey(y); counts[k] = (counts[k] || 0) + 1; });
@@ -523,7 +526,7 @@
     if (!list.length) return '<div class="empty">Talents not saved yet: Sync in game.</div>';
     const active = (A.CH.snap || {}).activeSpec;
     const cur = curSpec();
-    let h = `<div class="seg">${list.map((s) => `<button data-gearspec="${s.i}" class="${s === cur ? 'on' : ''}">${esc(s.label)}${s.i === active ? ' · active' : ''}</button>`).join('')}</div>`;
+    let h = `<div class="seg">${list.map((s) => `<button data-gearspec="${s.i}" class="${s.i === cur.i ? 'on' : ''}">${esc(s.label)}${s.i === active ? ' · active' : ''}</button>`).join('')}</div>`;
     const pk = profileKey(cur), prof = W.get(pk);
     const w = pk && weightsFor(cur, pk);
     const view = VIEWS.some(([k]) => k === A.STATE.gearView) ? A.STATE.gearView : 'up';
@@ -541,18 +544,18 @@
     const preT = P.slots.filter((s) => !s.twoHander).flatMap((s) => s.targets);
     const baseIds = new Set(Object.values(base.worn).map((x) => x.id));
     const preDone = preT.filter((t) => baseIds.has(t.c.id) && !t.c.roll).length;
-    const top = Object.entries(w).filter(([k]) => !W.PCT[k]).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([k, v]) => `${W.statName(k, A.GD.stat)} ${+v.toFixed(2)}`).join(' · ');
-    const why = pickedProfile(cur) ? 'your pick' : `default for ${cur.tree}`;
+    const top = Object.entries(w).filter(([k]) => !W.PCT[k]).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([k, v]) => `${W.statName(k, A.GD.stat)} ${+v.toFixed(2)}`).join(', ');
     const sel = P.slots.some((s) => s.name === A.STATE.gearSlot) ? A.STATE.gearSlot : (bigUp || P.slots[0]).name;
+    const why = pickedProfile(cur) ? 'your pick' : `default for ${cur.tree}`;
     h += `<div class="cards c4">
-      <button class="card link" data-gearview="up" data-gearslot="${esc(bigUp ? bigUp.name : sel)}"><span class="k">Upgrades now</span><span class="v">${upSlots.length} <span class="dim small">of ${P.slots.length} slots</span></span><span class="sub">${upSlots.length ? `biggest: ${esc(bigUp.name)} ${gainTxt(bigUp.ups[0].d)}` : `nothing beats ${esc(base.short)}`}</span></button>
-      <button class="card link" data-gearview="ah"><span class="k">On your AH</span><span class="v">${ahN}</span><span class="sub">${cheapest ? `cheapest ${A.money(cheapest.ah.price, { short: true })}: ${esc(cheapest.c.name)}` : 'no upgrades listed'}</span></button>
-      <div class="card"><span class="k">Pre-BiS</span><span class="v">${preDone}/${preT.length}</span><span class="sub">targets already in ${esc(base.short)}</span></div>
-      <button class="card link" data-tab="weights"><span class="k">Weights: ${esc(prof.name)}</span><span class="v small">${esc(top)}</span><span class="sub">${esc(why)} · change on Stat weights</span></button></div>`;
+      <button class="card link" data-gearview="up" data-gearslot="${esc(bigUp ? bigUp.name : sel)}"><span class="k">Slots with an upgrade</span><span class="v">${upSlots.length} of ${P.slots.length}</span><span class="sub">${upSlots.length ? `biggest: ${esc(bigUp.name)} ${gainTxt(bigUp.ups[0].d)}` : `nothing beats ${esc(base.short)}`}</span></button>
+      <button class="card link" data-gearview="ah"><span class="k">Upgrades on your AH</span><span class="v">${ahN}</span><span class="sub"${cheapest ? ` title="${esc(cheapest.c.name)}"` : ''}>${cheapest ? `cheapest from ${A.money(cheapest.ah.price, { short: true })}` : 'none listed now'}</span></button>
+      <div class="card"><span class="k">Pre-BiS targets</span><span class="v">${preDone} of ${preT.length}</span><span class="sub">already in ${esc(base.short)}</span></div>
+      <button class="card link" data-tab="weights"><span class="k">Stat weights</span><span class="v">${esc(prof.name)}</span><span class="sub" title="${esc(top)}">${esc(why)} · ${esc(top)}</span></button></div>`;
     if (view === 'up') h += `<div class="gearlay">${slotList(P, sel, setSel)}${slotDetail(P, P.slots.find((s) => s.name === sel), lvl, base, KIND_WORD[A.STATE.gearSrc] ? A.STATE.gearSrc : 'all')}</div>`;
     else if (view === 'ah') h += `<div class="toolbar">${setSel}</div>` + ahView(P, lvl);
     else h += setsView(classSets());
-    if (view !== 'sets') h += `<details class="how"><summary>How this works, and what's left out</summary><p>Score = each stat × its weight, added up. Gain = score minus what ${esc(base.short)} has in that slot (rings and trinkets: the weaker one). Random greens ("of Healing") are scored from their roll's exact stats (foreverchanges.pro, confirmed in game); for each roll, the best base you can wear at your level is shown. Left out: ${Object.entries(P.skipped).map(([k, v]) => `${v.toLocaleString()} ${esc(k)}`).join(' · ')}. Use and proc effects aren't in the score. Sources follow the item tooltip: Forever data is marked, Classic-only rates say so.</p></details>`;
+    if (view !== 'sets') h += `<details class="how"><summary>How this works, and what's left out</summary><p>Score = each stat × its weight, added up. Gain = score minus the score of ${esc(base.short)} in that slot (rings and trinkets: the weaker one). Random greens ("of Healing") are scored from their roll's exact stats (foreverchanges.pro, confirmed in game); for each roll, the best base you can wear at your level is shown. Left out: ${Object.entries(P.skipped).map(([k, v]) => `${v.toLocaleString()} ${esc(k)}`).join(' · ')}. Use and proc effects aren't in the score. Sources follow the item tooltip: Forever data is marked, Classic-only rates say so.</p></details>`;
     return h;
   };
 
