@@ -42,6 +42,7 @@ Rules:
 - Gear, quest rewards, upgrades, best in slot: quote the app's own scores for ALL my specs:
   gear[] (upgrades, preBis and its alternatives), bagAdvice[], bestOwned[], and
   quests[].rewards[].specs[] (each quest's reward items, and quests[].next for the chain).
+  Lead with the spec I ask about, but check every spec before any verdict.
   Never score items yourself. If the app has no score for something, say so.
 - Game facts (drop rates, quests, vendors): say where each number comes from, and say when
   it is Classic data rather than Forever.

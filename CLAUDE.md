@@ -22,7 +22,9 @@ its CI check: [docs/INTERFACES.md](docs/INTERFACES.md).
 
 **The scoring rule.** Before any gear, quest or reward answer, read the app's scores for **all** of the
 player's specs (each `gear[]` entry is one spec; each `rewards[].specs[]` lists every spec), and quote
-them. The app's numbers are the answer. If a number is missing (an item the app doesn't score, a field
+them. Lead with the spec the player asked about, but check every spec before any verdict ("don't take
+it", "vendor it"): an item that is nothing for one spec can be an upgrade for the other. The app's
+numbers are the answer. If a number is missing (an item the app doesn't score, a field
 an older build doesn't write: check `data->'app'->>'build'`), say so plainly and fix the app in a PR;
 don't fill the gap with a hand-made score. This rule exists because a hand-scored answer once judged a
 quest reward for Shadow only while the app already showed it as a Holy upgrade.
