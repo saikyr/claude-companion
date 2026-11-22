@@ -504,6 +504,7 @@ do
   check(c.taxiRead and c.taxiRead.Kalimdor, "which continent was read is saved")
   GetTaxiMapID, C_Map = oldTM, oldMap
   if FAILED then error("group loot / flight path checks failed") end
+end
 -- logout after the game has emptied bags, gear and money keeps the last good snapshot's values
 do
   local function check(ok, what) print((ok and "PASS " or "FAIL ") .. what); if not ok then FAILED = true end end
