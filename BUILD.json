@@ -1,0 +1,51 @@
+{
+ "version": "1.4.0",
+ "built": "2026-11-22T13:47:19+00:00",
+ "channel": {
+  "repo": "saikyr/claude-companion",
+  "branch": "stable"
+ },
+ "from": {
+  "branch": "pc-build",
+  "commit": "c914d29131046b70b5fda40a4da65c8813b44a19"
+ },
+ "notes": "Combined tested build: everything in PR #39.",
+ "files": {
+  "Bindings.xml": "5525ecd554c7dab0de755298c49cc8b24321b2fb7e8d0ff1b90791003a508b8d",
+  "ClaudeCompanion.toc": "0ab659c58a9fef201adbee03803d23009086aaa4faa07663ccfb854a18fbb728",
+  "Core.lua": "66685be57014c62a1c1d539f163974172766ff1703f5c5b07556fd4ad65381b5",
+  "Inbox.lua": "2da1f4e8f8bad7debaae0238ae8fc9c07cf5e2bd5345521b0bf03f54a1a8d9d2",
+  "Journal.lua": "9212309204be3f09be0a52f067cd0f10980c9fdddbdcfc5378c09be6de059160",
+  "Market.lua": "79573bde6efddc4ed8c2b114364c27cc6031763f2aae9e1faec1e285923d81db",
+  "Professions.lua": "e91a63206b21ea10a90fba445da4fed455ddd52a568c314289a545f838f54ad5",
+  "Snapshot.lua": "6ae97fbdcd110777eaf8b4976927a6ceb6c284d5bedf3d7e754dc72ec5e6f0f5",
+  "UI.lua": "53ad3b7485a40899604cd9e3051b31c222e1f84dd2a5b6ec7a508bcc1c17922f",
+  "companion-data/SCHEMA.md": "1adba1946e92afe8e59566a512b458c07d2d8623c0bda0a41d1a7df440bd821c",
+  "web/Claude Companion.app/Contents/Info.plist": "95208c509bb45972957426e1def1ccea9cf6bc2ada90407f44208245cc0d66ac",
+  "web/Claude Companion.app/Contents/MacOS/launcher": "e3c59a6a7b4678b821109da79a11cd6f677569e7f0f67ed7ee1c657e9782fdfe",
+  "web/Claude Companion.app/Contents/Resources/AppIcon.icns": "467ef964fdaff99ca47e80e7aff3d4db96306b984293aeb98251d68d2e4a2fdd",
+  "web/Claude Companion.bat": "8f5cf6c1ff6a95ad5e0ebfc10951ef451cccf5b1e9a6d1fc7574600cfd01a2fc",
+  "web/channel.json": "6257533c1329cedd3d3f50e2d9f1aa3f996368b54c56c717e10ddcb41447c62c",
+  "web/css/app.css": "aa5275c45f81e9ab8ccbb045f47749f5a4a5c98a5c1ca797051fc7e5efdaa3d4",
+  "web/data/gamedata.js": "acff76f53055ee494dd19c7d774186d67176a4a6a5b1825299fdd0dbf1922416",
+  "web/icons/app.ico": "890d1ad4b13ed82791c3fa3ad175798ed2fbe7f304af6cb6af5e15e5ce01c7a3",
+  "web/icons/icon-192.png": "7ba20877d554551a5378b001f9fe2a60caa7e2224e2d84c42359c069dfc33ca3",
+  "web/icons/icon-512.png": "658263476e4a5ac0371ed8fe85671973603436e42e550d92b937c495ba78e567",
+  "web/index.html": "b9abcff3d87d12adfd97045446b995be79fbc067fb8f8212e72e8323674a48a5",
+  "web/js/advice.js": "3f2b421b324a3535ff132bc6ecafd5d99b3e82cd69e5fcc80a6b3dce33079b1d",
+  "web/js/app.js": "fd76894bd346bb0347eeae89131b5db13e600734733e06e3412c396acd83c2c8",
+  "web/js/cards.js": "9ad493ad4d966ec3705f26c54a77252e823c89332dc5a17eeb4864cfcce27057",
+  "web/js/claude.js": "1c4db815fec395d6dbe11673b1225a3d836f3c1de560cf11d4957448920126e8",
+  "web/js/gear.js": "71452680610a44b731971a4d206927d7729728d67d4776f930eac00a79bef376",
+  "web/js/icons.js": "9a589c086b0c7f02837345b8f69baad6670e86b6ebe195117b9b540094d9be46",
+  "web/js/lua.js": "7a04d2d5e4438738ad9e6e77cb020bfaa805f15b2e81203be23adc711289e447",
+  "web/js/merge.js": "b996130c4e15d735a72e72a77a6e4a66a3f49ccc527f21c31a361add005ad72a",
+  "web/js/runs.js": "8e687b0cb708075d88ff473d85bbbd593164ca42941cb6feef3dec12d1a0ead0",
+  "web/js/sync.js": "7bd9e8b94be3dca44fdf8effe1bed6dacea2d9cc215da510ebe5a709d7c7d763",
+  "web/js/update.js": "edd802c12576a47de10b14b0573dd9e9685306681d5f08b8b51d9fc086388ce6",
+  "web/js/weights.js": "287754dd1e7db828fb762d0a1be66d8e9280eca5220e6bb6a3cd0d4ec1586567",
+  "web/manifest.json": "84a895318dd5245380d172ff2f7050b630c692086fc7af961c392c46f72ced27",
+  "web/server.ps1": "4658a4da5f6b767d38e1e5d4a84793c7d9a8f226e4984a054090fa1377093a83",
+  "web/server.py": "b5f30d9b0bb46826ea66dcf32b727f8f93345ce2db4c350939e4429d4bb42361"
+ }
+}

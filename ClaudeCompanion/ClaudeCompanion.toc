@@ -1,0 +1,14 @@
+## Interface: 16001
+## Title: Claude Companion
+## Notes: Records your character (gear, bags, bank, specs, bars, quests, professions, gold, loot, AH prices) so Claude can coach you. /cc to open.
+## Author: Claude for Gabriel
+## Version: 1.4.0
+## SavedVariables: ClaudeCompanionDB
+
+Inbox.lua
+Core.lua
+Snapshot.lua
+Journal.lua
+Market.lua
+Professions.lua
+UI.lua

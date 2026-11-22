@@ -1,0 +1,33 @@
+#!/bin/bash
+# Claude Companion for macOS. Opening this app sets the Companion's small local server to start by
+# itself at login (hidden, no Terminal), restarts it so an update takes effect, and opens the app.
+# Keep it inside AddOns/ClaudeCompanion/web: it runs server.py from that folder.
+APP="$(cd "$(dirname "$0")/../.." && pwd)"
+WEB="$(dirname "$APP")"
+tell() {   # a dialog, since there is no Terminal to print to
+  msg=$(printf '%s' "$1" | tr -d '"\\')
+  /usr/bin/osascript -e "display dialog \"$msg\" with title \"Claude Companion\" buttons {\"OK\"} default button 1 with icon caution" >/dev/null 2>&1
+}
+if [ ! -f "$WEB/server.py" ]; then
+  # macOS runs a downloaded app from a temporary copy until it is approved once ("App Translocation"):
+  # look in the usual game folders instead
+  for d in "/Applications/World of Warcraft/_forever_/Interface/AddOns/ClaudeCompanion/web" \
+           "$HOME/Applications/World of Warcraft/_forever_/Interface/AddOns/ClaudeCompanion/web"; do
+    if [ -f "$d/server.py" ]; then WEB="$d"; break; fi
+  done
+fi
+if [ ! -f "$WEB/server.py" ]; then
+  tell "Couldn't find the Companion's files. Keep Claude Companion.app inside AddOns/ClaudeCompanion/web and open it from there."
+  exit 1
+fi
+# approved once is enough: clear the download flag on the addon so macOS runs it in place from now on
+/usr/bin/xattr -dr com.apple.quarantine "$(dirname "$WEB")" 2>/dev/null
+if ! /usr/bin/xcode-select -p >/dev/null 2>&1; then
+  tell "Claude Companion needs Python 3, which comes with Apple's free Command Line Tools. The installer opens next. When it finishes, open Claude Companion again."
+  /usr/bin/xcode-select --install >/dev/null 2>&1
+  exit 1
+fi
+if ! out=$(/usr/bin/python3 "$WEB/server.py" 2>&1); then
+  tell "Claude Companion couldn't start: $(printf '%s' "$out" | tail -n 1)"
+  exit 1
+fi

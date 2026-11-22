@@ -1,0 +1,8 @@
+<Bindings>
+  <Binding name="CLAUDECOMPANION_SYNC" header="CLAUDECOMPANION" category="ADDONS">
+    ClaudeCompanion_Sync()
+  </Binding>
+  <Binding name="CLAUDECOMPANION_TOGGLE" category="ADDONS">
+    ClaudeCompanion_Toggle()
+  </Binding>
+</Bindings>
