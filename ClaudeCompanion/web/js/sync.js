@@ -167,7 +167,13 @@
     let state = null, cache = null;
     const status = { ok: null, error: null, pushed: null, pulled: null, devices: [], busy: false, queued: 0 };
 
-    async function ready() {
+    // one at a time: the app window's cycle and a link click must not register this computer twice
+    let readying = null;
+    function ready() {
+      if (!readying) readying = readyOnce().finally(() => { readying = null; });
+      return readying;
+    }
+    async function readyOnce() {
       if (!state) state = Object.assign({ sent: {}, live: {}, settings: {}, settingsT: {}, pendingSince: {} }, (await io.loadState()) || {});
       // the device key is made once by the local server (GET /api/sync), so two pages can't race
       if (!state.key || String(state.key).length < 32) { state = null; throw new Error('no device key yet (the app server makes it)'); }
@@ -274,6 +280,22 @@
       return { changed, settings };
     }
 
+    // this computer's snapshot (what companion-data/snapshot.json has: where the character is, the
+    // quest log, gear advice...) as one replaced record, so Claude can read every computer's "now"
+    // online. Other computers don't pull it. Sent only when it changed (written/by don't count).
+    async function pushSnapshot(snap) {
+      if (!snap) return false;
+      await ready();
+      const data = Object.assign({}, snap); delete data.written; delete data.by;
+      const body = JSON.stringify(data), h = hash(body), id = 'snapshot|' + state.device;
+      if (state.live[id] === h) return false;
+      if (body.length > 2000000) throw new Error('the snapshot is too big to send');
+      const t = Math.round((Date.parse(snap.savedInGame || snap.written || '') || io.now()) / 1000);
+      await rpc('cc_push', { p_key: state.key, p_records: [{ id, char: '*', kind: 'snapshot', t, data, mutable: true }] });
+      state.live[id] = h; await io.saveState(state);
+      return true;
+    }
+
     async function linkCode() { await ready(); return rpc('cc_link_code', { p_key: state.key }); }
     async function link(code) {
       await ready();
@@ -284,7 +306,7 @@
     }
 
     return {
-      ready, push, pull, linkCode, link, status,
+      ready, push, pull, pushSnapshot, linkCode, link, status,
       get state() { return state; }, get cache() { return cache; },
       view: (own) => view(own, cache, state && state.device),
     };
@@ -334,6 +356,7 @@
           Object.keys(localStorage).filter((k) => LOCAL_ONLY.test(k)).map((k) => [k, localStorage.getItem(k)]))));
         const raw = A.RAW;
         if (raw && raw.chars) await C.push(raw, settingsNow());
+        if (CC.lastSnapshot) await C.pushSnapshot(CC.lastSnapshot);
         lastPull = Date.now();
         const changedSettings = Object.keys(r.settings).length > 0;
         C.status.ok = true; C.status.error = null;

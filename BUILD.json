@@ -1,15 +1,15 @@
 {
  "version": "1.4.0",
- "built": "2026-11-22T15:24:02+00:00",
+ "built": "2026-11-22T15:56:56+00:00",
  "channel": {
   "repo": "saikyr/claude-companion",
   "branch": "stable"
  },
  "from": {
   "branch": "main",
-  "commit": "5459dc17bd0b8ee41abb9b0a301aeaf564d9dee8"
+  "commit": "3ce6a5005b8c0d5ed60eade2beac07188802bc02"
  },
- "notes": "Merge pull request #43 from saikyr/claude/project-thread-fvgi7h",
+ "notes": "Merge pull request #44 from saikyr/claude/project-thread-fvgi7h",
  "files": {
   "Bindings.xml": "f4ad14d769e58eb18cd49da688fb23d64dec6be99a7684b9993ea0689616bf09",
   "ClaudeCompanion.toc": "87915db63dcb911f027bc5c400284fe70fa58142f561efc0dea4134bd6625c42",
@@ -20,7 +20,7 @@
   "Professions.lua": "a3b2dac598413b50f149781fb0374c96371009249fda8c32f95f81aaf70f222b",
   "Snapshot.lua": "700d98226344326bb72fda0ec0abb38ff1b471bd4fd475adb25d17ac7cf9c6bc",
   "UI.lua": "c501d76e644498beec7e1d5fbb98f830faaacd1ae2ed1d95e3836c60e2d8cb78",
-  "companion-data/SCHEMA.md": "3715258c02f27abc647e49cd8b4e1de3ca6a1cb265e0fa122f6e9cd98c1b58e2",
+  "companion-data/SCHEMA.md": "a44c08b094fce5c0f9eab20085bac30d4ae98ba5378a44a12cc0de38078b955c",
   "web/Claude Companion.app/Contents/Info.plist": "cdf5f33d28ce203d9307b765ef33199602fa77a52b4c9b3fee9e7a00cd65a009",
   "web/Claude Companion.app/Contents/MacOS/launcher": "65fe025ebb1acad0f786633f5b30f6bdcfa6b49f2912eca1f87385dcec0224c4",
   "web/Claude Companion.app/Contents/Resources/AppIcon.icns": "467ef964fdaff99ca47e80e7aff3d4db96306b984293aeb98251d68d2e4a2fdd",
@@ -35,14 +35,14 @@
   "web/js/advice.js": "6a0420ff07267d55b73b1457edd3f4b90e09465c60ab91f2ea5856bccc17682e",
   "web/js/app.js": "b988e6236b26ec0bc286fd45764f79f7d18671e4a6aeaaed21881d865dccbca2",
   "web/js/cards.js": "27fbd8b2b8ee2a3de0b9d2677d642bbe471fec722c62fce8bb070ac27e78731f",
-  "web/js/claude.js": "a41eb4072eba2b2ed042df28a48caa94fd284c87c5b895ca531db88f6aa1ea5d",
+  "web/js/claude.js": "fb2066c662afe2c7f4a68773e22157f89fafe4bb2138658517b3f4419d4a723f",
   "web/js/gear.js": "b3fe7892ec78f0b24c21649a6be493bfe58a503e8eec6b39c3dc7aa2aef18c76",
   "web/js/icons.js": "9a589c086b0c7f02837345b8f69baad6670e86b6ebe195117b9b540094d9be46",
   "web/js/lua.js": "e14c5df02bbfa98ec07196ec363d017beb4bd6ac50e075b78a3ba32b72234f77",
   "web/js/merge.js": "85f8a6447c366be89dc676408f854fd7022d13d5610eb7e3598b641077162dd8",
   "web/js/runs.js": "bcab59cab6ae359b0466a8c77b6295653362d1e6087d71d6394721eaf307d4d3",
-  "web/js/sync.js": "71552bc889b4081d3f633126aa074f07e995cf60191fabc7bb12187c12c74dcb",
-  "web/js/update.js": "f16e01bd7801c40e09dc539b4660f3f1a53839014cad8092f6ac870fd8ddf890",
+  "web/js/sync.js": "fb04bc1c8fea514df4688b4993e2d620570a75b59c85bb0e7d20501888a1b420",
+  "web/js/update.js": "ebcc47aed61efde92220eb361e1bf4013298023d99d21fd0e1d8330e3c2086e8",
   "web/js/weights.js": "05819acc26e8b2f6e9d44402b9dfa915f959bce045c79f00d487d182f0a76b64",
   "web/manifest.json": "c2351657716a2425d052efcad63b0ee2f33a217caef17dd844d24c558a004613",
   "web/server.ps1": "75a4722dd5c96d9a1ec6b1fd481315cb4bc4b28574b8264f03ca2515022d629b",

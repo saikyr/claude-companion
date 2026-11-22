@@ -143,6 +143,9 @@
       last = key;
       // the custom header keeps other web pages from writing here (they can't send it without permission)
       post('api/snapshot', body).catch(() => {});
+      // and online, for Claude (js/sync.js; its next cycle sends it if it changed)
+      CC.lastSnapshot = snap;
+      if (CC.syncNow) CC.syncNow();
     }, 500);
   });
   // settings changed in the app (a gear pick, own weights) reach the hidden browser too

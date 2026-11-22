@@ -44,8 +44,20 @@
     } else show('');
   }
 
+  // An update installed while this window stays open (auto-update): the server runs the new build,
+  // but this page still runs the old one. Load the new one at a quiet moment: at once if the window
+  // is hidden or minimised, else after 2 minutes without a click or key in it.
+  let loadedTag, lastInput = Date.now();
+  ['pointerdown', 'keydown', 'wheel'].forEach((ev) => addEventListener(ev, () => { lastInput = Date.now(); }, { passive: true }));
+  function reloadWhenQuiet() {
+    if (document.visibilityState === 'hidden' || Date.now() - lastInput > 2 * 60 * 1000) location.reload();
+    else setTimeout(reloadWhenQuiet, 30 * 1000);
+  }
   async function check(force) {
-    try { st = await (await fetch('api/update' + (force ? '?force=1' : ''), { cache: 'no-store' })).json(); render(); } catch (e) { /* older server: no updates */ }
+    try { st = await (await fetch('api/update' + (force ? '?force=1' : ''), { cache: 'no-store' })).json(); render(); } catch (e) { return; /* older server: no updates */ }
+    const tag = (st.installed || {}).tag || null;
+    if (loadedTag === undefined) loadedTag = tag;
+    else if (tag && tag !== loadedTag && !busy) { loadedTag = tag; reloadWhenQuiet(); }
   }
 
   async function install() {
@@ -74,6 +86,6 @@
   });
 
   check(false);
-  setInterval(() => check(false), 10 * 60 * 1000);
+  setInterval(() => check(false), 5 * 60 * 1000);
   window.CCUpdate = { check, install };
 })();
