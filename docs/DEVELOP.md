@@ -19,13 +19,11 @@ every installed app updates from and friends download from.
 - The upload function's source is `supabase/functions/publish-build/index.ts`; deploy it to the sync
   project with `verify_jwt` off (it checks the caller's GitHub OIDC token itself).
 
-## Repo hooks (test)
+## Repo hooks
 
-`.claude/settings.json` holds a test hook (`.claude/hooks/hook-test.sh`) that only reports: at
-session start it adds one line, "REPO HOOK TEST: …", saying whether hooks from this repository load
-in a Claude session and whether the sync backend is reachable from there; tool calls are logged to
-`/tmp/cc-hook-test.log`. It never blocks anything. It is replaced once the answer is recorded
-(project-files `foundation/`).
+Tested 22 Nov 2026: hooks in this repository's `.claude/settings.json` do **not** load in Claude project
+threads (a report-only test hook never ran in a fresh thread), so nothing here relies on them. Checks
+that must hold go in CI or in the database (for example `private.claude_put_setting`).
 
 ## Layout
 
