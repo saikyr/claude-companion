@@ -1,6 +1,7 @@
 {
+ "url": "https://jucbngafdnyaizfxgplk.supabase.co/storage/v1/object/public/releases/",
  "repo": "saikyr/claude-companion",
  "branch": "stable",
  "version": "1.5.0",
- "build": "4c420a4acebf"
+ "build": "c9896443677c"
 }
