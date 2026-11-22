@@ -2,6 +2,25 @@
 
 Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 
+## Unreleased: item advice
+
+- **One item engine** (`web/js/advice.js`): every item you own is scored once per spec with that
+  spec's weights, against the gear that spec uses. Bags, Character, Gear and the snapshot all read it.
+- **Bags & Bank:** a quiet mark on each item (Upgrade, Disenchant, Auction House, Vendor, Keep, ask)
+  and the full verdict in its tooltip: score and gain per spec, disenchant value, AH and vendor price.
+  Chips above the bags show only one kind. Quest items, keys, rep turn-ins, set items are never sold.
+  Words and colours: `docs/ui-language.md`.
+- **Character:** the worn slot something you own would beat is marked, with the item and the gain.
+- **Gear:** "Best from what you own" per spec, which two rings and which two trinkets included, next
+  to what that spec's set uses.
+- **Stat weights page and defaults for every class and spec** (`web/js/weights.js`): order from Icy
+  Veins' WoW Forever pages, numbers from what each stat costs on Forever gear (docs/STAT-WEIGHTS.md).
+  Your own profiles: copy, edit, rename, reset, delete; pick one per spec. The old "Your own weights"
+  move into a profile. Fixes #5. Weapon DPS is scored for weapon specs (part of #6).
+- Removed: the Auction House tab's "Disenchant or sell" list (its verdicts now live on the items).
+- Snapshot: `bagAdvice[]`, `bestOwned[]`, `weightProfiles[]`, `gear[].weightsName/weightsSource/weightValues`.
+- Tests: `test/web/advice.test.js` (node, runs in CI).
+
 ## 1.4.0 (22 Nov), first release from this repository
 
 Addon 1.4.0 plus the app as of 22 Nov 08:30 UTC.

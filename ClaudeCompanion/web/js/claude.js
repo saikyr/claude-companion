@@ -21,6 +21,10 @@
       character: { name: c.name, level: c.level, xp: c.xp, xpMax: c.xpMax, rested: c.rested, class: c.class, race: c.race,
         faction: c.faction, money: c.money, where: c.where, hearth: c.hearth },
       gear: CC.gear ? CC.gear.summary() : [],
+      // what the app says about each item you own (js/advice.js); keep-only items are left out
+      bagAdvice: CC.advice ? CC.advice.snapshot() : [],
+      bestOwned: CC.advice ? CC.advice.bestOwnedSnapshot() : [],
+      weightProfiles: window.CCWeights ? window.CCWeights.custom((s.character || {}).classFile).map((p) => ({ id: p.id, name: p.name, from: p.from, weights: p.w })) : [],
       equipped: arr(s.equipped).filter((e) => e && e.item).map((e) => ({ slot: e.slotName, id: Number((/item:(\d+)/.exec(e.item) || [])[1]), name: (A.item(e.item) || {}).name })),
       quests: arr(s.quests).filter((q) => q && q.id).map((q) => {
         const gq = (A.GD && A.GD.quests[q.id]) || {};
