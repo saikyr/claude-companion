@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Draws the app icon (needs Pillow) and writes web/icons/icon-192.png, icon-512.png and the macOS
-# icon "Claude Companion.app"/Contents/Resources/AppIcon.icns. Run again only to change the icon.
+# icon "Claude Companion.app"/Contents/Resources/AppIcon.icns, and web/icons/app.ico for Windows. Run again only to change the icon.
 import io, os, struct
 from PIL import Image, ImageDraw
 
@@ -32,3 +32,5 @@ if __name__ == '__main__':
                      ((t.encode(), png(n)) for t, n in (('ic11', 32), ('ic12', 64), ('ic07', 128), ('ic13', 256), ('ic08', 256), ('ic14', 512), ('ic09', 512), ('ic10', 1024))))
     with open(os.path.join(WEB, 'Claude Companion.app', 'Contents', 'Resources', 'AppIcon.icns'), 'wb') as f:
         f.write(b'icns' + struct.pack('>I', 8 + len(parts)) + parts)
+    # Windows icon for the Start menu shortcut (server.ps1)
+    draw(256).save(os.path.join(WEB, 'icons', 'app.ico'), sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])

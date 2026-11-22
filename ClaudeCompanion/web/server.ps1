@@ -4,14 +4,16 @@
 # page updates by itself a few seconds after you Sync in game.
 # Nothing is sent anywhere: it only answers this computer.
 #
-# Daily use: the app is installed from Edge or Chrome as its own app (Start menu, taskbar), and
-# this server starts by itself when you sign in to Windows, hidden (a shortcut in your Startup folder).
+# Daily use: "Claude Companion" in the Start menu (pin it to the taskbar) opens the app in its own
+# window. The server starts by itself when you sign in to Windows. Nothing shows a console window:
+# both shortcuts run PowerShell through "conhost --headless".
 # "Claude Companion.bat" runs this script once to set that up, restart the server after an update,
 # and open the app.
-#   server.ps1             set up the Startup shortcut, (re)start the server hidden, open the app
+#   server.ps1             set up both shortcuts, (re)start the server hidden, open the app
+#   server.ps1 -Open       start the server if it isn't running, open the app (the Start menu shortcut)
 #   server.ps1 -Serve      just serve (what the Startup shortcut runs)
-#   server.ps1 -Uninstall  remove the Startup shortcut and stop the server
-param([switch]$Serve, [switch]$Uninstall)
+#   server.ps1 -Uninstall  remove both shortcuts and stop the server
+param([switch]$Serve, [switch]$Open, [switch]$Uninstall)
 $ErrorActionPreference = 'Continue'
 $web = Split-Path -Parent $MyInvocation.MyCommand.Path
 $forever = (Resolve-Path (Join-Path $web '..\..\..\..')).Path   # ...\_forever_
@@ -24,7 +26,29 @@ $prefix = "http://localhost:$port/"
 $self = $MyInvocation.MyCommand.Path
 $startup = [Environment]::GetFolderPath('Startup')
 $autostart = Join-Path $startup 'Claude Companion server.lnk'
-$serveArgs = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$self`" -Serve"
+$menuLink = Join-Path ([Environment]::GetFolderPath('Programs')) 'Claude Companion.lnk'
+$appIcon = Join-Path $web 'icons\app.ico'
+$psExe = Join-Path $PSHOME 'powershell.exe'
+$conhost = Join-Path $env:SystemRoot 'System32\conhost.exe'
+function Ps-Args([string]$flag) { "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$self`" $flag" }
+# "conhost --headless" runs PowerShell with no console window at all (Windows 10 1903 and later);
+# without it, a hidden PowerShell still flashes a window for a moment
+$headless = Test-Path $conhost
+function Start-Hidden([string]$flag) {
+    if ($headless) { Start-Process -FilePath $conhost -ArgumentList ('--headless "' + $psExe + '" ' + (Ps-Args $flag)) -WindowStyle Hidden }
+    else { Start-Process -FilePath $psExe -ArgumentList (Ps-Args $flag) -WindowStyle Hidden }
+}
+function Write-Link([string]$path, [string]$flag, [string]$what) {
+    $sh = New-Object -ComObject WScript.Shell
+    $lnk = $sh.CreateShortcut($path)
+    if ($headless) { $lnk.TargetPath = $conhost; $lnk.Arguments = '--headless "' + $psExe + '" ' + (Ps-Args $flag) }
+    else { $lnk.TargetPath = $psExe; $lnk.Arguments = (Ps-Args $flag) }
+    $lnk.WorkingDirectory = $web
+    $lnk.WindowStyle = 7
+    if (Test-Path $appIcon) { $lnk.IconLocation = "$appIcon,0" }
+    $lnk.Description = $what
+    $lnk.Save()
+}
 
 function Test-Running {
     try { (Invoke-WebRequest -UseBasicParsing -TimeoutSec 2 -Uri ($prefix + 'api/ping')).Content -eq 'claude-companion' } catch { $false }
@@ -36,40 +60,46 @@ function Stop-Servers {
         ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 }
 function Open-App {
-    # the app as installed from Edge or Chrome has a Start menu shortcut with its name
+    # installed from Edge or Chrome as an app ("Install as an app"): that shortcut opens it (it runs
+    # the browser with --app-id). Ours, which runs this script, is skipped.
+    $sh = New-Object -ComObject WScript.Shell
     $programs = [Environment]::GetFolderPath('Programs')
-    $installed = Get-ChildItem -Path $programs -Filter 'Claude Companion.lnk' -Recurse -File -ErrorAction SilentlyContinue |
-        Where-Object { $_.FullName -notlike "$startup*" } | Select-Object -First 1
+    $installed = Get-ChildItem -Path $programs -Filter 'Claude Companion*.lnk' -Recurse -File -ErrorAction SilentlyContinue |
+        Where-Object { $_.FullName -notlike "$startup*" -and $sh.CreateShortcut($_.FullName).Arguments -like '*--app-id=*' } | Select-Object -First 1
     if ($installed) { Start-Process $installed.FullName; return }
-    # not installed yet: Edge (or the default browser), where the page offers to install it as an app
-    $edge = @(
+    # otherwise its own window in Edge or Chrome (--app: no tabs or address bar), else the default browser
+    $browser = @(
         (Join-Path ${env:ProgramFiles(x86)} 'Microsoft\Edge\Application\msedge.exe'),
-        (Join-Path $env:ProgramFiles 'Microsoft\Edge\Application\msedge.exe')
+        (Join-Path $env:ProgramFiles 'Microsoft\Edge\Application\msedge.exe'),
+        (Join-Path $env:ProgramFiles 'Google\Chrome\Application\chrome.exe'),
+        (Join-Path ${env:ProgramFiles(x86)} 'Google\Chrome\Application\chrome.exe'),
+        (Join-Path $env:LOCALAPPDATA 'Google\Chrome\Application\chrome.exe')
     ) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
-    if ($edge) { Start-Process -FilePath $edge -ArgumentList '--new-window', $prefix } else { Start-Process $prefix }
+    if ($browser) { Start-Process -FilePath $browser -ArgumentList "--app=$prefix" } else { Start-Process $prefix }
+}
+function Wait-Running { for ($i = 0; $i -lt 60 -and -not (Test-Running); $i++) { Start-Sleep -Milliseconds 250 }; Test-Running }
+function Show-PortError {
+    Add-Type -AssemblyName System.Windows.Forms
+    [void][System.Windows.Forms.MessageBox]::Show("Claude Companion couldn't start its server on port $port. Is another program using it?", 'Claude Companion')
 }
 
 if ($Uninstall) {
-    Remove-Item -LiteralPath $autostart -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $autostart, $menuLink -ErrorAction SilentlyContinue
     Stop-Servers
     exit
 }
+if ($Open) {
+    # the Start menu shortcut: the server normally runs since sign-in; start it if it doesn't
+    if (-not (Test-Running)) { Start-Hidden '-Serve' }
+    if (Wait-Running) { Open-App } else { Show-PortError }
+    exit
+}
 if (-not $Serve) {
-    $sh = New-Object -ComObject WScript.Shell
-    $lnk = $sh.CreateShortcut($autostart)
-    $lnk.TargetPath = (Join-Path $PSHOME 'powershell.exe')
-    $lnk.Arguments = $serveArgs
-    $lnk.WorkingDirectory = $web
-    $lnk.WindowStyle = 7                                  # minimised; the server then runs hidden
-    $lnk.Description = 'Claude Companion: the local app server'
-    $lnk.Save()
+    Write-Link $autostart '-Serve' 'Claude Companion: the local app server'
+    Write-Link $menuLink '-Open' 'Claude Companion: your character, gear, AH and grinds'
     Stop-Servers                                          # so an update takes effect
-    Start-Process -FilePath (Join-Path $PSHOME 'powershell.exe') -ArgumentList $serveArgs -WindowStyle Hidden
-    for ($i = 0; $i -lt 40 -and -not (Test-Running); $i++) { Start-Sleep -Milliseconds 250 }
-    if (Test-Running) { Open-App } else {
-        Add-Type -AssemblyName System.Windows.Forms
-        [void][System.Windows.Forms.MessageBox]::Show("Claude Companion couldn't start its server on port $port. Is another program using it?", 'Claude Companion')
-    }
+    Start-Hidden '-Serve'
+    if (Wait-Running) { Open-App } else { Show-PortError }
     exit
 }
 
