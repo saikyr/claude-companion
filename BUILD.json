@@ -1,15 +1,15 @@
 {
  "version": "1.4.0",
- "built": "2026-11-22T14:34:11+00:00",
+ "built": "2026-11-22T15:18:14+00:00",
  "channel": {
   "repo": "saikyr/claude-companion",
   "branch": "stable"
  },
  "from": {
   "branch": "main",
-  "commit": "37b9762225119cf0126cd83374f780451b0d6848"
+  "commit": "8ddd8ac42d157ad4ca1285095b3309b8da8fffd4"
  },
- "notes": "Merge pull request #41 from saikyr/claude/project-thread-fvgi7h",
+ "notes": "Merge pull request #42 from saikyr/claude/project-thread-fvgi7h",
  "files": {
   "Bindings.xml": "f4ad14d769e58eb18cd49da688fb23d64dec6be99a7684b9993ea0689616bf09",
   "ClaudeCompanion.toc": "87915db63dcb911f027bc5c400284fe70fa58142f561efc0dea4134bd6625c42",
