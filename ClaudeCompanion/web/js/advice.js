@@ -229,6 +229,38 @@
     return { spec, ctx, rows };
   }
 
+  // ---------------------------------------------------------------- any item, owned or not
+  // The same per-spec score for an item you don't own: quest rewards, chain rewards, drops. An owned
+  // item (its key, "item:..."), or an item id read from the game-data pack. Rewards, the Quest log and
+  // the Claude snapshot all rate items here, so nothing scores gear a second way.
+  function asItem(x) {
+    if (typeof x === 'string' && A.item(x)) { const it = A.item(x); return { it, st: statsOf(x) }; }
+    const id = Number(String(x).replace(/^item:/, '').split(':')[0]);
+    const g = A.gdItem(id);
+    if (!g) return null;
+    return { it: { id, name: g[0], q: g[1], class: g[9], subclass: g[12], req: g[3] || 0, tip: arr(g[10]).map((l) => ({ l })) }, st: W.fromPack(g) };
+  }
+  function rate(x) {
+    const r = asItem(x);
+    if (!r || !(r.it.class === 2 || r.it.class === 4)) return null;
+    const C = compute(), can = wearable(r.it, C.use), lvl = char().level || 0;
+    const out = C.ctxs.map((c) => {
+      const m = measure(c, r.it, r.st);
+      return m && { spec: c.name, comparedWith: c.base.label, slot: m.row, score: +m.s.toFixed(1), gain: m.gain == null ? null : +m.gain.toFixed(1),
+        vs: m.vs && m.vs.id ? { id: m.vs.id, name: A.anyItemName(m.vs.id) } : null, same: !!m.same, blocked: m.blocked || null,
+        canWear: can, level: can && r.it.req > lvl ? r.it.req : null, effect: !!m.effect };
+    }).filter(Boolean);
+    return { id: r.it.id, name: r.it.name, specs: out };
+  }
+  // one line for a reward: which specs it upgrades, by how much ("Holy +3.2 · Shadow +0.8")
+  function rewardLine(x) {
+    const r = rate(x);
+    if (!r) return '';
+    const ups = r.specs.filter((s) => s.canWear && s.gain > 0.5);
+    if (!ups.length) return '';
+    return `<span class="pos small" title="Score gain over the gear each spec is compared with (Gear tab). Use and proc effects aren't counted.">${esc(r.name)}: ${ups.map((s) => `${esc(s.spec)} +${s.gain.toFixed(1)}${s.level ? ' at ' + s.level : ''}${s.effect ? '*' : ''}`).join(' · ')}</span>`;
+  }
+
   // ---------------------------------------------------------------- views
   const whereWord = { worn: 'worn', bags: 'in your bags', bank: 'in your bank' };
   function bestOwnedHTML(spec) {
@@ -319,6 +351,8 @@
     FLAG, ORDER, compute, bestOwned, bestOwnedHTML, tipHTML, markOf, slotHint, summary, chipsHTML,
     // shared with the Gear page (js/gear.js)
     owned, wearable, statsOf, effectOf, invOf,
+    // any item, owned or from the pack: quest rewards (Quest log, Claude snapshot)
+    rate, rewardLine,
     of: (key) => compute().byKey[key] || null,
     // for the Claude snapshot
     snapshot() {

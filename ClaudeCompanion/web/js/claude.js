@@ -35,6 +35,20 @@
   const installedReady = location.protocol === 'file:' ? Promise.resolve()
     : fetch('api/update', { cache: 'no-store' }).then((r) => r.json()).then((st) => { installed = (st && st.installed) || null; }).catch(() => {});
 
+  // a quest's reward items: from the game when the quest is in the log (it shows the real rolls),
+  // else from the game-data pack. Each with the app's score for every spec.
+  function questRewards(rw, gq) {
+    const rated = (x, how, count) => {
+      const r = CC.advice && CC.advice.rate ? CC.advice.rate(x) : null;
+      const id = r ? r.id : Number((/item:(\d+)/.exec(String(x)) || [])[1] || x);
+      return { id, name: r ? r.name : A.anyItemName(id), how, count: count || 1,
+        specs: r ? r.specs.map((p) => ({ spec: p.spec, score: p.score, gain: p.gain, slot: p.slot, vs: p.vs ? p.vs.name : null, canWear: p.canWear, level: p.level, effect: p.effect })) : null };
+    };
+    if (rw) return [...arr(rw.items).map((r) => rated(r.item || r.id, 'get', r.count)), ...arr(rw.choices).map((r) => rated(r.item || r.id, 'choose', r.count))];
+    gq = gq || {};
+    return [...arr(gq.reward).map(([id, n]) => rated(id, 'get', n)), ...arr(gq.choice).map(([id, n]) => rated(id, 'choose', n)), ...arr(gq.rewardAny).map(([id, n]) => rated(id, 'any', n))];
+  }
+
   function build() {
     const CH = A.CH;
     if (!CH || !CH.snap) return null;
@@ -118,7 +132,12 @@
         const to = arr(gq.to)[0];
         return { id: q.id, title: q.title, level: q.level, complete: !!(q.ready || q.complete), failed: !!q.failed,
           objectives: arr(q.objectives).map((o) => o.text), turnIn: to ? { npc: to[1], zone: to[2], x: to[3], y: to[4] } : null,
-          xp: (q.rewards || {}).xp, money: (q.rewards || {}).money };
+          xp: (q.rewards || {}).xp, money: (q.rewards || {}).money,
+          // every reward item scored for every spec by the app's one engine (js/advice.js rate): read
+          // these, never score rewards by hand. choose = pick one of the choose rewards
+          rewards: questRewards(q.rewards, gq),
+          // the next quest in the chain and what it gives, scored the same way
+          next: arr(gq.next).slice(0, 1).map((n) => { const nq = (A.GD && A.GD.quests[n]) || {}; return { id: n, title: nq.t || null, rewards: questRewards(null, nq) }; })[0] || null };
       }),
       cooldowns: A.cooldowns ? A.cooldowns().map((c) => ({ name: c.name, profession: c.prof || null, readyAt: c.ends })) : [],
       professions: arr(s.skills).filter((k, i, all) => k && k.maxRank > 1 && k.skillLineCategoryID === 11 && all.findIndex((y) => y && y.name === k.name) === i)

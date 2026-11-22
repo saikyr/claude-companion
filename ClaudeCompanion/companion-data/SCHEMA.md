@@ -44,7 +44,7 @@ Read that only for things the snapshot leaves out (bag contents, journal, full A
 | `bestOwned[]` | Per spec: `spec`, `comparedWith`, `slots[]` {slot ("Ring", "Trinket", "Weapons", ...), gain, best[] (the best items you own for it: id, name, score, where worn/bags/bank; two for rings and trinkets), now[] (what that spec's set uses)}. |
 | `weightProfiles[]` | Your own weight profiles for this class: id, name, from (the profile it was copied from), weights {statId: weight}. |
 | `equipped[]` | slot, id, name. |
-| `quests[]` | The quest log: id, title, level, complete, failed, objectives[], turnIn {npc, zone, x, y}, xp, money (copper). |
+| `quests[]` | The quest log: id, title, level, complete, failed, objectives[], turnIn {npc, zone, x, y}, xp, money (copper), rewards[], next. `rewards[]`: every reward item, `{id, name, how: get / choose (pick one) / any, count, specs[]}`, from the game when it showed the quest's rewards, else from the game-data pack. `specs[]` is the app's own score for **every** spec (js/advice.js `rate`, the engine behind Bags, Gear and the Quest log): `{spec, score, gain, slot, vs (the item it is compared with), canWear, level (wearable from), effect (a Use or proc the score leaves out)}`; gain is over the gear that spec is compared with on the Gear tab. `next`: the next quest in the chain, `{id, title, rewards[]}` scored the same way. Claude reads these; it never scores rewards by hand. |
 | `cooldowns[]` | Profession cooldowns: name, profession, readyAt (Unix seconds; in the past = ready now). Shared ones (Transmutes) are one entry. |
 | `professions[]` | name, rank, max. |
 | `reputation[]` | name, standing (1 Hated ... 4 Neutral ... 8 Exalted), value. |
@@ -56,14 +56,16 @@ docs/STAT-WEIGHTS.md). Stat ids are the game-data pack's (`gamedata/build.py` ST
 ## from-claude/: cards Claude writes, and what the player did with them
 
 Claude's suggestions (a farm, a flip, a quest route, a gear change...) show in the app's **From Claude**
-tab and on the Overview as cards. Two files, one writer each:
+tab and on the Overview as cards. The same cards file format goes one of two ways (docs/CLAUDE.md):
 
-| File | Written by | What |
+| Where | Written by | What |
 | --- | --- | --- |
-| `from-claude/cards.json` | **Claude only** | Every card, open or closed. Claude rewrites the whole file (write a temp file, then rename). The app never changes it. |
-| `from-claude/state.json` | **the app only** | What the player did: done, dismissed, which steps are ticked. Claude reads it, never writes it. |
+| account setting `cc.claude.cards` | **Claude only**, with `select private.claude_put_setting('<account>', 'cc.claude.cards', '<cards.json text>')` | Online: every computer of the account gets it at its next sync (about a minute). The usual way. |
+| `from-claude/cards.json` | **Claude only** | On one computer, through folder access (a friend's Claude project). Claude rewrites the whole file (write a temp file, then rename). The app never changes it. |
+| `from-claude/state.json` and account setting `cc.claude.cardsState` | **the app only** | What the player did: done, dismissed, which steps are ticked. Same content in both. Claude reads it (`select data->>'v' from private.history where account = '<account>' and id = 'setting|cc.claude.cardsState'`), never writes it. |
 
-The app checks both every 5 seconds, so a new card shows without a reload.
+The app shows both card sources as one list: the same `id` in both is one card, the newer `updated` wins.
+It checks every 5 seconds, so a new card shows without a reload.
 **Before writing cards.json, run `python3 tools/check-cards.py cards.json`** (in the repo); it must print `ok`.
 Reinstalling the addon by copying the zip over the folder keeps both files; deleting the folder first loses them.
 
@@ -90,6 +92,7 @@ Reinstalling the addon by copying the zip over the folder keeps both files; dele
 | `steps[]` | | Text, in order. The player ticks them off. |
 | `body` | | Longer text: the stop rule, caveats. Blank lines split paragraphs. Plain text, no HTML or Markdown. |
 | `sources[]` | | `{label, url?}`: where each number came from. |
+| `step` | | What the card is about, for pages that link to it: `quest:<quest id>`, `dungeon:<name>`, `item:<item id>`, `zone:<name>` or `npc:<id>`. |
 
 Unknown fields are refused by the checker, so a typo can't hide a field.
 

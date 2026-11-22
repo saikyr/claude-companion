@@ -1,7 +1,11 @@
-// Claude Companion: "From Claude" cards. Claude writes companion-data/from-claude/cards.json
-// (farm, flip, quest, gear... suggestions, one format for all, see companion-data/SCHEMA.md);
-// the app shows them and saves what you do with them (done, dismissed, ticked steps) to
-// from-claude/state.json, which Claude reads back. Each file has one writer.
+// Claude Companion: "From Claude" cards (farm, flip, quest, gear... suggestions, one format for all,
+// see companion-data/SCHEMA.md). Claude writes them one of two ways, and the app shows both as one list
+// (docs/CLAUDE.md):
+//   - online: the account setting cc.claude.cards (private.claude_put_setting), which every computer of
+//     the account gets with its next sync
+//   - on one computer: companion-data/from-claude/cards.json (folder access)
+// What you do with them (done, dismissed, ticked steps) is saved to from-claude/state.json and to the
+// synced setting cc.claude.cardsState, which Claude reads back. Each place has one writer.
 (function () {
   const CC = window.CC;
   if (!CC || !CC.api || !CC.V) return;
@@ -15,6 +19,9 @@
   const kindOf = (c) => (KINDS[c.kind] ? c.kind : 'note');
   const server = location.protocol.startsWith('http');
   const S = { cards: [], error: null, have: false, state: { schema: 1, cards: {} }, raw: '', rawState: '', kind: null, view: 'open' };
+  // the synced copies (js/sync.js keeps every cc.* setting the same on all your computers)
+  const SYNC_CARDS = 'cc.claude.cards', SYNC_STATE = 'cc.claude.cardsState';
+  const synced = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
 
   const secs = (iso) => { const t = Date.parse(iso || ''); return isNaN(t) ? null : t / 1000; };
   const mine = (c) => !c.character || !(A.CH && A.CH.snap) || c.character === ((A.CH.snap.character || {}).name);
@@ -33,24 +40,36 @@
   const open = () => visible().filter((c) => standing(c) === 'open');
 
   // ------------------------------------------------------------ reading and saving
-  function setCards(text) {
-    S.raw = text;
-    S.have = text != null;
-    S.error = null;
-    if (text == null) { S.cards = []; return; }
-    try {
-      const d = JSON.parse(text);
-      if (!d || !Array.isArray(d.cards)) throw new Error('no "cards" list');
-      const seen = new Set();
-      S.cards = d.cards.filter((c) => c && typeof c.id === 'string' && c.id && typeof c.title === 'string' && !seen.has(c.id) && seen.add(c.id))
-        .sort((a, b) => (secs(b.updated || b.created) || 0) - (secs(a.updated || a.created) || 0));
-      const bad = d.cards.length - S.cards.length;
-      if (bad) S.error = `${bad} card${bad > 1 ? 's' : ''} skipped (each needs a unique id and a title)`;
-    } catch (e) { S.cards = []; S.error = 'cards.json could not be read: ' + e.message; }
+  // both sources as one list: the same id in both = one card, the newer version wins (online on a tie)
+  function setCards(file, online) {
+    S.raw = JSON.stringify([file, online]);
+    S.have = file != null || online != null;
+    const errs = [], by = {};
+    [[online, 'Cards from your account'], [file, 'cards.json']].forEach(([text, what]) => {
+      if (text == null) return;
+      try {
+        const d = JSON.parse(text);
+        if (!d || !Array.isArray(d.cards)) throw new Error('no "cards" list');
+        const seen = new Set();
+        const ok = d.cards.filter((c) => c && typeof c.id === 'string' && c.id && typeof c.title === 'string' && !seen.has(c.id) && seen.add(c.id));
+        ok.forEach((c) => { const had = by[c.id]; if (!had || (secs(c.updated || c.created) || 0) > (secs(had.updated || had.created) || 0)) by[c.id] = c; });
+        const bad = d.cards.length - ok.length;
+        if (bad) errs.push(`${what}: ${bad} card${bad > 1 ? 's' : ''} skipped (each needs a unique id and a title)`);
+      } catch (e) { errs.push(`${what} could not be read: ${e.message}`); }
+    });
+    S.error = errs.join(' · ') || null;
+    S.cards = Object.values(by).sort((a, b) => (secs(b.updated || b.created) || 0) - (secs(a.updated || a.created) || 0));
   }
-  function setState(text) {
-    S.rawState = text;
-    try { const d = text ? JSON.parse(text) : null; S.state = d && d.cards ? d : { schema: 1, cards: {} }; } catch (e) { S.state = { schema: 1, cards: {} }; }
+  // your choices, from this computer's file and from the account: per card, the newest wins
+  function setState(file, online) {
+    S.rawState = JSON.stringify([file, online]);
+    const read = (t) => { try { const d = t ? JSON.parse(t) : null; return d && d.cards ? d.cards : {}; } catch (e) { return {}; } };
+    const a = read(file), b = read(online), all = {};
+    new Set([...Object.keys(a), ...Object.keys(b)]).forEach((id) => {
+      const x = a[id], y = b[id];
+      all[id] = !x ? y : !y ? x : ((secs(y.at) || 0) >= (secs(x.at) || 0) ? y : x);
+    });
+    S.state = { schema: 1, cards: all };
   }
   // 204 = that file doesn't exist yet
   const get = async (url) => { const r = await fetch(url, { cache: 'no-store' }); return r.status === 200 ? r.text() : null; };
@@ -58,15 +77,17 @@
     if (!server) return;
     try {
       const [c, st] = await Promise.all([get('api/cards'), get('api/cards-state')]);
-      if (c === S.raw && st === S.rawState) return;
-      if (c !== S.raw) setCards(c);
-      if (st !== S.rawState) setState(st);
+      const oc = synced(SYNC_CARDS), ost = synced(SYNC_STATE);
+      const rc = JSON.stringify([c, oc]), rst = JSON.stringify([st, ost]);
+      if (rc === S.raw && rst === S.rawState) return;
+      if (rc !== S.raw) setCards(c, oc);
+      if (rst !== S.rawState) setState(st, ost);
       if (A.CH && !document.querySelector('input:focus')) A.render();
     } catch (e) { /* server gone: keep what we have */ }
   }
   async function save(id, change) {
     // re-read first so a second app window's choices are kept
-    try { const st = await get('api/cards-state'); if (st !== S.rawState) setState(st); } catch (e) { /* offline: save what we have */ }
+    try { const st = await get('api/cards-state'); setState(st, synced(SYNC_STATE)); } catch (e) { /* offline: save what we have */ }
     const all = S.state.cards = S.state.cards || {};
     const rec = Object.assign({}, all[id], change, { at: new Date().toISOString() });
     if (rec.state == null) delete rec.state;
@@ -74,7 +95,9 @@
     S.state.schema = 1;
     S.state.written = rec.at;
     const body = JSON.stringify(S.state, null, 1);
-    S.rawState = body;
+    // the account copy: your other computers and Claude see it after the next sync
+    try { localStorage.setItem(SYNC_STATE, JSON.stringify(S.state)); } catch (e) { /* private mode: the file still has it */ }
+    S.rawState = JSON.stringify([body, synced(SYNC_STATE)]);
     A.render();
     fetch('api/cards-state', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CC': '1' }, body }).catch(() => {});
   }
@@ -178,7 +201,9 @@
     save(id, { steps: [...ticks].sort((a, b) => a - b) });
   });
 
-  CC.cards = { overview };
+  // overview(): the Overview page's short list (HTML). open(): the open cards for this character, newest
+  // first, as Claude wrote them (fields in companion-data/SCHEMA.md, step included), for other pages.
+  CC.cards = { overview, open: () => open().map((c) => Object.assign({}, c)) };
   poll();
   setInterval(poll, 5000);
 })();
