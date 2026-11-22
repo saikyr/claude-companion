@@ -36,3 +36,32 @@ against what you wear, for the spec whose gear set you have on.
 Scores use the spec's weights (docs/STAT-WEIGHTS.md), one decimal. Gains are signed: "+12.0" green,
 "−7.5" red. Money uses the coin format with `≈` for estimates. "Best from what you own" shows a ✓
 when the set already uses the best you have.
+
+## The Gear page
+
+One page per spec (the switcher in the header; each spec is named by its biggest tree), four views:
+
+- **Upgrades** (default): one block per slot with what the compared set has there and its score, then
+  the options that beat it, best gain first: the best few plus the best of each other source, so a slot
+  never shows six versions of one dungeon. Each option says its **source** in one word (Yours, On the AH,
+  Dungeon, Quest, Crafted, Vendor, World drop; the AH and your own items get a coloured dot), the AH price
+  with how many are listed and when they were seen, its score and its gain. Missing reputation or
+  profession skill is its own amber "Needs ..." line, never hidden. Slots with nothing better are one
+  line at the bottom. Source chips filter the page to one source.
+- **Pre-BiS**: per slot the best item up to level 60 (raids left out), with up to four alternatives as
+  buttons. Clicking one makes it your target (kept per character and spec); "use the best instead" undoes
+  it. "Only what I can get now" leaves out items behind reputation or profession skill you don't have.
+- **Auction House**: upgrades listed on your AH now (from the newest scan, at most 3 days old), sorted by
+  gain, with gain per gold; then the random-suffix rolls worth searching for, per slot.
+- **Class sets**: every item set for your class on Forever, pieces owned, bonuses active.
+
+The four cards at the top link to the views; the last one names the weights in use and why ("default for
+Holy" or "your pick"). Random-suffix items ("of Healing") are scored from their roll's exact stats
+(data/suffixes.js), never from the base item.
+
+## The Stat weights page
+
+"Your specs" says which weights each spec uses and why ("Default: most of your talent points are in Holy"
+or "Your pick"); the select changes it. Below, one profile at a time: its numbers as bars, biggest first,
+then **Why these numbers**: a short paragraph, one line per stat, the guide's order, and the source.
+Built-in profiles are named after their tree, nothing else ("Holy", "Protection (survival)").

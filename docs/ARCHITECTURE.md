@@ -172,7 +172,7 @@ observations), a few MB, so one player uses well under 1% of the database a mont
                  │
                  ▼
  App (web/index.html + js/)  ── lua.js parses the save ── app.js / gear.js render tabs
-   + web/data/gamedata.js (game-data pack: everything you haven't seen in game)
+   + web/data/gamedata.js (game-data pack: everything you haven't seen in game) and web/data/suffixes.js
                  │ after each load, js/claude.js POSTs a summary (an open window, or the
                  │ server's hidden headless Chrome/Edge after a save while the app is closed)
                  ▼
@@ -214,6 +214,7 @@ addons can't read the combat log.
 | Quests, NPCs, objects, givers / turn-ins, quest-item drops, vendors, quest XP | **QuestieDB** (Forever flavor) | Built from a Wowhead Forever snapshot + QuestieTrace. Lists drops only for quest items |
 | Weapon / armor tooltips and stats, "how to get it", group size | **endgametools** Forever item pages | Matched the game on all 48 items checked |
 | Drop chances, Forever sightings, general loot, crafted-by, icons, reward split, reward money | **ForeverDB** | Crowd uploads. Only a few hundred rates are Forever-measured; the rest are labelled Classic |
+| Random-suffix rolls (the stats of each "of Healing", "of the Owl", ... per base item) | **foreverchanges.pro** (`web/data/suffixes.js`, `gamedata/suffixes.py`) | "Confirmed in game" numbers, per base item (on Forever a suffix's numbers depend on the base) |
 | AH prices | **Your own scans** (`/cc scan`, browsing) | Per character, per realm you scan on. External sites are only a sanity check |
 | Disenchant tables | warcraft.wiki.gg (in `app.js`) | Classic tables; the addon also learns your real results |
 

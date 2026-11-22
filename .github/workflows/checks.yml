@@ -54,6 +54,8 @@ jobs:
           npm install --no-save --no-package-lock playwright@1.49.1
           npx playwright install --with-deps chromium
           node test/web/sync-browser.js 47999 $F/Interface/AddOns/ClaudeCompanion/companion-data
+      - name: Gear and Stat weights pages (Chromium, a made-up level 59 Priest)
+        run: node test/web/gear-browser.js
       - name: Local server API (server.py)
         run: node test/web/server-api.test.js 47999 /tmp/f/_forever_/Interface/AddOns/ClaudeCompanion/companion-data
       - name: Server rules (hidden browser)

@@ -29,7 +29,16 @@ test('every class and spec has a sourced default', () => {
     assert(Object.keys(p.w).length >= 3, `${cls} ${t} has too few weights`);
     assert(p.src && p.src.label, `${cls} ${t} has no source`);
   }
-  assert.strictEqual(Object.values(W.BUILTIN).filter((p) => p.src.url).length, 30, '30 guide-order profiles with a link');
+  assert.strictEqual(Object.values(W.BUILTIN).filter((p) => p.src.url).length, 27, '27 guide-order profiles with a link (Priests use the worked-out ones)');
+  // Priests: worked-out numbers with a reason for every stat, and the guide's order kept for comparison
+  for (const t of ['Discipline', 'Holy', 'Shadow']) {
+    const p = W.get(W.defaultFor('PRIEST', t));
+    assert.strictEqual(p.name, t, `the Priest ${t} default is named ${t}`);
+    Object.keys(p.w).filter((k) => !W.PCT[k]).forEach((k) => assert(p.why[k], `${t}: a reason for stat ${k}`));
+    assert(p.guide && p.guide.order.length, `${t}: the guide order for comparison`);
+  }
+  assert(Object.values(W.BUILTIN).every((p) => !/guide order|mana model|project weights|:/.test(p.name)), 'plain profile names');
+  assert(Object.values(W.BUILTIN).filter((p) => p.basis).every((p) => Object.values(p.basis).every((b) => !/× cost/.test(b))), 'reasons in plain words');
 });
 test('weapon specs weigh weapon DPS at 14 attack power', () => {
   const arms = W.get('iv-arms');

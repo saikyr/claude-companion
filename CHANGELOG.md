@@ -4,6 +4,26 @@ Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 
 ## Unreleased (updates itself)
 
+- **The Gear page, rebuilt.** Four views per spec: **Upgrades** (slot by slot, what you have and several
+  options that beat it, each with its source in one word: yours, on the AH, dungeon, quest, crafted,
+  vendor, world drop; AH price and how many are listed; filter by source), **Pre-BiS** (best per slot up
+  to 60 with alternatives you can click to make your target, and "only what I can get now"),
+  **Auction House** (upgrades listed now, sorted by gain, and the random-suffix rolls worth searching
+  for) and **Class sets**. Missing reputation or profession skill gets its own line.
+- **AH greens count.** Random-suffix items ("Elegant Mantle of Healing") are scored from their roll's
+  exact stats: every roll of 1,616 Forever items from foreverchanges.pro ("confirmed in game"), in the
+  new `web/data/suffixes.js` (`gamedata/suffixes.py`).
+- **The AH scan keeps each roll apart.** On Forever the scan's item links carry no suffix number, so every
+  roll of an item was priced as one ("Short Bastard Sword of Healing" was really all its rolls). The scan
+  now prices each roll by its listing name ("3192:of Healing"), and still keeps the item's all-rolls
+  price. Needs a `/reload` after the update, then a new scan.
+- **Stat weights: clean defaults.** Each spec uses the weights of its biggest talent tree unless you pick
+  others, and the page says so. Profiles are named after their tree ("Holy", "Shadow"), and every number
+  has its reason under "Why these numbers". Priests: Holy, Discipline and Shadow use the worked-out
+  numbers; the guide's order shows next to them for comparison instead of as separate picks.
+- Snapshot `gear[]`: `ahUpgrades`, `rollsToSearch`, pre-BiS `picked` and `alternatives`, `weightsChosen`,
+  `source` and `ah` on each item (SCHEMA.md); `watch` stays as the older name for `ahUpgrades`.
+
 - `snapshot.json` (and its copy online) names the app build each computer runs (`app`).
 - **Claude can read where you are and your quest log from anywhere.** Each computer now also sends its
   current snapshot (position, quest log, gear and bag advice, professions, rep) online after every save,
