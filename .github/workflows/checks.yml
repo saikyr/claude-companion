@@ -69,7 +69,7 @@ jobs:
       - name: Server rules (hidden browser)
         run: python3 test/server_test.py
       - name: Self-update, end to end (mock GitHub)
-        run: python3 test/update_test.py
+        run: python3 test/update_test.py && python3 test/update_test.py --url
       - name: From Claude cards format
         run: python3 tools/check-cards.py test/fixtures/cards.json
       - name: No personal data
@@ -101,4 +101,4 @@ jobs:
           Stop-Process -Id $srv.Id -Force -ErrorAction SilentlyContinue
           exit $code
       - name: Self-update, end to end (server.ps1, mock GitHub)
-        run: python test/update_test.py --ps1
+        run: python test/update_test.py --ps1 && python test/update_test.py --ps1 --url

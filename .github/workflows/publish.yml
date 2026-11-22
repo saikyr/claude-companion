@@ -2,8 +2,8 @@ name: publish
 # Every merge to main that passes the checks becomes a build on the "stable" branch, and every
 # computer's Companion app installs it by itself (see docs/ARCHITECTURE.md, "Delivery"). Merging the
 # PR is the approval; nothing is published by hand.
-# Optional public download channel for friends: set the repository variable DIST_REPO (owner/name of
-# a public repository) and the secret DIST_TOKEN (a token that can push to it).
+# The same build also goes to the public download folder (zips for a first install, and what the
+# installed apps update from), so the repository itself stays private.
 on:
   workflow_run:
     workflows: [checks]
@@ -12,6 +12,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
+  id-token: write   # the OIDC token the download folder's upload function checks
 concurrency: publish
 jobs:
   publish:
@@ -22,17 +23,23 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           fetch-depth: 0
-      - name: Publish to stable
-        env:
-          DIST_TOKEN: ${{ secrets.DIST_TOKEN }}
-          DIST_REPO: ${{ vars.DIST_REPO }}
+      - name: Publish to stable, and build the download zips
         run: |
           git checkout -q -B main
           msg="$(git log -1 --format=%s)"
           # a merge from GitHub says "Merge pull request #n from ..."; the PR's title is the first line of the body
           case "$msg" in "Merge pull request "*) t="$(git log -1 --format=%b | sed -n '/./{p;q}')"; [ -n "$t" ] && msg="$t";; esac
-          if [ -n "$DIST_REPO" ] && [ -n "$DIST_TOKEN" ]; then
-            python3 tools/publish-stable.py --to "$DIST_REPO" "$msg"
-          else
-            python3 tools/publish-stable.py "$msg"
-          fi
+          python3 tools/publish-stable.py --release dist "$msg"
+      # The download folder (public to read; the repository stays private): the first-install zips and
+      # latest.json, which every installed app's updater reads. supabase/functions/publish-build checks
+      # this job's GitHub OIDC token (this repository, publish.yml, main), so no secret is stored anywhere.
+      - name: Upload to the download folder
+        run: |
+          tok=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=claude-companion-publish" \
+                | python3 -c 'import json, sys; print(json.load(sys.stdin)["value"])')
+          curl -sS --fail-with-body -X POST https://jucbngafdnyaizfxgplk.supabase.co/functions/v1/publish-build \
+            -H "Authorization: Bearer $tok" -F "manifest=<dist/latest.json" \
+            -F "ClaudeCompanion-Windows.zip=@dist/ClaudeCompanion-Windows.zip" -F "ClaudeCompanion-Mac.zip=@dist/ClaudeCompanion-Mac.zip"
+          echo
+          # check what a computer will read
+          curl -sS --fail https://jucbngafdnyaizfxgplk.supabase.co/storage/v1/object/public/releases/latest.json

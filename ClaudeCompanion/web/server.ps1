@@ -249,7 +249,10 @@ function Get-UpdCfg {
     if (-not $tok) { $gh = Get-Command gh -ErrorAction SilentlyContinue; if ($gh) { try { $t = (& $gh.Source auth token 2>$null); if ($LASTEXITCODE -eq 0 -and $t) { $tok = ([string]$t).Trim() } } catch { } } }
     $api = if ($c -and $c.api) { $c.api } else { 'https://api.github.com' }   # api: only changed for testing
     $branch = if ($c -and $c.branch) { $c.branch } elseif ($ch -and $ch.branch) { $ch.branch } else { 'stable' }
-    @{ repo = $repo; auto = $auto; token = $tok; api = $api; branch = $branch }
+    # the public download folder (latest.json + the zip): no token is ever sent there
+    $url = if ($c -and $c.url) { [string]$c.url } elseif ($ch -and $ch.url) { [string]$ch.url } else { $null }
+    if ($url) { $tok = $null; if (-not $url.EndsWith('/')) { $url += '/' } }
+    @{ repo = $repo; auto = $auto; token = $tok; api = $api; branch = $branch; url = $url }
 }
 function Invoke-GitHub([string]$url, $cfg, [switch]$Raw) {
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -275,6 +278,19 @@ function Check-Update([switch]$Force) {
     if (-not $Force -and ((Get-Date) - $upd.checked).TotalMinutes -lt 15) { return $upd.latest }
     $cfg = Get-UpdCfg
     $upd.checked = Get-Date
+    if ($cfg.url) {
+        try {
+            $m = Invoke-GitHub "$($cfg.url)latest.json" $cfg
+            $name = [string]$m.name; if ($name.Length -gt 120) { $name = $name.Substring(0, 120) }
+            $upd.latest = @{ tag = [string]$m.tag; sha = $m.sha; name = $(if ($name) { $name } else { [string]$m.tag }); published = $m.published; notes = [string]$m.name; build = $m.build; zip = "$($cfg.url)$($m.zip)" }
+            $upd.error = $null
+        } catch {
+            $msg = $_.Exception.Message
+            if ($msg -match '\((400|404)\)') { $upd.latest = $null; $upd.error = $null; return $null }   # nothing published there yet
+            $upd.error = "Could not reach the download folder: $msg"
+        }
+        return $upd.latest
+    }
     try {
         $c = Invoke-GitHub "$($cfg.api)/repos/$($cfg.repo)/commits/$($cfg.branch)" $cfg
         $msg = [string]$c.commit.message; if ($msg.Length -gt 3000) { $msg = $msg.Substring(0, 3000) }
@@ -318,7 +334,7 @@ function Install-Update {
         $latest = Check-Update -Force
         if (-not $latest) { return @{ ok = $false; error = $(if ($upd.error) { $upd.error } else { 'No build found.' }) } }
         $cfg = Get-UpdCfg
-        $bytes = Invoke-GitHub "$($cfg.api)/repos/$($cfg.repo)/zipball/$($latest.sha)" $cfg -Raw
+        $bytes = if ($latest.zip) { Invoke-GitHub $latest.zip $cfg -Raw } else { Invoke-GitHub "$($cfg.api)/repos/$($cfg.repo)/zipball/$($latest.sha)" $cfg -Raw }
         $work = Join-Path $env:TEMP ('cc-update-' + [guid]::NewGuid().ToString('N'))
         New-Item -ItemType Directory -Path $work | Out-Null
         $zip = Join-Path $work 'release.zip'
@@ -336,6 +352,7 @@ function Install-Update {
         # every file must match BUILD.json (next to the ClaudeCompanion folder): a broken download installs nothing
         $build = Read-Json (Join-Path (Split-Path -Parent $src) 'BUILD.json')
         if (-not $build -or -not $build.files) { throw 'the build has no BUILD.json' }
+        if ($latest.build -and $build.build -ne $latest.build) { throw 'the download is a different build than announced; trying again later' }
         $sha = [System.Security.Cryptography.SHA256]::Create()
         foreach ($p in $build.files.PSObject.Properties) {
             $fp = Join-Path $src ($p.Name -replace '/', '\')
@@ -466,7 +483,7 @@ while ($listener.IsListening) {
             if ($path -eq '/index.html' -and $req.Url.Query -notmatch 'background=1') { $script:pageLoaded = $true }
             $file = [System.IO.Path]::GetFullPath((Join-Path $webFull ($path.TrimStart('/') -replace '/', '\')))
             # only files inside the app folder, and never the server script itself
-            if ($file.StartsWith($webFull, [StringComparison]::OrdinalIgnoreCase) -and (Test-Path $file -PathType Leaf) -and -not $file.EndsWith('.ps1')) {
+            if ($file.StartsWith($webFull.TrimEnd([char]92) + [char]92, [StringComparison]::OrdinalIgnoreCase) -and (Test-Path $file -PathType Leaf) -and -not $file.EndsWith('.ps1')) {
                 $body = [System.IO.File]::ReadAllBytes($file)
                 $ext = [System.IO.Path]::GetExtension($file).ToLower()
                 if ($types.ContainsKey($ext)) { $type = $types[$ext] }
