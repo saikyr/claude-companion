@@ -632,6 +632,37 @@ local PARTS = {
     { "quests", QuestLog }, { "completedQuests", CompletedQuests }, { "group", ns.Group }, { "buffs", Buffs },
 }
 
+-- When PLAYER_LOGOUT fires the game has often already emptied the character: bags, worn gear,
+-- spellbook, gear sets, completed quests and buffs read empty, and money and max mana read 0.
+-- A logout snapshot taken then would replace good data with nothing, so on logout any part that
+-- reads empty keeps the previous snapshot's value, and so do those zeros. snap.kept lists what was
+-- kept (with its time in snap.keptFrom), so nothing kept passes as freshly read.
+local function Empty(name, v)
+    if type(v) ~= "table" or next(v) == nil then return true end
+    if name == "bags" then                           -- bag frames can still report slots with no items in them
+        for _, b in ipairs(v) do if b.items and #b.items > 0 then return false end end
+        return true
+    end
+    return false
+end
+local KEEP_IF_ZERO = { "money", "manaMax", "healthMax" }
+local function KeepAtLogout(snap, prev)
+    if not prev then return end
+    local kept = {}
+    for _, p in ipairs(PARTS) do
+        local name = p[1]
+        if Empty(name, snap[name]) and not Empty(name, prev[name]) then snap[name] = prev[name]; kept[#kept + 1] = name end
+    end
+    local ch, old = snap.character, prev.character
+    if type(ch) == "table" and type(old) == "table" then
+        for _, k in ipairs(KEEP_IF_ZERO) do
+            if (ch[k] == nil or ch[k] == 0) and (old[k] or 0) > 0 then ch[k] = old[k]; kept[#kept + 1] = "character." .. k end
+        end
+    end
+    if #kept > 0 then snap.kept, snap.keptFrom = kept, prev.keptFrom or prev.taken end
+end
+ns.KeepAtLogout = KeepAtLogout
+
 function ns.Snapshot(reason)
     local c = ns.char
     if not c then return end
@@ -642,6 +673,7 @@ function ns.Snapshot(reason)
     end
     Try("snap:actionBars", ns.ActionBars)
     snap.activeSpec = ActiveGroup()
+    if reason == "logout" then Try("snap:keep", KeepAtLogout, snap, c.snap) end
     c.snap = snap
     Try("bank:cache", ns.BankFromCache)
     if ns.Enrich then C_Timer.After(3, function() Try("enrich", ns.Enrich) end) end

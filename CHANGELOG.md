@@ -2,6 +2,13 @@
 
 Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 
+
+## Unreleased (logout snapshot)
+
+- Logging out no longer wipes the saved bags, worn gear, gold and other parts: the game empties them
+  before `PLAYER_LOGOUT`, so a logout snapshot now keeps the previous value of any part that reads
+  empty (and money / max mana / max health read as 0). `snap.kept` and `snap.keptFrom` say what was
+  kept and from when. Harness test added. (#27)
 ## 1.4.0 (22 Nov), first release from this repository
 
 Addon 1.4.0 plus the app as of 22 Nov 08:30 UTC.
