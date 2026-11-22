@@ -2,6 +2,21 @@
 
 Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 
+## Unreleased (grinds end cleanly, one save per computer)
+
+- **A grind no longer runs on by itself.** Logging out ends it at the logout. A `/reload` or Sync keeps
+  it (a reload that wasn't recognised as one, seen as a logout and a login seconds apart, brings it back).
+  If this computer's save last saw the grind more than 2 minutes before you log in (a crash, a long
+  disconnect, or you played on the other computer, whose save this one never sees), it ends at its last
+  counted kill or loot, so the hours away don't count. 30 minutes with nothing counted ends it the same way.
+  The grind records why it ended (`ended`: logout, away, idle) and on which computer it ran (`device`).
+- **Pausing needs Shift-click (#31).** A plain click on the grind panel does nothing, so a stray click in
+  combat can't pause it. Paused shows in red with a chat line, and `grindPause` / `grindResume` go in the
+  Journal. Right-click still stops.
+- **snapshot.json says which computer wrote it (#11):** `device` {host, os}, from the server, and `grind`
+  {running, recent[]}. The PC and the Mac each keep their own save and their own `snapshot.json`.
+- Test harness: `hooksecurefunc("Name", fn)` mock fixed (it never called the hook), tickers can be run.
+
 ## Unreleased (background snapshot)
 
 - `snapshot.json` now updates after every save in game even with the app closed (#3): the server
