@@ -7,6 +7,11 @@ session has to publish by hand:
     python tools/publish-stable.py "what changed"                      # this repository's stable
     python tools/publish-stable.py --release dist "what changed"       # also the download zips
                                                                         # (tools/make-release.py)
+    python tools/publish-stable.py --force --release dist "..."        # publish even if ClaudeCompanion/
+                                                                        # is unchanged (manual runs)
+
+A merge that changes nothing in ClaudeCompanion/ (docs, tests, CI, .claude/) is not published: the
+build id would change for no reason and every computer would be asked to /reload.
 
 The branch holds only the built addon: ClaudeCompanion/ exactly as it goes in Interface/AddOns
 (with the game-data pack, web/data/gamedata.js), web/channel.json naming the repository and branch
@@ -81,7 +86,20 @@ def assemble(work, repo, notes, ver, src_branch, src_sha):
     return files
 
 
-def publish(repo, remote, notes, ver, src_branch, src_sha, release_dir=None):
+def unchanged_since(work, src_sha):
+    # the commit the current stable build came from, if nothing the build is made of (ClaudeCompanion/)
+    # changed since then: a merge that only touches docs, tests, CI or .claude/ is not a new build, so
+    # it doesn't stamp a new build id and every computer isn't asked to /reload for nothing
+    try:
+        with open(os.path.join(work, 'BUILD.json'), encoding='utf-8') as f: prev = json.load(f)['from']['commit']
+    except (OSError, ValueError, KeyError, TypeError): return None
+    if not prev or subprocess.run(['git', 'cat-file', '-e', prev + '^{commit}'], cwd=ROOT, capture_output=True).returncode: return None
+    same = subprocess.run(['git', 'diff', '--quiet', prev, src_sha, '--', 'ClaudeCompanion'], cwd=ROOT).returncode == 0
+    return prev if same else None
+
+
+def publish(repo, remote, notes, ver, src_branch, src_sha, release_dir=None, force=False):
+    """Returns True when a build was published, False when nothing the build is made of changed."""
     work = tempfile.mkdtemp(prefix='cc-stable-')
     try:
         git('fetch', '-q', remote, BRANCH, check=False)
@@ -92,6 +110,10 @@ def publish(repo, remote, notes, ver, src_branch, src_sha, release_dir=None):
         else:
             git('worktree', 'add', '-q', '--detach', work)
             git('checkout', '-q', '--orphan', 'cc-publish-tmp', cwd=work)
+        prev = None if force or not have else unchanged_since(work, src_sha)
+        if prev:
+            print(f'{repo}: nothing in ClaudeCompanion/ changed since build {prev[:12]}; not published')
+            return False
         git('rm', '-rfq', '--ignore-unmatch', '.', cwd=work, check=False)
         for name in os.listdir(work):
             if name != '.git': (shutil.rmtree if os.path.isdir(os.path.join(work, name)) else os.remove)(os.path.join(work, name))
@@ -105,6 +127,7 @@ def publish(repo, remote, notes, ver, src_branch, src_sha, release_dir=None):
             print(f'{repo}: published to {BRANCH} ({git("rev-parse", "--short=12", "HEAD", cwd=work)})')
         # the download zips for a first install: the same build, plus which stable commit it is
         if release_dir: release.make_zips(work, release_dir, git('rev-parse', 'HEAD', cwd=work), git('log', '-1', '--format=%s', cwd=work))
+        return True
     finally:
         git('worktree', 'remove', '--force', work, check=False)
         git('update-ref', '-d', f'refs/cc-publish/{BRANCH}', check=False)
@@ -113,7 +136,8 @@ def publish(repo, remote, notes, ver, src_branch, src_sha, release_dir=None):
 
 def main():
     args = sys.argv[1:]
-    rel = None
+    rel, force = None, False
+    if args[:1] == ['--force']: force, args = True, args[1:]
     if args[:1] == ['--release']: rel, args = args[1], args[2:]
     notes = ' '.join(args).strip() or 'New build.'
     if not os.path.isfile(os.path.join(ADDON, 'web', 'data', 'gamedata.js')):
@@ -125,7 +149,10 @@ def main():
         for line in f:
             if line.startswith('## Version:'): ver = line.split(':', 1)[1].strip()
     src_branch, src_sha = git('rev-parse', '--abbrev-ref', 'HEAD'), git('rev-parse', 'HEAD')
-    publish(origin_repo(), 'origin', notes, ver, src_branch, src_sha, rel)
+    done = publish(origin_repo(), 'origin', notes, ver, src_branch, src_sha, rel, force)
+    # publish.yml uploads the download zips only when there is a new build
+    if os.environ.get('GITHUB_OUTPUT'):
+        with open(os.environ['GITHUB_OUTPUT'], 'a') as f: f.write(f"published={'true' if done else 'false'}\n")
 
 
 if __name__ == '__main__':
