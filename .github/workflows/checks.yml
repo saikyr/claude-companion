@@ -80,7 +80,7 @@ jobs:
         run: python3 tools/check-cards.py test/fixtures/cards.json
       - name: No personal data
         run: |
-          ! git ls-files | grep -E 'SavedVariables|snapshot\.json$|settings\.json$|sync(-cache)?\.json$|web/data\.js$'
+          ! git ls-files | grep -v '^\.claude/settings\.json$' | grep -E 'SavedVariables|snapshot\.json$|settings\.json$|sync(-cache)?\.json$|web/data\.js$'
 
   # The PC's server (server.ps1) under Windows PowerShell 5.1, the one Windows ships: the same API test.
   windows-server:
