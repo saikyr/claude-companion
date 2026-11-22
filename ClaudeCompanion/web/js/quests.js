@@ -40,7 +40,7 @@
   // your reputation with a faction, in QuestieDB's points (0 = the start of Neutral), from the game's own bar
   function repPoints(faction) {
     const r = state().rep.get(faction);
-    if (!r) return null;
+    if (!r) return state().rep.size ? 0 : null;       // a faction you haven't met yet stands at Neutral (0)
     if (r.currentStanding != null) return r.currentStanding;
     return r.reaction ? REP_FLOOR[r.reaction] : null;
   }

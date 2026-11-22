@@ -148,7 +148,7 @@
   let cache = null;
   function candidates(use, cls) {
     const Q = CC.quests;
-    const ck = JSON.stringify(use) + cls + (SFX ? SFX.built : '') + '|' + arr(((A.CH && A.CH.snap) || {}).completedQuests).length;
+    const ck = JSON.stringify(use) + cls + (SFX ? SFX.built : '') + '|' + (((A.CH && A.CH.snap) || {}).taken || 0) + '|' + arr(((A.CH && A.CH.snap) || {}).completedQuests).length;
     if (cache && cache.ck === ck) return cache;
     const fixed = [], rolls = [], byId = {};
     const skipped = { 'quest reward you already took (or not for you)': 0, 'raid only': 0, 'PvP honor gear': 0, 'other faction only': 0, 'only Classic data says where it comes from': 0, 'no endgametools tooltip': 0, 'not for your class': 0, 'no known source': 0 };
