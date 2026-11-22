@@ -17,6 +17,7 @@ L = [f"# Game-data coverage ({r['built']})", '',
      f"| Seen dropping on Forever (player uploads) | {c['items_seen_dropping_on_forever']:,} items | |",
      f"| Drop chance | {c['items_with_drop_rate']:,} items | only {c['items_with_forever_rate']:,} are Forever-measured rates; the rest are labelled Classic rates |",
      f"| Vendors | {c['items_with_vendor']:,} items | |",
+     f"| Item sets (pieces: ForeverDB; name and bonuses: endgametools) | {c.get('item_sets', 0):,} sets, {c.get('item_sets_named', 0):,} named | the rest have no piece the client shows yet |",
      '', f"Pack size {c['pack_kb'] / 1024:.1f} MB. endgametools pages missing: {c['egt_pages_missing']:,} (404: not on Forever, or test/monster items).",
      'The game always wins in the app: your own tooltips, quest log rewards and AH scans replace pack data.']
 open(sys.argv[2], 'w').write('\n'.join(L) + '\n')

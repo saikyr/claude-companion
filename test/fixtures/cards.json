@@ -1,0 +1,22 @@
+{
+ "schema": 1,
+ "cards": [
+  {
+   "id": "farm-example",
+   "kind": "farm",
+   "title": "Example farm",
+   "summary": "One line on what and why.",
+   "created": "2026-11-22T08:00:00Z",
+   "updated": "2026-11-22T09:00:00Z",
+   "where": "Burning Steppes",
+   "facts": [{ "label": "Drop rate", "value": "2.0%", "note": "Forever, 12 of 591 kills" }],
+   "items": [{ "id": 252888, "note": "Blackrock Soldier" }],
+   "track": { "grind": "example", "mobs": ["Blackrock Soldier"] },
+   "steps": ["Fly there", "Start the tracker: /cc start example"],
+   "body": "Stop rule and caveats.\n\nA second paragraph.",
+   "sources": [{ "label": "Forever QuestieDB" }, { "label": "Wowhead Forever", "url": "https://www.wowhead.com/classic/item=252888" }]
+  },
+  { "id": "flip-example", "kind": "flip", "title": "Example flip", "status": "withdrawn" },
+  { "id": "note-example", "title": "Example note", "expires": "2026-11-23T00:00:00Z" }
+ ]
+}

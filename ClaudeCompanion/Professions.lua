@@ -190,20 +190,33 @@ function ns.ReadTaxi()
     if not c or not NumTaxiNodes then return end
     local n = Clean(Call(NumTaxiNodes)) or 0
     local now = ns.Now()
+    -- the flight map only lists the continent you're on: note which one, so paths on the other
+    -- continent are kept (they always were) and the app can say which continent hasn't been read
+    local mapID = Clean(Call(GetTaxiMapID))
+    local info = mapID and C_Map and C_Map.GetMapInfo and ns.Call(C_Map.GetMapInfo, mapID)
+    local continent = (type(info) == "table" and Clean(info.name)) or (mapID and ("map " .. mapID)) or nil
     for i = 1, n do
         local name = Clean(Call(TaxiNodeName, i))
         local kind = Clean(Call(TaxiNodeGetType, i))
-        if name and kind and kind ~= "NONE" then
+        if name and kind and kind ~= "NONE" and not name:find("^zzOLD") then
             local t = c.taxi[name]
             if not t then
-                c.taxi[name] = { first = now, last = now }
-                ns.Log("flightPath", { name = name })
+                t = { first = now, last = now }
+                c.taxi[name] = t
+                ns.Log("flightPath", { name = name, continent = continent })
             else
                 t.last = now
             end
-            if kind == "CURRENT" then c.taxi[name].here = now end
+            if continent then t.continent = continent end
+            if kind == "CURRENT" then t.here = now end
         end
     end
+    if continent then
+        c.taxiRead = c.taxiRead or {}
+        c.taxiRead[continent] = now
+    end
+    -- names the game no longer lists ("zzOLD...") are dropped
+    for name in pairs(c.taxi) do if name:find("^zzOLD") then c.taxi[name] = nil end end
 end
 ns.On("TAXIMAP_OPENED", function() if ns.char then ns.Soon("taxi", 0.5, function() ns.Try("taxi", ns.ReadTaxi) end) end end)
 

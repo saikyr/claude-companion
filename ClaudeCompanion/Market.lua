@@ -202,10 +202,17 @@ local function ReadMail()
                 end
             end
         end
-        local invType, itemName, player, bid, buyout, deposit, consignment = Call(GetInboxInvoiceInfo, i)
+        -- returns per warcraft.wiki.gg API_GetInboxInvoiceInfo (Forever 1.60.1 listed): the 11th is the count
+        local invType, itemName, player, bid, buyout, deposit, consignment, _, _, _, count = Call(GetInboxInvoiceInfo, i)
         if Clean(invType) then
             m.invoice = { type = Clean(invType), item = Clean(itemName), player = Clean(player), bid = Clean(bid),
-                buyout = Clean(buyout), deposit = Clean(deposit), cut = Clean(consignment) }
+                buyout = Clean(buyout), deposit = Clean(deposit), cut = Clean(consignment), count = Clean(count) }
+            -- a won item's letter carries the item itself: its stack size is the count when the invoice has none
+            if not m.invoice.count and #m.items > 0 then
+                local n = 0
+                for _, x in ipairs(m.items) do n = n + (x.count or 1) end
+                m.invoice.count = n
+            end
             -- record each sale once (same item + price + days left = same letter)
             -- what you paid for things you won (for flip profit)
             if m.invoice.type == "buyer" then
@@ -217,7 +224,7 @@ local function ReadMail()
                     c.ah.salesSeen[id] = true
                     local boughtAt = m.daysLeft and (ns.Now() - math.floor((30 - m.daysLeft) * 86400)) or ns.Now()
                     ns.Push(c.ah.buys, { t = boughtAt, seenAt = ns.Now(), item = m.invoice.item, price = m.invoice.bid,
-                        seller = m.invoice.player }, ns.LIMITS.sales)
+                        count = m.invoice.count, seller = m.invoice.player }, ns.LIMITS.sales)
                 end
             end
             if m.invoice.type == "seller" then
@@ -230,7 +237,7 @@ local function ReadMail()
                     -- mail lasts 30 days: estimate when the sale happened
                     local soldAt = m.daysLeft and (ns.Now() - math.floor((30 - m.daysLeft) * 86400)) or ns.Now()
                     ns.Push(c.ah.sales, { t = soldAt, seenAt = ns.Now(), item = m.invoice.item, price = m.invoice.bid,
-                        buyer = m.invoice.player, net = (m.invoice.bid or 0) + (m.invoice.deposit or 0) - (m.invoice.cut or 0), cut = m.invoice.cut, deposit = m.invoice.deposit }, ns.LIMITS.sales)
+                        count = m.invoice.count, buyer = m.invoice.player, net = (m.invoice.bid or 0) + (m.invoice.deposit or 0) - (m.invoice.cut or 0), cut = m.invoice.cut, deposit = m.invoice.deposit }, ns.LIMITS.sales)
                 end
             end
         end
@@ -257,8 +264,17 @@ ns.On("MAIL_SHOW", function() if ns.char then ns.Soon("mail", 1, ReadMail) end e
 -- this about every 15 minutes). For each item we keep the lowest price,
 -- the median, and how many are up, as one dated observation, so prices
 -- build up a history you can trust for sell / disenchant / craft calls.
+--
+-- A realm can have 200,000+ auctions. Reading them all in one go froze the game for seconds, and it
+-- happened up to three times per scan. Now the list is read a slice at a time, a few milliseconds
+-- per frame, with the progress on the button; item links (only needed to tell "of the Owl" from
+-- "of the Eagle") are only asked for items whose name has " of "; and the second pass only rereads
+-- the auctions whose details hadn't loaded yet.
 local scan = { state = "idle" }
 ns.ahScan = scan
+local FRAME_MS = 6      -- time spent reading per frame
+local FRAME_ROWS = 400  -- per frame, when the client has no millisecond clock
+local QUIET = 2         -- the list has stopped growing for this many seconds: read it
 
 local function Median(t)
     if #t == 0 then return nil end
@@ -266,38 +282,63 @@ local function Median(t)
     return t[math.ceil(#t / 2)]
 end
 
-local function FinishScan(again)
-    local n = Clean(Call(AH.GetNumReplicateItems)) or 0
-    local by, missing = {}, 0
-    for i = 0, n - 1 do
-        local r = { Call(AH.GetReplicateItemInfo, i) }
-        -- name, icon, count, quality, usable, level, levelType, minBid, minInc, buyout, bid, highBidder,
-        -- bidderFull, owner, ownerFull, saleStatus, itemID, hasAllInfo
-        local count, buyout, itemID, all = Clean(r[3]), Clean(r[10]), Clean(r[17]), Clean(r[18])
-        if itemID and buyout and buyout > 0 and count and count > 0 then
-            local suffix
-            if all ~= false then
-                local link = Clean(Call(AH.GetReplicateItemLink, i))
-                local s = link and link:match("item:%d+:[^:]*:[^:]*:[^:]*:[^:]*:[^:]*:([%-%d]*)")
-                suffix = tonumber(s)
-            else
-                missing = missing + 1
-            end
-            local key = Key(itemID, suffix)
-            local b = by[key]
-            if not b then b = { id = itemID, suffix = suffix, units = {}, qty = 0, n = 0, name = Clean(r[1]), q = Clean(r[4]) }; by[key] = b end
-            local unit = math.floor(buyout / count)
-            b.qty = b.qty + count
-            b.n = b.n + 1
-            -- weight the median by stack size, capped so it stays cheap
-            for _ = 1, math.min(count, 20) do b.units[#b.units + 1] = unit end
+local function Refresh() if ns.ScanButtonRefresh then ns.ScanButtonRefresh() end end
+
+-- run step(i) for i = first..last, a slice per frame, then done()
+local function Sliced(first, last, step, done)
+    local i = first
+    local clock = type(debugprofilestop) == "function" and debugprofilestop or nil
+    local function frame()
+        if scan.state == "idle" then return end -- cancelled
+        local t0 = clock and clock()
+        local n = 0
+        while i <= last do
+            step(i)
+            i = i + 1; n = n + 1
+            if clock then
+                if n % 50 == 0 and clock() - t0 > FRAME_MS then break end
+            elseif n >= FRAME_ROWS then break end
         end
+        scan.done = i - first
+        Refresh()
+        if i <= last then C_Timer.After(0, frame) else done() end
     end
-    local now, items = ns.Now(), 0
+    frame()
+end
+
+local function Row(by, i, missing)
+    local name, _, count, quality, _, _, _, _, _, buyout, _, _, _, _, _, _, itemID, all = Call(AH.GetReplicateItemInfo, i)
+    count, buyout, itemID, all, name = Clean(count), Clean(buyout), Clean(itemID), Clean(all), Clean(name)
+    if not (itemID and buyout and buyout > 0 and count and count > 0) then return end
+    local suffix
+    -- random-suffix items ("Gossamer Cape of Healing") need the link to tell the suffixes apart
+    if name and name:find(" of ", 1, true) then
+        if all == false then missing[#missing + 1] = i; return end
+        local link = Clean(Call(AH.GetReplicateItemLink, i))
+        local s = link and link:match("item:%d+:[^:]*:[^:]*:[^:]*:[^:]*:[^:]*:([%-%d]*)")
+        suffix = tonumber(s)
+    end
+    local key = Key(itemID, suffix)
+    local b = by[key]
+    if not b then b = { id = itemID, suffix = suffix, units = {}, qty = 0, n = 0, name = name, q = Clean(quality) }; by[key] = b end
+    local unit = math.floor(buyout / count)
+    b.qty = b.qty + count
+    b.n = b.n + 1
+    -- weight the median by stack size, capped so it stays cheap
+    for _ = 1, math.min(count, 20) do b.units[#b.units + 1] = unit end
+end
+
+-- turn what was read into one price observation per item (also a slice per frame)
+local function Store(by, n, missing, again, onDone)
+    local now = ns.Now()
     if not again then scan.t = now end
     local prices = ns.char.ah.prices
-    for key, b in pairs(by) do
-        items = items + 1
+    local keys = {}
+    for key in pairs(by) do keys[#keys + 1] = key end
+    scan.phase = "saving"; scan.total = #keys
+    Sliced(1, #keys, function(i)
+        local key = keys[i]
+        local b = by[key]
         local p = prices[key]
         if not p then p = { id = b.id, suffix = b.suffix, obs = {} }; prices[key] = p end
         p.name = p.name or b.name
@@ -310,30 +351,73 @@ local function FinishScan(again)
         if again and lastO and lastO.src == "scan" and scan.t and lastO.t >= scan.t then p.obs[#p.obs] = o
         else ns.Push(p.obs, o, ns.LIMITS.priceObs) end
         lastObs[key] = nil
-    end
-    -- items that were up last scan but are gone now: mark as none listed
-    local prev = ns.char.ah.lastScan
-    if prev and prev.keys then
-        for key in pairs(prev.keys) do
-            local p = prices[key]
-            if p and not by[key] and not again then ns.Push(p.obs, { t = now, qty = 0, src = "scan" }, ns.LIMITS.priceObs) end
+    end, function()
+        local set = {}
+        for _, key in ipairs(keys) do set[key] = true end
+        if not again then
+            -- items that were up last scan but are gone now: mark as none listed
+            local prev = ns.char.ah.lastScan
+            if prev and prev.keys then
+                for key in pairs(prev.keys) do
+                    local p = prices[key]
+                    if p and not set[key] then ns.Push(p.obs, { t = now, qty = 0, src = "scan" }, ns.LIMITS.priceObs) end
+                end
+            end
+            ns.char.ah.lastScan = { t = now, auctions = n, items = #keys, missingInfo = #missing, keys = set,
+                secs = scan.started and math.floor(GetTime() - scan.started + 0.5) or nil }
+        else
+            local ls = ns.char.ah.lastScan
+            for key in pairs(set) do ls.keys[key] = true end
+            ls.pass, ls.missingInfo = again, #missing
+            ls.items = 0; for _ in pairs(ls.keys) do ls.items = ls.items + 1 end
         end
-    end
-    local keys = {}
-    for key in pairs(by) do keys[key] = true end
-    ns.char.ah.lastScan = { t = now, auctions = n, items = items, missingInfo = missing, keys = keys }
-    if again then ns.char.ah.lastScan.t = scan.t; ns.char.ah.lastScan.pass = again; return end
+        onDone()
+    end)
+end
+
+local function Finish(by, n, missing)
+    scan.state = "idle"; scan.phase = nil
     ns.char.ah.scans = (ns.char.ah.scans or 0) + 1
-    scan.state = "idle"
-    ns.Log("ahScan", { auctions = n, items = items })
-    ns.Print(string.format("AH scan done: %d auctions, %d different items. Sync to send it to the page.", n, items))
-    -- some auctions arrive before their item details (needed to tell
-    -- "of the Eagle" from "of the Owl"); read the list again once they load
-    if missing > 0 then
-        C_Timer.After(15, function() ns.Try("ahScan2", FinishScan, 2) end)
-        C_Timer.After(45, function() ns.Try("ahScan3", FinishScan, 3) end)
+    local ls = ns.char.ah.lastScan
+    ns.Log("ahScan", { auctions = n, items = ls.items, secs = ls.secs })
+    ns.Print(string.format("AH scan done: %d auctions, %d different items. Sync to send it to the page.", n, ls.items))
+    Refresh()
+    -- some auctions arrive before their item details (needed to tell "of the Eagle" from "of the
+    -- Owl"); read just those again once, a little later
+    if #missing > 0 then
+        local again = missing
+        C_Timer.After(20, function()
+            if scan.state ~= "idle" then return end
+            scan.state, scan.phase, scan.total, scan.done = "rereading", "rereading", #again, 0
+            local by2, still = {}, {}
+            Sliced(1, #again, function(k) Row(by2, again[k], still) end, function()
+                Store(by2, n, still, 2, function() scan.state = "idle"; scan.phase = nil; Refresh() end)
+            end)
+        end)
     end
-    if ns.ScanButtonRefresh then ns.ScanButtonRefresh() end
+end
+
+local function Read()
+    if scan.state ~= "scanning" then return end
+    local n = Clean(Call(AH.GetNumReplicateItems)) or 0
+    scan.state, scan.phase, scan.total, scan.done = "reading", "reading", n, 0
+    Refresh()
+    local by, missing = {}, {}
+    Sliced(0, n - 1, function(i) Row(by, i, missing) end, function()
+        Store(by, n, missing, nil, function() Finish(by, n, missing) end)
+    end)
+end
+
+-- the list arrives in pieces: read it once it has stopped growing for QUIET seconds
+local function WaitQuiet()
+    if scan.waiting then return end
+    scan.waiting = true
+    local function check()
+        if scan.state ~= "scanning" then scan.waiting = false; return end
+        if GetTime() - (scan.lastUpdate or 0) >= QUIET then scan.waiting = false; ns.Try("ahScan", Read)
+        else C_Timer.After(0.5, check) end
+    end
+    C_Timer.After(0.5, check)
 end
 
 function ns.AHScan()
@@ -344,7 +428,7 @@ function ns.AHScan()
         ns.char.caps.ahFullScan = false
         return
     end
-    if scan.state == "scanning" then ns.Print("A scan is already running."); return end
+    if scan.state ~= "idle" then ns.Print("A scan is already running."); return end
     local last = ns.char.ah.lastScan
     if last and ns.Now() - last.t < 15 * 60 then
         ns.Print(string.format("The game allows one full scan every 15 minutes. Next in %d min.", math.ceil((15 * 60 - (ns.Now() - last.t)) / 60)))
@@ -352,6 +436,8 @@ function ns.AHScan()
     end
     scan.state = "scanning"
     scan.started = GetTime()
+    scan.lastUpdate = GetTime()
+    scan.phase, scan.done, scan.total = "waiting", 0, nil
     ns.char.caps = ns.char.caps or {}
     ns.char.caps.ahFullScan = true
     local ok, err = pcall(AH.ReplicateItems)
@@ -359,53 +445,87 @@ function ns.AHScan()
         scan.state = "idle"
         ns.char.caps.ahFullScan = "error: " .. tostring(err)
         ns.Print("The full scan was refused: " .. tostring(err))
+        Refresh()
         return
     end
-    ns.Print("Scanning the whole auction house. Keep the AH open for a few seconds.")
-    if ns.ScanButtonRefresh then ns.ScanButtonRefresh() end
-    -- if the list event never comes, stop waiting after a minute
+    ns.Print("Scanning the whole auction house. Keep the AH open until the button says it's done.")
+    Refresh()
+    -- if the list never comes, stop waiting after a minute
     C_Timer.After(60, function()
         if scan.state == "scanning" and GetTime() - scan.started >= 59 then
             scan.state = "idle"
             ns.Print("The scan got no answer. Try again in 15 minutes.")
-            if ns.ScanButtonRefresh then ns.ScanButtonRefresh() end
+            Refresh()
         end
     end)
 end
 
 if AH then
-    -- the list arrives in pieces; wait until it stops growing, then read it
     ns.On("REPLICATE_ITEM_LIST_UPDATE", function()
         if scan.state ~= "scanning" then return end
-        ns.Soon("ahscan", 3, function() ns.Try("ahScan", FinishScan) end)
+        scan.lastUpdate = GetTime()
+        WaitQuiet()
     end)
 end
 
--- a small "Scan" button on the auction house window
+-- closing the AH mid-read: the list is gone, so stop cleanly rather than read empty rows
+local function Closed()
+    if scan.state == "reading" or scan.state == "scanning" or scan.state == "rereading" then
+        scan.state, scan.phase = "idle", nil
+        ns.Print("AH closed before the scan finished. Open it and scan again (the game may make you wait 15 min).")
+        Refresh()
+    end
+end
+ns.On("AUCTION_HOUSE_CLOSED", Closed)
+
+-- the "Scan AH" button sits just below the auction house window, at its right edge: the game's
+-- own buttons and tabs are inside the window or below its left edge, so nothing can overlap it.
+-- The line next to it says how the scan is going, or when the last one was.
 local function MakeScanButton(parent)
     if ns.scanButton or not parent then return end
     local b = CreateFrame("Button", "ClaudeCompanionScanButton", parent, "UIPanelButtonTemplate")
-    b:SetSize(110, 22)
-    b:SetPoint("TOPRIGHT", parent, "TOPRIGHT", -30, -26)
+    b:SetSize(104, 22)
+    b:ClearAllPoints()
+    b:SetPoint("TOPRIGHT", parent, "BOTTOMRIGHT", -2, -2)
     b:SetScript("OnClick", function() ns.AHScan() end)
+    local status = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    status:SetPoint("RIGHT", b, "LEFT", -6, 0)
+    status:SetJustifyH("RIGHT")
     b:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:AddLine("Claude Companion scan")
-        GameTooltip:AddLine("Reads every auction once (allowed every 15 min).", 1, 1, 1, true)
+        GameTooltip:AddLine("Claude Companion: scan the whole AH")
+        GameTooltip:AddLine("Reads every auction once and saves today's prices (the game allows it every 15 min). It reads a little per frame, so the game keeps running.", 1, 1, 1, true)
         local last = ns.char and ns.char.ah.lastScan
-        if last then GameTooltip:AddLine("Last scan " .. math.floor((ns.Now() - last.t) / 60) .. " min ago, " .. last.items .. " items.", 0.7, 0.7, 0.7) end
+        if last then GameTooltip:AddLine("Last scan " .. math.floor((ns.Now() - last.t) / 60) .. " min ago: " .. (last.items or 0) .. " items" .. (last.secs and (", " .. last.secs .. " s") or "") .. ".", 0.7, 0.7, 0.7) end
         GameTooltip:Show()
     end)
     b:SetScript("OnLeave", function() GameTooltip:Hide() end)
     ns.scanButton = b
     function ns.ScanButtonRefresh()
-        b:SetText(scan.state == "scanning" and "Scanning..." or "Claude scan")
+        local st = scan.state
+        if st == "idle" then
+            b:SetText("Scan AH"); b:Enable()
+            local last = ns.char and ns.char.ah.lastScan
+            local wait = last and 15 * 60 - (ns.Now() - last.t)
+            if wait and wait > 0 then status:SetText(string.format("|cff9a9890next scan in %d min|r", math.ceil(wait / 60)))
+            elseif last then status:SetText(string.format("|cff9a9890last scan %d min ago|r", math.floor((ns.Now() - last.t) / 60)))
+            else status:SetText("") end
+        else
+            b:Disable()
+            local pct = scan.total and scan.total > 0 and math.floor(100 * (scan.done or 0) / scan.total) or nil
+            if st == "scanning" then b:SetText("Waiting..."); status:SetText("|cffffd100the game is sending the list|r")
+            elseif scan.phase == "saving" then b:SetText("Saving " .. (pct or 0) .. "%"); status:SetText("")
+            else b:SetText((st == "rereading" and "Rereading " or "Reading ") .. (pct or 0) .. "%"); status:SetText(scan.total and ("|cff9a9890" .. scan.total .. " auctions|r") or "") end
+        end
     end
     ns.ScanButtonRefresh()
 end
-ns.On("AUCTION_HOUSE_SHOW", function() pcall(MakeScanButton, AuctionHouseFrame or AuctionFrame) end)
+ns.On("AUCTION_HOUSE_SHOW", function() pcall(MakeScanButton, AuctionHouseFrame or AuctionFrame); Refresh() end)
 ns.On("PLAYER_INTERACTION_MANAGER_FRAME_SHOW", function(t)
     if ns.InteractionKind and ns.InteractionKind(Clean(t)) == "Auctioneer" then
-        C_Timer.After(0.5, function() pcall(MakeScanButton, AuctionHouseFrame or AuctionFrame) end)
+        C_Timer.After(0.5, function() pcall(MakeScanButton, AuctionHouseFrame or AuctionFrame); Refresh() end)
     end
+end)
+ns.On("PLAYER_INTERACTION_MANAGER_FRAME_HIDE", function(t)
+    if ns.InteractionKind and ns.InteractionKind(Clean(t)) == "Auctioneer" then Closed() end
 end)

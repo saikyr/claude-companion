@@ -18,6 +18,8 @@ ONE OWNER PER FIELD (see README.md for the why):
   Drop chances and "seen on Forever" counts ........................... ForeverDB (player uploads)
   Quest reward split (fixed vs choose-one) and reward money ........... ForeverDB quest guides
   Crafted-by and world-drop rows (QuestieDB has no crafting data) ..... ForeverDB
+  Item sets: which items belong together ............................. ForeverDB (set id per item)
+  Item sets: name and bonuses .......................................... endgametools (the set lines of a member's tooltip)
 The game itself always wins in the app: your quest log rewards, your tooltips, your AH scans.
 """
 import json, os, re, sys, time
@@ -307,6 +309,45 @@ STAT = {3: 'Agility', 4: 'Strength', 5: 'Intellect', 6: 'Spirit', 7: 'Stamina', 
         104: 'Shadow resistance', 105: 'Arcane resistance', 110: 'Fire damage', 111: 'Shadow damage',
         112: 'Frost damage', 113: 'Arcane damage', 114: 'Nature damage', 115: 'Holy damage', 116: 'Crit %', 117: 'Hit %', 118: 'Dodge %', 119: 'Parry %', 120: 'Block %'}
 
+# ------------------------------------------------------------------ item sets
+# sets[id] = [name, [item ids], [[pieces, bonus text], ...], class mask]
+SET_LINE = re.compile(r'^\((\d+)\) Set: (.+)$')
+sets = {}
+for it in FDB_ITEMS.values():
+    sid = it.get('set')
+    if not sid or it['id'] not in items: continue
+    s_ = sets.setdefault(sid, [None, [], [], 0])
+    s_[1].append(it['id'])
+    s_[3] |= it.get('cls') or 0
+    tip = (EGT.get(str(it['id'])) or {}).get('tip') or []
+    k = next((i for i, l in enumerate(tip) if SET_LINE.match(l)), None)
+    # the tooltip with the most bonus lines names the set (pieces the client hides have no tooltip)
+    if k and len([l for l in tip if SET_LINE.match(l)]) > len(s_[2]):
+        s_[0] = tip[k - 1]
+        s_[2] = [[int(m.group(1)), m.group(2)] for m in map(SET_LINE.match, tip) if m]
+# which classes a set is for: the items' own class mask (ForeverDB) or "Classes:" tooltip line, a class
+# quest that rewards a piece, or a class quest that asks for pieces by name (the dungeon set 0.5 chain)
+CLASS_BIT = {'Warrior': 1, 'Paladin': 2, 'Hunter': 4, 'Rogue': 8, 'Priest': 16, 'Shaman': 64, 'Mage': 128, 'Warlock': 256, 'Druid': 1024}
+set_of = {i: sid for sid, s_ in sets.items() for i in s_[1]}
+for sid, s_ in sets.items():
+    for i in s_[1]:
+        for l in (EGT.get(str(i)) or {}).get('tip') or []:
+            if l.startswith('Classes: '):
+                for c in l[9:].split(', '): s_[3] |= CLASS_BIT.get(c, 0)
+piece_names = {sid: [items[i][0] for i in s_[1] if items[i][0]] for sid, s_ in sets.items()}
+for q in quests.values():
+    m = q.get('cls') or 0
+    if not m: continue
+    for i, _ in (q.get('reward') or []) + (q.get('choice') or []):
+        if i in set_of: sets[set_of[i]][3] |= m
+    text = ' '.join(q.get('obj') or [])
+    if text:
+        for sid, names in piece_names.items():
+            if any(n in text for n in names): sets[sid][3] |= m
+for s_ in sets.values(): s_[1].sort()
+cov['item_sets'] = len(sets)
+cov['item_sets_named'] = sum(1 for s_ in sets.values() if s_[0])
+
 builds = Counter(v.get('build') for v in EGT.values())
 pack = {
     'v': 2, 'built': int(time.time()),
@@ -314,6 +355,7 @@ pack = {
              'item_tooltips': 'endgametools, client build ' + (builds.most_common(1)[0][0] if builds else '?'),
              'drop_rates_icons_reward_split': 'ForeverDB (foreverdb.net/data)'},
     'items': items, 'src': src, 'quests': quests, 'vend': vend, 'stat': STAT,
+    'sets': {sid: v for sid, v in sets.items()},
     # group size of the dungeon / raid an item drops in, from endgametools ("5 players", "10 players")
     'size': {int(k): v['size'] for k, v in EGT.items() if v.get('size')},
     # how the Forever client says you get it (endgametools "How to get it"); no entry = no known way yet

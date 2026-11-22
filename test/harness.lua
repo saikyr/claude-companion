@@ -2,7 +2,10 @@
 local SECRET = setmetatable({}, {__tostring=function() return "SECRET" end})
 function issecretvalue(v) return v == SECRET end
 local timers = {}
-C_Timer = { After = function(d, fn) table.insert(timers, fn) end, NewTicker = function() return { Cancel = function() end } end }
+local tickers = {}
+C_Timer = { After = function(d, fn) table.insert(timers, fn) end,
+  NewTicker = function(d, fn) local t = { fn = fn }; t.Cancel = function() t.fn = nil end; tickers[#tickers + 1] = t; return t end }
+function RunTickers() for _, t in ipairs(tickers) do if t.fn then t.fn() end end end
 function IsShiftKeyDown() return false end
 local function obj()
   local o = {}
@@ -35,7 +38,7 @@ function Advance(s) clock = clock + s end
 function GetTime() return clock - 1795000000 end
 function strtrim(s) return (s:gsub("^%s+", ""):gsub("%s+$", "")) end
 function strsplit(sep, s) local out = {} for p in (s..sep):gmatch("(.-)%"..sep) do out[#out+1]=p end return unpack(out) end
-function hooksecurefunc(t, name, fn) if type(t) == "string" then local orig=_G[t]; _G[t]=function(...) local r={orig(...)} fn(...) return unpack(r) end else local orig=t[name]; t[name]=function(...) local r={orig(...)} fn(...) return unpack(r) end end end
+function hooksecurefunc(t, name, fn) if type(t) == "string" then fn = name; local orig=_G[t]; _G[t]=function(...) local r={orig(...)} fn(...) return unpack(r) end else local orig=t[name]; t[name]=function(...) local r={orig(...)} fn(...) return unpack(r) end end end
 function InCombatLockdown() return false end
 function ReloadUI() print("RELOAD") end
 function UnitName(u) if u=="player" then return "Gabriel" elseif u=="target" then return "Son of Arkkoroc" end return nil end
@@ -238,7 +241,7 @@ Fire("LOOT_CLOSED")
 Fire("CHAT_MSG_LOOT", "You receive loot: |cffffffff|Hitem:4338::|h[Mageweave Cloth]|h|r.")
 Fire("CHAT_MSG_COMBAT_FACTION_CHANGE", "Reputation with Timbermaw Hold increased by 15.")
 Fire("PLAYER_INTERACTION_MANAGER_FRAME_SHOW", 21)
-SlashCmdList.CLAUDECOMPANION("scan"); Fire("REPLICATE_ITEM_LIST_UPDATE"); RunTimers()
+SlashCmdList.CLAUDECOMPANION("scan"); Fire("REPLICATE_ITEM_LIST_UPDATE"); Advance(3); RunTimers()
 SlashCmdList.CLAUDECOMPANION("scan")
 Fire("PLAYER_INTERACTION_MANAGER_FRAME_SHOW", 8); RunTimers(); Fire("PLAYER_INTERACTION_MANAGER_FRAME_HIDE", 8)
 Fire("PLAYER_INTERACTION_MANAGER_FRAME_SHOW", 5); RunTimers()
@@ -310,7 +313,303 @@ do
   check(deSrc, "disenchant source found without lock flag")
   check(mailOrigin, "mailed item knows it was an AH win + price")
   check(buys, "AH purchase recorded in ah.buys")
+  check(c.ah.buys[1].count == 1, "AH purchase has its stack size from the letter (#2)")
   if FAILED then error("v1.4 checks failed") end
+end
+-- #1 item cache: full cache makes room (oldest first) and keeps items in use
+do
+  local function check(ok, what) print((ok and "PASS " or "FAIL ") .. what); if not ok then FAILED = true end end
+  local c; for _, v in pairs(ClaudeCompanionDB.chars) do c = v end
+  local worn = "item:777001::::::::58"
+  c.snap.equipped = c.snap.equipped or {}
+  c.snap.equipped[99] = { slot = 99, item = worn }
+  ClaudeCompanionDB.items[worn] = { id = 777001, seen = 1 }           -- oldest of all, but worn
+  local cap = ns.LIMITS.items
+  for i = 1, cap + 50 do Advance(1); ns.NoteItem("|cffffffff|Hitem:" .. (800000 + i) .. "::|h[Filler]|h|r") end
+  local n = 0; for _ in pairs(ClaudeCompanionDB.items) do n = n + 1 end
+  local last = ClaudeCompanionDB.items["item:" .. (800000 + cap + 50) .. "::"]
+  check(n <= cap, "item cache stays within its cap (" .. n .. " of " .. cap .. ")")
+  check(last and last.name ~= nil, "newest item still saved with its name after the cache filled")
+  check(ClaudeCompanionDB.items[worn] ~= nil, "worn item kept when the cache made room")
+  check(ClaudeCompanionDB.items["item:800001::"] == nil, "oldest unused item made room")
+  check((ClaudeCompanionDB.cacheStats or {}).evicted and ClaudeCompanionDB.cacheStats.evicted > 0, "evictions counted in cacheStats")
+  c.snap.equipped[99] = nil; ClaudeCompanionDB.items[worn] = nil
+  if FAILED then error("#1 checks failed") end
+end
+-- grinds end on logout, after time away (other computer, crash) and when idle; /reload keeps them
+do
+  local function check(ok, what) print((ok and "PASS " or "FAIL ") .. what); if not ok then FAILED = true end end
+  local c; for _, v in pairs(ClaudeCompanionDB.chars) do c = v end
+  local function relog(away, reload)
+    if reload then ns.MarkReload() end
+    Fire("PLAYER_LOGOUT"); Advance(away); Fire("PLAYER_LOGIN")
+  end
+  local n0 = #c.grinds
+  -- 1. /reload (Sync) keeps the grind, and the 5 s reload doesn't count
+  ns.GrindStart("reloadtest"); Advance(100); c.grind.last = ns.Now()
+  relog(5, true)
+  check(c.grind and c.grind.name == "reloadtest", "a /reload keeps the grind running")
+  check(c.grind and ns.ActiveSecs(c.grind) == 100, "the reload's 5 s don't count (" .. tostring(c.grind and ns.ActiveSecs(c.grind)) .. ")")
+  -- 2. a real logout ends it, at logout time
+  Advance(50); c.grind.last = ns.Now(); local out = ns.Now()
+  relog(3600, false)
+  local g = c.grinds[#c.grinds]
+  check(c.grind == nil and g.name == "reloadtest" and g.ended == "logout" and g.finish == out, "a logout ends the grind at the logout")
+  check(g.secs == 150, "its time stops at the logout (" .. tostring(g.secs) .. ")")
+  -- 3. a /reload missed by the hooks: logout seconds before login brings the grind back
+  ns.GrindStart("missedreload"); Advance(30); c.grind.last = ns.Now()
+  relog(4, false)
+  check(c.grind and c.grind.name == "missedreload" and c.grind.finish == nil and c.grind.ended == nil, "an unflagged 4 s reload brings the grind back")
+  ns.GrindStop(true)
+  -- 4. the save on this computer last saw the grind hours ago (played on the Mac, or crashed):
+  --    the grind ends at its last counted event, not hours later
+  ns.GrindStart("jinthaalor"); Advance(600); c.grind.last = ns.Now(); local lastKill = ns.Now()
+  ns.MarkReload(); Fire("PLAYER_LOGOUT")      -- last save was a Sync
+  Advance(3 * 3600); Fire("PLAYER_LOGIN")      -- 3 h later, after playing elsewhere
+  g = c.grinds[#c.grinds]
+  check(c.grind == nil and g.name == "jinthaalor" and g.ended == "away" and g.finish == lastKill and g.secs == 600,
+    "a grind last seen 3 h ago ends at its last event (" .. tostring(g.ended) .. ", " .. tostring(g.secs) .. " s)")
+  -- 5. idle: nothing counted for 30 min ends it at the last event
+  ns.GrindStart("idle"); Advance(120); c.grind.last = ns.Now(); local idleLast = ns.Now()
+  Advance(29 * 60); RunTickers()
+  check(c.grind ~= nil, "29 min idle: still running")
+  Advance(2 * 60); RunTickers()
+  g = c.grinds[#c.grinds]
+  check(c.grind == nil and g.name == "idle" and g.ended == "idle" and g.finish == idleLast and g.secs == 120, "31 min idle ends it at the last event")
+  -- 6. pause / resume are in the journal; a plain click doesn't pause (#31)
+  ns.GrindStart("pausetest")
+  local panel = ClaudeCompanionGrind
+  panel._scripts.OnClick(panel, "LeftButton")
+  check(not c.grind.paused, "a plain left-click on the panel doesn't pause")
+  local shift = IsShiftKeyDown; IsShiftKeyDown = function() return true end
+  panel._scripts.OnClick(panel, "LeftButton"); IsShiftKeyDown = shift
+  check(c.grind.paused, "shift-click pauses")
+  ns.GrindPause()
+  local kinds = {}; for i = #c.journal - 3, #c.journal do kinds[#kinds + 1] = c.journal[i].e end
+  local ks = table.concat(kinds, ",")
+  check(ks:find("grindPause") and ks:find("grindResume"), "pause and resume are logged (" .. ks .. ")")
+  -- 7. device
+  check(c.grind.device == "pc" and c.device == "pc", "the grind and character know which computer (pc)")
+  IsMacClient = function() return true end
+  check(ns.Device() == "mac", "IsMacClient gives mac"); IsMacClient = nil
+  ns.GrindStop(true)
+  check(#c.grinds == n0 + 4 + 1, "finished grinds kept (" .. (#c.grinds - n0) .. ")")
+  if FAILED then error("grind lifecycle checks failed") end
+end
+-- dungeon runs: start on entering, count kills from the XP line, bosses, leave and come back, end
+do
+  local function check(ok, what) print((ok and "PASS " or "FAIL ") .. what); if not ok then FAILED = true end end
+  local c; for _, v in pairs(ClaudeCompanionDB.chars) do c = v end
+  local where = nil -- nil = outdoors, else { name, map }
+  local oldII, oldGI = IsInInstance, GetInstanceInfo
+  IsInInstance = function() if where then return true, "party" end return false, "none" end
+  GetInstanceInfo = function() if where then return where.name, "party", 1, "Normal", 5, 0, false, where.map end return "Burning Steppes", "none" end
+  local function go(w) where = w; Fire("ZONE_CHANGED_NEW_AREA"); Fire("PLAYER_ENTERING_WORLD") end
+  local BRD = { name = "Blackrock Depths", map = 230 }
+  c.run = nil; c.runs = c.runs or {}
+  local n0 = #c.runs
+  local oldUN = UnitName; UnitName = function(u) if u == "party1" then return "Graky" end return oldUN(u) end
+  go(BRD); UnitName = oldUN
+  check(c.run and c.run.name == "Blackrock Depths" and c.run.kind == "party" and c.run.inside, "entering BRD starts a run")
+  check(c.run and #c.run.group == 1, "the run remembers the group (" .. tostring(c.run and #c.run.group) .. ")")
+  local start = c.run.start
+  -- kills inside: the kill event's GUIDs are secret, the XP line still names the mob
+  Advance(30); Fire("CHAT_MSG_COMBAT_XP_GAIN", "Shadowforge Flame Keeper dies, you gain 312 experience. (+62 exp group bonus)")
+  Advance(30); Fire("CHAT_MSG_COMBAT_XP_GAIN", "Anvilrage Warden dies, you gain 300 experience.")
+  check(c.run.kills == 2 and c.run.killsBy["Shadowforge Flame Keeper"] == 1, "XP lines count as kills, by name (" .. c.run.kills .. ")")
+  local journalKill = c.journal[#c.journal]
+  check(journalKill.e == "kill" and journalKill.by == "xp" and journalKill.name == "Anvilrage Warden", "XP kill logged with the mob's name")
+  -- the same kill seen by both the kill event and the XP line counts once
+  local before = c.run.kills
+  Fire("CHAT_MSG_COMBAT_XP_GAIN", "Anvilrage Warden dies, you gain 300 experience.")
+  check(c.run.kills == before, "the same name within 2 s isn't counted twice")
+  -- a boss, a wipe, a death
+  Advance(60); Fire("ENCOUNTER_END", 227, "High Interrogator Gerstahn", 1, 5, 0)
+  Fire("ENCOUNTER_END", 227, "High Interrogator Gerstahn", 1, 5, 1)
+  Fire("BOSS_KILL", 227, "High Interrogator Gerstahn")
+  check(#c.run.bosses == 1 and c.run.bosses[1].name == "High Interrogator Gerstahn" and c.run.wipes == 1, "boss kill recorded once, wipe counted")
+  Fire("PLAYER_DEAD")
+  check(c.run.deaths == 1, "death counted in the run")
+  -- run back outside (ghost) for 3 min: same run, outside time doesn't count
+  Advance(60); go(nil)
+  check(c.run and not c.run.inside, "leaving parks the run")
+  Advance(180); go(BRD)
+  check(c.run and c.run.inside and c.run.start == start and c.run.outsideSecs == 180, "back within 15 min: same run, 180 s outside")
+  -- a quest handed in inside counts
+  Fire("QUEST_TURNED_IN", 4362, 17407, 23144)
+  check(c.run.quests == 1, "quest turned in counts in the run")
+  -- a /reload inside keeps it, and so does a short disconnect
+  Advance(120); ns.MarkReload(); Fire("PLAYER_LOGOUT"); Advance(5); Fire("PLAYER_LOGIN"); Fire("PLAYER_ENTERING_WORLD")
+  check(c.run and c.run.start == start and c.run.inside, "a /reload inside keeps the run")
+  Fire("PLAYER_LOGOUT"); Advance(240); Fire("PLAYER_LOGIN"); Fire("PLAYER_ENTERING_WORLD")
+  check(c.run and c.run.start == start and c.run.outsideSecs == 180 + 5 + 240, "a 4 min disconnect keeps the run, minus the time away (" .. tostring(c.run and c.run.outsideSecs) .. ")")
+  -- leave and stay out 16 min: it ends when you left
+  Advance(600); go(nil); local leftAt = ns.Now()
+  Advance(16 * 60); RunTickers()
+  local r = c.runs[#c.runs]
+  check(c.run == nil and #c.runs == n0 + 1 and r.ended == "left" and r.finish == leftAt, "16 min outside ends the run at the exit")
+  check(r.secs == (leftAt - start) - (180 + 5 + 240), "run time leaves out time outside and logged out (" .. tostring(r.secs) .. ")")
+  -- entering another instance ends the old run and starts a new one
+  go(BRD); Advance(60); go({ name = "Lower Blackrock Spire", map = 229 })
+  check(c.runs[#c.runs].name == "Blackrock Depths" and c.runs[#c.runs].ended == "other" and c.run.name == "Lower Blackrock Spire", "a different instance ends the old run")
+  -- logged out inside, back 3 h later (played on the other computer): ends when last seen
+  Advance(100); local lastIn = ns.Now(); c.run.last = lastIn
+  Fire("PLAYER_LOGOUT"); Advance(3 * 3600); where = nil; Fire("PLAYER_LOGIN"); Fire("PLAYER_ENTERING_WORLD")
+  r = c.runs[#c.runs]
+  check(c.run == nil and r.name == "Lower Blackrock Spire" and r.ended == "away" and r.finish == lastIn, "back 3 h later: the run ended when last seen")
+  -- reset while outside
+  go(BRD); Advance(30); go(nil)
+  Fire("CHAT_MSG_SYSTEM", "Blackrock Depths has been reset.")
+  check(c.run == nil and c.runs[#c.runs].ended == "reset", "an instance reset ends the run")
+  -- outdoors, a grind is not a run
+  check(c.run == nil, "no run outdoors")
+  IsInInstance, GetInstanceInfo = oldII, oldGI
+  if FAILED then error("dungeon run checks failed") end
+end
+-- group loot and rolls; flight paths per continent
+do
+  local function check(ok, what) print((ok and "PASS " or "FAIL ") .. what); if not ok then FAILED = true end end
+  local c; for _, v in pairs(ClaudeCompanionDB.chars) do c = v end
+  local oldII, oldGI = IsInInstance, GetInstanceInfo
+  IsInInstance = function() return true, "party" end
+  GetInstanceInfo = function() return "Blackrock Depths", "party", 1, "Normal", 5, 0, false, 230 end
+  c.run = nil; Fire("PLAYER_ENTERING_WORLD")
+  local SC = "|cnIQ3:|Hitem:11932::::::::59:1487:::::::::|h[Guiding Stave of Wisdom]|h|r"
+  local GREY = "|cnIQ0:|Hitem:4583::::::::58:1487:::::::::|h[Thick Furry Mane]|h|r"
+  Fire("CHAT_MSG_LOOT", "Graky has selected Need for: " .. SC)
+  Fire("CHAT_MSG_LOOT", "Sap has selected Greed for: " .. SC)
+  Fire("CHAT_MSG_LOOT", "Need Roll - 87 for " .. SC .. " by Graky")
+  Fire("CHAT_MSG_LOOT", "Greed Roll - 12 for " .. SC .. " by Sap")
+  Fire("CHAT_MSG_LOOT", "Graky won: " .. SC)
+  Fire("CHAT_MSG_LOOT", "Sap receives loot: " .. GREY .. ".")
+  local gl = c.run.groupLoot or {}
+  check(#gl == 1 and gl[1].who == "Graky" and gl[1].how == "won" and gl[1].q == 3, "who won the Stave is in the run (" .. #gl .. ")")
+  local byWho = {}; for _, r in ipairs(gl[1] and gl[1].rolls or {}) do byWho[r.who] = r end
+  check(byWho.Graky and byWho.Graky.choice == "need" and byWho.Graky.roll == 87 and byWho.Sap and byWho.Sap.roll == 12, "the rolls are kept with it")
+  check(c.journal[#c.journal].e == "groupLoot" and c.journal[#c.journal].who == "Graky", "groupLoot in the journal; grey loot of others skipped")
+  local before = #gl
+  Fire("CHAT_MSG_LOOT", "You receive loot: " .. SC .. ".")
+  check(#(c.run.groupLoot or {}) == before, "own loot isn't group loot")
+  IsInInstance, GetInstanceInfo = oldII, oldGI
+  c.run = nil
+  -- flight paths: the map names its continent; paths from the other continent stay
+  c.taxi = { ["Stormwind, Elwynn"] = { first = 1, last = 1 }, ["zzOLDRiverglades, Farholde Keep"] = { first = 1, last = 1 } }
+  local oldTM, oldMap = GetTaxiMapID, C_Map
+  GetTaxiMapID = function() return 1414 end
+  C_Map = setmetatable({ GetMapInfo = function(id) return { name = id == 1414 and "Kalimdor" or "Eastern Kingdoms" } end }, { __index = oldMap })
+  TaxiNodeGetType = TaxiNodeGetType or function() return "REACHABLE" end
+  ns.ReadTaxi()
+  check(c.taxi["Stormwind, Elwynn"] and c.taxi["Talrendis Point, Azshara"] and c.taxi["Talrendis Point, Azshara"].continent == "Kalimdor", "Kalimdor paths added, Eastern Kingdoms ones kept")
+  check(c.taxi["zzOLDRiverglades, Farholde Keep"] == nil, "old zzOLD node dropped")
+  check(c.taxiRead and c.taxiRead.Kalimdor, "which continent was read is saved")
+  GetTaxiMapID, C_Map = oldTM, oldMap
+  if FAILED then error("group loot / flight path checks failed") end
+end
+-- logout after the game has emptied bags, gear and money keeps the last good snapshot's values
+do
+  local function check(ok, what) print((ok and "PASS " or "FAIL ") .. what); if not ok then FAILED = true end end
+  local c; for _, v in pairs(ClaudeCompanionDB.chars) do c = v end
+  local good = c.snap                                         -- the logout above, with everything readable
+  local items = 0; for _, b in ipairs(good.bags or {}) do items = items + #(b.items or {}) end
+  local oldMoney, oldLink, oldInfo = GetMoney(), GetInventoryItemLink, C_Container.GetContainerItemInfo
+  SetMoney(0); GetInventoryItemLink = function() return nil end; C_Container.GetContainerItemInfo = function() return nil end
+  Advance(60); Fire("PLAYER_LOGOUT")
+  local s = c.snap
+  local items2 = 0; for _, b in ipairs(s.bags or {}) do items2 = items2 + #(b.items or {}) end
+  local kept = table.concat(s.kept or {}, ",")
+  check(items > 0 and items2 == items, "logout keeps bag contents the game already emptied (" .. items2 .. " of " .. items .. ")")
+  check(#(good.equipped or {}) > 0 and #(s.equipped or {}) == #good.equipped, "logout keeps worn gear the game already emptied")
+  check(s.character.money == good.character.money and good.character.money > 0, "logout keeps gold when the game reads 0")
+  check(good.kept == nil, "a logout that reads everything keeps nothing")
+  check(s.reason == "logout" and s.taken > good.taken and kept:find("bags") and kept:find("equipped") and kept:find("character.money") and s.keptFrom == good.taken,
+    "logout snapshot lists what it kept and from when (" .. kept .. ")")
+  SetMoney(oldMoney); GetInventoryItemLink = oldLink; C_Container.GetContainerItemInfo = oldInfo
+  if FAILED then error("logout checks failed") end
+end
+-- bosses from the ForeverDungeonJournal addon's run log (same shape as Gabriel's save)
+do
+  local function check(ok, what) print((ok and "PASS " or "FAIL ") .. what); if not ok then FAILED = true end end
+  local c; for _, v in pairs(ClaudeCompanionDB.chars) do c = v end
+  local t0 = ns.Now()
+  ForeverDungeonJournalCharacterDB = { runLog = { runs = { { id = 57, dungeon = "Blackrock Depths", created = t0, lastSeen = t0 + 2700, kills = {
+    { a = 1, t = t0 + 10, m = "Anvilrage Overseer", x = 160 },
+    { a = 1, t = t0 + 900, m = "Golem Lord Argelmach", b = "Golem Lord Argelmach" },
+    { a = 1, t = t0 + 1500, m = "Anger'rel", b = "The Seven" }, { a = 1, t = t0 + 1600, m = "Gloom'rel", b = "The Seven" },
+    { a = 1, t = t0 + 2600, m = "Emperor Dagran Thaurissan", b = "Emperor Dagran Thaurissan", f = 1 } } } } } }
+  local log = ns.ImportBossLog()
+  check(log and #log == 1 and #log[1].bosses == 3, "journal addon log read: 3 bosses, The Seven once (" .. tostring(log and #log[1].bosses) .. ")")
+  check(c.bossLog and c.bossLog.runs[1].bosses[3].name == "Emperor Dagran Thaurissan", "kept in the save for the app")
+  -- a tracked run whose encounter events didn't come gets them at the end
+  local oldII, oldGI = IsInInstance, GetInstanceInfo
+  IsInInstance = function() return true, "party" end
+  GetInstanceInfo = function() return "Blackrock Depths", "party", 1, "Normal", 5, 0, false, 230 end
+  c.run = nil
+  local now0 = ns.Now
+  ns.Now = function() return t0 end; Fire("PLAYER_ENTERING_WORLD")
+  ns.Now = function() return t0 + 2700 end
+  local r = ns.RunEnd("left", t0 + 2700)
+  ns.Now = now0
+  check(r and #r.bosses == 3 and r.bosses[1].source == "journal addon", "run with no encounter events gets its bosses from the log")
+  ForeverDungeonJournalCharacterDB = nil
+  check(ns.ImportBossLog() == nil, "without the journal addon nothing breaks")
+  IsInInstance, GetInstanceInfo = oldII, oldGI
+  if FAILED then error("boss log checks failed") end
+end
+-- AH scan: read a slice per frame with progress, only ask links for " of " items, reread only the missing
+do
+  local function check(ok, what) print((ok and "PASS " or "FAIL ") .. what); if not ok then FAILED = true end end
+  local c; for _, v in pairs(ClaudeCompanionDB.chars) do c = v end
+  local AHm = C_AuctionHouse
+  local oldN, oldInfo, oldLink = AHm.GetNumReplicateItems, AHm.GetReplicateItemInfo, AHm.GetReplicateItemLink
+  local N, loaded, linkCalls = 1000, false, 0
+  AHm.GetNumReplicateItems = function() return N end
+  AHm.GetReplicateItemInfo = function(i)
+    if i % 10 == 0 then -- every 10th: a random-suffix cape, details not loaded on the first read
+      return "Gossamer Cape of Healing", 1, 1, 2, true, 40, 0, 1, 1, 50000 + i, 0, false, nil, "x", "x", 0, 7524, loaded
+    end
+    return "Silk Cloth", 1, 20, 1, true, 40, 0, 1, 1, 2000 + i, 0, false, nil, "x", "x", 0, 4306, true
+  end
+  AHm.GetReplicateItemLink = function(i) linkCalls = linkCalls + 1; return "|cff1eff00|Hitem:7524::::::903:::|h[Gossamer Cape of Healing]|h|r" end
+  c.ah.lastScan = nil
+  local refreshes, pcts = 0, {}
+  local oldRefresh = ns.ScanButtonRefresh
+  ns.ScanButtonRefresh = function() refreshes = refreshes + 1; if ns.ahScan.total then pcts[#pcts + 1] = ns.ahScan.done end end
+  local oldAfter, delayed = C_Timer.After, {}
+  C_Timer.After = function(d, fn) if d >= 15 then delayed[#delayed + 1] = fn else oldAfter(d, fn) end end
+  ns.AHScan()
+  check(ns.ahScan.state == "scanning", "scan waits for the list")
+  Fire("REPLICATE_ITEM_LIST_UPDATE"); Advance(1); RunTimers()
+  -- a timer loop that keeps checking while updates arrive: still waiting, not read yet
+  Fire("REPLICATE_ITEM_LIST_UPDATE")
+  check(ns.ahScan.state == "scanning", "still waiting while the list grows")
+  Advance(3)
+  local frames = 0
+  -- run timers one round at a time to count the frames the read takes
+  for _ = 1, 100 do RunTimers(); frames = frames + 1; if ns.ahScan.state == "idle" then break end end
+  local ls = c.ah.lastScan
+  check(ls and ls.auctions == N, "all " .. N .. " auctions read (" .. tostring(ls and ls.auctions) .. ")")
+  check(#pcts >= 3, "read in slices with progress (" .. #pcts .. " progress updates)")
+  check(linkCalls == 0, "no link asked for plain items, and none for capes whose details weren't loaded (" .. linkCalls .. ")")
+  check(ls and ls.missingInfo == 100, "100 capes waiting for details (" .. tostring(ls and ls.missingInfo) .. ")")
+  local silk = c.ah.prices["4306"] or c.ah.prices[4306]
+  check(silk and silk.obs[#silk.obs].qty == 900 * 20 and silk.obs[#silk.obs].min == 100, "Silk priced per unit from 900 auctions")
+  -- the reread: only the 100 missing rows, now with details
+  loaded = true; linkCalls = 0
+  for _, fn in ipairs(delayed) do fn() end; delayed = {}
+  for _ = 1, 100 do RunTimers(); if ns.ahScan.state == "idle" and c.ah.lastScan.pass then break end end
+  ls = c.ah.lastScan
+  check(ls.pass == 2 and ls.missingInfo == 0 and linkCalls == 100, "second pass rereads only the 100 capes (" .. linkCalls .. " links)")
+  local capeKey; for k, p in pairs(c.ah.prices) do if p.id == 7524 and p.suffix == 903 then capeKey = k end end
+  check(capeKey ~= nil, "the cape is priced with its suffix (of Healing)")
+  -- closing the AH while reading stops cleanly
+  c.ah.lastScan.t = c.ah.lastScan.t - 3600
+  ns.AHScan(); Fire("REPLICATE_ITEM_LIST_UPDATE"); Advance(3)
+  ns.ahScan.state = "reading" -- as if mid-read
+  Fire("AUCTION_HOUSE_CLOSED")
+  check(ns.ahScan.state == "idle", "closing the AH mid-scan stops it")
+  ns.ScanButtonRefresh = oldRefresh; C_Timer.After = oldAfter
+  AHm.GetNumReplicateItems, AHm.GetReplicateItemInfo, AHm.GetReplicateItemLink = oldN, oldInfo, oldLink
+  if FAILED then error("AH scan checks failed") end
 end
 local f = io.open("out.lua", "w"); f:write("ClaudeCompanionDB = " .. ser(ClaudeCompanionDB)); f:close()
 print("DIAG:")

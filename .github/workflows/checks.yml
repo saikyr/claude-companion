@@ -17,8 +17,18 @@ jobs:
         run: for f in ClaudeCompanion/*.lua; do luac5.1 -p "$f"; done
       - name: JavaScript syntax
         run: for f in ClaudeCompanion/web/js/*.js; do node --check "$f"; done
+      - name: App logic (stat weights, item advice)
+        run: node test/web/advice.test.js
       - name: Python syntax
-        run: python3 -m py_compile ClaudeCompanion/web/server.py gamedata/*.py
+        run: python3 -m py_compile ClaudeCompanion/web/server.py gamedata/*.py tools/*.py
+      - name: One character across computers (merge rules)
+        run: node test/web/merge.test.js
+      - name: Self-update, end to end (mock GitHub)
+        run: python3 test/update_test.py
+      - name: Save sync between computers, end to end (shared folder)
+        run: python3 test/sync_test.py
+      - name: From Claude cards format
+        run: python3 tools/check-cards.py test/fixtures/cards.json
       - name: No personal data
         run: |
-          ! git ls-files | grep -E 'SavedVariables|snapshot\.json$|web/data\.js$'
+          ! git ls-files | grep -E 'SavedVariables|snapshot\.json$|settings\.json$|web/data\.js$'

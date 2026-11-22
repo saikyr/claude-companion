@@ -21,10 +21,11 @@
     }
     return (window.CC_ICONS && window.CC_ICONS[ic]) || 'inv_misc_questionmark';
   }
-  // one icon square. o: {item, spell, tip, q, count, key, size, cls, dim}
+  // one icon square. o: {item, spell, tip, q, count, key, size, cls, dim, mark}
+  // mark: the item-advice mark (js/advice.js markOf), a quiet corner sign; docs/ui-language.md
   function icon(ic, o) {
     o = o || {};
-    const cls = ['ic', o.size || '', o.q != null ? 'q' + o.q + 'b' : '', o.dim ? 'dim' : '', o.cls || ''].join(' ').trim();
+    const cls = ['ic', o.size || '', o.q != null ? 'q' + o.q + 'b' : '', o.dim ? 'dim' : '', o.cls || '', o.mark ? o.mark.cls : ''].join(' ').trim();
     let attrs = '';
     if (o.item) attrs = ` data-item="${esc(o.item)}"`;
     else if (o.spell) attrs = ` data-spell="${esc(o.spell)}"${o.rank != null ? ` data-rank="${o.rank}/${o.max}"` : ''}`;
@@ -32,7 +33,8 @@
     const cnt = o.count > 1 ? `<b class="cnt">${o.count}</b>` : '';
     const key = o.key ? `<b class="key">${esc(shortKey(o.key))}</b>` : '';
     const badge = o.badge != null ? `<b class="rk">${o.badge}</b>` : '';
-    return `<span class="${cls}"${attrs}><img loading="lazy" src="${ICON_URL}${iconName(ic)}.jpg" alt="">${cnt}${key}${badge}</span>`;
+    const mk = o.mark ? '<i class="mk"></i>' : '';
+    return `<span class="${cls}"${attrs}><img loading="lazy" src="${ICON_URL}${iconName(ic)}.jpg" alt="">${cnt}${key}${badge}${mk}</span>`;
   }
   const emptySlot = (label) => `<span class="ic empty"${label ? ` title="${esc(label)}"` : ''}></span>`;
   function shortKey(k) { return String(k).replace('SHIFT-', 's').replace('CTRL-', 'c').replace('ALT-', 'a').replace('NUMPAD', 'n').replace('BUTTON', 'm').replace('MOUSEWHEEL', 'w'); }
@@ -220,6 +222,8 @@
     if (it.sell && !/No sell price/.test(h)) extra.push(`<div class="l tipx">Vendor: ${money(it.sell)}</div>`);
     allSourceLines(it).forEach((ln) => extra.push(lineHTML(ln)));
     if (extra.length) h += '<div class="tipsep"></div>' + extra.join('');
+    // what the app advises for this item (js/advice.js)
+    if (window.CC && CC.advice) { try { h += CC.advice.tipHTML(key); } catch (e) { console.warn('advice', e); } }
     return h;
   }
   function spellTip(id, rank) {
@@ -255,15 +259,16 @@
   // ------------------------------------------------------------ tabs
   const TABS = [
     ['overview', 'Overview', 'inv_misc_book_09'], ['character', 'Character', 'inv_chest_cloth_17'], ['bags', 'Bags & Bank', 'inv_misc_bag_08'],
-    ['talents', 'Talents & Bars', 'spell_holy_holybolt'], ['grinds', 'Grinds', 'inv_misc_coin_02'], ['quests', 'Quests', 'inv_misc_note_01'],
+    ['talents', 'Talents & Bars', 'spell_holy_holybolt'], ['grinds', 'Grinds', 'inv_misc_coin_02'], ['runs', 'Dungeons', 'inv_misc_key_10'], ['quests', 'Quests', 'inv_misc_note_01'],
     ['professions', 'Professions', 'trade_engraving'], ['rep', 'Reputation', 'inv_misc_tournaments_banner_human'], ['auction', 'Auction House', 'inv_misc_coin_17'],
     ['journal', 'Journal', 'inv_misc_book_11'], ['system', 'System', 'trade_engineering'], ['gear', 'Gear', 'inv_helmet_06'],
+    ['claude', 'From Claude', 'inv_scroll_03'], ['weights', 'Stat weights', 'inv_misc_note_02'],
   ];
   // sidebar groups (layout only)
   const NAV_GROUPS = [
-    [null, ['overview']],
-    ['Character', ['character', 'gear', 'bags', 'talents', 'rep']],
-    ['Activity', ['quests', 'grinds', 'journal']],
+    [null, ['overview', 'claude']],
+    ['Character', ['character', 'gear', 'weights', 'bags', 'talents', 'rep']],
+    ['Activity', ['quests', 'grinds', 'runs', 'journal']],
     ['Gold', ['professions', 'auction']],
   ];
   // How fresh each kind of saved data is. Things the game only shows while
@@ -318,6 +323,12 @@
     if (rs) { STATE.recSort = rs.dataset.recsort; render(); return; }
     const as = e.target.closest('[data-ahsec]');
     if (as) { STATE.ahSec = as.dataset.ahsec; render(); return; }
+    const fu = e.target.closest('[data-flipused]');
+    if (fu) {
+      const set = usedSet();
+      if (fu.dataset.flipused) set.add(fu.dataset.flipused); else set.clear();
+      localStorage.setItem(usedKey(), JSON.stringify([...set])); render(); return;
+    }
     const sp = e.target.closest('[data-spec]');
     if (sp) { STATE.spec = Number(sp.dataset.spec); render(); }
   });
@@ -339,7 +350,7 @@
     </div>`;
     const cds = cooldowns();
     const ready = arr(s.quests).filter((q) => q.ready || q.complete);
-    h += '<div class="grid2"><section>';
+    h += (window.CC.cards ? window.CC.cards.overview() : '') + '<div class="grid2"><section>';
     if (cds.length || ready.length) {
       h += '<h2>Now</h2><div class="list">';
       cds.forEach((c) => { h += `<div class="li">${icon(c.icon, { size: 'sm' })}<div class="grow">${esc(c.name)}${c.prof ? `<div class="sub">${esc(c.prof)} cooldown</div>` : ''}</div><div class="num">${cdWhen(c)}</div></div>`; });
@@ -386,7 +397,10 @@
       if (!e) return `<div class="gs ${side}">${emptySlot(LABEL[name] || name)}<div class="gt"><span class="dim">${LABEL[name] || name}</span></div></div>`;
       const it = item(e.item) || {};
       const broken = e.durMax && e.dur / e.durMax < 0.25 ? ' <span class="neg">damaged</span>' : '';
-      return `<div class="gs ${side}">${icon(e.icon || it.icon, { item: e.item, q: it.q, size: 'lg' })}<div class="gt">${itemName$(e.item, e.link)}<span class="sub">${it.ilvl ? 'ilvl ' + it.ilvl : ''}${broken}</span></div></div>`;
+      // a soft ring on the slot when something you own would do better here (js/advice.js)
+      const up = window.CC && CC.advice ? CC.advice.slotHint(e.slot) : null;
+      const hint = up ? `<span class="sub pos" data-item="${esc(up.key)}">${esc(up.name)} (${up.where === 'bank' ? 'bank' : 'bags'}) +${up.gain.toFixed(1)} ${esc(up.spec)}</span>` : '';
+      return `<div class="gs ${side}">${icon(e.icon || it.icon, { item: e.item, q: it.q, size: 'lg', mark: up ? { cls: 'adv-slot' } : null })}<div class="gt">${itemName$(e.item, e.link)}<span class="sub">${it.ilvl ? 'ilvl ' + it.ilvl : ''}${broken}</span>${hint}</div></div>`;
     };
     const b = st.base || {};
     const stat = (k, v) => `<div class="st"><span>${k}</span><b>${v == null ? '–' : v}</b></div>`;
@@ -398,10 +412,18 @@
     </div></div>`;
     let h = `<div class="charlay"><div class="cmain"><div class="sheet"><div class="col">${LEFT.map((n) => slot(n, 'l')).join('')}</div><div class="col">${RIGHT.map((n) => slot(n, 'r')).join('')}</div>
       <div class="weap">${WEAP.map((n) => slot(n, 'l')).join('')}</div></div>`;
-    const taxi = Object.entries(CH.taxi || {}).sort((a, b) => a[0].localeCompare(b[0]));
+    const taxi = Object.entries(CH.taxi || {}).filter(([n]) => !/^zzOLD/.test(n)).sort((a, b) => a[0].localeCompare(b[0]));
     const tl = taxi.length ? Math.max(...taxi.map(([, t]) => t.last || 0)) : null;
     h += `<h2>Flight paths <span class="dim small">${taxi.length} known</span> ${savedPill(tl, 30 * 24 * HOUR)}</h2>`;
-    h += taxi.length ? `<div class="chips">${taxi.map(([n]) => `<span class="chip">${esc(n)}</span>`).join('')}</div>` : '<div class="empty">Talk to any flight master once, then Sync.</div>';
+    if (!taxi.length) h += '<div class="empty">Talk to any flight master once, then Sync.</div>';
+    else {
+      // grouped by continent; the flight map only lists the continent you're on
+      const groups = {};
+      taxi.forEach(([n, t]) => { if (/^zzOLD/.test(n)) return; const k = (t && t.continent) || 'Continent not noted yet'; (groups[k] = groups[k] || []).push(n); });
+      Object.entries(groups).sort().forEach(([k, names]) => { h += `<div class="small dim">${esc(k)}</div><div class="chips">${names.map((n) => `<span class="chip">${esc(n)}</span>`).join('')}</div>`; });
+      const read = CH.taxiRead || {};
+      ['Eastern Kingdoms', 'Kalimdor'].filter((k) => !read[k]).forEach((k) => { h += `<div class="dim small">${k}: open a flight map there once, then Sync, to save its flight paths.</div>`; });
+    }
     h += `</div><div class="cside">${stats}`;
     const sets = arr(s.gearSets);
     if (sets.length) {
@@ -427,8 +449,9 @@
     for (let s = 1; s <= (b.slots || 0); s++) {
       const x = bySlot[s];
       if (!x) { if (!compact) cells.push(emptySlot()); continue; }
-      const hide = filter && !itemName(x.item, x.link).toLowerCase().includes(filter);
-      cells.push(icon(x.icon || (item(x.item) || {}).icon, { item: x.item, q: x.q, count: x.count, dim: hide }));
+      const mark = window.CC && CC.advice ? CC.advice.markOf(x.item) : null;
+      const hide = (filter && !itemName(x.item, x.link).toLowerCase().includes(filter)) || (STATE.bagFlag && !(mark && mark.flag === STATE.bagFlag));
+      cells.push(icon(x.icon || (item(x.item) || {}).icon, { item: x.item, q: x.q, count: x.count, dim: hide, mark }));
     }
     const name = label || (b.id === 0 ? 'Backpack' : b.name || 'Bag ' + b.id);
     return `<div class="bagf${b.slots > 24 && !compact ? ' wide' : ''}"><div class="baghd">${b.link ? itemIcon(keyOf(b.link), { size: 'xs' }) : ''}<span>${esc(name)}</span><span class="dim">${b.used || 0}/${b.slots}</span></div><div class="cells">${cells.join('')}</div></div>`;
@@ -439,6 +462,8 @@
     const bags = arr(s.bags);
     const used = bags.reduce((a, b) => a + (b.used || 0), 0), total = bags.reduce((a, b) => a + (b.slots || 0), 0);
     let h = `<div class="toolbar lift"><input class="search" id="bagsearch" placeholder="Search bags and bank" value="${esc(STATE.bagFilter || '')}"><span class="dim">${used}/${total} slots used · ${money(((s.character || {}).money))}</span></div>`;
+    // what to do with things: a quiet mark on each item, the reason in its tooltip; a chip shows only those
+    if (window.CC && CC.advice) h += CC.advice.chipsHTML(STATE.bagFlag);
     h += `<div class="bags">${bags.map((b) => bagFrame(b, f)).join('') || '<div class="empty">Not saved yet.</div>'}</div>`;
     const bank = CH.bank;
     h += `<h2>Bank ${savedPill(bank && bank.taken, 3 * 24 * HOUR)}</h2>`;
@@ -863,87 +888,63 @@
     arr((CH.snap || {}).gearSets).forEach((g) => arr(g.items).forEach((x) => x && x.id > 0 && ids.add(x.id)));
     return ids;
   }
-  function deHelper() {
-    const s = CH.snap || {};
-    const keep = gearIds();
-    const cands = [];
-    const add = (x, where) => {
-      const it = item(x.item) || {};
-      if (!(it.q >= 2 && it.q <= 4) || !(it.class === 2 || it.class === 4) || !it.ilvl || keep.has(it.id)) return;
-      const de = deOutcome(it);
-      if (!de) return;
-      const ahp = x.bound ? null : planPrice(it.id);
-      const sell = ahp ? Math.round(ahp * 0.95) : it.sell || 0;
-      const known = de.missing.length < de.mats.length;
-      cands.push({ x, it, de, sell, how: ahp ? 'AH' : 'vendor', where, known, act: !known ? 'unknown' : de.value > sell ? 'de' : 'sell' });
-    };
-    arr(s.bags).forEach((b) => arr(b.items).forEach((x) => add(x, 'Bags')));
-    arr((CH.bank || {}).bags).forEach((b) => arr(b.items).forEach((x) => add(x, 'Bank')));
-    let h = '';
-    if (!cands.length) return '<div class="empty">Nothing to decide: no unused greens, blues or purples in your bags or bank. Items you wear or keep in a gear set are never listed.</div>';
-    const sum = (k) => cands.filter((c) => c.act === k);
-    const de = sum('de'), sell = sum('sell'), unk = sum('unknown');
-    const ls = (CH.ah || {}).lastScan;
-    h += `<div class="cards c3">
-      <div class="card"><span class="k">Disenchant</span><span class="v">${de.length} item${de.length === 1 ? '' : 's'}</span><span class="sub">worth ≈ ${money(de.reduce((a, c) => a + c.de.value, 0), { short: true })} in materials</span></div>
-      <div class="card"><span class="k">Sell</span><span class="v">${sell.length} item${sell.length === 1 ? '' : 's'}</span><span class="sub">worth ≈ ${money(sell.reduce((a, c) => a + c.sell, 0), { short: true })} after the AH cut</span></div>
-      <div class="card"><span class="k">Prices from</span><span class="v">${ls ? ago(ls.t) : 'no scan'}</span><span class="sub">${ls ? 'your last full AH scan' : 'open the AH in game and press Claude scan'}</span></div>
-    </div>`;
-    h += `<p class="meta">Every green, blue and purple in your bags and bank that you don't wear or keep in a gear set. Do what the right-hand column says.</p>`;
-    const order = { de: 0, sell: 1, unknown: 2 };
-    cands.sort((a, b) => order[a.act] - order[b.act] || Math.abs(b.de.value - b.sell) - Math.abs(a.de.value - a.sell));
-    const likely = (c) => c.de.mats.slice().sort((a, b) => b.ch - a.ch).map((m) => `${m.lo === m.hi ? m.lo : m.lo + '–' + m.hi} ${esc(m.name)} <span class="dim">${Math.round(m.ch * 100)}%</span>`).join(' · ');
-    h += `<div class="table de"><div class="thead"><div>Item</div><div class="c-num">Sell for</div><div class="c-num">Disenchant for</div><div class="c-num">Do this</div></div>`;
-    cands.forEach((c) => {
-      const verdict = c.act === 'de' ? '<span class="badge de">Disenchant</span>' : c.act === 'sell' ? `<span class="badge sell">Sell on ${c.how === 'AH' ? 'AH' : 'vendor'}</span>` : '<span class="badge">No dust price</span>';
-      h += `<div class="tr">
-        <div class="c-main">${itemIcon(c.x.item, { size: 'sm' })}<div class="grow"><div class="nm">${itemName$(c.x.item, c.x.link)}</div><div class="sub">${c.where} · ilvl ${c.it.ilvl}${c.x.bound ? ' · soulbound' : ''} · DE gives ${likely(c)}</div></div></div>
-        <div class="c-num${c.act === 'sell' ? ' best' : ''}">${money(c.sell, { short: true })}</div>
-        <div class="c-num${c.act === 'de' ? ' best' : ''}">${c.known ? '≈ ' + money(c.de.value, { short: true }) : '<span class="dim">–</span>'}</div>
-        <div class="c-num">${verdict}</div></div>`;
-    });
-    h += `</div><details class="how"><summary>How this is worked out</summary><p>Disenchant value is the average result: chance × amount × your AH median for each material, from the disenchanting tables (warcraft.wiki.gg; wow-professions.com/forever lists the same materials). Sell value is the AH median minus the 5% cut, or the vendor price for soulbound items. Materials with no AH price count as zero, so scan the AH first.</p></details>`;
-    return h;
-  }
   // older versions saved a sale twice (again after the gold was taken)
   const salesOf = (ah) => arr(ah.sales).filter((x, i, all) => !(x.net === 0 && all.some((y) => y !== x && y.item === x.item && y.price === x.price && Math.abs(y.t - x.t) < 7200)));
 
-  // Flips: each AH purchase matched to the first later sale of the same item (oldest buy first).
-  // A buy record is one auction (price = what you paid for it). Deposit comes back when it sells,
-  // so profit = sale price - AH cut - what you paid.
+  // Flips: AH purchases matched to later sales of the same item, unit by unit, oldest purchase first.
+  // Buys and sales carry the stack size (count) from the AH letter; older records without one count as a
+  // single unit. Deposit comes back when an auction sells, so profit = sale price - AH cut - what you paid.
+  // A purchase you used yourself can be set aside ("Used, not a flip"), kept in this browser.
+  const usedKey = () => 'cc.flips.used.' + (((CH.snap || {}).character || {}).name || '');
+  const buyId = (b) => `${b.t}|${b.item}|${b.price}`;
+  const usedSet = () => { try { return new Set(JSON.parse(localStorage.getItem(usedKey()) || '[]')); } catch (e) { return new Set(); } };
   function flipsOf(ah) {
-    const sales = salesOf(ah).slice().sort((a, b) => a.t - b.t), used = new Set();
-    const listed = {};
-    arr(ah.owned && ah.owned.list).forEach((a) => { const n = anyItemName(a.id); (listed[n] = listed[n] || []).push(a); });
-    const done = [], open = [];
-    arr(ah.buys).filter((b) => b && b.item).slice().sort((a, b) => a.t - b.t).forEach((b) => {
-      const i = sales.findIndex((x, k) => !used.has(k) && x.item === b.item && x.t >= b.t);
-      if (i < 0) { const l = arr(listed[b.item]).shift(); open.push({ item: b.item, t: b.t, paid: b.price, listedAt: l ? l.buyout : null }); return; }
-      used.add(i);
-      const x = sales[i], cut = x.cut || 0, dep = x.deposit || 0;
-      done.push({ item: b.item, bought: b.t, sold: x.t, paid: b.price, price: x.price, cut, deposit: dep, profit: x.price - cut - b.price });
+    const used = usedSet();
+    const buys = arr(ah.buys).filter((b) => b && b.item && !used.has(buyId(b))).slice().sort((a, b) => a.t - b.t)
+      .map((b) => ({ b, left: b.count || 1, unit: (b.price || 0) / (b.count || 1) }));
+    const done = [];
+    salesOf(ah).slice().sort((a, b) => a.t - b.t).forEach((x) => {
+      const n = x.count || 1, unit = (x.price || 0) / n, cutU = (x.cut || 0) / n, depU = (x.deposit || 0) / n;
+      let need = n;
+      for (const lot of buys) {
+        if (!need) break;
+        if (lot.b.item !== x.item || lot.b.t > x.t || !lot.left) continue;
+        const k = Math.min(need, lot.left);
+        lot.left -= k; need -= k;
+        const paid = Math.round(lot.unit * k), price = Math.round(unit * k), cut = Math.round(cutU * k);
+        done.push({ item: x.item, units: k, bought: lot.b.t, sold: x.t, paid, price, cut, deposit: Math.round(depU * k), profit: price - cut - paid });
+      }
     });
-    const sum = (a, k) => a.reduce((n, x) => n + (x[k] || 0), 0);
+    // what is left of each purchase; listed if one of your auctions has that item (price per unit)
+    const listed = {};
+    arr(ah.owned && ah.owned.list).forEach((a) => { const nm = anyItemName(a.id); listed[nm] = (a.buyout || 0) / (a.qty || 1); });
+    const open = buys.filter((l) => l.left > 0).map((l) => {
+      const u = listed[l.b.item];
+      return { id: buyId(l.b), item: l.b.item, t: l.b.t, units: l.left, paid: Math.round(l.unit * l.left), listedAt: u != null ? Math.round(u * l.left) : null };
+    });
+    const sum = (a, k) => a.reduce((t, x) => t + (x[k] || 0), 0);
     const tied = open.filter((o) => o.listedAt != null);
-    return { done: done.reverse(), open: open.reverse(), totals: { flips: done.length, paid: sum(done, 'paid'), sold: sum(done, 'price'), cut: sum(done, 'cut'), profit: sum(done, 'profit'),
-      unsold: open.length, listed: tied.length, tiedUp: sum(tied, 'paid'), notListed: open.length - tied.length } };
+    return { done: done.reverse(), open: open.reverse(), set: used.size, totals: { flips: done.length, units: sum(done, 'units'), paid: sum(done, 'paid'), sold: sum(done, 'price'), cut: sum(done, 'cut'), profit: sum(done, 'profit'),
+      unsold: open.length, listed: tied.length, tiedUp: sum(tied, 'paid'), notListed: open.length - tied.length, setAside: used.size } };
   }
 
   function flipsView(ah) {
     const F = flipsOf(ah), T = F.totals;
     if (!arr(ah.buys).length) return '<div class="empty">No AH purchases recorded yet. Buys are saved when the item arrives in your mailbox and you take it.</div>';
     const sign = (v) => `<span class="${v >= 0 ? 'pos' : 'neg'}">${v < 0 ? '−' : ''}${money(Math.abs(v))}</span>`;
-    let h = `<p class="meta">${T.flips} sold · ${sign(T.profit)} profit after the AH cut · ${T.listed} still listed (${money(T.tiedUp)} tied up) · ${T.notListed} bought, not listed</p>`;
+    const qty = (n) => (n > 1 ? ` <span class="dim">×${n}</span>` : '');
+    let h = `<p class="meta">${T.flips} sold · ${sign(T.profit)} profit after the AH cut · ${T.listed} still listed (${money(T.tiedUp)} tied up) · ${T.notListed} bought, not listed${T.setAside ? ` · ${T.setAside} set aside as used` : ''}</p>`;
     if (F.done.length) {
       h += `<div class="table flips"><div class="thead"><div>Item</div><div class="c-num">Paid</div><div class="c-num">Sold for</div><div class="c-num">AH cut</div><div class="c-num">Deposit</div><div class="c-num">Profit</div></div>`;
-      F.done.forEach((r) => (h += `<div class="tr"><div class="c-main"><div class="nm">${esc(r.item)}</div><div class="sub">bought ${fmtTime(r.bought)} · sold ${fmtTime(r.sold)}</div></div><div class="c-num">${money(r.paid)}</div><div class="c-num">${money(r.price)}</div><div class="c-num dim">${money(r.cut)}</div><div class="c-num dim">${r.deposit ? money(r.deposit) + ' back' : '–'}</div><div class="c-num best">${sign(r.profit)}</div></div>`));
+      F.done.forEach((r) => (h += `<div class="tr"><div class="c-main"><div class="nm">${esc(r.item)}${qty(r.units)}</div><div class="sub">bought ${fmtTime(r.bought)} · sold ${fmtTime(r.sold)}</div></div><div class="c-num">${money(r.paid)}</div><div class="c-num">${money(r.price)}</div><div class="c-num dim">${money(r.cut)}</div><div class="c-num dim">${r.deposit ? money(r.deposit) + ' back' : '–'}</div><div class="c-num best">${sign(r.profit)}</div></div>`));
       h += `<div class="tr tsum"><div class="c-main"><div class="nm">Total</div></div><div class="c-num">${money(T.paid)}</div><div class="c-num">${money(T.sold)}</div><div class="c-num dim">${money(T.cut)}</div><div></div><div class="c-num best">${sign(T.profit)}</div></div></div>`;
     }
     if (F.open.length) {
       h += `<div class="table flips open"><div class="tsec">Bought, not sold yet</div><div class="thead"><div>Item</div><div class="c-num">Paid</div><div class="c-num">Listed at</div><div class="c-num">If it sells</div></div>`;
-      F.open.forEach((o) => (h += `<div class="tr"><div class="c-main"><div class="nm">${esc(o.item)}</div><div class="sub">bought ${fmtTime(o.t)}</div></div><div class="c-num">${money(o.paid)}</div><div class="c-num">${o.listedAt != null ? money(o.listedAt) : '<span class="dim">not listed</span>'}</div><div class="c-num">${o.listedAt != null ? sign(Math.round(o.listedAt * 0.95) - o.paid) : '<span class="dim">–</span>'}</div></div>`));
+      F.open.forEach((o) => (h += `<div class="tr"><div class="c-main"><div class="nm">${esc(o.item)}${qty(o.units)}</div><div class="sub">bought ${fmtTime(o.t)} · <button class="linkbtn" data-flipused="${esc(o.id)}">Used, not a flip</button></div></div><div class="c-num">${money(o.paid)}</div><div class="c-num">${o.listedAt != null ? money(o.listedAt) : '<span class="dim">not listed</span>'}</div><div class="c-num">${o.listedAt != null ? sign(Math.round(o.listedAt * 0.95) - o.paid) : '<span class="dim">–</span>'}</div></div>`));
       h += '</div>';
     }
+    if (T.setAside) h += `<p class="meta"><button class="linkbtn" data-flipused="">Count the ${T.setAside} set-aside purchase${T.setAside === 1 ? '' : 's'} as flips again</button></p>`;
     return h;
   }
 
@@ -952,12 +953,11 @@
     const prices = Object.entries(ah.prices || {}).map(([k, p]) => ({ k, p })).sort((a, b) => (b.p.last || 0) - (a.p.last || 0));
     const f = (STATE.ahFilter || '').toLowerCase();
     const ls = ah.lastScan;
-    const SECS = [['prices', 'Prices'], ['de', 'Disenchant or sell'], ['sold', 'Sold'], ['flips', 'Flips'], ['mine', 'Your auctions'], ['posted', 'Posted']];
-    const sec = STATE.ahSec || 'prices';
+    const SECS = [['prices', 'Prices'], ['sold', 'Sold'], ['flips', 'Flips'], ['mine', 'Your auctions'], ['posted', 'Posted']];
+    const sec = SECS.some(([k]) => k === STATE.ahSec) ? STATE.ahSec : 'prices';
     const on = (k) => sec === k;
     let h = `<div class="seg">${SECS.map(([k, l]) => `<button data-ahsec="${k}" class="${sec === k ? 'on' : ''}">${l}</button>`).join('')}</div>`;
     h += `<div class="toolbar">${on('prices') ? `<input class="search" id="ahsearch" placeholder="Search prices" value="${esc(STATE.ahFilter || '')}">` : ''}<span class="dim small">${prices.length.toLocaleString()} items priced · ${ls ? `last full scan ${ago(ls.t)} (${ls.auctions.toLocaleString()} auctions)` : 'no full scan yet: open the AH and press <b>Claude scan</b>'}</span></div>`;
-    if (on('de')) h += deHelper();
     const sales = salesOf(ah).slice().reverse();
     if (on('flips')) h += flipsView(ah);
     if (on('sold') && !sales.length) h += '<div class="empty">No sales recorded yet. Sales show up after you take the gold from an AH mail.</div>';
@@ -1013,6 +1013,9 @@
     questDrop: (e) => `Abandoned quest #${e.quest}`, zone: (e) => `Entered ${esc(e.to)}`, death: () => '<span class="neg">Died</span>', note: (e) => `<i>“${esc(e.text)}”</i>`,
     equip: (e) => (e.item ? `Equipped ${itemIcon(e.item, { size: 'xs' })} ${itemName$(e.item, e.link)}` : `Unequipped ${esc(e.slotName || e.slot)}`),
     spec: (e) => `Switched to spec ${e.to}`, session: (e) => `New session${e.label ? ': ' + esc(e.label) : ''}`,
+    runStart: (e) => `Entered <b>${esc(e.name)}</b>: dungeon run started`, runEnd: (e) => `Dungeon run <b>${esc(e.name)}</b> over (${dur(e.secs)}, ${e.kills} kills, ${e.bosses || 0} bosses)`,
+    groupLoot: (e) => `${e.item ? itemIcon(e.item, { size: 'xs' }) + ' ' : ''}${itemName$(e.item, e.link)} → <b>${esc(e.who)}</b>${e.how === 'won' ? ' (won)' : ''}`,
+    runLeft: (e) => `Left ${esc(e.name)}`, runBack: (e) => `Back in ${esc(e.name)}`, boss: (e) => `<b>Killed ${esc(e.name)}</b>`, wipe: (e) => `<span class="neg">Wiped on ${esc(e.name)}</span>`,
     grindStart: (e) => `Started grind <b>${esc(e.name)}</b>`, grindStop: (e) => `Finished grind <b>${esc(e.name)}</b> (${dur(e.secs)}, ${e.kills} kills)`,
     ahPost: (e) => `Posted ${e.link ? itemName$(keyOf(e.link), e.link) : esc(e.name)} ×${e.qty || 1} at ${money(e.unit)}`,
     ahSold: (e) => `Sold ${esc(e.name)}`, ahExpired: (e) => `Expired ${esc(e.name)}`, ahWon: (e) => `Won ${esc(e.name)}`, ahOutbid: (e) => `Outbid on ${esc(e.name)}`, ahRemoved: (e) => `Cancelled ${esc(e.name)}`,
@@ -1024,7 +1027,7 @@
     recipe: (e) => `Learned recipe ${esc(e.name || e.recipe)}`,
     login: () => 'Logged in', logout: () => 'Logged out', skill: (e) => esc(e.text), rep: (e) => esc(e.text), coin: (e) => esc(e.text),
   };
-  const EV_LABEL = { xp: 'XP', money: 'Money', coin: 'Coin', loot: 'Loot', kill: 'Kills', ahPost: 'AH posts', receive: 'Received', zone: 'Zones', group: 'Group', flightPath: 'Flight paths', equip: 'Gear', craft: 'Crafts', skill: 'Skills', login: 'Logins', logout: 'Logouts', disenchant: 'Disenchants', profession: 'Professions', death: 'Deaths', grindStart: 'Grind start', grindStop: 'Grind end', ahScan: 'AH scans', spec: 'Spec', questDone: 'Quests done', questAccept: 'Quests taken', questDrop: 'Quests dropped', level: 'Levels', note: 'Notes', session: 'Sessions', ahSold: 'AH sold', ahExpired: 'AH expired', ahWon: 'AH won', ahOutbid: 'AH outbid', ahRemoved: 'AH cancelled', cooldownCraft: 'Cooldowns', learn: 'Learned', recipe: 'Recipes', rep: 'Reputation' };
+  const EV_LABEL = { xp: 'XP', money: 'Money', coin: 'Coin', loot: 'Loot', kill: 'Kills', ahPost: 'AH posts', receive: 'Received', zone: 'Zones', group: 'Group', flightPath: 'Flight paths', equip: 'Gear', craft: 'Crafts', skill: 'Skills', login: 'Logins', logout: 'Logouts', disenchant: 'Disenchants', profession: 'Professions', death: 'Deaths', grindStart: 'Grind start', grindStop: 'Grind end', runStart: 'Run start', runEnd: 'Run end', runLeft: 'Run left', runBack: 'Run back', boss: 'Bosses', wipe: 'Wipes', groupLoot: 'Group loot', ahScan: 'AH scans', spec: 'Spec', questDone: 'Quests done', questAccept: 'Quests taken', questDrop: 'Quests dropped', level: 'Levels', note: 'Notes', session: 'Sessions', ahSold: 'AH sold', ahExpired: 'AH expired', ahWon: 'AH won', ahOutbid: 'AH outbid', ahRemoved: 'AH cancelled', cooldownCraft: 'Cooldowns', learn: 'Learned', recipe: 'Recipes', rep: 'Reputation' };
   const evRow = (e) => `<div class="ev"><span class="t">${fmtTime(e.t)}</span><span class="what">${EV[e.e] ? EV[e.e](e) : esc(e.e)}</span><span class="where">${esc(e.sub || e.zone || '')}</span></div>`;
   V.journal = function () {
     const all = arr(CH.journal);
@@ -1050,6 +1053,25 @@
     return h;
   };
 
+  // ------------------------------------------------------------ install as an app
+  // Chrome and Edge offer to install the page as its own app (Dock / Start menu, own window);
+  // Safari on a Mac does it with File > Add to Dock (support.apple.com/104996).
+  let installPrompt = null;
+  window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installPrompt = e; render(); });
+  window.addEventListener('appinstalled', () => { installPrompt = null; render(); });
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('[data-install]') || !installPrompt) return;
+    installPrompt.prompt();
+    installPrompt.userChoice.finally(() => { installPrompt = null; render(); });
+  });
+  function installHint() {
+    if (!location.protocol.startsWith('http') || matchMedia('(display-mode: standalone)').matches || navigator.standalone) return '';
+    if (installPrompt) return '<button class="install" data-install title="Its own window, in your Dock or Start menu">Install as an app</button>';
+    const ua = navigator.userAgent;
+    if (/Macintosh/.test(ua) && /Version\/\d+.*Safari\//.test(ua) && !/Chrome|Edg\//.test(ua)) return '<div class="install hint">To keep it in your Dock: <b>File &gt; Add to Dock</b></div>';
+    return '';
+  }
+
   // ------------------------------------------------------------ render
   function render() {
     const app = $('#app');
@@ -1071,7 +1093,7 @@
           <div class="row sb"><span>${money(c.money, { short: true })}</span><span class="dim small">${esc(w.sub || w.zone || '')}</span></div></div>
         <nav>${NAV_GROUPS.map(([gl, keys]) => `<div class="navg">${gl ? `<div class="navh">${gl}</div>` : ''}${keys.filter((k) => V[k]).map(navBtn).join('')}</div>`).join('')}</nav>
         ${g ? `<div class="live-grind" data-tab="grinds"><span class="tag">${g.paused ? 'paused' : 'grinding'}</span> ${esc(g.name)}</div>` : ''}
-        <div class="foot"><button data-tab="system" class="sys${STATE.tab === 'system' ? ' on' : ''}" title="What the addon can read"><img src="${ICON_URL}trade_engineering.jpg" alt="">System</button>
+        <div class="foot">${installHint()}<button data-tab="system" class="sys${STATE.tab === 'system' ? ' on' : ''}" title="What the addon can read"><img src="${ICON_URL}trade_engineering.jpg" alt="">System</button>
         <div class="sync ${STATE.live ? 'on' : ''}" title="${esc(fmtTime(s.taken))}"><span class="dot ${STATE.live ? 'ok' : 'never'}"></span>${STATE.live ? 'Live' : 'Offline copy'} · synced ${ago(s.taken)}</div></div>
       </aside>
       <section class="page"><header class="ph"><h1>${esc(tabLabel)}</h1><div class="ph-tools"></div></header><main>${body}</main></section>`;
@@ -1110,14 +1132,14 @@
   window.CC = {
     load, loadText, V,
     api: { get CH() { return CH; }, STATE, GD, esc, arr, money, icon, itemIcon, anyItemIcon, anyItemName, gdItem, gdTip,
-      gdSourceLines, planPrice, priceOf, flipsOf, cooldowns, specTrees, specLabel, TREE_NAMES, gearIds, item, byId, render, QCOL },
+      gdSourceLines, planPrice, priceOf, trackerStats, lootStrip, ago, dur, fmtTime, flipsOf, cooldowns, specTrees, specLabel, TREE_NAMES, gearIds, item, byId, render, QCOL, deOutcome },
   };
 
   // ------------------------------------------------------------ data sources
-  // 1) data embedded in a published copy, 2) data.js written by the watcher
-  // (checked every 5 seconds), 3) drag and drop the saved file.
+  // 1) data embedded in a published copy, 2) the local server (app mode), 3) drag and drop the saved file.
   const hashTab = (location.hash || '').slice(1);
-  if (V[hashTab]) STATE.tab = hashTab;
+  // any tab name: tabs from js/gear.js and js/cards.js register after this runs (an unknown one shows the Overview)
+  if (/^[a-z]+$/.test(hashTab)) STATE.tab = hashTab;
   const embedded = document.getElementById('cc-embedded');
   const binary = (buf) => { const bytes = new Uint8Array(buf); let out = ''; for (let i = 0; i < bytes.length; i += 8192) out += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192)); return out; };
   if (embedded && embedded.textContent.trim().length > 2) {
@@ -1132,11 +1154,25 @@
       busy = true;
       try {
         const st = await (await fetch('api/stamp', { cache: 'no-store' })).json();
-        if (st.stamp && st.stamp !== lastStamp) {
+        if (st.host || st.os) STATE.device = { host: st.host || null, os: st.os || null };   // which computer (snapshot.device)
+        const both = (st.stamp || '') + '#' + (st.peers || '');
+        if (st.stamp && both !== lastStamp) {
           const buf = await (await fetch('api/data', { cache: 'no-store' })).arrayBuffer();
-          lastStamp = st.stamp;
+          lastStamp = both;
+          STATE.saveStamp = st.stamp;   // the save file's modified time this data came from (snapshot.saveModified)
           STATE.loading = false;
-          loadText(binary(buf), { live: true });
+          // the other computers' saves (sync): merged in, so every computer shows one character
+          const peers = [];
+          for (const part of String(st.peers || '').split('|').filter(Boolean)) {
+            const dev = part.split(':')[0];
+            try {
+              const pb = await (await fetch('api/device-data?dev=' + encodeURIComponent(dev), { cache: 'no-store' })).arrayBuffer();
+              peers.push({ dev, savedAt: part.slice(dev.length + 1), db: window.CCLua.parse(binary(pb)).ClaudeCompanionDB });
+            } catch (e) { console.warn('could not read the save from ' + dev, e); }
+          }
+          STATE.peers = peers.map((p) => ({ dev: p.dev, savedAt: p.savedAt }));
+          const own = window.CCLua.parse(binary(buf)).ClaudeCompanionDB;
+          load(window.CCMerge && peers.length ? window.CCMerge.merge(own, peers, st.device || 'here') : own, { live: true });
         } else if (!st.stamp) { STATE.loading = false; if (!CH) render(); }
         if (STATE.live === false && CH) { STATE.live = true; render(); }
       } catch (e) {
@@ -1146,25 +1182,6 @@
     };
     poll();
     setInterval(poll, 3000);
-    setInterval(() => { if (CH && !document.querySelector('input:focus')) render(); }, 60000);
-  } else {
-    let lastStamp = null;
-    const poll = () => {
-      const s = document.createElement('script');
-      s.src = 'data.js?t=' + Date.now();
-      s.onload = () => {
-        s.remove();
-        const d = window.CC_DATA;
-        if (d && d.b64 && d.written !== lastStamp) {
-          lastStamp = d.written;
-          try { loadText(atob(d.b64), { live: true }); } catch (e) { console.error(e); }
-        } else if (!CH) render();
-      };
-      s.onerror = () => { s.remove(); if (!CH) render(); };
-      document.head.appendChild(s);
-    };
-    poll();
-    setInterval(poll, 5000);
     setInterval(() => { if (CH && !document.querySelector('input:focus')) render(); }, 60000);
   }
   document.addEventListener('dragover', (e) => e.preventDefault());

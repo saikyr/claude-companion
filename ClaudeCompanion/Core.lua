@@ -7,6 +7,7 @@
 --     chars = { ["Name-Realm"] = <char> },
 --     items = { [itemString] = { id, name, q, ilvl, ..., icon, tip = { {l,lc,r,rc}, ... } } },
 --     inboxSeen = "<stamp>",
+--     cacheStats = { evicted, lastEvict, cap },   -- item cache housekeeping (oldest unused items make room)
 --   }
 --   <char> = {
 --     key, created, lastSync, syncs,
@@ -172,7 +173,48 @@ local function TooltipLines(link)
     return #out > 0 and out or nil
 end
 
+-- The cache is capped (LIMITS.items). When it is full, the items seen longest ago make room, a tenth
+-- of the cap at a time, but never one that any character wears, carries, banks, has in the mail or
+-- keeps in a gear set: those are what the Gear tab scores and the app names.
+local function InUse()
+    local keep, ids = {}, {}
+    local function walk(list) -- {item = key} rows, directly or inside bags
+        if type(list) ~= "table" then return end
+        for _, x in pairs(list) do
+            if type(x) == "table" then
+                if type(x.item) == "string" then keep[x.item] = true end
+                if x.items then walk(x.items) end
+            end
+        end
+    end
+    for _, c in pairs(ClaudeCompanionDB.chars or {}) do
+        local s = c.snap or {}
+        walk(s.equipped); walk(s.bags); walk(c.bank and c.bank.bags); walk(c.mail and c.mail.list)
+        for _, g in pairs(s.gearSets or {}) do
+            for _, x in pairs(type(g) == "table" and g.items or {}) do if type(x) == "table" and x.id then ids[x.id] = true end end
+        end
+    end
+    return keep, ids
+end
+
 local itemCount = nil
+local function MakeRoom(items)
+    local keep, ids = InUse()
+    local old = {}
+    for k, e in pairs(items) do
+        if not keep[k] and not ids[e.id] then old[#old + 1] = { k = k, seen = e.seen or 0 } end
+    end
+    table.sort(old, function(a, b) return a.seen < b.seen end)
+    local drop = math.min(#old, math.max(1, math.floor(LIMITS.items / 10)))
+    for i = 1, drop do items[old[i].k] = nil end
+    itemCount = itemCount - drop
+    local d = ClaudeCompanionDB.cacheStats or {}
+    ClaudeCompanionDB.cacheStats = d
+    d.evicted = (d.evicted or 0) + drop; d.lastEvict = ns.Now(); d.cap = LIMITS.items
+    if drop == 0 then d.fullOfInUse = (d.fullOfInUse or 0) + 1 end
+    return drop > 0
+end
+
 function ns.NoteItem(link)
     local key = ns.ItemString(link)
     if not key then return nil end
@@ -181,7 +223,7 @@ function ns.NoteItem(link)
     if e and e.name and e.tip then e.seen = ns.Now(); return key end
     if not e then
         if not itemCount then itemCount = 0; for _ in pairs(items) do itemCount = itemCount + 1 end end
-        if itemCount >= LIMITS.items then return key end
+        if itemCount >= LIMITS.items and not MakeRoom(items) then return key end
         e = {}; items[key] = e; itemCount = itemCount + 1
     end
     e.id = tonumber(key:match("^item:(%-?%d+)"))
