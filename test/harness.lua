@@ -421,7 +421,7 @@ do
   local c; for _, v in pairs(ClaudeCompanionDB.chars) do c = v end
   local panel = ClaudeCompanionGrind
   local PATTERN = "|cff1eff00|Hitem:14482::::::|h[Pattern: Cindercloth Cloak]|h|r"
-  check(ns.DROPS and ns.DROPS[14482] and ns.DROPS[14482][1] == "Thaurissan Firewalker", "Drops.lua is loaded from the .toc and has the pack's rows")
+  check(ns.DROPS and ns.DROPS[725] and ns.DROPS[725][1] == "Riverpaw Bandit" and ns.DROPS[725][3] == 87 and ns.DROPS[14482] == nil, "Drops.lua is loaded from the .toc and has only Forever-measured rows")
   local none, why = ns.GrindTarget(PATTERN)
   check(none == nil and why:find("start a grind"), "/cc target with no grind says to start one")
   ns.GrindStart("Thaurissan")
@@ -430,9 +430,18 @@ do
   g.kills, g.killsBy = 27, { ["Thaurissan Firewalker"] = 27 }
   g.loot["4338"] = { id = 4338, name = "Mageweave Cloth", link = "|cffffffff|Hitem:4338::|h[Mageweave Cloth]|h|r", q = 1, count = 12 }
   local t = ns.TargetStats(g, g.targets[1])
-  check(t.got == 0 and math.abs(t.expected - 27 * 0.0178) < 1e-9 and t.kills == 27 and t.forever == false,
-    "expected = kills x drop chance (" .. tostring(t.expected) .. "), Classic rate")
-  check(math.abs(t.none - (1 - 0.0178) ^ 27) < 1e-9, "chance of none after 27 kills (" .. string.format("%.2f", t.none) .. ")")
+  check(not ns.DROPS[14482] and t.got == 0 and t.expected == nil and t.rated == false and t.kills == 27,
+    "no Forever-measured rate (Classic only): no expected, rate unknown, counted against all 27 kills")
+  local r, lo, hi = ns.OwnRange(0, 27)
+  check(r == 0 and lo < 1e-9 and hi > 10 and hi < 15, "own rate 0 in 27 kills has a 95% range up to " .. string.format("%.1f", hi) .. "%")
+  -- an item ForeverDB measured on Forever: Riverpaw Gnoll drops 725 at 29.49% over 356 kills
+  local gnoll = { id = 725, name = "Gnoll Paw" }
+  g.killsBy["Riverpaw Gnoll"] = 10
+  ns.TargetStats(g, gnoll)
+  check(ns.DROPS[725] and math.abs(gnoll.expected - 10 * 0.2949) < 1e-9 and gnoll.sample == 356 and gnoll.kills == 10,
+    "expected = kills x Forever-measured chance (" .. tostring(gnoll.expected) .. ", " .. tostring(gnoll.sample) .. " kills measured)")
+  check(math.abs(gnoll.none - (1 - 0.2949) ^ 10) < 1e-9, "chance of none after 10 kills")
+  g.killsBy["Riverpaw Gnoll"] = nil
   local ok, err = pcall(ns.UpdateGrindPanel)
   check(ok, "the panel draws a running grind with a target and drops (" .. tostring(err) .. ")")
   g.loot["14482"] = { id = 14482, name = "Pattern: Cindercloth Cloak", link = PATTERN, q = 2, count = 1 }
@@ -446,7 +455,7 @@ do
   panel._scripts.OnClick(panel, "RightButton"); IsShiftKeyDown = shift
   local done = c.grinds[#c.grinds]
   check(c.grind == nil and done == g, "shift-right-click stops it")
-  check(done.targets[1].id == 14482 and done.targets[1].got == 1 and done.targets[1].expected ~= nil, "the saved grind keeps each target's dropped and expected")
+  check(done.targets[1].id == 14482 and done.targets[1].got == 1 and done.targets[1].kills == 27, "the saved grind keeps each target's dropped count and kills")
   ok, err = pcall(ns.UpdateGrindPanel)
   check(ok, "the panel draws the finished grind's summary (" .. tostring(err) .. ")")
   panel._scripts.OnClick(panel, "RightButton")
@@ -455,7 +464,7 @@ do
     "the next /cc start with that name has the same targets, counted from zero")
   local drops = ns.DROPS; ns.DROPS = nil
   t = ns.TargetStats(c.grind, c.grind.targets[1])
-  check(t.expected == nil and t.rated == false, "without Drops.lua (no game restart yet) there's no expected, and no error")
+  check(t.expected == nil and t.rated == false and t.kills == 0, "without Drops.lua (no game restart yet) there's no expected, and no error")
   ok, err = pcall(ns.UpdateGrindPanel); ns.DROPS = drops
   check(ok, "the panel draws without Drops.lua (" .. tostring(err) .. ")")
   ns.GrindStop(true)

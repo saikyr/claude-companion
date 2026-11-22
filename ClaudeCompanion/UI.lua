@@ -200,10 +200,10 @@ for i = 1, 3 do
     local ic = b:CreateTexture(nil, "ARTWORK")
     ic:SetSize(14, 14); ic:SetPoint("LEFT", 0, 0)
     pcall(ic.SetTexCoord, ic, 0.08, 0.92, 0.08, 0.92)
-    local n = Text(b, 11, C.t1)
-    n:SetPoint("LEFT", ic, "RIGHT", 6, 0); n:SetPoint("RIGHT", -78, 0)
     local v = Text(b, 11, C.t2, "RIGHT")
     v:SetPoint("RIGHT", 0, 0)
+    local n = Text(b, 11, C.t1)
+    n:SetPoint("LEFT", ic, "RIGHT", 6, 0); n:SetPoint("RIGHT", v, "LEFT", -8, 0)
     b.ic, b.n, b.v = ic, n, v
     b:Hide()
     targetRows[i] = b
@@ -291,7 +291,9 @@ local function TargetText(t)
     local got = t.got or 0
     local gotTxt = (got > 0 and Hex(C.pos) or Hex(C.t1)) .. got .. "|r"
     if t.expected then return gotTxt .. Hex(C.t3) .. string.format(" of %.2f", t.expected) .. "|r" end
-    return gotTxt .. Hex(C.t3) .. (t.rated and " · 0 kills" or " · no rate") .. "|r"
+    if t.rated then return gotTxt .. Hex(C.t3) .. " · none killed" .. "|r" end
+    if got > 0 and (t.kills or 0) > 0 then return gotTxt .. Hex(C.t3) .. string.format(" · 1 per %d kills", math.floor(t.kills / got + 0.5)) .. "|r" end
+    return gotTxt .. Hex(C.t3) .. " · rate unknown|r"
 end
 
 local function Layout(g)
@@ -472,19 +474,24 @@ for _, row in ipairs(targetRows) do
             if (t.got or 0) == 0 then
                 GameTooltip:AddDoubleLine("Chance of none by now", string.format("%d%%", math.floor(t.none * 100 + 0.5)), 0.64, 0.64, 0.68, 1, 1, 1)
             end
-            GameTooltip:AddLine(t.forever and "Drop chances measured on Forever (ForeverDB)." or "Classic drop chances (ForeverDB): Forever may differ.", 0.42, 0.43, 0.47, true)
+            GameTooltip:AddLine(string.format("Drop chances ForeverDB measured on Forever kills (at least %d kills each).", t.sample or 0), 0.42, 0.43, 0.47, true)
         elseif not ns.DROPS then
             GameTooltip:AddLine("Drop chances show after you restart the game (this update added them).", 0.91, 0.64, 0.23, true)
         elseif t.rated then
             GameTooltip:AddLine("Nothing you killed in this grind drops it.", 0.42, 0.43, 0.47, true)
         else
-            GameTooltip:AddLine("The game data has no drop chance for it.", 0.42, 0.43, 0.47, true)
+            GameTooltip:AddLine("Forever drop rate unknown: no one has measured it on Forever. Classic rates aren't used.", 0.42, 0.43, 0.47, true)
+            local r, lo, hi = ns.OwnRange(t.got or 0, t.kills)
+            if r then
+                GameTooltip:AddDoubleLine(string.format("Yours: %d in %d kills", t.got or 0, t.kills),
+                    string.format("%.1f%% (95%%: %.1f-%.1f%%)", r, lo, hi), 0.64, 0.64, 0.68, 1, 1, 1)
+            end
         end
         local rows = ns.DROPS and ns.DROPS[t.id]
         if rows then
             GameTooltip:AddLine(" ")
             for i = 1, math.min(18, #rows), 3 do
-                GameTooltip:AddDoubleLine(rows[i], rows[i + 1] .. "%" .. (rows[i + 2] == 1 and "" or " (Classic)"), 1, 1, 1, 0.64, 0.64, 0.68)
+                GameTooltip:AddDoubleLine(rows[i], string.format("%s%%  (%d kills)", rows[i + 1], rows[i + 2]), 1, 1, 1, 0.64, 0.64, 0.68)
             end
         end
         GameTooltip:AddLine((ns.char and ns.char.grind) and "/cc target the item again to take it off." or " ", 0.42, 0.43, 0.47, true)

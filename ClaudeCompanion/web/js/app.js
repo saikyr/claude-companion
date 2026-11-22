@@ -705,11 +705,11 @@
     return `<div class="destrip"><span class="dim small">Disenchanted</span>${d.map((x) => `${x.item ? itemIcon(x.item, { size: 'xs', count: x.count }) : ''}<span class="arrow">→</span>${Object.values(x.out || {}).map((o) => (o.item ? itemIcon(o.item, { size: 'xs', count: o.count }) : '')).join('')}`).join('<span class="gap"></span>')}</div>`;
   }
   // items farmed for (/cc target): how many dropped, and how many the kills should have given (the
-  // addon works it out from the pack's drop chances, Drops.lua; Classic unless ForeverDB measured it)
+  // addon works it out from Drops.lua: only chances ForeverDB measured on Forever, never Classic)
   function targetsLine(g) {
     const t = arr(g.targets);
     if (!t.length) return '';
-    return `<div class="small">${t.map((x) => `${esc(x.name || '?')}: <b>${x.got || 0}</b>${x.expected != null ? ` <span class="dim">of ${x.expected.toFixed(2)} expected from ${x.kills} kills (${x.forever ? 'Forever' : 'Classic'} rate)</span>` : ''}`).join(' · ')}</div>`;
+    return `<div class="small">${t.map((x) => `${esc(x.name || '?')}: <b>${x.got || 0}</b>${x.expected != null ? ` <span class="dim">of ${x.expected.toFixed(2)} expected from ${x.kills} kills (Forever rate, ${x.sample}+ kills measured)</span>` : x.rated ? '' : ` <span class="dim">in ${x.kills || 0} kills · Forever rate unknown</span>`}`).join(' · ')}</div>`;
   }
   function grindCard(g, live) {
     const s = trackerStats(g);

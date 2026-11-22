@@ -182,8 +182,9 @@ end
 
 ---------------------------------------------------------------- targets (/cc target <item>)
 -- Items you farm for. Each shows on the panel with how many dropped and how many the kills so far
--- should have given: the pack's drop chance (Drops.lua, ForeverDB) times your kills of each creature
--- that drops it. Kept per grind name, so the next /cc start with that name has them again.
+-- should have given: the drop chance ForeverDB measured on Forever kills (Drops.lua; never a
+-- Classic rate) times your kills of each creature that drops it. No Forever rate: "rate unknown",
+-- and only your own count. Kept per grind name, so the next /cc start with that name has them again.
 function ns.ItemFromText(text)
     text = strtrim(text or "")
     if text == "" then return nil end
@@ -232,18 +233,19 @@ function ns.GrindTarget(text)
     return added, name
 end
 
--- got: how many dropped. expected: what your kills should have given; nil when you killed nothing
--- the pack lists as dropping it (or Drops.lua isn't loaded: it needs a game restart after the
--- update that added it). rated: the pack has a drop chance for it at all. none: the chance of no
--- drop at all after these kills. forever: every chance used was measured on Forever (else Classic).
--- kills: kills of creatures that drop it. Written onto the target, so the saved grind has them.
+-- got: how many dropped. expected: what your kills should have given, from Forever-measured chances
+-- only; nil when there is no Forever rate for it (rated = false), when you killed nothing that drops
+-- it, or when Drops.lua isn't loaded (it needs a game restart after the update that added it).
+-- none: the chance of no drop at all after these kills. sample: the fewest Forever kills behind a
+-- chance used. kills: kills of the creatures that drop it; with no rate, every kill of the grind.
 function ns.TargetStats(g, t)
     local l = g.loot and g.loot[tostring(t.id)]
     t.got = l and l.count or 0
     local rows = ns.DROPS and ns.DROPS[t.id]
-    t.expected, t.none, t.forever, t.kills, t.rated = nil, nil, nil, 0, rows ~= nil
+    t.expected, t.none, t.sample, t.rated, t.kills = nil, nil, nil, rows ~= nil, 0
+    t.forever = nil -- older builds' Classic/Forever flag: only Forever rates are used now
     if rows then
-        local exp, none, forever = 0, 1, true
+        local exp, none, sample = 0, 1, nil
         for i = 1, #rows, 3 do
             local k = g.killsBy and g.killsBy[rows[i]]
             if k and k > 0 then
@@ -251,12 +253,24 @@ function ns.TargetStats(g, t)
                 exp = exp + k * p
                 none = none * (1 - math.min(p, 1)) ^ k
                 t.kills = t.kills + k
-                if rows[i + 2] ~= 1 then forever = false end
+                sample = math.min(sample or rows[i + 2], rows[i + 2])
             end
         end
-        if t.kills > 0 then t.expected, t.none, t.forever = exp, none, forever end
+        if t.kills > 0 then t.expected, t.none, t.sample = exp, none, sample end
+    else
+        t.kills = g.kills or 0
     end
     return t
+end
+
+-- your own rate: got in kills, with a 95% range (Wilson), as drops per 100 kills
+function ns.OwnRange(got, kills)
+    if not kills or kills <= 0 then return nil end
+    local z, n, p = 1.96, kills, got / kills
+    local d = 1 + z * z / n
+    local mid = (p + z * z / (2 * n)) / d
+    local half = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / d
+    return p * 100, math.max(0, mid - half) * 100, math.min(1, mid + half) * 100
 end
 
 function ns.GrindReport(g)
@@ -274,7 +288,7 @@ function ns.GrindReport(g)
     if #parts > 0 then ns.Print("Drops: " .. table.concat(parts, ", ")) end
     for _, t in ipairs(g.targets or {}) do
         ns.Print(string.format("Target %s: %d dropped%s.", t.link or t.name or "?", t.got or 0,
-            t.expected and string.format(", %.2f expected from %d kills (%s rate)", t.expected, t.kills, t.forever and "Forever" or "Classic") or ""))
+            t.expected and string.format(", %.2f expected from %d kills (Forever rate)", t.expected, t.kills) or ", Forever rate unknown"))
     end
 end
 
