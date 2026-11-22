@@ -73,10 +73,20 @@
     const m = /\[(.+?)\]/.exec(link || (it && it.link) || '');
     return m ? m[1] : '?';
   }
+  const idOfKey = (key) => { const m = /^item:(\d+)/.exec(key || ''); return m ? Number(m[1]) : null; };
   function itemIcon(key, o) {
     o = o || {};
     const it = item(key) || {};
-    return icon(o.icon || it.icon, Object.assign({ item: key, q: o.q != null ? o.q : it.q }, o));
+    // a key this save's item cache doesn't have (another computer's loot, an item seen at another
+    // level): the same item by id from the cache, else the game-data pack
+    let ic = o.icon || it.icon, q = it.q;
+    if (ic == null) {
+      const id = idOfKey(key);
+      const mine = id && ITEM_BY_ID[id], g = id && gdItem(id);
+      ic = (mine && mine.icon) || (g && g[5]);
+      if (q == null) q = mine && mine.q != null ? mine.q : g ? g[1] : undefined;
+    }
+    return icon(ic, Object.assign({ item: key, q: o.q != null ? o.q : q }, o));
   }
   function itemName$(key, link, q) {
     const it = item(key) || {};
@@ -245,8 +255,10 @@
   const wowText = (t) => esc(t).replace(/\|c[0-9a-f]{2}([0-9a-f]{6})([\s\S]*?)(\|r|$)/gi, '<span style="color:#$1">$2</span>').replace(/\|r/g, '');
   const lineHTML = (ln) => `<div class="l"><span style="color:#${ln.lc || 'ffffff'}">${wowText(ln.l || '')}</span>${ln.r ? `<span class="r" style="color:#${ln.rc || 'ffffff'}">${wowText(ln.r)}</span>` : ''}</div>`;
   function itemTip(key) {
-    const it = item(key);
-    if (!it) return null;
+    // a key the item cache doesn't have: the same item by id, else the pack's tooltip
+    const id = idOfKey(key);
+    const it = item(key) || (id && ITEM_BY_ID[id]);
+    if (!it) return id && gdItem(id) ? arr(gdTip(id)).map(lineHTML).join('') : null;
     let h;
     if (it.tip && arr(it.tip).length) h = arr(it.tip).map(lineHTML).join('');
     else {
@@ -348,12 +360,12 @@
     add('mail', 'Mailbox', (CH.mail || {}).taken, 'Open a mailbox, then Sync', 'bags', 3 * 24 * HOUR);
     return out;
   }
-  // Sidebar: how fresh this is. WoW writes the addon's data to disk only on /reload (/cc sync) and
+  // Sidebar: how fresh this is. WoW writes the addon's data to disk only on /reload and
   // logout, so while you play the app shows your last save; the addon keeps every change meanwhile
   // (a spec swap, new gear, kills) and it all appears at the next save.
   function saveStatus(s) {
     const saved = s.taken ? ago(s.taken) : 'never';
-    const why = 'WoW writes addon data only when you /reload (or /cc sync, or the Sync key) and when you log out. '
+    const why = 'WoW writes addon data only when you /reload and when you log out. '
       + 'Nothing is lost meanwhile: the addon keeps every change and it all shows at the next save.';
     let dot, text, tip;
     if (!STATE.live) { dot = 'never'; text = `App offline · saved ${saved}`; tip = 'The app can\'t reach its local server; this is the last copy it read.'; }
@@ -694,9 +706,11 @@
   }
   function grindCard(g, live) {
     const s = trackerStats(g);
+    // the app sees a /cc stop only once the game has saved it
+    const liveTip = live ? `As of the last save (${fmtTime((CH.snap || {}).taken)}). A /cc stop shows here after the game saves: /reload or log out.` : '';
     const kills = Object.entries(g.killsBy || {}).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([n, k]) => `${esc(killName(n))} ×${k}`).join(', ');
     return `<div class="grind${live ? ' live' : ''}">
-      <div class="ghd"><span class="gname">${esc(g.name || 'Grind')}</span>${live ? `<span class="tag">${g.paused ? 'paused' : 'running'}</span>` : ''}<span class="dim small">${fmtDay(g.start)} · ${dur(s.secs)}${g.startZone ? ' · ' + esc(g.startZone) : ''}</span></div>
+      <div class="ghd"><span class="gname">${esc(g.name || 'Grind')}</span>${live ? `<span class="tag" title="${esc(liveTip)}">${g.paused ? 'paused' : 'running'}</span>` : ''}<span class="dim small">${fmtDay(g.start)} · ${dur(s.secs)}${g.startZone ? ' · ' + esc(g.startZone) : ''}</span></div>
       <div class="gnums"><div><span class="k">Per hour</span><span class="v">${gph(s.perHour)}</span></div><div><span class="k">Total</span><span class="v">${money(s.total, { short: true })}</span></div><div><span class="k">Gold looted</span><span class="v">${money(s.coin, { short: true })}</span></div><div><span class="k">Items</span><span class="v">${money(s.ah, { short: true })}</span></div><div><span class="k">Kills</span><span class="v">${g.kills || 0} <span class="dim small">${Math.round((g.kills || 0) / s.hrs)}/hr</span></span></div>${g.xp ? `<div><span class="k">XP/hr</span><span class="v">${Math.round(g.xp / s.hrs).toLocaleString()}</span></div>` : ''}</div>
       <div class="row wrap">${lootStrip(g) || '<span class="dim small">no drops</span>'}</div>
       ${deStrip(g)}
@@ -1157,7 +1171,7 @@
   // ------------------------------------------------------------ render
   function render() {
     const app = $('#app');
-    if (!CH) { app.innerHTML = `<div class="drop"><p><b>Claude Companion</b></p><p>${STATE.loading ? 'Loading your character…' : 'No data yet. Type <b>/cc sync</b> in game and this page fills in by itself.'}</p></div>`; return; }
+    if (!CH) { app.innerHTML = `<div class="drop"><p><b>Claude Companion</b></p><p>${STATE.loading ? 'Loading your character…' : 'No data yet. Type <b>/reload</b> in game and this page fills in by itself.'}</p></div>`; return; }
     const s = CH.snap || {}, c = s.character || {}, w = c.where || {};
     const xpPct = c.level >= MAX_LEVEL ? 100 : c.xpMax ? (100 * (c.xp || 0)) / c.xpMax : 0;
     const restPct = c.level < MAX_LEVEL && c.xpMax && c.rested ? Math.min(100 - xpPct, (100 * c.rested) / c.xpMax) : 0;

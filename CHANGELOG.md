@@ -3,6 +3,11 @@
 Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 
 ## 1.5.0 (in progress: every merge to main updates itself)
+- **/reload is the one way to save.** `/cc sync`, the window's Sync button and its key binding are gone:
+  they only did a /reload, and refused to in combat, so a stop could go unsaved. `/cc stop` now says
+  the app shows it after your next /reload or logout; a running grind's tag says it's as of the last save.
+- **Loot icons and tooltips always show.** An item this computer's item cache doesn't have (another
+  computer's loot, an old grind) takes its icon and tooltip from the game-data pack instead of a "?".
 - **The Now page shows your next steps**, ranked: dungeons (one run's expected upgrades, by drop chance,
   plus their quests), quests worth doing for their rewards (with the chain still to do), items to chase on
   the AH or to craft, profession skill that opens an upgrade (with the cheapest skill-ups), and attunements

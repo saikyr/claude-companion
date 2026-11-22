@@ -22,7 +22,7 @@ Works for any class and spec. English game client only, for now.
      yet, it offers Apple's free Command Line Tools; install them and open the app again.
 3. The installer finds your WoW Forever folder (or asks you to pick the **World of Warcraft** folder),
    puts the addon in `_forever_/Interface/AddOns/ClaudeCompanion` and opens the app in your browser.
-4. In game: `/reload` if the game was running, then `/cc sync`. The app shows your character a few
+4. In game: `/reload` (WoW saves addon data only on /reload and logout). The app shows your character a few
    seconds later.
 
 From then on the app starts by itself (hidden) when you sign in to your computer, and **updates
@@ -31,7 +31,7 @@ says so. To keep it handy: **Install as an app** in the app's sidebar (Chrome, E
 **File > Add to Dock**. On Windows it is also in the Start menu.
 
 To fill everything in once: open your bank, each profession window, a flight master, a mailbox and
-the auction house (press **Claude scan**), switch to your other spec, then `/cc sync`. The Overview tab
+the auction house (press **Claude scan**), switch to your other spec, then `/reload`. The Overview tab
 shows what is up to date.
 
 ## Several computers
@@ -45,8 +45,8 @@ played last saw it.
 
 | Command | What |
 | --- | --- |
-| `/cc` | The Claude Companion window: a note to Claude, and Sync |
-| `/cc sync` | Save everything now (reloads the UI) |
+| `/cc` | The Claude Companion window: a note to Claude, and the grind button |
+| `/reload` | Save everything now (WoW writes addon data only on /reload and logout) |
 | `/cc start <name>` / `/cc stop` / `/cc pause` | Track a grind: time, kills, loot, gold and XP per hour |
 | `/cc status` | Gold, kills and XP per hour so far |
 | `/cc scan` | Full auction house scan (AH open; the game allows one every 15 min) |

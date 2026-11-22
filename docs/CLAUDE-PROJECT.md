@@ -21,7 +21,7 @@ computers still sync with each other; their Claude reads the snapshot file the a
 
 ## Set up (a friend)
 
-1. Install the app and play once: `/cc sync` in game, then open the app. The app writes
+1. Install the app and play once: `/reload` in game, then open the app. The app writes
    `AddOns/ClaudeCompanion/companion-data/snapshot.json`.
 2. In Claude, create a project (for example "WoW Forever"). Paste the instructions below into the
    project's instructions, with your character filled in.

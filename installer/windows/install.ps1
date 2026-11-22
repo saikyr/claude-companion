@@ -94,4 +94,4 @@ if ($Quiet) { Write-Output "Installed into $dest"; exit 0 }
 Start-Process -FilePath (Join-Path $dest 'web\Claude Companion.bat') -WindowStyle Hidden
 Say ("Claude Companion is installed in`n$dest`n`n" +
      "The app opens in your browser in a moment, and from now on it's in the Start menu and updates by itself.`n`n" +
-     "In game: if WoW Forever is running, type /reload. Then /cc sync saves everything for the app.")
+     "In game: type /reload. It saves everything for the app.")

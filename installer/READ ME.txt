@@ -12,9 +12,9 @@ The installer finds your WoW Forever folder (or asks you to pick it), puts the a
 _forever_/Interface/AddOns/ClaudeCompanion and opens the app in your browser. From then on the app
 starts by itself when you sign in to your computer and updates itself. Nothing else to download.
 
-In game: type /reload if the game was running, then /cc sync. The app shows your character a few
+In game: type /reload (it saves everything). The app shows your character a few
 seconds later. Open your bank, profession windows, a flight master and the auction house once
-(press "Claude scan"), switch to your other spec once, then /cc sync again to fill everything in.
+(press "Claude scan"), switch to your other spec once, then /reload again to fill everything in.
 
 Your data
   Everything the addon records stays in your game's own saved file. The app syncs your history

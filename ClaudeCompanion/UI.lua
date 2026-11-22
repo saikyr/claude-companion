@@ -1,4 +1,4 @@
--- The only window: where Claude's advice is, a box to write Claude a note, and a Sync button.
+-- The only window: where Claude's advice is, a box to write Claude a note, and a Start/Stop grind button.
 -- Hidden unless you open it (/cc). Claude's suggestions are cards in the app (From Claude tab).
 local _, ns = ...
 
@@ -72,21 +72,9 @@ status:SetPoint("BOTTOMLEFT", 16, 16)
 status:SetPoint("RIGHT", -100, 0)
 status:SetJustifyH("LEFT")
 
-local sync = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-sync:SetSize(80, 22)
-sync:SetPoint("BOTTOMRIGHT", -14, 12)
-sync:SetText("Sync")
-sync:SetScript("OnClick", function() ClaudeCompanion_Sync() end)
-sync:SetScript("OnEnter", function(self)
-    GameTooltip:SetOwner(self, "ANCHOR_TOP")
-    GameTooltip:SetText("Sync")
-    GameTooltip:AddLine("Saves everything for Claude (reloads your UI, about 2 seconds).", 1, 1, 1, true)
-    GameTooltip:Show()
-end)
-sync:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
 local HELP = "Claude's suggestions (farms, flips, quests, gear) are cards in the Claude Companion app, in its From Claude tab.\n\n"
-    .. "Leave Claude a note below. Sync saves everything now (it reloads your UI), and the app shows it a few seconds later.\n\n"
+    .. "Leave Claude a note below. WoW saves addon data when you /reload or log out; the app shows it a few seconds later.\n\n"
     .. "/cc start <name> tracks a grind, /cc stop ends it, /cc scan scans the Auction House."
 local function Refresh()
     title:SetText("Claude Companion")
@@ -106,18 +94,11 @@ function ClaudeCompanion_Toggle()
     if f:IsShown() then f:Hide() else f:Show() end
 end
 
-function ClaudeCompanion_Sync()
-    if InCombatLockdown() then ns.Print("can't sync in combat, try again after.") return end
-    ns.Print("syncing...")
-    if ns.char then ns.char.syncRequested = ns.Now() end
-    if ns.MarkReload then ns.MarkReload() end
-    ReloadUI() -- the game writes saved data during the reload
-end
 
 ---------------------------------------------------------------- grind button in the window
 local grindBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
 grindBtn:SetSize(100, 22)
-grindBtn:SetPoint("RIGHT", sync, "LEFT", -6, 0)
+grindBtn:SetPoint("BOTTOMRIGHT", -14, 12)
 grindBtn:SetScript("OnClick", function()
     if ns.char and ns.char.grind then ns.GrindStop() else ns.GrindStart() end
     ns.UpdateGrindButton()
@@ -236,7 +217,7 @@ local HELP = {
     "/cc start [name]  start a grind, e.g. /cc start azshara",
     "/cc stop  finish the grind and show the summary",
     "/cc pause  pause or resume the grind",
-    "/cc sync  save everything now (reloads UI)",
+    "/reload  saves everything (WoW writes addon data only on /reload and logout)",
     "/cc note <text>  leave Claude a note",
     "/cc status  gold, kills and XP per hour so far",
     "/cc scan  scan the whole auction house (AH open, every 15 min)",
@@ -247,7 +228,7 @@ local function Slash(msg)
     local cmd, rest = msg:match("^(%S+)%s*(.-)$")
     cmd = (cmd or ""):lower()
     if cmd == "" then ClaudeCompanion_Toggle()
-    elseif cmd == "sync" or cmd == "save" then ClaudeCompanion_Sync()
+    elseif cmd == "sync" or cmd == "save" then ns.Print("/cc sync is gone: type /reload, it saves everything.")
     elseif cmd == "note" or cmd == "n" then
         if rest == "" then ns.Print("type /cc note followed by your note.")
         else ns.AddNote(rest); ns.Print("note saved.") end
@@ -255,7 +236,8 @@ local function Slash(msg)
         local g = ns.GrindStart(rest)
         if g then ns.Print("grind started: |cffffd100" .. g.name .. "|r. /cc stop when you're done.") end
     elseif cmd == "stop" or cmd == "end" or cmd == "finish" then
-        if not ns.GrindStop() then ns.Print("no grind running. /cc start to begin one.") end
+        if not ns.GrindStop() then ns.Print("no grind running. /cc start to begin one.")
+        else ns.Print("the app shows it after the game saves: /reload now, or it goes at logout.") end
     elseif cmd == "pause" or cmd == "resume" then
         local paused = ns.GrindPause()
         if paused == nil then ns.Print("no grind running.") else ns.Print(paused and "grind paused." or "grind resumed.") end
@@ -269,11 +251,3 @@ end
 SLASH_CLAUDECOMPANION1 = "/cc"
 SLASH_CLAUDECOMPANION2 = "/claude"
 SlashCmdList.CLAUDECOMPANION = Slash
-
--- one quiet line at login, only after a /cc sync
-ns.OnLogin(function()
-    if ns.char.syncRequested and ns.Now() - ns.char.syncRequested < 120 then
-        ns.char.syncRequested = nil
-        ns.Print("synced.")
-    end
-end)
