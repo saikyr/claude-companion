@@ -6,6 +6,8 @@ a spare port; the test asks for the update status, installs, and checks:
   - the update was offered, and installed (marker present, installed.json written)
   - companion-data (snapshot, settings, update.json, cards) is untouched, SCHEMA.md is updated
   - a backup of the old addon was made, without companion-data
+  - files an older build had and this one doesn't are removed (outside companion-data)
+  - the status names the app's build and the build the game last saved with (a /reload is due)
   - the API call carried the token and the redirected download did not
   - the server came back up on its own after the restart
     python test/update_test.py            (server.py)
@@ -30,6 +32,7 @@ def build_zip(corrupt=False):
             if rel.startswith('companion-data/'): continue
             files[rel] = open(os.path.join(root, f), 'rb').read()
     files['web/UPDATE_MARKER.txt'] = b'new build'
+    files['web/channel.json'] = json.dumps({'repo': 'me/cc', 'branch': 'stable', 'build': 'newbuild5678'}).encode()
     files['companion-data/SCHEMA.md'] = b'# new schema'
     sums = {k: hashlib.sha256(v).hexdigest() for k, v in files.items()}
     files['companion-data/settings.json'] = b'{"evil": "must not be copied"}'   # not in BUILD.json, never copied anyway
@@ -79,8 +82,14 @@ def main():
     threading.Thread(target=gh.serve_forever, daemon=True).start()
     tmp = tempfile.mkdtemp(prefix='cc-updtest-')
     addon = os.path.join(tmp, '_forever_', 'Interface', 'AddOns', 'ClaudeCompanion')
-    os.makedirs(os.path.join(tmp, '_forever_', 'WTF'))
+    sv = os.path.join(tmp, '_forever_', 'WTF', 'Account', 'T', 'SavedVariables')
+    os.makedirs(sv)
+    with open(os.path.join(sv, 'ClaudeCompanion.lua'), 'w') as f: f.write('ClaudeCompanionDB = {\n["schema"] = 1,\n["addonBuild"] = "oldbuild1234",\n["chars"] = {},\n}\n')
     shutil.copytree(SRC, addon, ignore=shutil.ignore_patterns('__pycache__', 'data'))
+    stale = [os.path.join(addon, 'Inbox.lua'), os.path.join(addon, 'web', 'old', 'style.css')]   # an older build's files
+    for p in stale:
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        with open(p, 'w') as f: f.write('old')
     cd = os.path.join(addon, 'companion-data')
     os.makedirs(os.path.join(cd, 'from-claude'), exist_ok=True)
     personal = {'snapshot.json': '{"mine": 1}', 'settings.json': '{"cc.gear": "mine"}', 'from-claude/cards.json': '{"cards": []}'}
@@ -117,6 +126,8 @@ def main():
         for k, v in personal.items():
             check(open(os.path.join(cd, k)).read() == v, 'companion-data/' + k + ' untouched')
         check(json.load(open(os.path.join(cd, 'update.json'))) == cfg, 'update.json (token) untouched')
+        check(not any(os.path.exists(p) for p in stale) and not os.path.exists(os.path.join(addon, 'web', 'old')), 'an older build\'s files removed')
+        check(os.path.isfile(os.path.join(addon, 'web', 'index.html')) and os.path.isfile(os.path.join(addon, 'Core.lua')), 'the build\'s own files kept')
         check(open(os.path.join(cd, 'SCHEMA.md')).read() == '# new schema', 'SCHEMA.md updated')
         inst = json.load(open(os.path.join(cd, 'installed.json')))
         check(inst.get('tag') == 'abc123def456' and inst.get('version') == '1.4.0', 'installed.json names the build')
@@ -135,6 +146,7 @@ def main():
         check(up, 'server back up after the restart')
         st2 = json.loads(get(base + 'api/update?force=1')) if up else {}
         check(st2.get('available') is False, 'after the update nothing more is offered')
+        check((st2.get('builds') or {}) == {'app': 'newbuild5678', 'game': 'oldbuild1234'}, 'status names both builds (a /reload is due): ' + json.dumps(st2.get('builds')))
     finally:
         # stop every copy of the test server (the restarted one is a new process on Windows)
         if PS1:

@@ -21,7 +21,7 @@
 
 1. **Nothing is installed by hand or by an agent.** Code reaches a computer only through the
    updater, from a build that passed CI and that a person merged. The merge is the approval.
-2. **One mechanism for everyone.** Gabriel's PC and Mac and a friend's computers use the same updater.
+2. **One mechanism for everyone.** Every computer, yours or a friend's, uses the same updater.
 3. **The game owns its saves.** Each computer's `SavedVariables` is written by the game and only read
    by the app.
 4. **One writer per file.** The updater writes the addon folder (never `companion-data/`); the page
@@ -37,13 +37,13 @@
 | `.github/workflows/publish.yml` | After the checks pass on `main`: `tools/publish-stable.py` |
 | `tools/publish-stable.py` | Copies `ClaudeCompanion/` (with the game-data pack) to the `stable` branch with `BUILD.json` (version, source commit, every file's SHA-256) and `web/channel.json` (where this build keeps updating from). One commit per build. Never packs personal data |
 | Public download repo (optional) | Set the repository variable `DIST_REPO` and secret `DIST_TOKEN`: the same build also goes to a public repo, whose builds point their updater at it. Friends need no GitHub account or token |
-| Updater (`server.py` / `server.ps1`, `/api/update`) | Every 30 min: newest commit of the channel's `stable`. Auto-install (default) or the app's Install button. Download the zipball → reject unsafe paths → check every file against `BUILD.json` → back up the addon folder (last 5) → copy over (never `companion-data/`) → `installed.json` → restart |
+| Updater (`server.py` / `server.ps1`, `/api/update`) | Every 30 min: newest commit of the channel's `stable`. Auto-install (default) or the app's Install button. Download the zipball → reject unsafe paths → check every file against `BUILD.json` → back up the addon folder (last 5) → copy exactly the build's files and remove files an older build had (never `companion-data/`) → `installed.json` → restart |
 | `tools/install.sh` | First install on a Mac (or repair). Afterwards the Mac updates itself |
 | Windows first install | Unzip into AddOns, double-click `Claude Companion.bat` once |
 
 The private repository needs a token to read: `gh auth token` (GitHub CLI signed in), or
 `companion-data/update.json` `"token"`. Builds from the public download repo need none.
-Verified for real on Gabriel's PC on 22 Nov: the app installed build `d7dd338` from `stable` by itself
+Verified for real on a Windows PC on 22 Nov: the app installed build `d7dd338` from `stable` by itself
 (36 files, checksums matched, backup made, server restarted).
 
 ## Sync between computers (Supabase)
@@ -99,7 +99,7 @@ computer** shows an 8-character code (30 minutes, works once, 40 bits from `gen_
 the other computer enters; a computer gets at most 10 wrong codes an hour. Joining
 moves nothing: the joining account points at the one it joined (`accounts.merged_into`), its computers
 move over, and reads cover the whole group. Claude can also join two accounts it knows are one
-person's (`private.merge_accounts`), so Gabriel's PC and Mac need no code.
+person's (`private.merge_accounts`), so one person's computers need no code.
 
 **Security.** All tables have row-level security on and no policies: the API can't read or write them
 (checked with the anon role: 0 rows). The only way in is the `cc_*` functions (security definer, fixed
@@ -151,7 +151,7 @@ link codes and the accounts.
 and 5 GB cached egress a month; 1 GB file storage; 50,000 monthly active users; unlimited API requests;
 500,000 edge function invocations; 2 active projects per organization; **paused after 1 week of
 inactivity** (any play syncs, which counts as activity); no automatic backups; 1 day of logs. Pro is
-from $25 a month. Size: Gabriel's Mac save of 22 Nov is about 7,900 records (7,400 of them AH price
+from $25 a month. Size: a level-59 player's save on 22 Nov is about 7,900 records (7,400 of them AH price
 observations), a few MB, so one player uses well under 1% of the database a month.
 
 ## On one computer: addon, save, local app
@@ -161,7 +161,7 @@ observations), a few MB, so one player uses well under 1% of the database a mont
  ┌──────────────────────────────────────────┐
  │ ClaudeCompanion addon (Lua)              │   events, C_* APIs, tooltips
  │  Core · Snapshot · Journal · Market ·    │
- │  Professions · UI · Inbox                │
+ │  Professions · UI                        │
  └───────────────┬──────────────────────────┘
                  │ on /cc sync (ReloadUI) or logout the game writes
                  ▼
@@ -187,8 +187,8 @@ Claude → player channel: **From Claude cards** (`js/cards.js`). Claude writes
 `companion-data/from-claude/cards.json` (one format for farms, flips, quests, gear...; checked with
 `tools/check-cards.py`); the app polls it through the server every 5 s and saves the player's
 done / dismissed / ticked steps to `from-claude/state.json`, which Claude reads back. One writer per
-file. Format: `companion-data/SCHEMA.md`. The older `Inbox.lua` message (shown in the `/cc` window
-after a `/reload`) still works for a note inside the game.
+file. Format: `companion-data/SCHEMA.md`. (The old in-game message file, `Inbox.lua`, is gone: the
+updater replaces the addon's files, so nothing Claude wrote there would last.)
 
 ## Addon modules
 
@@ -254,13 +254,21 @@ disenchant tables have no gaps) and warns when the pack is more than 30 days old
 
 ## Contracts
 
-1. **`ClaudeCompanionDB`** (SavedVariables, `schema = 1`): layout at the top of `Core.lua`. The app
-   tolerates missing fields; new fields can appear any time.
-2. **`snapshot.json`** (`schema = 1`): `ClaudeCompanion/companion-data/SCHEMA.md`. Bump `schema`
-   only when a field changes meaning or is removed. Claude reads this before the raw save.
-3. **`gamedata.js`**: positional arrays per item; schema documented at the top of `gamedata/build.py`.
-4. **Local HTTP API**: the endpoints above, plus the files the page keeps in `companion-data/` (`/api/settings`, `/api/sync`, `/api/sync-cache`, `/api/cards`, `/api/cards-state`). Same on both servers; keep them identical.
-5. **Sync backend**: the `cc_*` functions in `supabase/migrations/`. Additive changes only; the app of every computer calls them.
+The parts are written and updated separately (the addon's Lua loads at a `/reload`, the app's page when
+the window reloads, the backend once for everyone), so each place they meet has one owner, one version,
+and a CI check (`test/contract.test.js`, first step of `checks.yml`) that fails when two sides disagree.
+
+| Contract | Owner | Version | Rules | Checked |
+| --- | --- | --- | --- | --- |
+| Addon version | `ClaudeCompanion.toc` `## Version` | semver | `Core.lua` `ns.VERSION` and the newest `CHANGELOG.md` section say the same | versions agree |
+| Build | `tools/publish-stable.py` | source commit | stamps `Core.lua` `ns.BUILD` and writes `web/channel.json` `build`; the addon saves `addonBuild`, the servers report both (`/api/update` `builds`), and the app says "type /reload" while they differ | one `ns.BUILD = "dev"` line, update test |
+| **`ClaudeCompanionDB`** (SavedVariables, `schema = 1`) | `Core.lua` (layout at the top) | `ns.SCHEMA` | new fields any time, readers tolerate missing ones; bump only when a field changes meaning | schema agrees here and in `Core.lua` |
+| Lua tables in the page | `js/lua.js` | | a Lua table keyed 1..n arrives as a JS array (index 0..n-1). Anything the game numbers (specs 1 and 2, bag ids, action slots) is re-keyed to the game's numbers once, where the save is read (`specsByGroup`, `js/merge.js`), never offset by hand elsewhere | `merge.test.js` (specs keep 1 and 2) |
+| **`snapshot.json`** | `js/claude.js` writes, `companion-data/SCHEMA.md` documents | `schema = 1` | bump only when a field changes meaning or is removed; Claude reads this before the raw save | schema agrees |
+| `gamedata.js` | `gamedata/build.py` (schema at its top) | pack date | one source per domain (Data sources) | "Game data complete" |
+| Local HTTP API | `server.py` and `server.ps1`, identical | | the endpoints above, plus the files the page keeps in `companion-data/` | both servers serve the same paths, the page calls only those, the same files are writable; `server-api.test.js` on both |
+| Sync backend | `supabase/migrations/` (`cc_*` functions) | migration file name | additive only; a migration on `main` is never edited (the live database already ran it): changes go in a new file. Every record's `id` is its content's identity (`js/sync.js`), so the same event from two computers is one record | every call in `js/sync.js` is defined; no merged migration edited |
+| Installed files | `BUILD.json` | build | the updater copies exactly the build's files and removes what an older build had (outside `companion-data/`) | `update_test.py` on both servers |
 
 ## Where things live on a computer
 

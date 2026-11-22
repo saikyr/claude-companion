@@ -23,6 +23,10 @@ jobs:
           printf '0.0.0.0 jucbngafdnyaizfxgplk.supabase.co\n:: jucbngafdnyaizfxgplk.supabase.co\n' | sudo tee -a /etc/hosts
           ! curl -s --max-time 5 -o /dev/null https://jucbngafdnyaizfxgplk.supabase.co
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # the contract check compares migrations with the branch this merges into
+      - name: Contract between addon, servers, page and sync backend (docs/ARCHITECTURE.md, Contracts)
+        run: node test/contract.test.js "${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || 'HEAD~1' }}"
       - name: Install Lua 5.1
         run: sudo apt-get update -qq && sudo apt-get install -y -qq lua5.1
       - name: Addon harness (mock game API)
@@ -96,3 +100,5 @@ jobs:
           if ($code -ne 0) { Get-Content "$env:RUNNER_TEMP\server.log", "$env:RUNNER_TEMP\server.err" -ErrorAction SilentlyContinue }
           Stop-Process -Id $srv.Id -Force -ErrorAction SilentlyContinue
           exit $code
+      - name: Self-update, end to end (server.ps1, mock GitHub)
+        run: python test/update_test.py --ps1

@@ -1,5 +1,5 @@
--- The only window: Claude's latest message to you, a box to write a note
--- back, and a Sync button. Hidden unless you open it (/cc).
+-- The only window: where Claude's advice is, a box to write Claude a note, and a Sync button.
+-- Hidden unless you open it (/cc). Claude's suggestions are cards in the app (From Claude tab).
 local _, ns = ...
 
 local W, H = 440, 330
@@ -85,17 +85,18 @@ sync:SetScript("OnEnter", function(self)
 end)
 sync:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
+local HELP = "Claude's suggestions (farms, flips, quests, gear) are cards in the Claude Companion app, in its From Claude tab.\n\n"
+    .. "Leave Claude a note below. Sync saves everything now (it reloads your UI), and the app shows it a few seconds later.\n\n"
+    .. "/cc start <name> tracks a grind, /cc stop ends it, /cc scan scans the Auction House."
 local function Refresh()
-    local inbox = ClaudeCompanionInbox or {}
-    title:SetText(inbox.title or "Claude")
-    stamp:SetText(inbox.stamp and ("from Claude, " .. inbox.stamp) or "")
-    body:SetText(strtrim(inbox.text or "No message yet."))
+    title:SetText("Claude Companion")
+    stamp:SetText(ns.VERSION and ("version " .. ns.VERSION) or "")
+    body:SetText(HELP)
     child:SetHeight(math.max(10, body:GetStringHeight() + 6))
     if ns.char then
         local g = ns.char.grind
         status:SetText(g and ("Grind: " .. ns.TrackerLine(g)) or ("Session: " .. ns.SessionLine()))
         if ns.UpdateGrindButton then ns.UpdateGrindButton() end
-        if inbox.stamp then ClaudeCompanionDB.inboxSeen = inbox.stamp end
     end
 end
 f:SetScript("OnShow", Refresh)
@@ -269,14 +270,10 @@ SLASH_CLAUDECOMPANION1 = "/cc"
 SLASH_CLAUDECOMPANION2 = "/claude"
 SlashCmdList.CLAUDECOMPANION = Slash
 
--- one quiet line at login, only when Claude left something new
+-- one quiet line at login, only after a /cc sync
 ns.OnLogin(function()
-    local inbox = ClaudeCompanionInbox
     if ns.char.syncRequested and ns.Now() - ns.char.syncRequested < 120 then
         ns.char.syncRequested = nil
         ns.Print("synced.")
-    end
-    if inbox and inbox.stamp and inbox.stamp ~= ClaudeCompanionDB.inboxSeen then
-        C_Timer.After(4, function() ns.Print("new message from Claude: |cffffd100" .. (inbox.title or "") .. "|r. Type /cc to read.") end)
     end
 end)
