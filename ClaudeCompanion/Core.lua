@@ -3,10 +3,9 @@
 -- Saved file: WTF\Account\<account>\SavedVariables\ClaudeCompanion.lua
 -- Layout (schema 1):
 --   ClaudeCompanionDB = {
---     schema = 1, addonVersion = "1.0.0",
+--     schema = 1, addonVersion = "1.5.0", addonBuild = "<source commit>",
 --     chars = { ["Name-Realm"] = <char> },
 --     items = { [itemString] = { id, name, q, ilvl, ..., icon, tip = { {l,lc,r,rc}, ... } } },
---     inboxSeen = "<stamp>",
 --     cacheStats = { evicted, lastEvict, cap },   -- item cache housekeeping (oldest unused items make room)
 --   }
 --   <char> = {
@@ -22,8 +21,11 @@
 --   }
 -- All times are Unix epoch seconds (time()). Positions are map % (0-100).
 local ADDON, ns = ...
-ns.VERSION = "1.4.0"
+ns.VERSION = "1.5.0"
 ns.SCHEMA = 1
+-- the source commit of this build: tools/publish-stable.py writes it here; "dev" in a checkout.
+-- The app compares it with the build it runs itself, to say when the game still needs a /reload.
+ns.BUILD = "4c420a4acebf"
 
 BINDING_HEADER_CLAUDECOMPANION = "Claude Companion"
 BINDING_NAME_CLAUDECOMPANION_SYNC = "Sync (save data now)"
@@ -377,6 +379,8 @@ ns.On("ADDON_LOADED", function(name)
     local db = ClaudeCompanionDB
     db.schema = ns.SCHEMA
     db.addonVersion = ns.VERSION
+    db.addonBuild = ns.BUILD
+    db.inboxSeen = nil   -- the old in-game message from Claude (Inbox.lua) was replaced by From Claude cards
     db.chars = db.chars or {}
     db.items = db.items or {}
     db.spells = db.spells or {}

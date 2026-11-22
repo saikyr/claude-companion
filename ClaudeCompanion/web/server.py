@@ -9,7 +9,7 @@
 #                            other computers' history, in companion-data/ (sync.json, sync-cache.json)
 # It serves the app and reads the game's saved file (ClaudeCompanion.lua) directly.
 # The server itself only answers this computer. The page syncs history with the backend (js/sync.js).
-import glob, json, os, shutil, subprocess, sys, tempfile, threading, time, urllib.error, urllib.request, webbrowser
+import glob, json, os, re, shutil, subprocess, sys, tempfile, threading, time, urllib.error, urllib.request, webbrowser
 from datetime import datetime, timezone
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 
@@ -168,7 +168,7 @@ class Handler(BaseHTTPRequestHandler):
 # Installing: download, check the zip has the whole addon, copy the current addon folder to a backup
 # (the last 5 are kept), then copy the new files over it. Never touched: companion-data/ (your
 # snapshot, settings, Claude's cards; only its SCHEMA.md is updated) and the game's saved data (WTF/).
-# Files the release doesn't have are left alone. Afterwards the server restarts itself on the new code;
+# Files an older build had and this one doesn't are removed (they are in the backup). Afterwards the server restarts itself on the new code;
 # the addon's own Lua takes effect at the next /reload in game.
 # The repository is private, so downloads need a GitHub token: companion-data/update.json "token",
 # else CC_GITHUB_TOKEN, else the GitHub CLI's (`gh auth token`). A public repository needs none.
@@ -257,13 +257,52 @@ def check_update(force=False):
     return _upd['latest']
 
 
+_game_build = {'key': None, 'build': None}
+
+
+def builds():
+    # which build the app runs (web/channel.json, written by the build) and which the game ran at its
+    # last save (the addon writes ClaudeCompanionDB.addonBuild): they differ until a /reload in game
+    app = read_json(os.path.join(WEB, 'channel.json'), {}).get('build')
+    game, path = None, find_save()
+    if path:
+        key = (path, os.path.getmtime(path))
+        if _game_build['key'] != key:
+            m = None
+            try:
+                with open(path, 'rb') as f: m = re.search(rb'\["addonBuild"\]\s*=\s*"([0-9A-Za-z]{1,40})"', f.read())
+            except OSError: pass
+            _game_build.update(key=key, build=m.group(1).decode() if m else '')   # '': a save from before 1.5
+        game = _game_build['build']
+    return {'app': app, 'game': game}
+
+
 def update_status(force=False):
     latest = check_update(force)
     inst = read_json(INSTALLED, {})
     cfg = upd_cfg()
-    return {'installed': inst or None, 'latest': latest, 'available': bool(latest and latest['tag'] != inst.get('tag')),
+    return {'installed': inst or None, 'latest': latest, 'available': bool(latest and latest['tag'] != inst.get('tag')), 'builds': builds(),
             'auto': bool(cfg.get('auto', True)), 'busy': _upd['busy'], 'error': _upd['error'], 'last': _upd['last'],
             'checked': datetime.fromtimestamp(_upd['checked'], timezone.utc).isoformat() if _upd['checked'] else None}
+
+
+def prune(addon, ship):
+    # files in the addon folder that the build doesn't have (outside companion-data/): left over from an
+    # older build, so they go (the backup made just before keeps them). Returns how many were removed.
+    n = 0
+    for root, dirs, files in os.walk(addon, topdown=True):
+        rel = os.path.relpath(root, addon).replace(os.sep, '/')
+        if rel == 'companion-data' or rel.startswith('companion-data/'): dirs[:] = []; continue
+        for f in files:
+            r = f if rel == '.' else rel + '/' + f
+            if r not in ship:
+                try: os.remove(os.path.join(root, f)); n += 1
+                except OSError: pass
+    for root, dirs, files in os.walk(addon, topdown=False):   # then folders left empty
+        if root != addon and not os.listdir(root) and not os.path.relpath(root, addon).startswith('companion-data'):
+            try: os.rmdir(root)
+            except OSError: pass
+    return n
 
 
 def install_update():
@@ -303,20 +342,22 @@ def install_update():
         shutil.copytree(ADDON, backup, ignore=shutil.ignore_patterns('companion-data', '__pycache__'))
         olds = sorted(d for d in os.listdir(BACKUPS) if d.startswith('ClaudeCompanion-'))
         for d in olds[:-5]: shutil.rmtree(os.path.join(BACKUPS, d), ignore_errors=True)
+        # copy exactly the build's files (BUILD.json), then remove what an earlier build had and this one
+        # doesn't, so no old file lingers; companion-data/ is yours and only its SCHEMA.md is the build's
+        ship = set(build['files'])
         copied = 0
-        for root, dirs, files in os.walk(src):
-            rel = os.path.relpath(root, src)
-            parts = [] if rel == '.' else rel.split(os.sep)
-            if parts[:1] == ['companion-data']:
-                files = [f for f in files if parts == ['companion-data'] and f == 'SCHEMA.md']
-            for f in files:
-                dest = os.path.join(ADDON, *parts, f)
-                os.makedirs(os.path.dirname(dest), exist_ok=True)
-                shutil.copy2(os.path.join(root, f), dest)
-                if f == 'launcher' or f.endswith(('.command', '.sh')): os.chmod(dest, 0o755)   # zips don't keep the run bit
-                copied += 1
+        for rel in sorted(ship):
+            parts = rel.split('/')
+            if parts[0] == 'companion-data' and rel != 'companion-data/SCHEMA.md': continue
+            dest = os.path.join(ADDON, *parts)
+            os.makedirs(os.path.dirname(dest), exist_ok=True)
+            shutil.copy2(os.path.join(src, *parts), dest)
+            if parts[-1] == 'launcher' or rel.endswith(('.command', '.sh')): os.chmod(dest, 0o755)   # zips don't keep the run bit
+            copied += 1
+        removed = prune(ADDON, ship)
         shutil.rmtree(work, ignore_errors=True)
-        info = {'tag': latest['tag'], 'sha': latest['sha'], 'version': build.get('version'), 'at': datetime.now(timezone.utc).isoformat(), 'backup': backup, 'files': copied}
+        info = {'tag': latest['tag'], 'sha': latest['sha'], 'version': build.get('version'), 'at': datetime.now(timezone.utc).isoformat(), 'backup': backup, 'files': copied, 'removed': removed,
+                'build': build.get('build')}
         write_json(INSTALLED, info)
         _upd['last'] = info
         print(f"updated to {latest['tag']} ({copied} files; backup {backup})", flush=True)

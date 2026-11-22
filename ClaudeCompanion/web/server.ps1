@@ -288,11 +288,28 @@ function Check-Update([switch]$Force) {
     }
     $upd.latest
 }
+$gameBuild = @{ key = $null; build = $null }
+# which build the app runs (web\channel.json, written by the build) and which the game ran at its last
+# save (the addon writes ClaudeCompanionDB.addonBuild): they differ until a /reload in game
+function Get-Builds {
+    $ch = Read-Json (Join-Path $web 'channel.json')
+    $app = if ($ch -and $ch.build) { [string]$ch.build } else { $null }
+    $sv = Get-Save
+    if ($sv) {
+        $key = $sv.FullName + '|' + $sv.LastWriteTimeUtc.Ticks
+        if ($gameBuild.key -ne $key) {
+            $b = ''   # '': a save from before 1.5
+            try { $m = [regex]::Match([System.Text.Encoding]::ASCII.GetString((Read-Shared $sv.FullName)), '\["addonBuild"\]\s*=\s*"([0-9A-Za-z]{1,40})"'); if ($m.Success) { $b = $m.Groups[1].Value } } catch { }
+            $gameBuild.key = $key; $gameBuild.build = $b
+        }
+    }
+    @{ app = $app; game = $gameBuild.build }
+}
 function Get-UpdStatus([switch]$Force) {
     $latest = Check-Update -Force:$Force
     $inst = Read-Json $installedFile
     $cfg = Get-UpdCfg
-    @{ installed = $inst; latest = $latest; available = [bool]($latest -and (-not $inst -or $latest.tag -ne $inst.tag)); auto = $cfg.auto
+    @{ installed = $inst; latest = $latest; available = [bool]($latest -and (-not $inst -or $latest.tag -ne $inst.tag)); auto = $cfg.auto; builds = (Get-Builds)
        busy = $false; error = $upd.error; last = $upd.last; checked = $(if ($upd.checked -ne [DateTime]::MinValue) { $upd.checked.ToUniversalTime().ToString('o') } else { $null }) }
 }
 function Install-Update {
@@ -331,17 +348,30 @@ function Install-Update {
         New-Item -ItemType Directory -Path $backup -Force | Out-Null
         Get-ChildItem -LiteralPath $addonDir -Force | Where-Object { $_.Name -ne 'companion-data' } | Copy-Item -Destination $backup -Recurse -Force
         Get-ChildItem -LiteralPath $backupDir -Directory | Where-Object { $_.Name -like 'ClaudeCompanion-*' } | Sort-Object Name | Select-Object -SkipLast 5 | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+        # copy exactly the build's files (BUILD.json), then remove what an earlier build had and this one
+        # doesn't, so no old file lingers; companion-data\ is yours and only its SCHEMA.md is the build's
+        $ship = @{}
+        foreach ($p in $build.files.PSObject.Properties) { $ship[$p.Name] = $true }
         $copied = 0
-        foreach ($f in (Get-ChildItem -LiteralPath $src -Recurse -File)) {
-            $rel = $f.FullName.Substring($src.Length).TrimStart('\')
-            if ($rel -like 'companion-data\*' -and $rel -ne 'companion-data\SCHEMA.md') { continue }
-            $dest = Join-Path $addonDir $rel
+        foreach ($rel in $ship.Keys) {
+            if ($rel -like 'companion-data/*' -and $rel -ne 'companion-data/SCHEMA.md') { continue }
+            $from = Join-Path $src ($rel -replace '/', '\')
+            $dest = Join-Path $addonDir ($rel -replace '/', '\')
             $dd = Split-Path -Parent $dest
             if (-not (Test-Path $dd)) { New-Item -ItemType Directory -Path $dd -Force | Out-Null }
-            Copy-Item -LiteralPath $f.FullName -Destination $dest -Force
+            Copy-Item -LiteralPath $from -Destination $dest -Force
             $copied++
         }
-        $info = @{ tag = $latest.tag; sha = $latest.sha; version = $build.version; at = (Get-Date).ToUniversalTime().ToString('o'); backup = $backup; files = $copied }
+        $removed = 0
+        $root = [System.IO.Path]::GetFullPath($addonDir).TrimEnd('\')
+        foreach ($f in (Get-ChildItem -LiteralPath $root -Recurse -File -Force)) {
+            $rel = $f.FullName.Substring($root.Length).TrimStart('\') -replace '\\', '/'
+            if ($rel -like 'companion-data/*') { continue }
+            if (-not $ship.ContainsKey($rel)) { Remove-Item -LiteralPath $f.FullName -Force -ErrorAction SilentlyContinue; if (-not (Test-Path -LiteralPath $f.FullName)) { $removed++ } }
+        }
+        Get-ChildItem -LiteralPath $root -Recurse -Directory -Force | Where-Object { $_.FullName.Substring($root.Length).TrimStart('\') -notlike 'companion-data*' } |
+            Sort-Object { $_.FullName.Length } -Descending | Where-Object { -not (Get-ChildItem -LiteralPath $_.FullName -Force) } | Remove-Item -Force -ErrorAction SilentlyContinue
+        $info = @{ tag = $latest.tag; sha = $latest.sha; version = $build.version; build = $build.build; at = (Get-Date).ToUniversalTime().ToString('o'); backup = $backup; files = $copied; removed = $removed }
         Write-Json $installedFile $info
         $upd.last = $info
         return @{ ok = $true; tag = $info.tag; at = $info.at; backup = $backup; files = $copied }

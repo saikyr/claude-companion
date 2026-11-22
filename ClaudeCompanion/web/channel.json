@@ -1,4 +1,6 @@
 {
  "repo": "saikyr/claude-companion",
- "branch": "stable"
+ "branch": "stable",
+ "version": "1.5.0",
+ "build": "4c420a4acebf"
 }
