@@ -9,6 +9,8 @@ Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
   Talents page could show Shadow's name on the active (Holy) spec and spec 2 wouldn't open. Specs now keep
   the game's numbers from the moment the save is read (and when computers are merged), for Talents, Gear
   and Stat weights alike. Gear choices made before carry over.
+- **Talents & Bars:** action bars use the game's own names (Action Bar 1 to 8, as in the Action Bars settings),
+  plus Action Bar 1's second page and its Shadowform page, instead of guessed positions like "Bottom left".
 - **Professions:** one selector (in the header) and the selected profession's skill bar; other skills in one
   line at the bottom. Hovering a recipe shows its reagents: how many you have and what each costs.
 - **AH flips:** the same AH letter read on both computers counts once, and the Flips view explains exactly

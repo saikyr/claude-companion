@@ -585,7 +585,12 @@
     else {
       const bySlot = {};
       bars.forEach((a) => (bySlot[a.slot] = a));
-      const rows = [[1, 'Main'], [61, 'Bottom left'], [49, 'Bottom right'], [25, 'Right'], [37, 'Right 2'], [13, 'Page 2'], [73, 'Bar 7'], [85, 'Bar 8'], [97, 'Bar 9'], [109, 'Bar 10']];
+      // the game's action slots, named the way its Action Bars settings name them
+      const cls = ((CH.snap || {}).character || {}).classFile;
+      const FORM = { PRIEST: ['Shadowform'], DRUID: ['Cat Form', 'Prowl', 'Bear Form', 'Moonkin Form'], ROGUE: ['Stealth'], WARRIOR: ['Battle Stance', 'Defensive Stance', 'Berserker Stance'] }[cls] || [];
+      const rows = [[1, 'Action Bar 1'], [13, 'Action Bar 1, page 2'],
+        ...[73, 85, 97, 109].map((st, k) => [st, `Action Bar 1${FORM[k] ? ` (${FORM[k]})` : `, form ${k + 1}`}`]),
+        [61, 'Action Bar 2'], [49, 'Action Bar 3'], [25, 'Action Bar 4'], [37, 'Action Bar 5'], [145, 'Action Bar 6'], [157, 'Action Bar 7'], [169, 'Action Bar 8']];
       h += '<div class="abars">';
       rows.forEach(([start, lbl]) => {
         const cells = [];
@@ -683,7 +688,7 @@
       if (qi === 0) header = Symbol('start');
       if (q.header !== header) { h += `${typeof header !== 'symbol' ? '</div></div>' : ''}<div class="grp"><h3>${esc(q.header || 'Other')}</h3><div class="panel">`; header = q.header; }
       const done = q.ready || q.complete;
-      h += `<div class="quest"><div class="qt"><span class="qlvl">${q.level || ''}</span><span class="qname">${esc(q.title)}</span>${done ? '<span class="tag ok">complete</span>' : q.failed ? '<span class="tag bad">failed</span>' : ''}${q.id ? `<a class="dim small" href="https://www.wowhead.com/forever/quest=${q.id}" target="_blank">wowhead</a>` : ''}</div>`;
+      h += `<div class="quest"><div class="qt"><span class="qlvl">${q.level || ''}</span><span class="qname">${esc(q.title)}</span>${done ? '<span class="tag ok">complete</span>' : q.failed ? '<span class="tag bad">failed</span>' : ''}${q.id ? `<a class="dim small" href="https://www.wowhead.com/forever/quest=${q.id}" target="_blank" title="Turn-in, rewards and XP here come from QuestieDB and your game; this opens the quest page on Wowhead Forever (comments, maps)">Wowhead page</a>` : ''}</div>`;
       arr(q.objectives).forEach((o) => { h += `<div class="qo ${o.done ? 'done' : ''}">${esc(o.text)}</div>`; });
       const rw = q.rewards;
       const gq = GD && GD.quests[q.id];
