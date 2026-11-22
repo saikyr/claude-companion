@@ -73,6 +73,18 @@ const check = (ok, what) => { console.log((ok ? 'ok   ' : 'FAIL ') + what); if (
   await bg.waitForFunction(() => window.CC && window.CC.sync && window.CC.sync.status.ok === true && !window.CC.sync.status.busy, null, { timeout: 30000 });
   check(true, 'the hidden browser\'s page syncs');
   await bg.close();
+  // sync turned off in System: kept in sync.json, the view goes back to this computer's save; back on, it returns
+  await page.click('[data-sync="off"]');
+  await page.waitForFunction(() => /Sync is off on this computer/.test(document.querySelector('main').textContent), null, { timeout: 5000 });
+  const offState = JSON.parse(fs.readFileSync(path.join(dataDir, 'sync.json'), 'utf8'));
+  const offView = await page.evaluate(() => (window.CC.api.CH.journal || []).some((e) => e && e.name === 'Browser Test Mob'));
+  const pushedBefore = B.query('select count(*) from public.records');
+  await page.evaluate(() => window.CC.syncNow());
+  check(offState.off === true && !offView && B.query('select count(*) from public.records') === pushedBefore,
+    'Turn sync off: kept in sync.json, the app shows only this computer\'s save, and nothing is sent');
+  await page.click('[data-sync="on"]');
+  await page.waitForFunction(() => window.CC.sync.status.ok === true && !window.CC.sync.status.busy && (window.CC.api.CH.journal || []).some((e) => e && e.name === 'Browser Test Mob'), null, { timeout: 15000 });
+  check(!JSON.parse(fs.readFileSync(path.join(dataDir, 'sync.json'), 'utf8')).off, 'Turn sync on: the other computer\'s history is back');
   // offline: the backend is down, the app still works and says so
   B.down = true;
   await page.evaluate(() => window.CC.syncNow());

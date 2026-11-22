@@ -61,7 +61,8 @@ Key bindings: Options > Key Bindings > AddOns > Claude Companion.
 - **Sync:** your history (journal, grinds, runs, AH prices and sales, settings) and your character's
   current state are sent to the Companion's sync database (Supabase), under a random key made on your
   computer, so your own computers can share them. The person who runs this project's sync database can
-  see what is stored there. Nothing else leaves your computer.
+  see what is stored there. Nothing else leaves your computer. To keep it all on this computer, open
+  the app's System tab and press **Turn sync off on this computer** (you can turn it back on there).
 - Updates come from the same download folder as the zips, only builds that passed every test; every
   file is checked against the build's checksums before anything is installed, and a backup is kept
   (the last 5).

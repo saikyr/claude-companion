@@ -3,6 +3,8 @@
 Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 
 ## 1.5.0 (in progress: every merge to main updates itself)
+- **Sync can be turned off per computer.** System tab, Turn sync off on this computer: nothing is sent
+  or fetched there and the app shows only that computer's save; turned back on, what waited is sent.
 - **Ready to share: one download, one installer.** Every build now also goes to a public download folder
   (the repository stays private) as **ClaudeCompanion-Windows.zip** and **ClaudeCompanion-Mac.zip**,
   linked in the README. Installed apps update from the same folder, so no computer needs a GitHub

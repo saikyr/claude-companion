@@ -220,6 +220,23 @@ async function main() {
       try { B.query('set role anon; ' + sql); } catch (e) { closed++; }
     }
     check(closed === 4, 'the API role can\'t read or write any table directly');
+    // sync turned off on one computer: nothing goes out or comes in; back on, what waited goes
+    {
+      const quiet = computer(B.fetch, 'Friend', 'pc');
+      await quiet.client.setOff(true);
+      const before = B.query('select count(*) from public.records');
+      let stopped = 0;
+      for (const f of [() => quiet.client.pull(null), () => quiet.client.push(clone(base), null), () => quiet.client.pushSnapshot({ app: 1 })]) {
+        try { await f(); } catch (e) { if (e.off) stopped++; }
+      }
+      check(stopped === 3 && B.query('select count(*) from public.records') === before && !JSON.parse(quiet.files.state).device,
+        'sync turned off: this computer registers nothing, sends nothing and fetches nothing');
+      check(await quiet.client.isOff(), 'sync off is kept in this computer\'s sync.json');
+      await quiet.client.setOff(false);
+      await sync(quiet, clone(base), null);
+      check(!(await quiet.client.isOff()) && Number(B.query(`select count(*) from public.records where device_id = '${quiet.client.state.device}'`)) > 0,
+        'turned back on, it registers and sends what waited');
+    }
     // a retired account: its computers are refused
     B.query(`update public.accounts set retired = true where id = '${third.client.state.account}'`);
     let refused = false; try { await third.client.pull(null); } catch (e) { refused = /unknown device/.test(e.message); }

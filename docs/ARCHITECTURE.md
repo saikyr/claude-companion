@@ -101,6 +101,11 @@ moves nothing: the joining account points at the one it joined (`accounts.merged
 move over, and reads cover the whole group. Claude can also join two accounts it knows are one
 person's (`private.merge_accounts`), so one person's computers need no code.
 
+**Turning it off.** System tab, **Turn sync off on this computer** sets `off: true` in that computer's
+`sync.json`. Then no page there (the app window or the hidden browser) registers, sends or fetches
+anything, and the view shows only that computer's save. Nothing is lost: what wasn't sent stays "not
+sent" and goes when it's turned back on. What was already online stays online.
+
 **Security.** All tables have row-level security on and no policies: the API can't read or write them
 (checked with the anon role: 0 rows). The only way in is the `cc_*` functions (security definer, fixed
 `search_path`), which check the device key. The app ships only the publishable key. The Supabase
