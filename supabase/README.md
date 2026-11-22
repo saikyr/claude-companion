@@ -8,6 +8,8 @@ API URL `https://jucbngafdnyaizfxgplk.supabase.co`. The app only has the publish
 `sync_account_groups`, `sync_merge_precise`; this file is their combined end state). `migrations/20261122150000_sync_v2.sql` is
 on top of it (applied 22 Nov 2026 as `sync_v2`): per-account lock, replaceable trackers, CSPRNG link
 codes with an attempt limit, Cloudflare client IP, record counter, retired accounts, no table grants.
+`migrations/20261122160000_sync_snapshot.sql`
+(applied as `sync_snapshot`): each computer's current snapshot as one row, up to 2 MB, left out of pulls.
 Change the schema with a new migration file, applied with the Supabase connector (`apply_migration`),
 and keep the files identical to what runs on the project.
 

@@ -4,7 +4,9 @@ The Companion app (`web/`) writes `snapshot.json` here every time the game saves
 `/reload` or logout), **also with the app closed**: the server, which starts at login, then has a
 hidden (headless) Chrome or Edge load the page once, about 10-20 seconds after the save. With no
 Chrome or Edge installed it waits until the app is opened (see `saveModified`). It is the page's own view of the
-character, so Claude's answers match what the app shows. Claude sessions read it from
+character, so Claude's answers match what the app shows. The same snapshot is also online, one per
+computer (js/sync.js, kind `snapshot`): Claude reads it with the Supabase connector,
+`select computer, at, data from private.history where account = '<id>' and kind = 'snapshot' order by t desc`. Claude sessions read it from
 `_forever_/Interface/AddOns/ClaudeCompanion/companion-data/snapshot.json` on the computer the game runs on
 (Windows: `server.ps1`, set up by `Claude Companion.bat`; macOS: `server.py`, set up by `Claude Companion.app`;
 both start the server at login, hidden).

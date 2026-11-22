@@ -57,7 +57,20 @@ const check = (ok, what) => { console.log((ok ? 'ok   ' : 'FAIL ') + what); if (
   await page.waitForTimeout(1500);
   const snap = JSON.parse(fs.readFileSync(path.join(dataDir, 'snapshot.json'), 'utf8'));
   check(snap.sync && snap.sync.account === st.account && !JSON.stringify(snap).includes(st.key), 'snapshot.json has the account for Claude, never the key');
+  const online = B.query(`select data->'character'->>'name' from public.records where kind = 'snapshot'`);
+  check(online && online === (snap.character || {}).name, `the snapshot is online for Claude too (${online})`);
   if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT, fullPage: false });
+  // the server's hidden browser (?background=1, what runs after a save with the app closed) syncs too
+  const bg = await browser.newPage();
+  bg.on('pageerror', (e) => errors.push('background: ' + e));
+  await bg.route(S.CONFIG.url + '/**', async (route) => {
+    const r = await B.fetch(route.request().url(), { body: route.request().postData() });
+    route.fulfill({ status: r.status, contentType: 'application/json', body: await r.text(), headers: { 'access-control-allow-origin': '*' } });
+  });
+  await bg.goto(`http://localhost:${port}/?background=1`);
+  await bg.waitForFunction(() => window.CC && window.CC.sync && window.CC.sync.status.ok === true && !window.CC.sync.status.busy, null, { timeout: 30000 });
+  check(true, 'the hidden browser\'s page syncs');
+  await bg.close();
   // offline: the backend is down, the app still works and says so
   B.down = true;
   await page.evaluate(() => window.CC.syncNow());

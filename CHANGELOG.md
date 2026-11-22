@@ -4,6 +4,14 @@ Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 
 ## Unreleased (updates itself)
 
+- **Claude can read where you are and your quest log from anywhere.** Each computer now also sends its
+  current snapshot (position, quest log, gear and bag advice, professions, rep) online after every save,
+  one per computer, only when it changed. Other computers don't download it.
+- **An open app window picks up updates by itself.** After the server installs a new build, an open
+  window loads it at a quiet moment (hidden or minimised, or 2 minutes without a click or key). Before,
+  a window left open kept the old page, so a new feature (like sync) didn't start until it was reopened.
+- The PC's server (server.ps1) is now tested in CI under Windows PowerShell 5.1.
+
 - **The sidebar says how fresh the data really is.** WoW writes addon data to disk only on `/reload`,
   `/cc sync` and logout, so while you play the app shows your last save. Instead of "Live · synced 4 h
   ago" the sidebar now says "In game · last saved 4 h ago" while the game runs on this computer, and
