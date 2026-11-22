@@ -41,22 +41,6 @@ def find_save():
         return _save['path']
 
 
-_game = {'at': 0.0, 'on': None}
-
-
-def game_running():
-    # is this game client running? (the app says "in game" instead of only "saved N ago"); checked at most every 10 s
-    if time.time() - _game['at'] < 10: return _game['on']
-    _game['at'] = time.time()
-    try:
-        if os.name == 'nt': return None
-        out = subprocess.run(['ps', '-axo', 'comm='], capture_output=True, text=True, timeout=5).stdout
-        root = os.path.realpath(FOREVER)
-        _game['on'] = any(l.strip().startswith(root) or l.strip().startswith(FOREVER) for l in out.splitlines())
-    except Exception: _game['on'] = None
-    return _game['on']
-
-
 _sync_lock = threading.Lock()
 
 
@@ -94,7 +78,7 @@ class Handler(BaseHTTPRequestHandler):
         if path in ('/api/stamp', '/api/data'):
             save = find_save()
             if path == '/api/stamp':
-                dev = {'host': DEVICE_HOST, 'os': DEVICE_OS, 'game': game_running()}
+                dev = {'host': DEVICE_HOST, 'os': DEVICE_OS}
                 if not save: return self.send(200, json.dumps({'stamp': None, **dev}), TYPES['.json'])
                 return self.send(200, json.dumps({'stamp': stamp_of(save), 'size': os.path.getsize(save), **dev}), TYPES['.json'])
             if not save: return self.send(404, 'no save yet')

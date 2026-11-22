@@ -148,4 +148,5 @@
   // settings changed in the app (a gear pick, own weights) reach the hidden browser too
   if (!BACKGROUND && location.protocol.startsWith('http')) settingsReady.then(() => setInterval(saveSettings, 10000));
   CC.snapshot = build;
+  CC.settingsReady = settingsReady;   // js/sync.js reads settings only after the file's are in
 })();

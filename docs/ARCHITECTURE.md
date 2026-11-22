@@ -62,13 +62,21 @@ history, disenchant results, AH price observations, sales, buys and posts, plus 
 
 **Records.** One row per history entry, `id` made from its content (character, kind, time, what it was:
 the same identities `js/merge.js` uses), so the same event saved by two computers is one record, a
-re-send changes nothing, and there are no conflicts. Two kinds of row are replaced instead of added:
-`live` (per computer and character: what's running there now and when it last saw the character, so
-another computer can end a stale grind "away") and `setting` (per key, the last writer wins).
+re-send changes nothing, and there are no conflicts. Some rows are replaced instead of added, because
+their data changes after they are first sent: `live` (per computer and character: what's running there
+now and when it last saw the character, so another computer can end a stale grind "away"), `setting`
+(per key) and the trackers `session`, `grind` and `run` (an edited or finished run updates its row).
+A replaced row has one current copy per account (the root account's, see below); a pull leaves out the
+copies it shadows.
+
+**Settings.** Each setting carries the time it last changed. The page pulls before it pushes and sends
+no setting before its first pull has finished. A pulled setting replaces the local one unless the local
+one changed after it. A computer that joins an account takes that account's settings (so linking a
+new computer never resets the old one's), and a setting changed there afterwards spreads as usual.
 
 **When.** The page pushes after every save it reads (each `/reload`, `/cc sync`, logout and the addon's
-own saves), from the app window or the server's hidden browser when the window is closed, and pulls
-right after, plus every 2 minutes while the window is open. Only what's new is sent: per character and
+own saves), from the app window or the server's hidden browser when the window is closed, pulling
+first, plus every 2 minutes while the window is open. Only what's new is sent: per character and
 kind the page keeps the newest time it has sent (`companion-data/sync.json`), and only moves it once
 the backend has the batch.
 
@@ -76,10 +84,16 @@ the backend has the batch.
 move and the next save sends everything since. The app always works from the local save; the other
 computers' history is cached in `companion-data/sync-cache.json`, so it shows offline too.
 
+**Pull cursor.** Each row gets a sequence number (`seq`) when it is written, and a pull asks for rows
+after the highest one it has. Pushes and joins of one account take a lock on that account for their
+transaction (`private.lock_account`), so its rows commit in `seq` order and a pull can never pass a row
+that commits later (tested with two overlapping pushes).
+
 **Accounts, with no sign-up.** Each install makes a random 256-bit device key (in `sync.json`) and
 registers it (`cc_register`); the backend keeps only its SHA-256. Every call carries the key, and the
 functions only touch that key's account. Linking a second computer: System tab, **Link another
-computer** shows an 8-letter code (30 minutes, works once) that the other computer enters. Joining
+computer** shows an 8-character code (30 minutes, works once, 40 bits from `gen_random_bytes`) that
+the other computer enters; a computer gets at most 10 wrong codes an hour. Joining
 moves nothing: the joining account points at the one it joined (`accounts.merged_into`), its computers
 move over, and reads cover the whole group. Claude can also join two accounts it knows are one
 person's (`private.merge_accounts`), so Gabriel's PC and Mac need no code.
@@ -89,21 +103,30 @@ person's (`private.merge_accounts`), so Gabriel's PC and Mac need no code.
 `search_path`), which check the device key. The app ships only the publishable key. The Supabase
 advisor lists those functions as "callable without signing in" (by design: the device key is the
 credential) and "RLS enabled, no policy" (by design: no direct table access). Limits per call: 1000
-records, 64 KB per record; 2 million records per account; new computers: 20 an hour per IP, 1000 an
-hour in all.
+records, 64 KB per record; 2 million records per account (a counter on the account); new computers:
+20 an hour per IP, 5000 an hour in all. The IP is Cloudflare's `cf-connecting-ip`, which Cloudflare sets
+itself (seen in the project's edge logs), not the caller. The API roles have no table grants at all.
+An account marked `retired` is closed: its computers' calls are refused and Claude's view leaves it out.
 
 **Claude's access.** With the Supabase connector, project `jucbngafdnyaizfxgplk`:
 `select * from private.history where account = '<id>' and kind = 'journal' order by t desc`. The account
 id is in each `snapshot.json` (`sync.account`). Kinds: journal, session, grind, run, note, history, de,
 ah_obs, ah_sale, ah_buy, ah_post, live, setting.
 
-**Schema:** `supabase/migrations/20261122140000_sync.sql` (`supabase/README.md`). Client: `js/sync.js`.
-Tests: `test/web/sync.test.js` (an in-memory copy of the backend's rules, on a fixture and on a real
-save: stable ids, no duplicates, offline, linking, settings, the merged view, batching). Checked on the
-real project on 22 Nov 2026 with SQL as the anon role: register, push (history written once, a changed
-re-send ignored), own live rows left out of a pull, link code, joining, each computer's history visible
-to the other, and no table readable directly. The account "roundtrip test" (devices with os `test`) is
-kept for these checks.
+**Schema:** `supabase/migrations/` (`supabase/README.md`). Client: `js/sync.js`.
+Tests run the real migration files on a plain Postgres (`test/sql/backend.js`; CI has a Postgres
+service): `test/web/sync.test.js` (stable ids, no duplicates, offline, link codes and their limits,
+settings when linking and after, edited runs, the merged view, a third computer, overlapping pushes,
+closed tables, retired accounts) and `test/web/sync-browser.js` (the real page in Chromium). CI blocks
+the live project's host for the whole job, so no test can reach it. Checked on the real project on
+22 Nov 2026 with SQL as the anon role, in a transaction rolled back afterwards: register, history
+written once, an edited grind replaced, link code, a wrong code, joining, pull, a retired computer
+refused, tables closed.
+
+**Pending cleanup** (retired, so invisible and unusable; to delete once): accounts
+`fff05b79-0171-4ce7-85fb-58ebf6fc969c` (a CI runner, 125 records), `8d518109-c416-4368-a0f1-f2ddfb28474e`
+and `b02713e0-c711-46a8-b7c6-b40211398579` (the first round-trip test). Delete their records, devices,
+link codes and the accounts.
 
 **Free plan limits** (supabase.com/pricing, read 22 Nov 2026): 500 MB database per project; 5 GB egress
 and 5 GB cached egress a month; 1 GB file storage; 50,000 monthly active users; unlimited API requests;

@@ -44,12 +44,16 @@
   const evKey = (e) => [e.t, e.e, e.name || e.title || e.item || e.link || e.to || e.text || '', e.amount != null ? e.amount : e.count != null ? e.count : e.quest || ''].join('|');
   const tracker = (x) => [x.start || x.id, x.name || ''].join('|');
   const ahKey = (x) => JSON.stringify([x.t, x.item || x.link || x.name, x.price || x.net || x.unit]);
+  // trackers (sessions, grinds, runs) can still change after they're first saved (the addon ends a
+  // grind "away" later, a run gets its last loot): they're replaced when their data changes. The rest
+  // is written once.
+  const REPLACED = new Set(['session', 'grind', 'run']);
   const KINDS = [
     // [kind, list, identity, time]
     ['journal', (c) => c.journal, evKey, (e) => e.t],
-    ['session', (c) => c.sessions, tracker, (x) => x.finish || x.last || x.start],
-    ['grind', (c) => c.grinds, tracker, (x) => x.finish || x.last || x.start],
-    ['run', (c) => c.runs, tracker, (x) => x.finish || x.last || x.start],
+    ['session', (c) => c.sessions, tracker, (x) => x.start],
+    ['grind', (c) => c.grinds, tracker, (x) => x.start],
+    ['run', (c) => c.runs, tracker, (x) => x.start],
     ['note', (c) => c.notes, (n) => n.t + '|' + n.text, (n) => n.t],
     ['history', (c) => c.history, (h) => JSON.stringify([h.t, h.level, h.money]), (h) => h.t],
     ['de', (c) => c.deResults, (d) => JSON.stringify([d.t, d.item]), (d) => d.t],
@@ -78,7 +82,7 @@
           const k0 = key(x), n = (nth.get(k0) || 0) + 1;
           nth.set(k0, n);
           const t = Math.round(num(time(x)));
-          out.push({ id: `${ck}|${kind}|${t}|${hash(k0)}${n > 1 ? '#' + n : ''}`, char: ck, kind, t, data: x });
+          out.push({ id: `${ck}|${kind}|${t}|${hash(k0)}${n > 1 ? '#' + n : ''}`, char: ck, kind, t, data: x, mutable: REPLACED.has(kind) || undefined });
         });
       }
       // AH price observations: one record each, with the item they belong to
@@ -164,7 +168,7 @@
     const status = { ok: null, error: null, pushed: null, pulled: null, devices: [], busy: false, queued: 0 };
 
     async function ready() {
-      if (!state) state = Object.assign({ sent: {}, live: {}, settings: {} }, (await io.loadState()) || {});
+      if (!state) state = Object.assign({ sent: {}, live: {}, settings: {}, settingsT: {}, pendingSince: {} }, (await io.loadState()) || {});
       // the device key is made once by the local server (GET /api/sync), so two pages can't race
       if (!state.key || String(state.key).length < 32) { state = null; throw new Error('no device key yet (the app server makes it)'); }
       if (!state.account || !state.device) {
@@ -177,8 +181,19 @@
       return state;
     }
 
+    // Settings, per key, the newest change wins. state.settings[k] = the value this computer and the
+    // backend agree on; state.settingsT[k] = when it last changed (here or there). A value that differs
+    // here is a local change: it goes with the next push, unless a newer one comes from elsewhere first.
+    // Settings only go out after one pull, and after joining an account its settings win (adopt).
+    function noteLocal(local) {
+      Object.entries(local || {}).forEach(([k, v]) => {
+        if (state.settings[k] !== v && !(state.pendingSince || {})[k]) (state.pendingSince = state.pendingSince || {})[k] = Math.round(io.now() / 1000);
+        if (state.settings[k] === v && state.pendingSince) delete state.pendingSince[k];
+      });
+    }
+
     // send what's new in this save; returns how many records went
-    async function push(db, settings) {
+    async function push(db, local) {
       await ready();
       const all = recordsOf(db, state.device);
       const pending = all.filter((r) => {
@@ -186,11 +201,14 @@
         const hw = state.sent[r.char + '|' + r.kind];
         return hw == null || r.t >= hw;
       });
-      // settings: last writer wins, per key
-      Object.entries(settings || {}).forEach(([k, v]) => {
-        if (state.settings[k] === v) return;
-        pending.push({ id: 'setting|' + k, char: '*', kind: 'setting', t: Math.round(io.now() / 1000), mutable: true, data: { k, v }, _setting: true });
-      });
+      if (state.pulledOnce) {
+        noteLocal(local);
+        Object.entries(local || {}).forEach(([k, v]) => {
+          if (state.settings[k] === v) return;
+          const t = (state.pendingSince || {})[k] || Math.round(io.now() / 1000);
+          pending.push({ id: 'setting|' + k, char: '*', kind: 'setting', t, mutable: true, data: { k, v, t }, _setting: true });
+        });
+      }
       pending.sort((a, b) => a.t - b.t);
       status.queued = pending.length;
       let sent = 0;
@@ -198,7 +216,7 @@
         const batch = pending.slice(i, i + BATCH);
         await rpc('cc_push', { p_key: state.key, p_records: batch.map(({ id, char, kind, t, data, mutable }) => ({ id, char, kind, t, data, mutable: !!mutable })) });
         for (const r of batch) {
-          if (r._setting) state.settings[r.data.k] = r.data.v;
+          if (r._setting) { state.settings[r.data.k] = r.data.v; state.settingsT[r.data.k] = r.data.t; if (state.pendingSince) delete state.pendingSince[r.data.k]; }
           else if (r.mutable) state.live[r.id] = hash(JSON.stringify(r.data));
           else { const k = r.char + '|' + r.kind; state.sent[k] = Math.max(state.sent[k] == null ? -1 : state.sent[k], r.t); }
         }
@@ -210,19 +228,38 @@
       return sent;
     }
 
-    // fetch everything new on the account; returns { changed, settings: {k: v} from other computers }
-    async function pull() {
+    // a new account for this computer (it joined another): start over from the account's records
+    function joined(account) {
+      cache = { account, after: 0, recs: {}, names: {} };
+      state.account = account; state.adopt = true; state.pulledOnce = false;
+      state.settings = {}; state.settingsT = {}; state.pendingSince = {};
+    }
+
+    // fetch everything new on the account; returns { changed, settings: {k: v} to apply here }
+    async function pull(local) {
       await ready();
+      noteLocal(local);
       let changed = 0; const settings = {};
       for (let page = 0; page < 200; page++) {
         const r = await rpc('cc_pull', { p_key: state.key, p_after: cache.after, p_limit: 2000 });
-        if (r.account !== cache.account) { cache = { account: r.account, after: 0, recs: {}, names: {} }; state.account = r.account; await io.saveState(state); continue; }
+        if (r.account !== cache.account) {
+          // joined another account (here, on another computer of the old one, or by Claude on the backend)
+          if (cache.account) joined(r.account); else cache.account = r.account;
+          state.account = r.account; await io.saveState(state); continue;
+        }
         status.devices = r.devices || [];
         (r.devices || []).forEach((d) => { cache.names[d.id] = d.name ? `${d.name}${d.os ? ' (' + d.os + ')' : ''}` : d.os || 'other computer'; });
         for (const x of r.records || []) {
           cache.after = Math.max(cache.after, x.seq);
           if (x.kind === 'setting') {
-            if (x.dev !== state.device && x.data && typeof x.data.v === 'string') { settings[x.data.k] = x.data.v; state.settings[x.data.k] = x.data.v; }
+            const d = x.data || {};
+            if (x.dev === state.device || typeof d.v !== 'string' || typeof d.k !== 'string') continue;
+            const t = Number(d.t || x.t) || 0;
+            const pendingHere = local && local[d.k] !== undefined && local[d.k] !== state.settings[d.k];
+            if (state.adopt || !pendingHere || t > ((state.pendingSince || {})[d.k] || 0)) {
+              settings[d.k] = d.v; state.settings[d.k] = d.v; state.settingsT[d.k] = t;
+              if (state.pendingSince) delete state.pendingSince[d.k];
+            }
             continue;
           }
           cache.recs[x.id] = { dev: x.dev, char: x.char, kind: x.kind, t: x.t, data: x.data };
@@ -230,7 +267,9 @@
         }
         if ((r.records || []).length < 2000) break;
       }
-      if (changed || Object.keys(settings).length) { await io.saveCache(cache); await io.saveState(state); }
+      state.adopt = false; state.pulledOnce = true;
+      await io.saveState(state);
+      if (changed) await io.saveCache(cache);
       status.pulled = new Date(io.now()).toISOString();
       return { changed, settings };
     }
@@ -239,8 +278,8 @@
     async function link(code) {
       await ready();
       const r = await rpc('cc_link', { p_key: state.key, p_code: code });
-      state.account = r.account; await io.saveState(state);
-      cache = { account: r.account, after: 0, recs: {}, names: {} };
+      if (r.error) throw new Error(r.error);
+      joined(r.account); await io.saveState(state);
       return r;
     }
 
@@ -284,12 +323,19 @@
     running = (async () => {
       C.status.busy = true;
       try {
+        // this browser's settings are the ones in companion-data/settings.json (js/claude.js loads them
+        // first), in the app window and in the hidden browser alike
+        if (CC.settingsReady) await CC.settingsReady;
+        // pull first: settings from elsewhere are weighed against changes here before anything goes out
+        const r = await C.pull(settingsNow());
+        const apply = Object.entries(r.settings).filter(([k, v]) => !LOCAL_ONLY.test(k) && localStorage.getItem(k) !== v);
+        apply.forEach(([k, v]) => localStorage.setItem(k, v));
+        if (apply.length) await putJson('api/settings', Object.assign({}, settingsNow(), Object.fromEntries(
+          Object.keys(localStorage).filter((k) => LOCAL_ONLY.test(k)).map((k) => [k, localStorage.getItem(k)]))));
         const raw = A.RAW;
-        if (raw && raw.chars) await C.push(raw, BACKGROUND ? {} : settingsNow());
-        const r = await C.pull();
+        if (raw && raw.chars) await C.push(raw, settingsNow());
         lastPull = Date.now();
-        let changedSettings = false;
-        Object.entries(r.settings).forEach(([k, v]) => { if (!LOCAL_ONLY.test(k) && localStorage.getItem(k) !== v) { localStorage.setItem(k, v); changedSettings = true; } });
+        const changedSettings = Object.keys(r.settings).length > 0;
         C.status.ok = true; C.status.error = null;
         // the first time (cache read from disk) and whenever something new came in
         if ((r.changed || changedSettings || !viewed) && A.RAW) { viewed = true; CC.reload(); }

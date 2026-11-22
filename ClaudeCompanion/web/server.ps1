@@ -108,17 +108,6 @@ if (-not $Serve) {
     exit
 }
 
-# is this game client running? (the app says "in game" instead of only "saved N ago"); checked at most every 10 s
-$script:gameAt = [DateTime]::MinValue; $script:gameOn = 'null'
-function Test-Game {
-    if (((Get-Date) - $script:gameAt).TotalSeconds -lt 10) { return $script:gameOn }
-    $script:gameAt = Get-Date
-    try {
-        $hit = Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith($forever, [StringComparison]::OrdinalIgnoreCase) } | Select-Object -First 1
-        $script:gameOn = if ($hit) { 'true' } else { 'false' }
-    } catch { $script:gameOn = 'null' }
-    $script:gameOn
-}
 # this install's sync device key (js/sync.js), made once, here: one place makes it, so an app window
 # and the hidden browser starting at the same moment can't each make their own
 function Ensure-SyncKey([string]$f) {
@@ -377,7 +366,7 @@ while ($listener.IsListening) {
             $save = Get-Save
             if ($path -eq '/api/stamp') {
                 $type = 'application/json; charset=utf-8'
-                $dev = ',"host":"' + ($env:COMPUTERNAME -replace '[^A-Za-z0-9._-]', '') + '","os":"pc","game":' + (Test-Game) + '}'
+                $dev = ',"host":"' + ($env:COMPUTERNAME -replace '[^A-Za-z0-9._-]', '') + '","os":"pc"}'
                 if ($save) {
                     $json = '{"stamp":"' + $save.LastWriteTimeUtc.ToString('o') + '","size":' + $save.Length + $dev
                 } else { $json = '{"stamp":null' + $dev }

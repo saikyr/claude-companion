@@ -3,7 +3,25 @@ on: [push, pull_request]
 jobs:
   checks:
     runs-on: ubuntu-latest
+    # the sync tests run the real backend SQL (supabase/migrations) on this Postgres
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: --health-cmd pg_isready --health-interval 2s --health-timeout 5s --health-retries 20
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
     steps:
+      # Nothing in this job may reach the live sync backend, whatever a later step starts.
+      - name: Block the live sync backend
+        run: |
+          echo "0.0.0.0 jucbngafdnyaizfxgplk.supabase.co" | sudo tee -a /etc/hosts
+          ! curl -s --max-time 5 -o /dev/null https://jucbngafdnyaizfxgplk.supabase.co
       - uses: actions/checkout@v4
       - name: Install Lua 5.1
         run: sudo apt-get update -qq && sudo apt-get install -y -qq lua5.1
@@ -23,9 +41,9 @@ jobs:
         run: python3 -m py_compile ClaudeCompanion/web/server.py gamedata/*.py tools/*.py
       - name: One character across computers (merge rules)
         run: node test/web/merge.test.js
-      - name: History sync between computers (in-memory backend)
+      - name: History sync between computers (the real backend SQL on Postgres)
         run: node test/web/sync.test.js
-      - name: History sync in the real app page (Chromium, in-memory backend, the harness's save)
+      - name: History sync in the real app page (Chromium, the real backend SQL, the harness's save)
         run: |
           F=/tmp/f/_forever_
           mkdir -p $F/Interface/AddOns $F/WTF/Account/T/SavedVariables

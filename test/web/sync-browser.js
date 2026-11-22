@@ -1,16 +1,17 @@
 // node test/web/sync-browser.js <port> <companion-data folder>
-// The real app page in Chromium, its backend calls answered by the in-memory backend: the page
+// The real app page in Chromium, its backend calls answered by the real backend SQL on a test
+// Postgres (test/sql/backend.js; PGHOST / PGPORT / PGUSER): the page
 // registers, pushes its save, gets another computer's history after linking, shows it, and writes
 // sync.account into snapshot.json. Needs a running server.py on <port> with a save (see the CI step).
 const fs = require('fs'), path = require('path'), crypto = require('crypto');
 const { chromium } = require('playwright');
 const S = require('../../ClaudeCompanion/web/js/sync.js');
-const { memoryBackend } = require('./sync-backend.js');
+const { sqlBackend } = require('../sql/backend.js');
 const [port, dataDir] = process.argv.slice(2);
 let failed = 0;
 const check = (ok, what) => { console.log((ok ? 'ok   ' : 'FAIL ') + what); if (!ok) failed++; };
 (async () => {
-  const B = memoryBackend();
+  const B = sqlBackend();
   const browser = await chromium.launch();
   const page = await browser.newPage();
   const errors = [];
@@ -24,17 +25,20 @@ const check = (ok, what) => { console.log((ok ? 'ok   ' : 'FAIL ') + what); if (
   await page.waitForFunction(() => window.CC && window.CC.sync && window.CC.sync.status.ok === true, null, { timeout: 30000 });
   const st = JSON.parse(fs.readFileSync(path.join(dataDir, 'sync.json'), 'utf8'));
   check(st.key && st.key.length === 64 && st.account && st.device, 'the page registered and kept its key in companion-data/sync.json');
-  check(B.records.size > 0, `the page sent its save (${B.records.size} records)`);
+  const sent = Number(B.query('select count(*) from public.records'));
+  check(sent > 0, `the page sent its save (${sent} records)`);
   const key = await page.evaluate(() => Object.keys(window.CC.api.RAW.chars)[0]);
   // another computer, linked to this one, with history this save doesn't have
   const files = { s: { key: crypto.randomBytes(32).toString('hex') } };
   const mac = S.client({ fetch: B.fetch, now: () => Date.now(), device: { name: 'MacBook', os: 'mac' },
     loadState: async () => files.s || null, saveState: async (s) => { files.s = s; }, loadCache: async () => null, saveCache: async () => {} });
   const t = 1795400000;
-  await mac.push({ chars: { [key]: { lastSeen: t, journal: [{ t, e: 'kill', name: 'Browser Test Mob' }], grinds: [{ name: 'browser test grind', start: t - 600, finish: t, kills: 1 }] } } }, { 'cc.test.fromMac': 'yes' });
-  const { code } = B.fns.cc_link_code({ p_key: st.key });
+  await mac.push({ chars: { [key]: { lastSeen: t, journal: [{ t, e: 'kill', name: 'Browser Test Mob' }], grinds: [{ name: 'browser test grind', start: t - 600, finish: t, kills: 1 }] } } }, {});
+  const { code } = B.call('cc_link_code', { p_key: st.key });
   await mac.link(code);
-  await mac.push({ chars: { [key]: { lastSeen: t, journal: [{ t, e: 'kill', name: 'Browser Test Mob' }] } } }, {});
+  // a computer that joins takes the account's settings; a setting changed there afterwards spreads
+  await mac.pull({});
+  await mac.push({ chars: { [key]: { lastSeen: t, journal: [{ t, e: 'kill', name: 'Browser Test Mob' }] } } }, { 'cc.test.fromMac': 'yes' });
   await page.evaluate(() => window.CC.syncNow());
   await page.waitForFunction(() => (window.CC.api.CH.journal || []).some((e) => e && e.name === 'Browser Test Mob'), null, { timeout: 15000 });
   const seen = await page.evaluate(() => ({ grind: (window.CC.api.CH.grinds || []).some((g) => g.name === 'browser test grind'),
@@ -57,10 +61,9 @@ const check = (ok, what) => { console.log((ok ? 'ok   ' : 'FAIL ') + what); if (
   await page.evaluate(() => window.CC.syncNow());
   const off = await page.evaluate(() => ({ ok: window.CC.sync.status.ok, err: window.CC.sync.status.error, ch: !!window.CC.api.CH }));
   check(off.ok === false && off.ch, `offline: the app keeps working and shows "${off.err}"`);
-  const side = await page.textContent('aside .sync');
-  check(/Saved in game|In game · last saved/.test(side), `the sidebar says how fresh the save is ("${side.trim()}")`);
   check(!errors.length, 'no page errors' + (errors.length ? ': ' + errors.join(' | ') : ''));
   await browser.close();
+  B.drop();
   console.log(failed ? `\n${failed} FAILED` : '\nall passed');
   process.exit(failed ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });
