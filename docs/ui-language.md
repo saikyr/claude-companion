@@ -36,3 +36,15 @@ against what you wear, for the spec whose gear set you have on.
 Scores use the spec's weights (docs/STAT-WEIGHTS.md), one decimal. Gains are signed: "+12.0" green,
 "−7.5" red. Money uses the coin format with `≈` for estimates. "Best from what you own" shows a ✓
 when the set already uses the best you have.
+
+## Controls
+
+The same few controls on every page (`css/app.css`):
+
+- **Buttons:** `.btn` for the one main action, `.btn.ghost` for the others, `.linkbtn` inside text.
+  Filters and choices are `.chips` buttons (`.on` = chosen).
+- **Text fields:** `input.search` (with the magnifier) to filter a list, `input.field` for anything
+  else typed in, the same height as the button next to it. `input.field.code` for codes.
+- **Codes** to read off or type in (System, Link another computer): `.code`, monospace and spaced,
+  shown in two groups of four ("ABCD EFGH"); spaces and dashes typed with a code don't matter.
+- A row of controls is a `.toolbar`; no inline styles.

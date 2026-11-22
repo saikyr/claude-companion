@@ -52,7 +52,7 @@ const check = (ok, what) => { console.log((ok ? 'ok   ' : 'FAIL ') + what); if (
   const sys = await page.textContent('main');
   check(/Sync between computers/.test(sys) && /MacBook/.test(sys), 'the System tab shows sync and both computers');
   await page.click('[data-sync="code"]');
-  await page.waitForFunction(() => /enter [A-Z0-9]{8}/.test(document.querySelector('main').textContent), null, { timeout: 5000 });
+  await page.waitForFunction(() => /enter [A-Z0-9]{4} [A-Z0-9]{4}/.test(document.querySelector('main').textContent), null, { timeout: 5000 });
   check(true, 'Link another computer shows a code');
   await page.waitForTimeout(1500);
   const snap = JSON.parse(fs.readFileSync(path.join(dataDir, 'snapshot.json'), 'utf8'));
