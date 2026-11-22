@@ -204,6 +204,9 @@ def check_update(force=False):
                   'published': ((c.get('commit') or {}).get('committer') or {}).get('date'), 'notes': msg[:3000]}
         _upd['latest'], _upd['error'] = latest, None
     except urllib.error.HTTPError as e:
+        if e.code == 422:   # the branch doesn't exist yet: nothing published, not a problem
+            _upd['latest'], _upd['error'] = None, None
+            return None
         _upd['error'] = ('GitHub said %d. ' % e.code) + ('The repository is private: add a token (see companion-data/SCHEMA.md, update.json), or sign in with the GitHub CLI.' if e.code in (401, 403, 404) else '')
     except Exception as e:
         _upd['error'] = 'Could not reach GitHub: %s' % e
