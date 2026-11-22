@@ -1,15 +1,15 @@
 {
  "version": "1.4.0",
- "built": "2026-11-22T17:50:48+00:00",
+ "built": "2026-11-22T17:57:23+00:00",
  "channel": {
   "repo": "saikyr/claude-companion",
   "branch": "stable"
  },
  "from": {
   "branch": "main",
-  "commit": "3883a860e0106113b0bee38bee82578b22cbcf1a"
+  "commit": "4914c5854b6e0c105dd8b411072fe6aa209d93ff"
  },
- "notes": "Quest log links to ForeverChanges, not Wowhead; CI refuses Wowhead links (#55)",
+ "notes": "Crafted items show their recipe, where it comes from and what it needs (#56)",
  "files": {
   "Bindings.xml": "f4ad14d769e58eb18cd49da688fb23d64dec6be99a7684b9993ea0689616bf09",
   "ClaudeCompanion.toc": "87915db63dcb911f027bc5c400284fe70fa58142f561efc0dea4134bd6625c42",
@@ -27,7 +27,7 @@
   "web/Claude Companion.bat": "8f5cf6c1ff6a95ad5e0ebfc10951ef451cccf5b1e9a6d1fc7574600cfd01a2fc",
   "web/channel.json": "6257533c1329cedd3d3f50e2d9f1aa3f996368b54c56c717e10ddcb41447c62c",
   "web/css/app.css": "fcce27c16ae2ead49fee23890d6f1fe31c374fc0deb006f0d0f01d68b20d5c02",
-  "web/data/gamedata.js": "6475b4b038e80786e10b8bf1bf31c419b2af48e6ad861fe6053ca973694bf056",
+  "web/data/gamedata.js": "3163e358427dc39e0257a543c963b0cc4909a2871ad1455bbfb73c639a6a43d5",
   "web/data/rules.js": "6127d443e567e4dbf3c6eeaa94a5b512095263c4805f6c52b9d84c5e29ff76bc",
   "web/data/suffixes.js": "1feb201a1c7487f2eaa94e40348450a539edd0004c9e3cbef8ea06b9af0108f6",
   "web/icons/app.ico": "890d1ad4b13ed82791c3fa3ad175798ed2fbe7f304af6cb6af5e15e5ce01c7a3",
@@ -35,10 +35,10 @@
   "web/icons/icon-512.png": "658263476e4a5ac0371ed8fe85671973603436e42e550d92b937c495ba78e567",
   "web/index.html": "9addc293d8830e45ac398c2c9517229c583c555f6171261ed4e31e5392089380",
   "web/js/advice.js": "9237d93946f3e5208701e541bd80645f25e6684b881402991d2c0d6471945096",
-  "web/js/app.js": "b19ca011ea42fa99255d2a03ce1c542fa6108c3fc615a57f87c83fb03dbe8eb5",
+  "web/js/app.js": "3d627ce193c71abad11c9cf16ec14c441a6b46ca19cd2eb7fa02dbc22ae88f48",
   "web/js/cards.js": "f1636114eb544dfe1d61495f382e84e987ed6a9e4a69f9c6b4df19ca21ab9d20",
   "web/js/claude.js": "3df1e52be93aafcb3518313b7bc1889e61014a8ff5dea2d225e95f9ac6b88fa7",
-  "web/js/gear.js": "a3d012264402960bdd5cd6dc329690d1adc112b06251b8620da6850afc91886f",
+  "web/js/gear.js": "536b99854eea4bcb05defa00646f628852c993d05d04b52130931d503d071c4d",
   "web/js/icons.js": "3179331f23af1fd412b265a3fc170efa047375350cbb8f5d77e3eeadf39deabc",
   "web/js/lua.js": "e14c5df02bbfa98ec07196ec363d017beb4bd6ac50e075b78a3ba32b72234f77",
   "web/js/merge.js": "18fcb271599c688bf629282f7caa8ff468a8dfa0aaff8b865a9e3a2c5e47ab25",

@@ -93,12 +93,65 @@
   const GD = window.GAMEDATA || null;
   const QCOL = ['9d9d9d', 'ffffff', '1eff00', '0070dd', 'a335ee', 'ff8000'];
   const gdItem = (id) => (GD && GD.items[id]) || null;
+  // ------------------------------------------------------------ what an item needs, and where its recipe comes from
+  // One model for every page (Gear, Bags, Professions, AH, tooltips). Gates, each shown as "Needs ...":
+  //   the reputation the item itself needs (pack req: rep-vendor gear, faction recipes), a reward quest's
+  //   reputation, and for a crafted item the profession skill and its recipe's reputation.
+  const REP_FLOOR = RULES.repFloor || [];
+  const repStanding = (v) => { let st = 1; for (let i = 1; i < REP_FLOOR.length; i++) if (v >= REP_FLOOR[i]) st = i; return st; };
+  const myStanding = (faction) => { const r = arr(((CH && CH.snap) || {}).reputation).find((x) => x.name === faction); return r && r.reaction ? r.reaction : null; };
+  const mySkill = (prof) => { const r = arr(((CH && CH.snap) || {}).skills).find((x) => x.name === prof); return r ? r.rank : null; };
+  // the recipe items that teach a crafted item: [{id, name, skill}]
+  const recipesOf = (id) => arr((GD && GD.teach || {})[id]).map(([rid, sk]) => ({ id: rid, name: (gdItem(rid) || [''])[0], skill: sk }));
+  // the profession and skill that craft an item: "Requires Tailoring (260)" in its how-to-get line, else the craft row
+  function craftSkill(id) {
+    const m = /Requires ([A-Z][a-z]+(?: [A-Z][a-z]+)?) \((\d+)\)/.exec(((GD && GD.how) || {})[id] || '');
+    if (m) return { prof: m[1], skill: Number(m[2]) };
+    const r = arr((GD && GD.src[id]) || []).find((x) => x[0] === 'craft');
+    const mm = r && /^([A-Za-z ]+?)(?: (\d+))?$/.exec(r[1] || '');
+    return mm ? { prof: mm[1], skill: Number(mm[2] || 0) } : null;
+  }
+  function itemGates(id) {
+    const out = [], seen = new Set();
+    const rep = (faction, standing, via) => { const k = 'r' + faction; if (!faction || seen.has(k)) return; seen.add(k); out.push({ kind: 'rep', faction, standing, via, have: myStanding(faction) }); };
+    const own = (GD && GD.req || {})[id];
+    if (own) rep(own[0], own[1], '');
+    const g = gdItem(id);
+    arr(g && g[10]).forEach((l) => { const m = /^Requires (.+) - (Friendly|Honored|Revered|Exalted)$/.exec(l); if (m) rep(m[1], STANDING.indexOf(m[2]), ''); });
+    arr((GD && GD.src[id]) || []).filter((r) => r[0] === 'quest').forEach((r) => { const q = (GD.quests || {})[r[2]]; const rr = q && arr(q.repReq)[0]; if (rr) rep(rr[0], repStanding(rr[1]), 'quest ' + q.t); });
+    const cs = craftSkill(id);
+    if (cs && cs.skill) out.push({ kind: 'skill', prof: cs.prof, skill: cs.skill, via: '', craft: true, have: mySkill(cs.prof) });
+    recipesOf(id).forEach((rc) => { const rq = (GD.req || {})[rc.id]; if (rq) rep(rq[0], rq[1], rc.name); });
+    out.forEach((x) => { x.met = x.have != null && (x.kind === 'rep' ? x.have >= x.standing : x.have >= x.skill); x.text = gateText(x); x.short = x.text.replace(/^Needs /, ''); });
+    return out;
+  }
+  function gateText(x) {
+    const what = x.kind === 'rep' ? `${STANDING[x.standing]} with ${x.faction}` : `${x.prof} ${x.skill} to craft it`;
+    const have = x.have == null ? '' : x.kind === 'rep' ? ` (you: ${STANDING[x.have] || 'none'})` : ` (you: ${x.have})`;
+    return `Needs ${what}${x.via ? ' for ' + x.via : ''}${x.met ? '' : have || ' (you: none)'}`;
+  }
+  // where one item comes from, in a few words: vendor, else the first source row
+  function whereShort(id) {
+    const v = arr((GD && GD.vend[id]) || [])[0];
+    if (v) return `sold by ${v[0]}${v[1] ? ', ' + v[1] : ''}`;
+    const r = arr((GD && GD.src[id]) || [])[0];
+    if (!r) return 'no known source';
+    return r[0] === 'world' ? r[1] : r[0] === 'quest' ? 'quest reward: ' + questName(r[2]) : `${{ drop: 'drops from', object: 'found in', container: 'inside', craft: 'crafted' }[r[0]] || ''} ${r[1]}${typeof r[7] === 'string' && r[7] ? ', ' + r[7] : ''}`.trim();
+  }
+  // the recipe line of a crafted item: "Recipe: Plans: Dark Iron Reaver (skill 300), sold by Lokhtos Darkbargainer, Blackrock Depths"
+  function recipeLine(id) {
+    const rs = recipesOf(id);
+    if (rs.length) return 'Recipe: ' + rs.slice(0, 2).map((r) => `${r.name}${r.skill ? ' (skill ' + r.skill + ')' : ''}, ${whereShort(r.id)}`).join('; ');
+    const cs = craftSkill(id);
+    return cs ? `Recipe: from a ${cs.prof} trainer` : null;
+  }
   function gdSourceLines(id, max, skipQuests) {
     const all = (GD && GD.src[id]) || [];
     const out = [];
     const qs = all.filter((r) => r[0] === 'quest');
     if (qs.length && !skipQuests) out.push({ l: 'Quest reward: ' + [...new Set(qs.map((r) => questName(r[2])))].slice(0, 2).join(', '), lc: '9ad0ff' });
-    const rows = all.filter((r) => r[0] !== 'quest');
+    if (all.some((r) => r[0] === 'craft')) { const cs = craftSkill(id), rl = recipeLine(id); out.push({ l: `Crafted${cs ? ' (' + cs.prof + ')' : ''}${rl ? ' · ' + rl : ''}`, lc: '9ad0ff' }); }
+    const rows = all.filter((r) => r[0] !== 'quest' && r[0] !== 'craft');
     const fv = rows.filter((r) => r[10] === 'f'), cl = rows.filter((r) => r[10] === 'c');
     const kindWord = { drop: 'drops from', object: 'found in', container: 'inside', quest: 'reward from', craft: 'crafted', vendor: 'sold by', world: '' };
     const fmt = (r) => r[0] === 'world' ? r[1] : r[0] === 'quest' ? questName(r[2]) : `${r[1]}${r[6] ? ' (boss)' : ''}${typeof r[7] === 'string' && r[7] ? ' in ' + r[7] : ''}`;
@@ -108,6 +161,9 @@
     if (cl.length) out.push({ l: 'Classic data only: ' + cl.slice(0, max || 3).map((r) => `${fmt(r)}${rate(r)}`).join(', '), lc: '8a8f98' });
     const v = (GD && GD.vend[id]) || [];
     if (v.length) out.push({ l: 'Vendor: ' + v.slice(0, 2).map((x) => `${x[0]}${x[1] ? ' (' + x[1] + ')' : ''}${x[5] ? '' : ' (Classic list)'}`).join(', '), lc: '9ad0ff' });
+    // what it needs that its own tooltip doesn't say (the item's own reputation line is in the tooltip already):
+    // red when you don't have it yet, quiet when you do
+    itemGates(id).filter((x) => x.via || x.kind === 'skill').forEach((x) => out.push({ l: x.text, lc: x.met ? '8a8f98' : 'ff6060' }));
     return out;
   }
   function gdTip(id) {
@@ -679,9 +735,6 @@
 
   // ------------------------------------------------------------ quests
   // a reputation value (points from the start of Neutral, as QuestieDB gives them) as a standing index
-  const REP_FLOOR = RULES.repFloor || [];
-  const repStanding = (v) => { let st = 1; for (let i = 1; i < REP_FLOOR.length; i++) if (v >= REP_FLOOR[i]) st = i; return st; };
-  const myStanding = (faction) => { const r = arr((CH.snap || {}).reputation).find((x) => x.name === faction); return r && r.reaction ? r.reaction : null; };
   V.quests = function () {
     const qs = arr((CH.snap || {}).quests);
     let h = `<div class="toolbar lift"><span class="dim">${qs.length} in log · ${arr((CH.snap || {}).completedQuests).length.toLocaleString()} completed</span></div><div class="flow2">`;
@@ -1160,7 +1213,7 @@
   window.CC = {
     load, loadText, V, reload: () => RAW && load(RAW, { live: STATE.live }),
     api: { get CH() { return CH; }, get RAW() { return RAW; }, get DB() { return DB; }, STATE, GD, esc, arr, money, icon, itemIcon, anyItemIcon, anyItemName, gdItem, gdTip,
-      gdSourceLines, planPrice, priceOf, trackerStats, lootStrip, ago, dur, fmtTime, flipsOf, cooldowns, specTrees, specLabel, TREE_NAMES, gearIds, item, byId, render, QCOL, deOutcome },
+      gdSourceLines, itemGates, recipeLine, planPrice, priceOf, trackerStats, lootStrip, ago, dur, fmtTime, flipsOf, cooldowns, specTrees, specLabel, TREE_NAMES, gearIds, item, byId, render, QCOL, deOutcome },
   };
 
   // ------------------------------------------------------------ data sources
