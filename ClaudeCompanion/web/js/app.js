@@ -5,7 +5,10 @@
   const $ = (s, el) => (el || document).querySelector(s);
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const arr = (x) => (Array.isArray(x) ? x : x && typeof x === 'object' ? Object.keys(x).sort((a, b) => a - b).map((k) => x[k]) : []);
+  // icon images only (the same files in every client; names from js/icons.js). Game data never comes from Wowhead.
   const ICON_URL = 'https://wow.zamimg.com/images/wow/icons/large/';
+  // a quest's Forever page (ForeverChanges); the app's own quest data is QuestieDB Forever (data/gamedata.js)
+  const QUEST_PAGE = 'https://foreverchanges.pro/quest/';
   const RULES = window.GAMERULES || {};
   const STANDING = RULES.standing || [];
   const MAX_LEVEL = 60;
@@ -688,7 +691,7 @@
       if (qi === 0) header = Symbol('start');
       if (q.header !== header) { h += `${typeof header !== 'symbol' ? '</div></div>' : ''}<div class="grp"><h3>${esc(q.header || 'Other')}</h3><div class="panel">`; header = q.header; }
       const done = q.ready || q.complete;
-      h += `<div class="quest"><div class="qt"><span class="qlvl">${q.level || ''}</span><span class="qname">${esc(q.title)}</span>${done ? '<span class="tag ok">complete</span>' : q.failed ? '<span class="tag bad">failed</span>' : ''}${q.id ? `<a class="dim small" href="https://www.wowhead.com/forever/quest=${q.id}" target="_blank" title="Turn-in, rewards and XP here come from QuestieDB and your game; this opens the quest page on Wowhead Forever (comments, maps)">Wowhead page</a>` : ''}</div>`;
+      h += `<div class="quest"><div class="qt"><span class="qlvl">${q.level || ''}</span><span class="qname">${esc(q.title)}</span>${done ? '<span class="tag ok">complete</span>' : q.failed ? '<span class="tag bad">failed</span>' : ''}${q.id ? `<a class="dim small" href="${QUEST_PAGE}${q.id}" target="_blank" rel="noopener" title="Turn-in, rewards and XP here come from QuestieDB Forever and your game; this opens the quest's Forever page on ForeverChanges">ForeverChanges page</a>` : ''}</div>`;
       arr(q.objectives).forEach((o) => { h += `<div class="qo ${o.done ? 'done' : ''}">${esc(o.text)}</div>`; });
       const rw = q.rewards;
       const gq = GD && GD.quests[q.id];

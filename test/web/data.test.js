@@ -86,6 +86,18 @@ test('rules: disenchant tables cover item levels without gaps, chances add up to
   for (let i = 1; i < D.skill.length; i++) assert.ok(D.skill[i][0] > D.skill[i - 1][0] && D.skill[i][1] > D.skill[i - 1][1]);
 });
 
+// ---------------------------------------------------------------- no Wowhead data or links
+test('the app links to Forever sites, never Wowhead (only its icon image CDN)', () => {
+  const files = ['index.html', ...fs.readdirSync(path.join(WEB, 'js')).filter((f) => f.endsWith('.js') && f !== 'icons.js').map((f) => 'js/' + f),
+    'data/rules.js'];
+  const hits = [];
+  for (const f of files) fs.readFileSync(path.join(WEB, f), 'utf8').split('\n').forEach((l, i) => {
+    if (/wowhead\.com|wowhead/i.test(l.replace(/wow\.zamimg\.com\/images\/wow\/icons/g, '')) && !/^\s*\/\//.test(l)) hits.push(`${f}:${i + 1}`);
+  });
+  for (const f of ['data/gamedata.js', 'data/suffixes.js']) if (/wowhead/i.test(fs.readFileSync(path.join(WEB, f), 'utf8'))) hits.push(f);
+  assert.strictEqual(hits.length, 0, hits.join(', '));
+});
+
 // ---------------------------------------------------------------- freshness (a note, not a failure)
 const days = (t) => Math.round((Date.now() / 1000 - t) / 86400);
 for (const [f, t] of [['gamedata.js', GD.built], ['suffixes.js', SFX.built]]) {
