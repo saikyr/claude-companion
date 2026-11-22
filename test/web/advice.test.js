@@ -91,6 +91,8 @@ const ITEMS = {
   'item:11': { id: 11, name: 'Plate Cap', q: 2, ilvl: 40, req: 35, class: 4, subclass: 4, loc: 'INVTYPE_HEAD', sell: 400, stats: { ITEM_MOD_STRENGTH_SHORT: 6 }, tip: tip('Plate Cap') },
   'item:12': { id: 12, name: 'Runecloth', q: 1, class: 7, subclass: 0, sell: 400, tip: tip('Runecloth') },
 };
+// items you don't own, as the game-data pack has them: [name, q, ilvl, req, inv, , , bind, stats, class, tooltip, src, subclass]
+const PACK = { 20: ['Reward Helm', 3, 58, 50, 1, 0, 0, 1, [[4, 20]], 4, [], 'e', 4], 21: ['Reward Robe', 2, 55, 50, 20, 0, 0, 1, [[5, 20]], 4, [], 'e', 1] };
 const BY_ID = {}; Object.entries(ITEMS).forEach(([k, it]) => (BY_ID[it.id] = Object.assign({ key: k }, it)));
 const CH = {
   snap: {
@@ -108,7 +110,7 @@ const esc = (s) => String(s == null ? '' : s);
 const arr = (x) => (Array.isArray(x) ? x : x && typeof x === 'object' ? Object.values(x) : []);
 ctx.CC = { V: {}, api: {
   get CH() { return CH; }, STATE: {}, GD: { items: {}, src: {}, vend: {}, quests: {}, how: {}, stat: {} }, esc, arr,
-  item: (k) => ITEMS[k] || null, byId: (id) => BY_ID[id] || null, gdItem: () => null, gdSourceLines: () => [], itemGates: () => [], recipeLine: () => null,
+  item: (k) => ITEMS[k] || null, byId: (id) => BY_ID[id] || null, gdItem: (id) => PACK[id] || null, gdSourceLines: () => [], itemGates: () => [], recipeLine: () => null,
   planPrice: (id) => { const p = CH.ah.prices[id]; return p ? p.obs[0].med : null; }, anyItemName: (id) => (BY_ID[id] || {}).name || '#' + id,
   anyItemIcon: () => '', itemIcon: () => '', money: (c) => String(c), render() {}, deOutcome: () => null,
   specTrees: (sp) => [{ points: sp.tree === 'Arms' ? 31 : 0 }, { points: 5 }, { points: 15 }], specLabel: (sp) => sp.tree, TREE_NAMES: { WARRIOR: ['Arms', 'Fury', 'Protection'] },
@@ -138,6 +140,18 @@ test('snapshot lists flagged items with their reasons', () => {
   const s = ADV.snapshot();
   assert(s.find((x) => x.name === 'Silk Robe' && x.flag === 'ah' && x.value === 28500));
   assert(!s.find((x) => x.name === 'Lost Letter'), 'kept items are not listed');
+});
+
+test('quest rewards you do not own are scored per spec by the same engine', () => {
+  const r = ADV.rate(20);
+  assert.strictEqual(r.name, 'Reward Helm');
+  const arms = r.specs.find((x) => x.spec === 'Arms');
+  assert(arms && arms.canWear && arms.slot === 'Head' && arms.gain > 0, 'a better plate helm is an Arms upgrade over the worn cap');
+  assert.strictEqual(arms.vs.id, 11);
+  assert(ADV.rate(21).specs.every((x) => !x.canWear), 'cloth: scored, but a Warrior cannot wear it');
+  assert.match(ADV.rewardLine(20), /Arms \+/);
+  assert.strictEqual(ADV.rewardLine(21), '');
+  assert.strictEqual(ADV.rate('item:5').specs[0].gain > 0, true, 'an owned item by its key');
 });
 
 console.log(failed ? `\n${failed} FAILED` : '\nall passed');

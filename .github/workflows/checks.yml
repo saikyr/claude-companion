@@ -51,6 +51,8 @@ jobs:
         run: node test/web/merge.test.js
       - name: History sync between computers (the real backend SQL on Postgres)
         run: node test/web/sync.test.js
+      - name: Claude's cards through the real backend SQL
+        run: node test/web/claude.test.js
       - name: History sync in the real app page (Chromium, the real backend SQL, the harness's save)
         run: |
           F=/tmp/f/_forever_

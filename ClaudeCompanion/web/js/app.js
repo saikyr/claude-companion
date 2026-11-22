@@ -769,10 +769,19 @@
         const its = arr(rw.items).map((r) => (r.item ? itemIcon(r.item, { size: 'sm', count: r.count }) : '')).join('');
         const ch = arr(rw.choices).map((r) => (r.item ? itemIcon(r.item, { size: 'sm', count: r.count }) : '')).join('');
         h += `<div class="qrw">${its}${ch ? `<span class="dim small">choose one</span>${ch}` : ''}${rw.money ? ` ${money(rw.money)}` : ''}${rw.xp ? ` <span class="dim small">${rw.xp.toLocaleString()} XP</span>` : ''}</div>`;
-      }
+        h += rewardScores([...arr(rw.items), ...arr(rw.choices)].map((r) => r.item || r.id));
+      } else if (gq) h += rewardScores([...arr(gq.reward), ...arr(gq.choice), ...arr(gq.rewardAny)].map(([id]) => id));
       h += '</div>';
     });
     return h + '</div></div></div>';
+  };
+
+  // which specs each reward upgrades, from the one scoring engine (js/advice.js rate)
+  const rewardScores = (keys) => {
+    const ADV = window.CC && window.CC.advice;
+    if (!ADV || !ADV.rewardLine) return '';
+    const lines = keys.filter(Boolean).map((k) => ADV.rewardLine(k)).filter(Boolean);
+    return lines.length ? `<div class="qinfo small">${lines.join('<br>')}</div>` : '';
   };
 
   // ------------------------------------------------------------ professions

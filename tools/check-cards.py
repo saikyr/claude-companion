@@ -8,7 +8,7 @@ from datetime import datetime
 KINDS = {'farm', 'flip', 'quest', 'gear', 'craft', 'route', 'note'}
 STATUS = {'open', 'done', 'withdrawn'}
 KEYS = {'id', 'kind', 'title', 'summary', 'status', 'created', 'updated', 'expires', 'character', 'where',
-        'facts', 'items', 'steps', 'track', 'body', 'sources'}
+        'facts', 'items', 'steps', 'track', 'body', 'sources', 'step'}
 
 
 def iso(v):
@@ -43,6 +43,8 @@ def check(d):
             bad.append(f'{at}: each item needs a numeric game item id')
         if not all(isinstance(s, dict) and isinstance(s.get('label'), str) and (s.get('url') is None or str(s['url']).startswith(('https://', 'http://'))) for s in c.get('sources', [])):
             bad.append(f'{at}: each source needs a label (and an http(s) url if any)')
+        if c.get('step') is not None and not (isinstance(c['step'], str) and re.fullmatch(r'(quest|item|npc):\d+|(dungeon|zone):\S.*', c['step'])):
+            bad.append(f'{at}: step is quest:<id>, item:<id>, npc:<id>, dungeon:<name> or zone:<name>')
         t = c.get('track')
         if t is not None and not (isinstance(t, dict) and isinstance(t.get('grind'), str) and all(isinstance(m, str) for m in t.get('mobs', []))):
             bad.append(f'{at}: track is {{"grind": "<name used with /cc start>", "mobs": [names]}}')
