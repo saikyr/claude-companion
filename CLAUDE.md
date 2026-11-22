@@ -29,6 +29,14 @@ an older build doesn't write: check `data->'app'->>'build'`), say so plainly and
 don't fill the gap with a hand-made score. This rule exists because a hand-scored answer once judged a
 quest reward for Shadow only while the app already showed it as a Holy upgrade.
 
+**The dungeon-quest rule.** Never recommend abandoning a dungeon or raid quest, whatever its reward
+scores. A quest counts if it, or any step of its chain, has its objective inside a dungeon or raid
+(pack `quests[id].type` `Dungeon`, or `cat` / the objective naming an instance; `Raid` also marks
+outdoor raid-group quests such as The Battle of Darrowshire, so check where the objective is). In a quest-log
+cleanup, list those as KEEP, each tagged with its dungeon. Only open-world quests can go on a drop list.
+This rule exists because a cleanup once told the player to drop Blackrock Spire and Scholomance quests
+because their rewards scored low.
+
 ## Reading
 
 **Project owner (Supabase connector, project `jucbngafdnyaizfxgplk`).** The account id is in the
