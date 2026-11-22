@@ -201,7 +201,8 @@ saves the player's done / dismissed / ticked steps to `from-claude/state.json` a
 | `Journal.lua` | Timeline (loot, kills, XP, quests, deaths, zones, money by source), sessions, grinds (`/cc start`), disenchant results |
 | `Market.lua` | AH prices (browse, search, full scan via `C_AuctionHouse.ReplicateItems`), posts, owned auctions, mailbox + AH invoices (sales, buys) |
 | `Professions.lua` | Recipes, reagents, cooldowns (window open + cast log), bank, flight paths |
-| `UI.lua` | `/cc` window, grind panel, slash commands, key bindings |
+| `Drops.lua` | Generated (`tools/make-drops.py`): the pack's drop chances per item, for the grind panel's targets |
+| `UI.lua` | `/cc` window, grind panel (live numbers, targets, drops, summary on stop), slash commands, key bindings |
 
 Every capture step runs inside `ns.Try`, so a blocked API on Forever never breaks the addon; the
 System tab shows `diag` (what worked, what errored) and `caps` (which APIs exist, which values come
@@ -229,7 +230,7 @@ Forever differs from Classic the Forever source is used, and anything that is on
 | Quests: titles, levels, givers, turn-ins, chains, rep needs, quest-item drops, XP | **QuestieDB** (Forever flavor) | `gamedata.js` `quests`, `src` | `gamedata/export_questie.py` | Wowhead Forever snapshot + QuestieTrace player traces; `origin: 'f'` marks Forever-only facts |
 | Quest reward split (fixed vs choose one) and reward money | **ForeverDB** quest guides | `gamedata.js` `quests` | `gamedata/build.py` | Forever uploads |
 | NPCs and spawns: name, levels, rank, zone, up to 4 spawn points | **QuestieDB** (Forever flavor) | `gamedata.js` `npcs` | `gamedata/build.py` | Points already in Forever map coordinates (QuestieDB converted Mulgore, Eastern Plaguelands, Redridge and Stormwind, whose maps changed); used as they are |
-| Drop rates, who drops what, "seen on Forever" | **ForeverDB** | `gamedata.js` `src` | `gamedata/build.py` | Only rates ForeverDB measured on Forever kills (`m`) are called Forever rates; the rest are labelled Classic |
+| Drop rates, who drops what, "seen on Forever" | **ForeverDB** | `gamedata.js` `src` (and `Drops.lua`, the same chances for the in-game grind panel, made by `tools/make-drops.py`) | `gamedata/build.py` | Only rates ForeverDB measured on Forever kills (`m`) are called Forever rates; the rest are labelled Classic |
 | Vendors: who sells it, where | **QuestieDB** list, with **ForeverDB** price and "seen selling it on Forever" (ForeverDB adds vendors QuestieDB lacks) | `gamedata.js` `vend` | `gamedata/build.py` | Forever where seen (`[5] = 1`), else Classic list |
 | Recipes you know, reagents, cooldowns | **The game** (profession window) | the save | `Professions.lua` | Forever |
 | Recipes you don't know: which recipe item teaches it (`teach`: the recipe's taught spell is the craft's spell), skill to learn it, where the recipe comes from (that item's own sources) | **ForeverDB** | `gamedata.js` `teach`, `src`, `vend` | `gamedata/build.py` | Forever |

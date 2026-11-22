@@ -42,6 +42,7 @@ jobs:
       - name: Game data complete (pack, random-suffix rolls, icons, rules; docs/ARCHITECTURE.md Data sources)
         run: |
           python3 -I gamedata/test_pack.py ClaudeCompanion/web/data/gamedata.js
+          python3 -I tools/make-drops.py --check
           node test/web/data.test.js
       - name: App logic (stat weights, item advice)
         run: node test/web/advice.test.js

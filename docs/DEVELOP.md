@@ -31,6 +31,7 @@ every installed app updates from and friends download from.
 | `installer/` | The installers in those zips: `windows/install.ps1` (+ `.bat`), `mac/Install Claude Companion.app` |
 | `tools/make-icons.py` | Draws the app icon (PNG for the installed app, `.icns` for the Mac launcher) |
 | `tools/check-cards.py` | Checks a From Claude `cards.json` before Claude writes it |
+| `tools/make-drops.py` | Writes `ClaudeCompanion/Drops.lua` (the pack's drop chances, for the grind panel) from `web/data/gamedata.js`; `--check` in CI |
 | `CLAUDE.md` | The agent guide: where the truth lives, reading the app's scores, writing cards, rules for changes |
 | `docs/INTERFACES.md` | Every interface between the parts: owner, format, version, CI check |
 | `docs/CLAUDE-PROJECT.md` | Setting up an optional Claude project (owner or friend), with instructions to paste |
@@ -51,6 +52,7 @@ every installed app updates from and friends download from.
     pip install lupa && sh gamedata/build.sh
     cp gamedata/work/out/{gamedata,suffixes}.js ClaudeCompanion/web/data/ && cp gamedata/work/out/icons.js ClaudeCompanion/web/js/
     cp gamedata/work/out/COVERAGE.md gamedata/
+    python3 -I tools/make-drops.py   # the in-game grind panel's drop chances, from the new pack
     # check the shipped data is complete (CI runs both)
     python3 -I gamedata/test_pack.py ClaudeCompanion/web/data/gamedata.js && node test/web/data.test.js
 

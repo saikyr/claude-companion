@@ -208,7 +208,12 @@ Enum.PlayerInteractionType = { Banker = 8, TaxiNode = 5, Auctioneer = 21, Mercha
 
 -- load addon
 local ns = {}
-local files = { "Core.lua", "Snapshot.lua", "Journal.lua", "Market.lua", "Professions.lua", "UI.lua" }
+-- the files the game loads, in its order: the .toc
+local files = {}
+for l in io.lines(ADDONDIR .. "/ClaudeCompanion.toc") do
+  l = l:gsub("%s+$", "")
+  if l ~= "" and not l:match("^#") then files[#files + 1] = l end
+end
 for _, f in ipairs(files) do local chunk = assert(loadfile(ADDONDIR .. "/" .. f)); chunk("ClaudeCompanion", ns) end
 -- a save from 1.4: copies of QuestieDB facts the addon used to keep (now the app's pack owns them)
 ClaudeCompanionDB = { npcs = { [1] = { name = "Old" } }, quests = { [1] = { name = "Old" } },
@@ -409,6 +414,52 @@ do
   ns.GrindStop(true)
   check(#c.grinds == n0 + 4 + 1, "finished grinds kept (" .. (#c.grinds - n0) .. ")")
   if FAILED then error("grind lifecycle checks failed") end
+end
+-- the grind panel: targets (dropped vs expected from the pack's drop chances), the summary on stop
+do
+  local function check(ok, what) print((ok and "PASS " or "FAIL ") .. what); if not ok then FAILED = true end end
+  local c; for _, v in pairs(ClaudeCompanionDB.chars) do c = v end
+  local panel = ClaudeCompanionGrind
+  local PATTERN = "|cff1eff00|Hitem:14482::::::|h[Pattern: Cindercloth Cloak]|h|r"
+  check(ns.DROPS and ns.DROPS[14482] and ns.DROPS[14482][1] == "Thaurissan Firewalker", "Drops.lua is loaded from the .toc and has the pack's rows")
+  local none, why = ns.GrindTarget(PATTERN)
+  check(none == nil and why:find("start a grind"), "/cc target with no grind says to start one")
+  ns.GrindStart("Thaurissan")
+  check(ns.GrindTarget(PATTERN) == true, "a shift-clicked link becomes a target")
+  local g = c.grind
+  g.kills, g.killsBy = 27, { ["Thaurissan Firewalker"] = 27 }
+  g.loot["4338"] = { id = 4338, name = "Mageweave Cloth", link = "|cffffffff|Hitem:4338::|h[Mageweave Cloth]|h|r", q = 1, count = 12 }
+  local t = ns.TargetStats(g, g.targets[1])
+  check(t.got == 0 and math.abs(t.expected - 27 * 0.0178) < 1e-9 and t.kills == 27 and t.forever == false,
+    "expected = kills x drop chance (" .. tostring(t.expected) .. "), Classic rate")
+  check(math.abs(t.none - (1 - 0.0178) ^ 27) < 1e-9, "chance of none after 27 kills (" .. string.format("%.2f", t.none) .. ")")
+  local ok, err = pcall(ns.UpdateGrindPanel)
+  check(ok, "the panel draws a running grind with a target and drops (" .. tostring(err) .. ")")
+  g.loot["14482"] = { id = 14482, name = "Pattern: Cindercloth Cloak", link = PATTERN, q = 2, count = 1 }
+  check(ns.TargetStats(g, g.targets[1]).got == 1, "a target that dropped counts as got")
+  check(ns.GrindTarget("14482") == false and #g.targets == 0, "/cc target the same item again takes it off")
+  ns.GrindTarget(PATTERN)
+  check(ns.GrindTarget("[test item]") == true and #g.targets == 2, "a typed name the item cache knows becomes a target")
+  panel._scripts.OnClick(panel, "RightButton")
+  check(c.grind == g, "a plain right-click doesn't stop the grind")
+  local shift = IsShiftKeyDown; IsShiftKeyDown = function() return true end
+  panel._scripts.OnClick(panel, "RightButton"); IsShiftKeyDown = shift
+  local done = c.grinds[#c.grinds]
+  check(c.grind == nil and done == g, "shift-right-click stops it")
+  check(done.targets[1].id == 14482 and done.targets[1].got == 1 and done.targets[1].expected ~= nil, "the saved grind keeps each target's dropped and expected")
+  ok, err = pcall(ns.UpdateGrindPanel)
+  check(ok, "the panel draws the finished grind's summary (" .. tostring(err) .. ")")
+  panel._scripts.OnClick(panel, "RightButton")
+  ns.GrindStart("thaurissan")
+  check(c.grind.targets and #c.grind.targets == 2 and c.grind.targets[1].id == 14482 and (c.grind.targets[1].got or 0) == 0,
+    "the next /cc start with that name has the same targets, counted from zero")
+  local drops = ns.DROPS; ns.DROPS = nil
+  t = ns.TargetStats(c.grind, c.grind.targets[1])
+  check(t.expected == nil and t.rated == false, "without Drops.lua (no game restart yet) there's no expected, and no error")
+  ok, err = pcall(ns.UpdateGrindPanel); ns.DROPS = drops
+  check(ok, "the panel draws without Drops.lua (" .. tostring(err) .. ")")
+  ns.GrindStop(true)
+  if FAILED then error("grind panel checks failed") end
 end
 -- dungeon runs: start on entering, count kills from the XP line, bosses, leave and come back, end
 do
