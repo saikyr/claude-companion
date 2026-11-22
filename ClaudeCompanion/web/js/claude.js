@@ -29,6 +29,12 @@
     if (body !== saveSettings.last) { saveSettings.last = body; post('api/settings', body).catch(() => {}); }
   }
 
+  // the app build this computer runs (the server's companion-data/installed.json), so Claude can tell
+  // from the snapshot online whether a computer has the latest update
+  let installed = null;
+  const installedReady = location.protocol === 'file:' ? Promise.resolve()
+    : fetch('api/update', { cache: 'no-store' }).then((r) => r.json()).then((st) => { installed = (st && st.installed) || null; }).catch(() => {});
+
   function build() {
     const CH = A.CH;
     if (!CH || !CH.snap) return null;
@@ -44,6 +50,7 @@
       saveModified: A.STATE.saveStamp || null,
       // which computer wrote this: the PC and the Mac each keep their own save and their own snapshot.json
       device: Object.assign({ host: null, os: CH.device || null }, A.STATE.device || {}),
+      app: installed ? { build: installed.tag || null, installedAt: installed.at || null } : null,
       // the sync account (js/sync.js): Claude reads every computer's history on the backend with it
       // (docs/ARCHITECTURE.md, "Sync between computers"). syncedFrom: other computers merged into this view
       sync: CC.sync && CC.sync.state ? { account: CC.sync.state.account || null, device: CC.sync.state.device || null,
@@ -132,7 +139,7 @@
   document.addEventListener('cc:loaded', () => {
     if (location.protocol === 'file:') return;          // file mode has no server to write it
     setTimeout(async () => {
-      await settingsReady;
+      await settingsReady; await installedReady;
       if (!BACKGROUND) saveSettings();
       let snap;
       try { snap = build(); } catch (e) { console.warn('snapshot', e); return; }
