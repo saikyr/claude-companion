@@ -108,6 +108,8 @@ test('rules: every attunement and key names quests, items, bosses and zones the 
     if (u.value && u.value.npcs) u.value.npcs.forEach((n) => assert.ok(GD.npcs[n], `${u.id}: boss ${n} in the pack`));
     if (u.value && u.value.zone) assert.ok(zones.has(u.value.zone), `${u.id}: drops listed for ${u.value.zone}`);
   }
+  // the Classic raids are spelled as the pack spells their zones
+  RULES.instances.raids.slice(0, 7).forEach((r) => assert.ok(zones.has(r), `raid ${r} is a zone in the pack`));
 });
 
 // ---------------------------------------------------------------- no Wowhead data or links

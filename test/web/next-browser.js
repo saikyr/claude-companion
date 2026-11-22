@@ -62,15 +62,32 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   const vals = all.map((r) => r.t);
   check(all.some((r) => r.id.startsWith('dungeon:')), 'dungeons are steps');
   check(all.some((r) => r.id.startsWith('quest:') || r.id.startsWith('zone:')), 'quests are steps');
-  check(all.some((r) => r.id === 'unlock:ubrs'), 'Upper Blackrock Spire (Seal of Ascension) is a step');
+  check(all.some((r) => r.id === 'dungeon:Upper Blackrock Spire'), 'Upper Blackrock Spire is its own step');
   check(!all.some((r) => r.id === 'unlock:brd'), 'a done key (Shadowforge, quest done) is not in the main list');
   check(!all.some((r) => r.id === 'quest:3802'), 'a done quest is never a step');
-  const ubrs = all.find((r) => r.id === 'unlock:ubrs');
-  check(ubrs && /Seal of Ascension/.test(ubrs.t), 'UBRS says what opens it');
+  const ubrs = all.find((r) => r.id === 'dungeon:Upper Blackrock Spire');
+  check(ubrs && /Needs Seal of Ascension/.test(ubrs.t), 'UBRS says it needs the Seal of Ascension');
   check(all.some((r) => /Holy \+[\d.]+/.test(r.t)) && all.some((r) => /Shadow \+[\d.]+/.test(r.t)), 'gains show per spec (Holy and Shadow)');
   check(all.some((r) => /% of a level/.test(r.t)), 'under 60, XP shows as a share of the level');
   const order = await page.evaluate(() => window.CC.next.ranked('all').map((x) => x.v));
   check(order.every((v, i) => !i || v <= order[i - 1] + 1e-9 || false) || order.filter((v, i) => i && v > order[i - 1] + 1e-9).length === 0, 'ranked best first');
+
+  // ---- what must never be a step (review of the first version)
+  const never = await page.evaluate(() => {
+    const ids = new Set(window.CC.next.steps().map((x) => x.id));
+    const all = window.CC.next.steps();
+    const inside = (id) => all.some((x) => (x.quests || []).some((q) => q.quest === id));
+    const D = window.CC.next._dungeonIndex();
+    const ups = all.flatMap((x) => (x.ups || []).map((u) => u.id)).concat(all.flatMap((x) => (x.items || []).map((u) => u.id)));
+    return { zf: D["Zul'Farrak"] && D["Zul'Farrak"].raid, mc: D['Molten Core'] && D['Molten Core'].raid, aq: ids.has('quest:8802') || inside(8802),
+      naxx: [...ids].some((i) => /^zone:Naxxramas/.test(i)) || all.some((x) => (x.quests || []).some((q) => q.quest === 9120)),
+      hakkar: all.some((x) => x.quest === 8183 || (x.quests || []).some((q) => q.quest === 8183)), owned: ups.includes(274641) || ups.includes(16695),
+      solakar: (all.find((x) => x.id === 'dungeon:Upper Blackrock Spire') || { ups: [] }).ups.some((u) => /Solakar|Gyth/.test(u.boss)) };
+  });
+  check(never.zf === false && never.mc === true, "Zul'Farrak is a dungeon, Molten Core a raid (rules.js instances)");
+  check(!never.aq && !never.naxx && !never.hakkar, 'raid quests (AQ40, Naxxramas, Zul\'Gurub by its starting item) are never steps');
+  check(!never.owned, 'items you already have are not counted as upgrades to chase');
+  check(never.solakar, 'UBRS counts boss drops that carry no instance id (Solakar, Gyth)');
 
   // ---- one spec
   await page.click('[data-nextspec="Shadow"]');

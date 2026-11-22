@@ -59,6 +59,21 @@ test('a reputation need you lack is a reason, with the standing', () => {
   assert.ok(g && g.faction === 'Argent Dawn' && g.have === 1200 && g.standing, JSON.stringify(g));
   assert.ok(Q.status(id).why.some((w) => w.kind === 'rep'));
 });
+test('a chain needs the highest level of its steps, not only the first', () => {
+  const lowSave = CH.snap.character.level; CH.snap.character.level = 45; CH.snap.taken++;
+  const yw = Object.keys(GD.quests).find((k) => GD.quests[k].t === "Yashiro's Windwalk" && Q.forYou(k));
+  assert.ok(yw, "Yashiro's Windwalk is in the pack");
+  assert.ok(Q.status(yw).why.some((w) => w.kind === 'level' && w.level >= 50), "Yashiro's Windwalk is not open at 45");
+  CH.snap.character.level = lowSave; CH.snap.taken++;
+});
+test('a profession quest: not for you without the profession; a skill gap with it', () => {
+  const bs = Object.keys(GD.quests).find((k) => { const q = GD.quests[k]; return Array.isArray(q.skill) && q.skill[0] === 164 && q.skill[1] >= 200 && Q.forYou(k) && !arr(q.prev).length; });
+  assert.ok(bs, 'a Blacksmithing quest');
+  assert.strictEqual(Q.status(bs).state, 'no', 'a Priest without Blacksmithing');
+  CH.snap.skills = CH.snap.skills.concat([{ name: 'Blacksmithing', rank: 100 }]); CH.snap.taken++;
+  assert.ok(Q.status(bs).why.some((w) => w.kind === 'skill' && w.prof === 'Blacksmithing' && w.have === 100));
+  CH.snap.skills = CH.snap.skills.filter((x) => x.name !== 'Blacksmithing'); CH.snap.taken++;
+});
 test('Gear: a quest reward you already took is no longer a source; one still to do is', () => {
   const use = { 2: [10, 19], 4: [0, null, 1] };
   const before = ctx.CC.gear._candidates(use, 'Priest');

@@ -26,7 +26,8 @@
     const r = CC.advice && CC.advice.rate ? CC.advice.rate(id) : null, lvl = char().level || 0;
     // only what the Gear page counts: raid-only, PvP, other-faction and quest rewards you took are left out there
     const cand = gearCands();
-    const out = r && (!cand || cand.byId[String(r.id)]) && {
+    // something you already have is not a step (Ready now shows it when it beats what you wear)
+    const out = r && (!cand || cand.byId[String(r.id)]) && !ownedIds().has(r.id) && {
       id: r.id, name: r.name, slot: (r.specs[0] || {}).slot || null,
       specs: r.specs.map((s) => {
         const ok = s.canWear && s.gain != null && s.gain > MIN_GAIN && (!s.level || s.level <= lvl + LEVEL_AHEAD);
@@ -35,6 +36,12 @@
     };
     RC.m.set(id, out);
     return out;
+  }
+  let OW = null;
+  function ownedIds() {
+    const C = CC.advice && CC.advice.compute ? CC.advice.compute() : null;
+    if (!OW || OW.C !== C) OW = { C, ids: new Set((CC.advice && CC.advice.owned ? CC.advice.owned() : []).map((o) => (A.item(o.key) || {}).id).filter(Boolean)) };
+    return OW.ids;
   }
   let GC = null;
   function gearCands() {
@@ -49,7 +56,7 @@
   const specNames = () => { const C = CC.advice && CC.advice.compute ? CC.advice.compute() : null; return C ? C.ctxs.map((c) => c.name) : []; };
   // gain per spec added up over several items (each item weighted, e.g. by its drop chance)
   function addGains(into, r, w) { if (r) r.specs.forEach((s) => { if (s.gain) into[s.spec] = (into[s.spec] || 0) + s.gain * w; }); return into; }
-  const mode = () => A.STATE.nextSpec || 'hybrid';
+  const mode = () => (A.STATE.nextSpec && specNames().includes(A.STATE.nextSpec) ? A.STATE.nextSpec : 'hybrid');
   const valueOf = (g) => (mode() === 'hybrid' ? Object.values(g || {}).reduce((a, b) => a + b, 0) : (g || {})[mode()] || 0);
   const gainTxt = (g) => Object.entries(g || {}).filter(([, v]) => v >= 0.05).sort((a, b) => b[1] - a[1]).map(([s, v]) => `${esc(s)} +${v.toFixed(1)}`).join(' · ');
 
@@ -57,20 +64,25 @@
   let DIDX = null;
   function dungeonIndex() {
     if (DIDX) return DIDX;
-    const z = {}, size = GD().size || {};
+    const z = {}, size = GD().size || {}, inst = new Set();
+    // an instance is a zone ForeverDB marks with an instance id on some drop; every drop listed in it counts
+    // (many boss rows carry no instance id), and it is a raid when most of its gear needs a raid group
+    for (const rows of Object.values(GD().src || {})) for (const r of rows) if (r[0] === 'drop' && r[5] && r[7]) inst.add(r[7]);
     for (const [k, rows] of Object.entries(GD().src || {})) {
       const g = A.gdItem(k);
       if (!g || (g[9] !== 2 && g[9] !== 4)) continue;
       for (const r of rows) {
-        if (r[0] !== 'drop' || !r[5] || !r[7]) continue;
-        const d = z[r[7]] || (z[r[7]] = { name: r[7], items: new Map(), bosses: {}, raid: false });
-        if ((size[k] || 0) >= 20) d.raid = true;
+        if (r[0] !== 'drop' || !r[7] || !inst.has(r[7])) continue;
+        const d = z[r[7]] || (z[r[7]] = { name: r[7], items: new Map(), bosses: {}, big: 0 });
+        if ((size[k] || 0) >= 20) d.big++;
         const cur = d.items.get(Number(k));
         if (!cur || (r[3] || 0) > (cur[3] || 0)) d.items.set(Number(k), r);
         if (r[6]) d.bosses[r[2]] = r[1];
       }
     }
     Object.values(z).forEach((d) => {
+      d.raid = RAIDS.has(d.name) || d.big > d.items.size / 2;
+      d.pvp = PVP.has(d.name);
       const lv = Object.keys(d.bosses).map((n) => (GD().npcs || {})[n]).filter(Boolean);
       d.min = lv.length ? Math.min(...lv.map((n) => n[1] || 0)) : null;
       d.max = lv.length ? Math.max(...lv.map((n) => n[2] || n[1] || 0)) : null;
@@ -78,6 +90,8 @@
     DIDX = z;
     return z;
   }
+  // which instances are raids or battlegrounds: data/rules.js (no per-item source says it reliably)
+  const RAIDS = new Set(arr((RULES.instances || {}).raids)), PVP = new Set(arr((RULES.instances || {}).battlegrounds));
   const unlocks = () => arr(RULES.unlocks);
   // What one run is worth: per slot and spec, the expected gain of the best upgrade that drops (items in
   // order of gain, each counting only when nothing better dropped: Σ gain × p × Π(1 − p of the better ones)),
@@ -116,9 +130,13 @@
 
   // ---------------------------------------------------------------- quests
   const Q = () => CC.quests;
+  // holiday quests (QuestieDB's sort categories): not a step most of the year
+  const SEASONAL = /^(Seasonal|Darkmoon Faire|Lunar Festival|Midsummer)$/;
+  let raidQuest = () => false;
   function rewardGains(q) {
-    const pick = arr(q.choice).length ? arr(q.choice) : null;
-    const fixed = arr(q.reward).concat(pick ? [] : arr(q.rewardAny));
+    // rewardAny: QuestieDB knows the items but not fixed vs choose-one, so it counts as choose-one (the lower claim)
+    const pick = arr(q.choice).length ? arr(q.choice) : arr(q.rewardAny).length ? arr(q.rewardAny) : null;
+    const fixed = arr(q.reward);
     const items = [];
     const g = {};
     fixed.forEach(([id]) => { const sc = rated(id); if (sc && sc.specs.some((s) => s.gain)) { addGains(g, sc, 1); items.push({ id, name: sc.name, g: addGains({}, sc, 1), how: 'get' }); } });
@@ -147,12 +165,16 @@
     const out = [];
     if (!Q() || !GD().quests || !CC.advice || !CC.advice.rate) return out;
     const D = dungeonIndex();
+    // a raid quest: its type, the raid it is set in, or a starting item that drops in a raid
+    const raidZone = (z) => !!(z && D[z] && D[z].raid);
+    raidQuest = (q) => q.type === 'Raid' || raidZone(q.cat) || arr(q.starter_item).some((it) => arr((GD().src || {})[it]).some((r) => raidZone(r[7])));
+    const known = Q().known();
     const dungeonQuests = {};
     const zoneBundles = {};
     const ul = unlocks();
     const ulState = {};
     // ---- attunements and keys first: the dungeon rows need to know what's still locked
-    const owns = (id) => (CC.advice.owned ? CC.advice.owned() : []).some((o) => (A.item(o.key) || {}).id === id);
+    const owns = (id) => ownedIds().has(id);
     ul.forEach((u) => {
       const qs = u.quests.filter((q) => Q().forYou(q));
       const done = qs.some((q) => Q().isDone(q)) || u.items.some(owns);
@@ -160,7 +182,7 @@
     });
     // ---- dungeons
     Object.values(D).forEach((d) => {
-      if (d.raid || d.max == null) return;
+      if (d.raid || d.pvp || d.max == null) return;
       if (d.min > lvl + 3) return;                                    // bosses well above you
       const carved = ul.filter((u) => u.value && u.value.npcs && u.value.npcs.some((n) => d.bosses[n]));
       const except = new Set(carved.flatMap((u) => u.value.npcs));
@@ -168,18 +190,23 @@
         .concat(carved.map((u) => ({ name: u.name, v: instanceValue(d, new Set(u.value.npcs)), u })));
       parts.forEach((p) => {
         const locked = p.u && !ulState[p.u.id].done ? p.u : null;
-        out.push({ id: 'dungeon:' + p.name, kind: 'dungeon', name: p.name, zone: d.name, min: d.min, max: d.max, gains: p.v.gains, ups: p.v.ups, unrated: p.v.unrated, quests: [], locked, xp: 0 });
+        // boss levels of this part only (Upper and Lower Blackrock Spire)
+        const ids = Object.keys(d.bosses).map(Number).filter((n) => (p.u && p.u.value && p.u.value.npcs ? p.u.value.npcs.includes(n) : !except.has(n)));
+        const lv = ids.map((n) => (GD().npcs || {})[n]).filter(Boolean);
+        const min = lv.length ? Math.min(...lv.map((n) => n[1] || 0)) : d.min, max = lv.length ? Math.max(...lv.map((n) => n[2] || n[1] || 0)) : d.max;
+        out.push({ id: 'dungeon:' + p.name, kind: 'dungeon', name: p.name, zone: d.name, min, max, gains: p.v.gains, ups: p.v.ups, unrated: p.v.unrated, quests: [], locked, xp: 0 });
       });
     });
     const dungeonRow = (zone) => out.find((x) => x.kind === 'dungeon' && x.name === zone) || out.find((x) => x.kind === 'dungeon' && x.zone === zone);
     // ---- quests
-    for (const [k, q] of Object.entries(GD().quests)) {
+    for (const [k, q] of (known ? Object.entries(GD().quests) : [])) {
       const id = Number(k);
-      if (q.repeatable || q.type === 'Raid' || !Q().forYou(id) || Q().isDone(id)) continue;
+      if (q.repeatable || q.type === 'Raid' || SEASONAL.test(q.cat || '') || !Q().forYou(id) || Q().isDone(id)) continue;
+      if (raidQuest(q)) continue;
       const st = Q().status(id);
       if (st.state === 'done' || st.state === 'no' || st.state === 'unknown') continue;
       if (st.why.some((w) => w.kind === 'level' && w.level > lvl + LEVEL_AHEAD)) continue;
-      if (arr(st.steps).some((x) => (Q().pack(x) || {}).type === 'Raid')) continue;     // a raid chain: not a next step before raids
+      if (arr(st.steps).some((x) => raidQuest(Q().pack(x) || {}))) continue;     // a raid chain: not a next step before raids
 
       const rw = rewardGains(q);
       const xp = q.lv >= lvl - XP_BELOW ? xpPct(q.xp) : 0;
@@ -191,7 +218,7 @@
         from: who(Q().pack(st.first || id)), group: groupShort(q.min) };
       const dz = q.cat && D[q.cat] ? dungeonRow(q.cat) : null;
       if (dz && q.type === 'Dungeon') { dz.quests.push(row); continue; }
-      if (!hasGear && leveling) { const b = zoneBundles[row.zone] || (zoneBundles[row.zone] = []); b.push(row); continue; }
+      if (!hasGear && leveling) { if (st.state !== 'open' && st.state !== 'active') continue; const b = zoneBundles[row.zone] || (zoneBundles[row.zone] = []); b.push(row); continue; }
       if (hasGear) out.push(row);
     }
     // dungeon rows add up their quests (a run does both)
@@ -231,8 +258,9 @@
       const us = ulState[u.id];
       const row = { id: 'unlock:' + u.id, kind: 'unlock', u, name: u.name, done: us.done, gains: {} };
       if (u.value) { const d = out.find((x) => x.kind === 'dungeon' && x.name === (u.value.zone || u.name)); if (d) { row.gains = Object.assign({}, d.gains); row.dungeon = d.id; } }
-      const q = us.qs.map((x) => Q().status(x)).find((x) => x.state !== 'no');
+      const q = known ? us.qs.map((x) => Q().status(x)).find((x) => x.state !== 'no') : null;
       row.st = q || null;
+      row.unknown = !known && !us.done && us.qs.length > 0;
       if (!us.qs.length && u.items[0]) row.src = arr((GD().src || {})[u.items[0]])[0] || null;
       out.push(row);
     });
@@ -242,7 +270,7 @@
   }
   // the ranked list for a filter: open steps with value first, then unlocks with nothing to rank them by
   const FILTERS = [['all', 'All'], ['gear', 'Gear'], ['quests', 'Quests'], ['dungeons', 'Dungeons'], ['prof', 'Professions'], ['unlocks', 'Unlocks']];
-  const inFilter = (x, f) => f === 'all' ? !(x.kind === 'unlock' && x.done) && (x.v > 0.05 || x.kind === 'unlock' && x.u.kind !== 'shortcut')
+  const inFilter = (x, f) => f === 'all' ? !(x.kind === 'unlock' && (x.done || x.dungeon)) && (x.v > 0.05 || x.kind === 'unlock' && x.u.kind !== 'shortcut')
     : f === 'gear' ? x.kind === 'item' && x.v > 0.05
       : f === 'quests' ? (x.kind === 'quest' || x.kind === 'zone') && x.v > 0.05
         : f === 'dungeons' ? x.kind === 'dungeon' && (x.v > 0.05 || x.quests.length)
@@ -289,9 +317,10 @@
       why.push(`${x.zone ? x.zone + ' · ' : ''}level ${x.lv}${x.st.steps && x.st.steps.length > 1 ? ` · ${x.st.steps.length - 1} earlier step${x.st.steps.length === 2 ? '' : 's'} to do` : ''}${x.st.state === 'active' ? ' · in your log' : x.from ? ' · starts at ' + x.from : ''}`);
       st.why.filter((w) => w.kind === 'rep').forEach((w) => why.push({ need: `Needs ${w.standing} with ${w.faction} (you: ${w.have == null ? 'none' : w.have.toLocaleString()} rep)` }));
       st.why.filter((w) => w.kind === 'level').forEach((w) => why.push({ need: `Needs level ${w.level}` }));
+      st.why.filter((w) => w.kind === 'skill').forEach((w) => why.push({ need: `Needs ${w.prof} ${w.skill} (you: ${w.have})` }));
       if (x.group.length) why.push({ need: 'Too low in your group: ' + x.group.join(', ') });
     } else if (x.kind === 'zone') {
-      why.push(`${x.quests.length} quest${x.quests.length === 1 ? '' : 's'} you can do: ${x.quests.slice(0, 3).map((q) => esc(q.name)).join(', ')}${x.quests.length > 3 ? ', …' : ''}`);
+      why.push(`${x.quests.length} quest${x.quests.length === 1 ? '' : 's'} you can take now: ${x.quests.slice(0, 3).map((q) => esc(q.name)).join(', ')}${x.quests.length > 3 ? ', …' : ''}`);
     } else if (x.kind === 'item') {
       why.push(`${x.slot} · ${SOURCE_WORD[x.source] || ''}${x.ah ? ` · ${A.money(x.ah.price, { short: true })}, ${x.ah.listed} listed ${A.ago(x.ah.seen)}` : x.where ? ' · ' + x.where : ''}`);
       arr(x.needs).forEach((n) => why.push({ need: 'Needs ' + n }));
@@ -301,6 +330,7 @@
       why.push(x.u.what);
       if (x.done) why.push('Done');
       else if (x.st) why.push(x.st.state === 'active' || x.st.state === 'ready' ? `In your log: ${Q().pack(x.st.id).t}` : `Starts with ${Q().pack(x.st.first || x.st.id).t}${who(Q().pack(x.st.first || x.st.id)) ? ' · ' + who(Q().pack(x.st.first || x.st.id)) : ''}${x.st.steps && x.st.steps.length > 1 ? ` · ${x.st.steps.length} steps` : ''}`);
+      else if (x.unknown) why.push({ need: 'Your save has no completed-quest list yet: Sync in game' });
       else if (x.src) why.push(`${x.src[0] === 'drop' ? 'Drops from' : 'From'} ${x.src[1]}${x.src[7] ? ', ' + x.src[7] : ''}`);
       if (x.u.kind === 'raid') why.push(x.u.opens ? `Raid · opens ${new Date(x.u.opens + 'T00:00:00Z').toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}` : 'Raid · not open yet');
       if (x.st && x.st.why) x.st.why.filter((w) => w.kind === 'level').forEach((w) => why.push({ need: `Needs level ${w.level}` }));
@@ -359,12 +389,14 @@
       h += `<h2>Ready now</h2><div class="list">${ready.map((r) => `<div class="li"${r.key ? ` data-item="${esc(r.key)}"` : ''}>${r.kind === 'owned' ? A.itemIcon(r.key, { size: 'sm' }) : r.kind === 'cooldown' ? A.icon(r.icon, { size: 'sm' }) : '<span class="ic sm qmark">?</span>'}<div class="grow">${esc(r.name)}<div class="sub">${esc(r.sub)}</div></div></div>`).join('')}</div>`;
     }
     if (notes.all.length) {
-      const shown = notes.all.filter((c) => !c.step || !list.some((x) => x.id === c.step)).slice(0, 4);
+      const visible = list.slice(0, A.STATE.nextAll === f ? 200 : 25);
+      const shown = notes.all.filter((c) => !c.step || !visible.some((x) => x.id === c.step)).slice(0, 4);
       if (shown.length) h += `<h2>From Claude <span class="n dim small">${notes.all.length} open</span></h2><div class="list">${shown.map((c) => `<div class="li link" data-tab="claude"><div class="grow"><div>${esc(c.title)}</div>${c.summary ? `<div class="sub">${esc(c.summary)}</div>` : ''}</div></div>`).join('')}</div>`;
     }
     const counts = Object.fromEntries(FILTERS.map(([k]) => [k, ranked(k).length]));
     h += `<h2>Next steps</h2><div class="toolbar"><div class="chips">${FILTERS.map(([k, l]) => `<button data-nextf="${k}" class="${f === k ? 'on' : ''}">${l} <span>${counts[k]}</span></button>`).join('')}</div>
       ${sp.length > 1 ? `<div class="seg">${[['hybrid', 'Hybrid']].concat(sp.map((n) => [n, n])).map(([k, l]) => `<button data-nextspec="${esc(k)}" class="${mode() === k ? 'on' : ''}">${esc(l)}</button>`).join('')}</div>` : ''}</div>`;
+    if (CC.quests && !Q().known()) h += '<p class="meta">Quests are left out: your save has no list of completed quests yet. Sync in game (or /reload) and they appear.</p>';
     if (!list.length) return h + `<div class="empty">${!CC.advice || !CC.quests ? 'Sync in game to see your next steps.' : f === 'all' ? 'Nothing to rank: no quest, dungeon or item here beats what you have.' : 'Nothing in this group.'}</div>` + how(lvl);
     h += `<div class="table nextsteps"><div class="thead"><div>Step</div><div>Kind</div><div class="c-num">${lvl < MAX_LEVEL ? 'Gain · XP' : 'Gain'}</div></div>`;
     list.slice(0, A.STATE.nextAll === f ? 200 : 25).forEach((x) => {
