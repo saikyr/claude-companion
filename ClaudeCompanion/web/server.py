@@ -113,9 +113,11 @@ class Handler(BaseHTTPRequestHandler):
 
 
 # ---------------------------------------------------------------- updates
-# The app updates itself from the project's GitHub releases: each tested build is a release with
-# ClaudeCompanion-*.zip attached. The server checks every 30 minutes (and when the page asks), and
-# installs the newest one by itself when "auto" is on (the default), or when you click Install.
+# The app updates itself from the project's "stable" branch: each tested build is pushed there
+# (tools/publish-stable.py) as the ClaudeCompanion folder plus BUILD.json, which lists every file's
+# SHA-256. The server checks the branch's newest commit every 30 minutes (and when the page asks), and
+# installs it by itself when "auto" is on (the default), or when you click Install. Every file is
+# checked against BUILD.json before anything is copied.
 # Installing: download, check the zip has the whole addon, copy the current addon folder to a backup
 # (the last 5 are kept), then copy the new files over it. Never touched: companion-data/ (your
 # snapshot, settings, Claude's cards; only its SCHEMA.md is updated) and the game's saved data (WTF/).
@@ -148,7 +150,7 @@ def write_json(path, data):
 
 
 def upd_cfg():
-    c = {'repo': REPO, 'auto': True, 'api': 'https://api.github.com'}   # api: only changed for testing
+    c = {'repo': REPO, 'auto': True, 'branch': 'stable', 'api': 'https://api.github.com'}   # api: only changed for testing
     c.update(read_json(UPDATE_CFG, {}))
     return c
 
@@ -188,15 +190,10 @@ def check_update(force=False):
     cfg = upd_cfg()
     _upd['checked'] = time.time()
     try:
-        rels = gh_get(f"{cfg['api']}/repos/{cfg['repo']}/releases?per_page=10", gh_token(cfg))
-        latest = None
-        for r in rels:
-            if r.get('draft'): continue
-            asset = next((a for a in r.get('assets', []) if a['name'].startswith('ClaudeCompanion') and a['name'].endswith('.zip')), None)
-            if asset:
-                latest = {'tag': r['tag_name'], 'name': r.get('name') or r['tag_name'], 'published': r.get('published_at'),
-                          'notes': (r.get('body') or '')[:3000], 'asset': asset['id'], 'size': asset['size']}
-                break
+        c = gh_get(f"{cfg['api']}/repos/{cfg['repo']}/commits/{cfg['branch']}", gh_token(cfg))
+        msg = (c.get('commit') or {}).get('message') or ''
+        latest = {'tag': c['sha'][:12], 'sha': c['sha'], 'name': msg.split('\n')[0][:120] or c['sha'][:12],
+                  'published': ((c.get('commit') or {}).get('committer') or {}).get('date'), 'notes': msg[:3000]}
         _upd['latest'], _upd['error'] = latest, None
     except urllib.error.HTTPError as e:
         _upd['error'] = ('GitHub said %d. ' % e.code) + ('The repository is private: add a token (see companion-data/SCHEMA.md, update.json), or sign in with the GitHub CLI.' if e.code in (401, 403, 404) else '')
@@ -220,9 +217,9 @@ def install_update():
     _upd['busy'] = True
     try:
         latest = check_update(force=True)
-        if not latest: return {'ok': False, 'error': _upd['error'] or 'No release found.'}
+        if not latest: return {'ok': False, 'error': _upd['error'] or 'No build found.'}
         cfg = upd_cfg()
-        data = gh_get(f"{cfg['api']}/repos/{cfg['repo']}/releases/assets/{latest['asset']}", gh_token(cfg), 'application/octet-stream')
+        data = gh_get(f"{cfg['api']}/repos/{cfg['repo']}/zipball/{latest['sha']}", gh_token(cfg), 'application/octet-stream')
         work = tempfile.mkdtemp(prefix='cc-update-')
         zpath = os.path.join(work, 'release.zip')
         with open(zpath, 'wb') as f: f.write(data)
@@ -235,7 +232,16 @@ def install_update():
             if 'ClaudeCompanion.toc' in files: src = root; break
         if not src: raise ValueError('the release zip has no ClaudeCompanion.toc')
         missing = [r for r in REQUIRED if not os.path.isfile(os.path.join(src, *r.split('/')))]
-        if missing: raise ValueError('the release zip is missing ' + ', '.join(missing))
+        if missing: raise ValueError('the build is missing ' + ', '.join(missing))
+        # every file must match BUILD.json (next to the ClaudeCompanion folder): a broken download installs nothing
+        import hashlib
+        build = read_json(os.path.join(os.path.dirname(src), 'BUILD.json'), None)
+        if not build or not isinstance(build.get('files'), dict): raise ValueError('the build has no BUILD.json')
+        for rel, want in build['files'].items():
+            fp = os.path.join(src, *rel.split('/'))
+            if not os.path.isfile(fp): raise ValueError('the build is missing ' + rel)
+            with open(fp, 'rb') as fh:
+                if hashlib.sha256(fh.read()).hexdigest() != want: raise ValueError('checksum mismatch: ' + rel)
         # back up the current addon (without companion-data, which is never overwritten anyway)
         stamp = datetime.now().strftime('%Y%m%d-%H%M%S')
         backup = os.path.join(BACKUPS, f'ClaudeCompanion-{stamp}')
@@ -255,7 +261,7 @@ def install_update():
                 if f == 'launcher' or f.endswith(('.command', '.sh')): os.chmod(dest, 0o755)   # zips don't keep the run bit
                 copied += 1
         shutil.rmtree(work, ignore_errors=True)
-        info = {'tag': latest['tag'], 'at': datetime.now(timezone.utc).isoformat(), 'backup': backup, 'files': copied}
+        info = {'tag': latest['tag'], 'sha': latest['sha'], 'version': build.get('version'), 'at': datetime.now(timezone.utc).isoformat(), 'backup': backup, 'files': copied}
         write_json(INSTALLED, info)
         _upd['last'] = info
         print(f"updated to {latest['tag']} ({copied} files; backup {backup})", flush=True)

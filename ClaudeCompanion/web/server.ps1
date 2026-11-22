@@ -188,8 +188,9 @@ function Check-Background {
 }
 
 # ---------------------------------------------------------------- updates (same as server.py)
-# Each tested build is a GitHub release with ClaudeCompanion-*.zip attached. Checked every 30 min and
-# when the page asks; installed by itself when "auto" is on (default), or with the page's Install button.
+# Each tested build is pushed to the repository's "stable" branch with BUILD.json (every file's SHA-256).
+# Checked every 30 min and when the page asks; installed by itself when "auto" is on (default), or with
+# the page's Install button. Every file is checked against BUILD.json before anything is copied.
 # Download, check the zip has the whole addon, back up the current addon folder (last 5 kept, in
 # %LOCALAPPDATA%\Claude Companion\backups), copy the new files over. Never touched: companion-data\
 # (only its SCHEMA.md is updated) and the game's saved data. Then the server restarts on the new code;
@@ -213,7 +214,8 @@ function Get-UpdCfg {
     $tok = if ($c -and $c.token) { $c.token } elseif ($env:CC_GITHUB_TOKEN) { $env:CC_GITHUB_TOKEN } else { $null }
     if (-not $tok) { $gh = Get-Command gh -ErrorAction SilentlyContinue; if ($gh) { try { $t = (& $gh.Source auth token 2>$null); if ($LASTEXITCODE -eq 0 -and $t) { $tok = ([string]$t).Trim() } } catch { } } }
     $api = if ($c -and $c.api) { $c.api } else { 'https://api.github.com' }   # api: only changed for testing
-    @{ repo = $repo; auto = $auto; token = $tok; api = $api }
+    $branch = if ($c -and $c.branch) { $c.branch } else { 'stable' }
+    @{ repo = $repo; auto = $auto; token = $tok; api = $api; branch = $branch }
 }
 function Invoke-GitHub([string]$url, $cfg, [switch]$Raw) {
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -240,17 +242,10 @@ function Check-Update([switch]$Force) {
     $cfg = Get-UpdCfg
     $upd.checked = Get-Date
     try {
-        $rels = Invoke-GitHub "$($cfg.api)/repos/$($cfg.repo)/releases?per_page=10" $cfg
-        $latest = $null
-        foreach ($r in @($rels)) {
-            if ($r.draft) { continue }
-            $a = @($r.assets) | Where-Object { $_.name -like 'ClaudeCompanion*.zip' } | Select-Object -First 1
-            if ($a) {
-                $notes = [string]$r.body; if ($notes.Length -gt 3000) { $notes = $notes.Substring(0, 3000) }
-                $latest = @{ tag = $r.tag_name; name = $(if ($r.name) { $r.name } else { $r.tag_name }); published = $r.published_at; notes = $notes; asset = $a.id; size = $a.size }
-                break
-            }
-        }
+        $c = Invoke-GitHub "$($cfg.api)/repos/$($cfg.repo)/commits/$($cfg.branch)" $cfg
+        $msg = [string]$c.commit.message; if ($msg.Length -gt 3000) { $msg = $msg.Substring(0, 3000) }
+        $first = ($msg -split "`n")[0]; if ($first.Length -gt 120) { $first = $first.Substring(0, 120) }
+        $latest = @{ tag = $c.sha.Substring(0, 12); sha = $c.sha; name = $(if ($first) { $first } else { $c.sha.Substring(0, 12) }); published = $c.commit.committer.date; notes = $msg }
         $upd.latest = $latest; $upd.error = $null
     } catch {
         $msg = $_.Exception.Message
@@ -269,9 +264,9 @@ function Install-Update {
     $work = $null
     try {
         $latest = Check-Update -Force
-        if (-not $latest) { return @{ ok = $false; error = $(if ($upd.error) { $upd.error } else { 'No release found.' }) } }
+        if (-not $latest) { return @{ ok = $false; error = $(if ($upd.error) { $upd.error } else { 'No build found.' }) } }
         $cfg = Get-UpdCfg
-        $bytes = Invoke-GitHub "$($cfg.api)/repos/$($cfg.repo)/releases/assets/$($latest.asset)" $cfg -Raw
+        $bytes = Invoke-GitHub "$($cfg.api)/repos/$($cfg.repo)/zipball/$($latest.sha)" $cfg -Raw
         $work = Join-Path $env:TEMP ('cc-update-' + [guid]::NewGuid().ToString('N'))
         New-Item -ItemType Directory -Path $work | Out-Null
         $zip = Join-Path $work 'release.zip'
@@ -282,10 +277,20 @@ function Install-Update {
         try { foreach ($e in $za.Entries) { $n = $e.FullName -replace '\\', '/'; if ($n.StartsWith('/') -or ($n.Split('/') -contains '..')) { throw "unsafe path in the zip: $n" } } } finally { $za.Dispose() }
         [System.IO.Compression.ZipFile]::ExtractToDirectory($zip, $x)
         $toc = Get-ChildItem -Path $x -Filter 'ClaudeCompanion.toc' -Recurse -File | Select-Object -First 1
-        if (-not $toc) { throw 'the release zip has no ClaudeCompanion.toc' }
+        if (-not $toc) { throw 'the build has no ClaudeCompanion.toc' }
         $src = $toc.DirectoryName
         $missing = @('ClaudeCompanion.toc', 'Core.lua', 'Journal.lua', 'web\index.html', 'web\js\app.js', 'web\server.py', 'web\server.ps1') | Where-Object { -not (Test-Path (Join-Path $src $_)) }
-        if ($missing) { throw ('the release zip is missing ' + ($missing -join ', ')) }
+        if ($missing) { throw ('the build is missing ' + ($missing -join ', ')) }
+        # every file must match BUILD.json (next to the ClaudeCompanion folder): a broken download installs nothing
+        $build = Read-Json (Join-Path (Split-Path -Parent $src) 'BUILD.json')
+        if (-not $build -or -not $build.files) { throw 'the build has no BUILD.json' }
+        $sha = [System.Security.Cryptography.SHA256]::Create()
+        foreach ($p in $build.files.PSObject.Properties) {
+            $fp = Join-Path $src ($p.Name -replace '/', '\')
+            if (-not (Test-Path -LiteralPath $fp)) { throw "the build is missing $($p.Name)" }
+            $h = -join ($sha.ComputeHash([System.IO.File]::ReadAllBytes($fp)) | ForEach-Object { $_.ToString('x2') })
+            if ($h -ne $p.Value) { throw "checksum mismatch: $($p.Name)" }
+        }
         # back up the current addon (without companion-data, which is never overwritten anyway)
         $backup = Join-Path $backupDir ('ClaudeCompanion-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
         New-Item -ItemType Directory -Path $backup -Force | Out-Null
@@ -301,7 +306,7 @@ function Install-Update {
             Copy-Item -LiteralPath $f.FullName -Destination $dest -Force
             $copied++
         }
-        $info = @{ tag = $latest.tag; at = (Get-Date).ToUniversalTime().ToString('o'); backup = $backup; files = $copied }
+        $info = @{ tag = $latest.tag; sha = $latest.sha; version = $build.version; at = (Get-Date).ToUniversalTime().ToString('o'); backup = $backup; files = $copied }
         Write-Json $installedFile $info
         $upd.last = $info
         return @{ ok = $true; tag = $info.tag; at = $info.at; backup = $backup; files = $copied }

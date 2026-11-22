@@ -4,18 +4,20 @@ Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 
 ## Unreleased (updates itself)
 
-- **The app updates itself.** Every tested build is published as a GitHub release
-  (`python tools/publish-build.py "what changed"`). The local server checks every 30 minutes and
-  installs a new one by itself (auto-update, on by default), or when you click **Install now** on the
-  card the app shows. It downloads the release, checks the zip has the whole addon, backs up the
-  current addon folder (the last 5, in `%LOCALAPPDATA%\Claude Companionackups` or
-  `~/Library/Application Support/Claude Companion/backups`), copies the new files over and restarts
-  itself. `companion-data/` (snapshot, settings, cards) and the game's saved data are never touched.
-  The only step left per build is `/reload` in game, for the addon's Lua.
+- **The app updates itself.** Each tested build is pushed to the `stable` branch
+  (`python tools/publish-stable.py "what changed"`): the ClaudeCompanion folder as it goes in AddOns,
+  with the game-data pack, plus `BUILD.json` with every file's SHA-256. The local server checks the
+  branch every 30 minutes and installs a new build by itself (auto-update, on by default), or when you
+  click **Install now** on the card the app shows. It downloads the build, checks every file against
+  `BUILD.json` (a damaged download installs nothing), backs up the current addon folder (last 5, in
+  `%LOCALAPPDATA%\Claude Companionackups` or `~/Library/Application Support/Claude Companion/backups`),
+  copies the new files over and restarts itself. `companion-data/` (snapshot, settings, cards) and the
+  game's saved data are never touched. The only step left per build is `/reload` in game.
 - The repository is private, so downloads use a token: `companion-data/update.json` `"token"`, else
   `CC_GITHUB_TOKEN`, else the GitHub CLI's (`gh auth token`). A public repository needs none.
 - `GET /api/update` (status, `?force=1` checks now), `POST /api/update` (install),
-  `POST /api/update-auto?on=0|1`. `companion-data/installed.json` says which release is installed.
+  `POST /api/update-auto?on=0|1`. `companion-data/installed.json` says which build is installed.
+- Mac, once: `tools/install.sh` (see its first lines) puts this on a Mac; it updates itself after that.
 
 ## Unreleased (smooth AH scan)
 

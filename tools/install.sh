@@ -1,5 +1,5 @@
 #!/bin/sh
-# One-time install (or repair) of Claude Companion on a Mac, from the newest GitHub release.
+# One-time install (or repair) of Claude Companion on a Mac, from the newest build on the "stable" branch.
 # After this the app updates itself; nothing else to run per build except /reload in game.
 #   gh api repos/saikyr/claude-companion/contents/tools/install.sh -H "Accept: application/vnd.github.raw" | sh
 # Needs the GitHub CLI signed in (gh auth login), because the repository is private; the app's
@@ -24,11 +24,20 @@ say "Installing into $DEST"
 
 TMP=$(mktemp -d /tmp/cc-install.XXXXXX)
 trap 'rm -rf "$TMP"' EXIT
-TAG=$(gh release view --repo "$REPO" --json tagName -q .tagName)
-gh release download "$TAG" --repo "$REPO" --pattern 'ClaudeCompanion*.zip' --dir "$TMP"
-unzip -q "$TMP"/ClaudeCompanion*.zip -d "$TMP/x"
-SRC="$TMP/x/ClaudeCompanion"
-[ -f "$SRC/ClaudeCompanion.toc" ] && [ -f "$SRC/web/server.py" ] || { say "The release zip looks incomplete; nothing changed."; exit 1; }
+SHA=$(gh api "repos/$REPO/commits/stable" -q .sha)
+TAG=$(printf %.12s "$SHA")
+gh api "repos/$REPO/zipball/$SHA" > "$TMP/build.zip"
+unzip -q "$TMP/build.zip" -d "$TMP/x"
+SRC=$(dirname "$(find "$TMP/x" -path '*/ClaudeCompanion/ClaudeCompanion.toc' | head -1)")
+[ -f "$SRC/ClaudeCompanion.toc" ] && [ -f "$SRC/web/server.py" ] && [ -f "$SRC/../BUILD.json" ] || { say "The build looks incomplete; nothing changed."; exit 1; }
+# every file must match BUILD.json
+/usr/bin/python3 - "$SRC" <<'PY' || { say "The download is damaged (checksum mismatch); nothing changed."; exit 1; }
+import hashlib, json, os, sys
+src = sys.argv[1]
+b = json.load(open(os.path.join(src, '..', 'BUILD.json')))
+for rel, want in b['files'].items():
+    if hashlib.sha256(open(os.path.join(src, *rel.split('/')), 'rb').read()).hexdigest() != want: sys.exit('mismatch ' + rel)
+PY
 
 # back up what's there now (without companion-data, which is never overwritten)
 if [ -d "$DEST" ]; then

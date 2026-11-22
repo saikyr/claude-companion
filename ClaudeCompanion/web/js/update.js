@@ -1,4 +1,4 @@
-// Claude Companion: updates. The local server checks the project's GitHub releases (server.py /
+// Claude Companion: updates. The local server checks the project's stable branch (server.py /
 // server.ps1, /api/update) and installs a new build by itself when auto-update is on, or when you
 // click Install here. This shows a small card when there is something to say: an update is ready,
 // one was just installed (the addon's Lua needs a /reload in game), or the check can't reach GitHub.
