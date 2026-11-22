@@ -104,6 +104,12 @@ Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 - PvP honor gear (sold in Champions' Hall / Hall of Legends or named after a PvP rank) is left out
   of PvE lists; sets sold only by the other faction's vendor are hidden.
 - Snapshot: `gear[].classSets[]`, `preBis[].status`.
+## Unreleased (logout snapshot)
+
+- Logging out no longer wipes the saved bags, worn gear, gold and other parts: the game empties them
+  before `PLAYER_LOGOUT`, so a logout snapshot now keeps the previous value of any part that reads
+  empty (and money / max mana / max health read as 0). `snap.kept` and `snap.keptFrom` say what was
+  kept and from when. Harness test added. (#27)
 
 ## 1.4.0 (22 Nov), first release from this repository
 

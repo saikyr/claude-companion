@@ -504,6 +504,26 @@ do
   check(c.taxiRead and c.taxiRead.Kalimdor, "which continent was read is saved")
   GetTaxiMapID, C_Map = oldTM, oldMap
   if FAILED then error("group loot / flight path checks failed") end
+-- logout after the game has emptied bags, gear and money keeps the last good snapshot's values
+do
+  local function check(ok, what) print((ok and "PASS " or "FAIL ") .. what); if not ok then FAILED = true end end
+  local c; for _, v in pairs(ClaudeCompanionDB.chars) do c = v end
+  local good = c.snap                                         -- the logout above, with everything readable
+  local items = 0; for _, b in ipairs(good.bags or {}) do items = items + #(b.items or {}) end
+  local oldMoney, oldLink, oldInfo = GetMoney(), GetInventoryItemLink, C_Container.GetContainerItemInfo
+  SetMoney(0); GetInventoryItemLink = function() return nil end; C_Container.GetContainerItemInfo = function() return nil end
+  Advance(60); Fire("PLAYER_LOGOUT")
+  local s = c.snap
+  local items2 = 0; for _, b in ipairs(s.bags or {}) do items2 = items2 + #(b.items or {}) end
+  local kept = table.concat(s.kept or {}, ",")
+  check(items > 0 and items2 == items, "logout keeps bag contents the game already emptied (" .. items2 .. " of " .. items .. ")")
+  check(#(good.equipped or {}) > 0 and #(s.equipped or {}) == #good.equipped, "logout keeps worn gear the game already emptied")
+  check(s.character.money == good.character.money and good.character.money > 0, "logout keeps gold when the game reads 0")
+  check(good.kept == nil, "a logout that reads everything keeps nothing")
+  check(s.reason == "logout" and s.taken > good.taken and kept:find("bags") and kept:find("equipped") and kept:find("character.money") and s.keptFrom == good.taken,
+    "logout snapshot lists what it kept and from when (" .. kept .. ")")
+  SetMoney(oldMoney); GetInventoryItemLink = oldLink; C_Container.GetContainerItemInfo = oldInfo
+  if FAILED then error("logout checks failed") end
 end
 local f = io.open("out.lua", "w"); f:write("ClaudeCompanionDB = " .. ser(ClaudeCompanionDB)); f:close()
 print("DIAG:")
