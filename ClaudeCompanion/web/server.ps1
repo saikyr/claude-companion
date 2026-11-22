@@ -223,7 +223,7 @@ function Invoke-GitHub([string]$url, $cfg, [switch]$Raw) {
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
     $rq = [System.Net.HttpWebRequest]::Create($url)
     $rq.UserAgent = 'claude-companion'; $rq.Timeout = 30000
-    $rq.Accept = if ($Raw) { 'application/octet-stream' } else { 'application/vnd.github+json' }
+    $rq.Accept = if ($Raw) { '*/*' } else { 'application/vnd.github+json' }   # zipballs answer 415 to application/octet-stream
     if ($cfg.token) { $rq.Headers.Add('Authorization', 'Bearer ' + $cfg.token) }
     $rq.AllowAutoRedirect = $false
     $rs = $rq.GetResponse()

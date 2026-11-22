@@ -1,15 +1,15 @@
 {
  "version": "1.4.0",
- "built": "2026-11-22T13:47:19+00:00",
+ "built": "2026-11-22T13:48:32+00:00",
  "channel": {
   "repo": "saikyr/claude-companion",
   "branch": "stable"
  },
  "from": {
   "branch": "pc-build",
-  "commit": "c914d29131046b70b5fda40a4da65c8813b44a19"
+  "commit": "d48800a96cd16e5609431ede8fde107fc8200f58"
  },
- "notes": "Combined tested build: everything in PR #39.",
+ "notes": "Updater fix: download builds GitHub's way (zipball Accept header).",
  "files": {
   "Bindings.xml": "5525ecd554c7dab0de755298c49cc8b24321b2fb7e8d0ff1b90791003a508b8d",
   "ClaudeCompanion.toc": "0ab659c58a9fef201adbee03803d23009086aaa4faa07663ccfb854a18fbb728",
@@ -45,7 +45,7 @@
   "web/js/update.js": "edd802c12576a47de10b14b0573dd9e9685306681d5f08b8b51d9fc086388ce6",
   "web/js/weights.js": "287754dd1e7db828fb762d0a1be66d8e9280eca5220e6bb6a3cd0d4ec1586567",
   "web/manifest.json": "84a895318dd5245380d172ff2f7050b630c692086fc7af961c392c46f72ced27",
-  "web/server.ps1": "4658a4da5f6b767d38e1e5d4a84793c7d9a8f226e4984a054090fa1377093a83",
-  "web/server.py": "b5f30d9b0bb46826ea66dcf32b727f8f93345ce2db4c350939e4429d4bb42361"
+  "web/server.ps1": "8f7778328f654084fc83b252c5dc9ecacf184c56e9d142713c2c512b572208f0",
+  "web/server.py": "6839dde381a4eb65e7e1fccd4c11171893185cc03561570a21ee04a427b34cef"
  }
 }
