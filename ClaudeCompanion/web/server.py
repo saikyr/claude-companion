@@ -148,7 +148,7 @@ def write_json(path, data):
 
 
 def upd_cfg():
-    c = {'repo': REPO, 'auto': True}
+    c = {'repo': REPO, 'auto': True, 'api': 'https://api.github.com'}   # api: only changed for testing
     c.update(read_json(UPDATE_CFG, {}))
     return c
 
@@ -188,7 +188,7 @@ def check_update(force=False):
     cfg = upd_cfg()
     _upd['checked'] = time.time()
     try:
-        rels = gh_get(f"https://api.github.com/repos/{cfg['repo']}/releases?per_page=10", gh_token(cfg))
+        rels = gh_get(f"{cfg['api']}/repos/{cfg['repo']}/releases?per_page=10", gh_token(cfg))
         latest = None
         for r in rels:
             if r.get('draft'): continue
@@ -222,7 +222,7 @@ def install_update():
         latest = check_update(force=True)
         if not latest: return {'ok': False, 'error': _upd['error'] or 'No release found.'}
         cfg = upd_cfg()
-        data = gh_get(f"https://api.github.com/repos/{cfg['repo']}/releases/assets/{latest['asset']}", gh_token(cfg), 'application/octet-stream')
+        data = gh_get(f"{cfg['api']}/repos/{cfg['repo']}/releases/assets/{latest['asset']}", gh_token(cfg), 'application/octet-stream')
         work = tempfile.mkdtemp(prefix='cc-update-')
         zpath = os.path.join(work, 'release.zip')
         with open(zpath, 'wb') as f: f.write(data)
