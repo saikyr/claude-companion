@@ -1,15 +1,15 @@
 {
  "version": "1.4.0",
- "built": "2026-11-22T17:24:59+00:00",
+ "built": "2026-11-22T17:41:40+00:00",
  "channel": {
   "repo": "saikyr/claude-companion",
   "branch": "stable"
  },
  "from": {
   "branch": "main",
-  "commit": "f18d5bcf0de9055259b19a0789034878bbd22c08"
+  "commit": "ce2a559159c3f8c132f4f3f5a3abcbdc66fab071"
  },
- "notes": "One source per kind of game data, checked in CI (#52)",
+ "notes": "Gear page: mark the shown spec, plain cards, standings from rules.js (#53)",
  "files": {
   "Bindings.xml": "f4ad14d769e58eb18cd49da688fb23d64dec6be99a7684b9993ea0689616bf09",
   "ClaudeCompanion.toc": "87915db63dcb911f027bc5c400284fe70fa58142f561efc0dea4134bd6625c42",
@@ -38,7 +38,7 @@
   "web/js/app.js": "1e68f1b024b7a830ae1e193d2801714d7a711afc37295aecec4a4ce611f40e30",
   "web/js/cards.js": "27fbd8b2b8ee2a3de0b9d2677d642bbe471fec722c62fce8bb070ac27e78731f",
   "web/js/claude.js": "3df1e52be93aafcb3518313b7bc1889e61014a8ff5dea2d225e95f9ac6b88fa7",
-  "web/js/gear.js": "f8a3e01d04d78d3510d63a228bbf05cdf066c7974696caa4acc2011328dd52b1",
+  "web/js/gear.js": "a612f96dff628c2d0fea65d05be0d084a6dda16b6529abc47b948dc38fc74105",
   "web/js/icons.js": "3179331f23af1fd412b265a3fc170efa047375350cbb8f5d77e3eeadf39deabc",
   "web/js/lua.js": "e14c5df02bbfa98ec07196ec363d017beb4bd6ac50e075b78a3ba32b72234f77",
   "web/js/merge.js": "85f8a6447c366be89dc676408f854fd7022d13d5610eb7e3598b641077162dd8",
