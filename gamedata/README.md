@@ -1,0 +1,26 @@
+# Companion game-data pack
+
+`build.sh` makes `web/data/gamedata.js`: every Forever item, quest, NPC source, vendor and drop
+chance the app needs for things you haven't seen in game. One owner per kind of data:
+
+| Data | Owner | Why |
+| --- | --- | --- |
+| Quests, NPCs, objects, quest givers / turn-ins, quest-item drops, vendors | **QuestieDB** (Forever flavor, `github.com/Questie/questiedb`) | The quest addon's own database. Its Forever layer is built from a Wowhead Forever snapshot plus QuestieTrace: traces from ~2 million Forever play sessions. |
+| Quest XP | QuestieDB QuestXP (measured by Forever players where traced) | Same project. |
+| Weapon and armor tooltips and stats; "how to get it"; group size | **endgametools** Forever item pages | Read from the Forever client (build shown on each page). Matched the game's own numbers on all 48 of the player's items checked. |
+| Drop chances, "seen on Forever" counts, loot lists for non-quest items, crafted-by, icons, fixed-vs-choice quest rewards, reward money | **ForeverDB** (`foreverdb.net/data`) | Player uploads from Forever. The only bulk Forever loot data; rates not measured on Forever are labelled Classic. |
+
+The game always wins in the app: your own tooltips, quest-log rewards and AH scans replace pack data.
+
+## Rebuild
+
+    pip install lupa
+    sh build.sh                # ~10 min first time (endgametools pages), 2-3 min after
+    # then copy work/out/gamedata.js to web/data/gamedata.js
+
+Optional: `SAVEDVARIABLES=<path to ClaudeCompanion.lua> sh build.sh` also checks the pack against
+that character's own items and quest log.
+
+Files: `export_questie.py` (QuestieDB → JSON, running QuestieDB's own loader in a sandboxed Lua),
+`egt_parse.py` (endgametools pages → JSON), `build.py` (joins everything; the schema is at the top),
+`test_pack.py` (shape, known facts, coverage floors, player check), `coverage_md.py` (COVERAGE.md).

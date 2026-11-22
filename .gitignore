@@ -1,0 +1,21 @@
+# Personal data: never commit
+WTF/
+SavedVariables/
+*.lua.bak
+ClaudeCompanion/companion-data/snapshot.json
+ClaudeCompanion/companion-data/snapshot.json.tmp
+ClaudeCompanion/companion-data/from-claude/
+
+# Generated: the game-data pack (12 MB, rebuilt by gamedata/build.sh; shipped in the release zip)
+ClaudeCompanion/web/data/
+# file-mode fallback output of server.ps1 (contains the save)
+ClaudeCompanion/web/data.js
+
+# Build and test output
+gamedata/work/
+test/out.lua
+dist/
+
+.DS_Store
+Thumbs.db
+__pycache__/

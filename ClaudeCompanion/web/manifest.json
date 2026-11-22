@@ -1,0 +1,3 @@
+{ "name": "Claude Companion", "short_name": "Companion", "start_url": "/", "display": "standalone",
+  "background_color": "#0c0d11", "theme_color": "#0f1015",
+  "icons": [{ "src": "https://wow.zamimg.com/images/wow/icons/large/inv_misc_book_09.jpg", "sizes": "56x56", "type": "image/jpeg" }] }
