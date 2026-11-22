@@ -21,7 +21,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, 'ClaudeCompanion')
 PS1 = '--ps1' in sys.argv
 URL = '--url' in sys.argv   # the download folder (web/channel.json "url"), what installed apps use
-API_PORT, APP_PORT = 47700, 47616 if not PS1 else 47617
+# each mode its own ports: a server restarted by an earlier run may still be shutting down
+API_PORT, APP_PORT = 47700 + 2 * URL, (47616 if not PS1 else 47617) + 2 * URL
 seen = {'api_auth': None, 'dl_auth': 'unset'}
 
 
