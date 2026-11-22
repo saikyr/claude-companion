@@ -3,6 +3,9 @@
 Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 
 ## Unreleased (updates itself)
+- **Gear page fixes.** The spec you are looking at is marked in the switcher again. The four cards read
+  like the rest of the app (label, value, one line). Reputation names come from data/rules.js, and items
+  whose source is "World Drop" are listed as world drops.
 
 - **One source per kind of game data, checked in CI.** docs/ARCHITECTURE.md (Data sources) names the one
   source for items, random-suffix rolls, quests, NPCs and spawns, drop rates, vendors, recipes, AH prices
