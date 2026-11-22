@@ -28,7 +28,6 @@ ns.SCHEMA = 1
 ns.BUILD = "dev"
 
 BINDING_HEADER_CLAUDECOMPANION = "Claude Companion"
-BINDING_NAME_CLAUDECOMPANION_SYNC = "Sync (save data now)"
 BINDING_NAME_CLAUDECOMPANION_TOGGLE = "Open or close Claude window"
 
 local LIMITS = { journal = 6000, sessions = 300, history = 2000, notes = 1000,

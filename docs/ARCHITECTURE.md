@@ -77,7 +77,7 @@ no setting before its first pull has finished. A pulled setting replaces the loc
 one changed after it. A computer that joins an account takes that account's settings (so linking a
 new computer never resets the old one's), and a setting changed there afterwards spreads as usual.
 
-**When.** The page pushes after every save it reads (each `/reload`, `/cc sync`, logout and the addon's
+**When.** The page pushes after every save it reads (each `/reload`, logout and the addon's
 own saves), from the app window or the server's hidden browser when the window is closed, pulling
 first, plus every 2 minutes while the window is open. Only what's new is sent: per character and
 kind the page keeps the newest time it has sent (`companion-data/sync.json`), and only moves it once
@@ -166,7 +166,7 @@ observations), a few MB, so one player uses well under 1% of the database a mont
  │  Core · Snapshot · Journal · Market ·    │
  │  Professions · UI                        │
  └───────────────┬──────────────────────────┘
-                 │ on /cc sync (ReloadUI) or logout the game writes
+                 │ on /reload or logout the game writes
                  ▼
  WTF/Account/<account>/SavedVariables/ClaudeCompanion.lua   (global ClaudeCompanionDB)
                  │ read directly, polled every 3 s via /api/stamp

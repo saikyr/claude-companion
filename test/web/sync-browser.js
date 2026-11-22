@@ -33,7 +33,7 @@ const check = (ok, what) => { console.log((ok ? 'ok   ' : 'FAIL ') + what); if (
   const mac = S.client({ fetch: B.fetch, now: () => Date.now(), device: { name: 'MacBook', os: 'mac' },
     loadState: async () => files.s || null, saveState: async (s) => { files.s = s; }, loadCache: async () => null, saveCache: async () => {} });
   const t = 1795400000;
-  await mac.push({ chars: { [key]: { lastSeen: t, journal: [{ t, e: 'kill', name: 'Browser Test Mob' }], grinds: [{ name: 'browser test grind', start: t - 600, finish: t, kills: 1 }] } } }, {});
+  await mac.push({ chars: { [key]: { lastSeen: t, journal: [{ t, e: 'kill', name: 'Browser Test Mob' }], grinds: [{ name: 'browser test grind', start: t - 600, finish: t, kills: 1, loot: { 14047: { id: 14047, item: 'item:14047::::::::7:999:::::::::', name: 'Runecloth', q: 1, count: 3 } } }] } } }, {});
   const { code } = B.call('cc_link_code', { p_key: st.key });
   await mac.link(code);
   // a computer that joins takes the account's settings; a setting changed there afterwards spreads
@@ -46,6 +46,10 @@ const check = (ok, what) => { console.log((ok ? 'ok   ' : 'FAIL ') + what); if (
   check(seen.grind, 'the other computer\'s grind shows in the app');
   check(seen.setting === 'yes', 'its settings reached this browser');
   check(!seen.raw, 'the save as read is untouched (the merge is only in the view)');
+  // its loot shows with its icon, though this computer's item cache has never seen that item key
+  await page.click('button[data-tab="grinds"]');
+  const lootIcon = await page.evaluate(() => { const el = document.querySelector('.grind [data-item^="item:14047::::::::7:999"] img'); return el ? el.getAttribute('src') : null; });
+  check(lootIcon && /inv_fabric_purplefire_01/.test(lootIcon), `another computer's loot shows its icon (${lootIcon})`);
   const side = await page.textContent('aside .sync');
   check(/^Saved in game .+ago$|^Saved in game just now$/.test(side.trim()), `the sidebar says when the game last saved ("${side.trim()}")`);
   await page.click('button[data-tab="system"]');

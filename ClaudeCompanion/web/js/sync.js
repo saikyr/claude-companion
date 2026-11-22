@@ -7,7 +7,7 @@
 //
 //  - every record has an id made from its content (character, kind, time, what it was), so the same
 //    event seen by two computers is ONE record, a re-send changes nothing, and there are no conflicts
-//  - each computer sends what is new in its save after every save it sees (each /reload, /cc sync,
+//  - each computer sends what is new in its save after every save it sees (each /reload,
 //    logout, and the automatic saves), and fetches everything new from its other computers
 //  - the merged view (js/merge.js, its tested rules) shows one character: your save here plus the
 //    history from every other computer, including history the addon has already trimmed here

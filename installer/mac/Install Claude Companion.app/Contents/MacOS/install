@@ -71,4 +71,4 @@ tell "Claude Companion is installed in $DEST.
 
 The app opens in your browser in a moment and updates by itself from now on. To keep it in the Dock: in Safari choose File > Add to Dock, or in Chrome click Install as an app in the app's sidebar.
 
-In game: if WoW Forever is running, type /reload. Then /cc sync saves everything for the app."
+In game: type /reload. It saves everything for the app."
