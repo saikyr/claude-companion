@@ -45,6 +45,8 @@ jobs:
           node test/web/data.test.js
       - name: App logic (stat weights, item advice)
         run: node test/web/advice.test.js
+      - name: Quests you can do (chains, faction, class, reputation; Gear leaves out rewards you took)
+        run: node test/web/quests.test.js
       - name: Python syntax
         run: python3 -m py_compile ClaudeCompanion/web/server.py gamedata/*.py tools/*.py
       - name: One character across computers (merge rules)
