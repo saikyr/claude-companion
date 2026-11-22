@@ -249,6 +249,7 @@ function Check-Update([switch]$Force) {
         $upd.latest = $latest; $upd.error = $null
     } catch {
         $msg = $_.Exception.Message
+        if ($msg -match '\(422\)') { $upd.latest = $null; $upd.error = $null; return $null }   # no build published yet
         $upd.error = if ($msg -match '\((401|403|404)\)') { "GitHub said no ($($Matches[1])). The repository is private: add a token to companion-data\update.json, or sign in with the GitHub CLI (gh auth login)." } else { "Could not reach GitHub: $msg" }
     }
     $upd.latest
