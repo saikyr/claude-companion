@@ -218,6 +218,18 @@ $addonDir = Split-Path -Parent $web
 $backupDir = Join-Path $env:LOCALAPPDATA 'Claude Companion\backups'
 $upd = @{ checked = [DateTime]::MinValue; latest = $null; error = $null; last = $null }
 $updNext = (Get-Date).AddSeconds(60)
+# is this game client running? (the app says "in game" instead of only "saved N ago"); checked at most every 10 s
+$script:gameAt = [DateTime]::MinValue; $script:gameOn = 'null'
+function Test-Game {
+    if (((Get-Date) - $script:gameAt).TotalSeconds -lt 10) { return $script:gameOn }
+    $script:gameAt = Get-Date
+    try {
+        $hit = Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith($forever, [StringComparison]::OrdinalIgnoreCase) } | Select-Object -First 1
+        $script:gameOn = if ($hit) { 'true' } else { 'false' }
+    } catch { $script:gameOn = 'null' }
+    $script:gameOn
+}
+
 function Read-Json([string]$f) { if (Test-Path $f) { try { return (Get-Content -Raw -LiteralPath $f | ConvertFrom-Json) } catch { } }; $null }
 function Write-Json([string]$f, $o) {
     $tmp = "$f.tmp"; [System.IO.File]::WriteAllText($tmp, ($o | ConvertTo-Json -Depth 5), (New-Object System.Text.UTF8Encoding($false)))
@@ -366,7 +378,7 @@ while ($listener.IsListening) {
             $save = Get-Save
             if ($path -eq '/api/stamp') {
                 $type = 'application/json; charset=utf-8'
-                $dev = ',"host":"' + ($env:COMPUTERNAME -replace '[^A-Za-z0-9._-]', '') + '","os":"pc"}'
+                $dev = ',"host":"' + ($env:COMPUTERNAME -replace '[^A-Za-z0-9._-]', '') + '","os":"pc","game":' + (Test-Game) + '}'
                 if ($save) {
                     $json = '{"stamp":"' + $save.LastWriteTimeUtc.ToString('o') + '","size":' + $save.Length + $dev
                 } else { $json = '{"stamp":null' + $dev }

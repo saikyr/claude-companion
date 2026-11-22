@@ -4,6 +4,12 @@ Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 
 ## Unreleased (updates itself)
 
+- **The sidebar says how fresh the data really is.** WoW writes addon data to disk only on `/reload`,
+  `/cc sync` and logout, so while you play the app shows your last save. Instead of "Live · synced 4 h
+  ago" the sidebar now says "In game · last saved 4 h ago" while the game runs on this computer, and
+  "Saved in game 4 h ago" when it doesn't, with a hover note on why (nothing is lost meanwhile: the addon
+  keeps every change, such as a spec swap, and it all shows at the next save). `/api/stamp` gains
+  `game` (true / false / null when the server can't tell).
 - **History syncs between computers.** The journal, sessions, grinds, dungeon runs, notes, level and
   money history, disenchant results, AH prices, sales, buys and posts, and the app's settings go to
   a small Supabase backend after every save, and each computer shows its own save plus every other
