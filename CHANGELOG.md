@@ -91,6 +91,19 @@ Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 - **Stale snapshot is detectable (#3):** `snapshot.json` gains `saveModified` (the save file time
   it was built from) and `taken` per part (bank, mail, flight paths, AH, professions, specs).
   SCHEMA.md tells Claude to compare `saveModified` with the save file before trusting it.
+## Unreleased
+
+- **Gear page rebuilt:** per spec, a summary (pre-BiS progress, upgrades now, class sets), a
+  **pre-BiS checklist** (best item per slot up to 60, raids and PvP left out, with what you have
+  in the compared set and whether you own the target: worn, bags, bank or missing), next upgrades,
+  **class sets** and the AH watch list.
+- **Class sets:** every item set for your class that Forever has, with pieces, where each comes
+  from, which you own, and set bonuses (active ones highlighted). Data-driven for any class:
+  set pieces from ForeverDB, set names and bonuses from the client tooltips (endgametools), class
+  from item masks, "Classes:" lines and class quests (the dungeon set 0.5 chain). Pack key `sets`.
+- PvP honor gear (sold in Champions' Hall / Hall of Legends or named after a PvP rank) is left out
+  of PvE lists; sets sold only by the other faction's vendor are hidden.
+- Snapshot: `gear[].classSets[]`, `preBis[].status`.
 
 ## 1.4.0 (22 Nov), first release from this repository
 
