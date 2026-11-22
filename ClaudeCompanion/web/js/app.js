@@ -7,6 +7,7 @@
   const arr = (x) => (Array.isArray(x) ? x : x && typeof x === 'object' ? Object.keys(x).sort((a, b) => a - b).map((k) => x[k]) : []);
   const ICON_URL = 'https://wow.zamimg.com/images/wow/icons/large/';
   const STANDING = ['', 'Hated', 'Hostile', 'Unfriendly', 'Neutral', 'Friendly', 'Honored', 'Revered', 'Exalted'];
+  const MAX_LEVEL = 60;
   const STANDING_COLOR = ['', '#cc2222', '#ff0000', '#ee6622', '#e6d200', '#33cc33', '#00cc88', '#00ccbb', '#00c8ff'];
 
   let DB = null, CH = null, ITEMS = {}, SPELLS = {}, ITEM_BY_ID = {};
@@ -85,7 +86,7 @@
   // ------------------------------------------------------------ game-data pack (data/gamedata.js)
   // Every Forever item, quest, drop source and vendor from ForeverDB, so the page
   // knows about things you haven't seen in game yet. Rebuild with
-  // gamedata/fetch_gamedata.sh + build_gamedata.py.
+  // gamedata/build.sh (gamedata/README.md).
   const GD = window.GAMEDATA || null;
   const QCOL = ['9d9d9d', 'ffffff', '1eff00', '0070dd', 'a335ee', 'ff8000'];
   const gdItem = (id) => (GD && GD.items[id]) || null;
@@ -173,6 +174,8 @@
   // where a quest ends, from the pack: 'Name, Place x, y'
   const gdWho = (w) => w ? `${w[1]}${w[2] ? ', ' + w[2] : ''}${w[3] != null ? ' ' + w[3] + ', ' + w[4] : ''}` : '';
   const npcName = (id) => (NPCS[id] && NPCS[id].name) || '#' + id;
+  // a kill the addon couldn't name ("npc 9019": the mob was never targeted or moused over) named from QuestieDB if it knows it
+  const killName = (n) => { const m = /^npc (\d+)$/.exec(n || ''); return m && NPCS[m[1]] && NPCS[m[1]].name ? NPCS[m[1]].name : n; };
   function npcWhere(id) {
     const n = NPCS[id];
     const z = n && arr(n.spawns)[0];
@@ -275,6 +278,10 @@
   // a window is open (bank, professions, flight map, AH, other spec) can
   // fall behind; each is marked so nothing out of date passes as current.
   const HOUR = 3600;
+  // the skill lines that are professions (Classic Era has no Jewelcrafting or Inscription)
+  const PROFESSION = /^(Alchemy|Blacksmithing|Enchanting|Engineering|Herbalism|Leatherworking|Mining|Skinning|Tailoring|Cooking|First Aid|Fishing)$/;
+  const GATHERING = /^(Herbalism|Mining|Skinning|Fishing)$/;   // no recipe window to save
+  const skillMax = (s) => s.maxRank || s.max || 0;   // C_SkillInfo says maxRank, the older API max
   function freshness() {
     const now = Date.now() / 1000;
     const out = [];
@@ -287,8 +294,8 @@
     add('snap', 'Character, bags, gear, quests', s.taken, 'Sync in game', 'character', 6 * HOUR);
     add('bank', 'Bank', (CH.bank || {}).taken, 'Open your bank, then Sync', 'bags', 3 * 24 * HOUR);
     const profs = Object.values(CH.professions || {}).filter((p) => p.name);
-    const skills = arr(s.skills).filter((x) => /^(Alchemy|Blacksmithing|Enchanting|Engineering|Herbalism|Leatherworking|Mining|Skinning|Tailoring|Jewelcrafting|Inscription|Cooking|First Aid|Fishing)$/.test(x.name));
-    skills.filter((x, i) => !/^(Herbalism|Mining|Skinning|Fishing)$/.test(x.name) && skills.findIndex((y) => y.name === x.name) === i).forEach((sk) => {
+    const skills = arr(s.skills).filter((x) => PROFESSION.test(x.name));
+    skills.filter((x, i) => !GATHERING.test(x.name) && skills.findIndex((y) => y.name === x.name) === i).forEach((sk) => {
       const p = profs.find((q) => q.name === sk.name);
       add('prof:' + sk.name, sk.name + ' recipes', p && p.taken, `Open ${sk.name} in game, then Sync`, 'professions', 14 * 24 * HOUR);
     });
@@ -357,7 +364,8 @@
     const lg = last && trackerStats(last);
     let h = `<div class="cards">
       <div class="card"><span class="k">Gold</span><span class="v">${money(c.money, { short: true })}</span></div>
-      <div class="card"><span class="k">Level ${c.level || '?'}</span><span class="v">${c.xpMax ? Math.floor((100 * c.xp) / c.xpMax) : 0}%</span><span class="sub">${(c.xpMax - c.xp || 0).toLocaleString()} XP to go${c.rested ? ` · ${c.rested.toLocaleString()} rested` : ''}</span></div>
+      ${c.level >= MAX_LEVEL || !c.xpMax ? `<div class="card"><span class="k">Level ${c.level || '?'}</span><span class="v">${c.level >= MAX_LEVEL ? 'Max level' : '–'}</span></div>`
+        : `<div class="card"><span class="k">Level ${c.level}</span><span class="v">${Math.floor((100 * (c.xp || 0)) / c.xpMax)}%</span><span class="sub">${(c.xpMax - (c.xp || 0)).toLocaleString()} XP to go${c.rested ? ` · ${c.rested.toLocaleString()} rested` : ''}</span></div>`}
       <div class="card"><span class="k">Bags</span><span class="v">${total - used} free</span><span class="sub">${used}/${total} used</span></div>
       ${lg ? `<div class="card link" data-tab="grinds"><span class="k">Last grind</span><span class="v">${gph(lg.perHour)}/hr</span><span class="sub">${esc(last.name || '')} · ${dur(lg.secs)}</span></div>` : ''}
     </div>`;
@@ -481,13 +489,13 @@
     const bank = CH.bank;
     h += `<h2>Bank ${savedPill(bank && bank.taken, 3 * 24 * HOUR)}</h2>`;
     if (bank) {
-      const frames = arr(bank.bags).filter((b) => !/keyring/i.test(b.name || '')).map((b) => ({ b, html: bagFrame(b, f, /bank|tab/i.test(b.name || '') || b.id > 5 && !b.link ? (b.name || 'Bank') : null) }));
+      const frames = arr(bank.bags).filter((b) => !/keyring/i.test(b.name || '')).map((b) => ({ b, html: bagFrame(b, f, /bank|tab/i.test(b.name || '') || (b.id < 0 || b.id > 5) && !b.link ? (b.name && !/^Bag -?\d+$/.test(b.name) ? b.name : 'Bank') : null) }));
       const wide = frames.filter((x) => x.b.slots > 24), rest = frames.filter((x) => x.b.slots <= 24);
       h += `<div class="bankwrap">${wide.map((x) => x.html).join('')}<div class="bags">${rest.map((x) => x.html).join('')}</div></div>`;
     } else h += '<div class="empty">Open your bank once in game, then Sync.</div>';
     const mail = CH.mail;
     if (mail && arr(mail.list).length) {
-      h += `<h2>Mailbox <span class="dim small">saved ${ago(mail.taken)}</span></h2><div class="list">`;
+      h += `<h2>Mailbox ${savedPill(mail.taken, 3 * 24 * HOUR)}</h2><div class="list">`;
       arr(mail.list).forEach((m) => {
         h += `<div class="li"><div class="grow"><div>${esc(m.subject)}</div><div class="sub">${esc(m.sender)} · ${m.daysLeft != null ? Math.floor(m.daysLeft) + ' days left' : ''}</div></div><div class="row">${arr(m.items).map((x) => itemIcon(x.item, { size: 'sm', count: x.count })).join('')}</div><div class="num">${m.money ? money(m.money) : ''}</div></div>`;
       });
@@ -497,8 +505,6 @@
   };
 
   // ------------------------------------------------------------ talents
-  // Lay out talent nodes from their in-game positions. If everything is
-  // one tree, split it into columns of nodes where the x positions jump.
   // Lay out talent nodes from their in-game positions. Positions come on
   // a fixed grid (about 600 apart); a big jump in x starts the next tree.
   // Stray nodes far below the trees (the spec badge) are left out.
@@ -656,7 +662,7 @@
   }
   function grindCard(g, live) {
     const s = trackerStats(g);
-    const kills = Object.entries(g.killsBy || {}).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([n, k]) => `${esc(n)} ×${k}`).join(', ');
+    const kills = Object.entries(g.killsBy || {}).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([n, k]) => `${esc(killName(n))} ×${k}`).join(', ');
     return `<div class="grind${live ? ' live' : ''}">
       <div class="ghd"><span class="gname">${esc(g.name || 'Grind')}</span>${live ? `<span class="tag">${g.paused ? 'paused' : 'running'}</span>` : ''}<span class="dim small">${fmtDay(g.start)} · ${dur(s.secs)}${g.startZone ? ' · ' + esc(g.startZone) : ''}</span></div>
       <div class="gnums"><div><span class="k">Per hour</span><span class="v">${gph(s.perHour)}</span></div><div><span class="k">Total</span><span class="v">${money(s.total, { short: true })}</span></div><div><span class="k">Gold looted</span><span class="v">${money(s.coin, { short: true })}</span></div><div><span class="k">Items</span><span class="v">${money(s.ah, { short: true })}</span></div><div><span class="k">Kills</span><span class="v">${g.kills || 0} <span class="dim small">${Math.round((g.kills || 0) / s.hrs)}/hr</span></span></div>${g.xp ? `<div><span class="k">XP/hr</span><span class="v">${Math.round(g.xp / s.hrs).toLocaleString()}</span></div>` : ''}</div>
@@ -685,6 +691,10 @@
   };
 
   // ------------------------------------------------------------ quests
+  // a reputation value (points from the start of Neutral, as QuestieDB gives them) as a standing index
+  const REP_FLOOR = [null, -42000, -6000, -3000, 0, 3000, 9000, 21000, 42000];
+  const repStanding = (v) => { let st = 1; for (let i = 1; i < REP_FLOOR.length; i++) if (v >= REP_FLOOR[i]) st = i; return st; };
+  const myStanding = (faction) => { const r = arr((CH.snap || {}).reputation).find((x) => x.name === faction); return r && r.reaction ? r.reaction : null; };
   V.quests = function () {
     const qs = arr((CH.snap || {}).quests);
     let h = `<div class="toolbar lift"><span class="dim">${qs.length} in log · ${arr((CH.snap || {}).completedQuests).length.toLocaleString()} completed</span></div><div class="flow2">`;
@@ -703,10 +713,10 @@
         const to = arr(gq.to)[0];
         if (to) bits.push(`<span>Turn in: <b>${esc(to[1])}</b>${to[2] ? ` <span class="dim">${esc(to[2])}${to[3] != null ? ' ' + to[3] + ', ' + to[4] : ''}</span>` : ''}</span>`);
         arr(gq.next).slice(0, 1).forEach((n) => bits.push(`<span>Next: ${esc(questName(n))}</span>`));
-        arr(gq.rep).forEach((r) => bits.push(`<span class="pos">+${r[1]} ${esc(String(r[0]))}</span>`));
+        arr(gq.rep).forEach((r) => bits.push(`<span class="${r[1] >= 0 ? 'pos' : 'neg'}">${r[1] >= 0 ? '+' : '−'}${Math.abs(r[1]).toLocaleString()} ${esc(String(r[0]))}</span>`));
         if (gq.min) bits.push(`<span>Req. level ${gq.min}</span>`);
         if (gq.xp && !(rw && rw.xp)) bits.push(`<span>${gq.xp.toLocaleString()} XP${gq.xpLv ? ` <span class="dim">(at ${gq.xpLv})</span>` : ''}</span>`);
-        arr(gq.repReq).forEach((r) => bits.push(`<span class="neg">Needs ${esc(JSON.stringify(r))}</span>`));
+        arr(gq.repReq).forEach((r) => { const need = repStanding(r[1]), have = myStanding(r[0]); bits.push(`<span class="${have != null && have >= need ? 'dim' : 'neg'}">Needs ${STANDING[need]} with ${esc(String(r[0]))}</span>`); });
         if (bits.length) h += `<div class="qinfo small">${bits.join(' · ')}</div>`;
         if (!rw && arr(gq.rewardAny).length) h += `<div class="qrw">${arr(gq.rewardAny).map(([id]) => anyItemIcon(id, { size: 'sm' })).join('')}<span class="dim small">rewards (accept the quest to see which you choose)</span></div>`;
         if (!rw && (arr(gq.reward).length || arr(gq.choice).length)) {
@@ -755,9 +765,11 @@
   const DIFF = [['optimal', 'Always gives a skill point'], ['medium', 'Usually gives a skill point'], ['easy', 'Rarely gives a skill point'], ['trivial', 'No skill points']];
   const PROF_ICON = { Tailoring: 'trade_tailoring', Enchanting: 'trade_engraving', Cooking: 'inv_misc_food_15', Alchemy: 'trade_alchemy', Blacksmithing: 'trade_blacksmithing', Engineering: 'trade_engineering', Leatherworking: 'trade_leatherworking', 'First Aid': 'spell_holy_sealofsacrifice' };
   V.professions = function () {
-    const skills = arr((CH.snap || {}).skills).filter((s, i, all) => !s.isHeader && /^(Alchemy|Blacksmithing|Enchanting|Engineering|Herbalism|Leatherworking|Mining|Skinning|Tailoring|Cooking|First Aid|Fishing|Riding)$/.test(s.name) && all.findIndex((y) => y.name === s.name) === i);
+    const skills = arr((CH.snap || {}).skills).filter((s, i, all) => !s.isHeader && PROFESSION.test(s.name) && all.findIndex((y) => y.name === s.name) === i);
     const profs = Object.values(CH.professions || {}).filter((p) => p.name).sort((a, b) => arr(b.recipes).length - arr(a.recipes).length);
-    const skillStrip = `<div class="skills">${skills.map((s) => `<div class="skill"><div class="skt"><span>${esc(s.name)}</span><b>${s.rank}<span class="dim"> / ${s.maxRank}</span></b></div><div class="bar"><i style="width:${(100 * s.rank) / s.maxRank}%"></i></div></div>`).join('')}</div>`;
+    // rank from the skill line, or from the profession window if the skill line didn't have it
+    const ranked = skills.map((s) => { const p = (CH.professions || {})[s.name] || {}; return { name: s.name, rank: s.rank != null ? s.rank : p.rank, max: skillMax(s) || p.max }; }).filter((s) => s.rank != null && s.max);
+    const skillStrip = `<div class="skills">${ranked.map((s) => `<div class="skill"><div class="skt"><span>${esc(s.name)}</span><b>${s.rank}<span class="dim"> / ${s.max}</span></b></div><div class="bar"><i style="width:${(100 * s.rank) / s.max}%"></i></div></div>`).join('')}</div>`;
     let h = '';
     if (!profs.length) return skillStrip + '<div class="empty">Open each profession window once in game, then Sync.</div>';
     const p = profs.find((x) => x.name === STATE.prof) || profs[0];
@@ -801,7 +813,7 @@
         </div>`;
       });
     });
-    h += '</div><p class="foot-note">${esc(p.name)} recipes ${savedPill(p.taken, 14 * 24 * HOUR)} · Cost = reagents at your AH scan median (vendor reagents at 4× their sell price). Sells for = AH median minus the 5% cut. A dash means no AH price yet.</p>';
+    h += `</div><p class="foot-note">${esc(p.name)} recipes ${savedPill(p.taken, 14 * 24 * HOUR)} · Cost = reagents at your AH scan median (vendor reagents at 4× their sell price). Sells for = AH median minus the 5% cut. A dash means no AH price yet.</p>`;
     return h;
   };
 
@@ -987,7 +999,7 @@
       owned.forEach((a) => (h += `<div class="li">${a.item ? itemIcon(a.item, { size: 'sm', count: a.qty }) : anyItemIcon(a.id, { size: 'sm', count: a.qty })}<div class="grow">${a.item ? itemName$(a.item, a.link) : esc(anyItemName(a.id))}${a.left ? `<div class="sub">${Math.round(a.left / 60)} min left when saved</div>` : ''}</div><div class="num">${money(a.buyout)}</div></div>`));
       h += '</div>';
     }
-        if (!on('prices')) { /* other section shown */ }
+    if (!on('prices')) { /* another section is shown */ }
     else if (!prices.length) h += '<div class="empty">Browse the Auction House in game, then Sync.</div>';
     else {
       h += `<div class="table prices"><div class="thead"><div>Item</div><div class="c-num">Listed</div><div>Last seen</div><div>Trend</div><div class="c-num">Lowest</div><div class="c-num">Median</div></div>`;
@@ -1019,7 +1031,7 @@
   const EV = {
     loot: (e) => `${itemIcon(e.item, { size: 'xs', count: e.count })} ${itemName$(e.item, e.link)}${e.count > 1 ? ' ×' + e.count : ''}`,
     receive: (e) => EV.loot(e), craft: (e) => 'Made ' + EV.loot(e),
-    kill: (e) => `${esc(e.name)}${e.level ? ` <span class="dim">${e.level}${e.class && e.class !== 'normal' ? ' ' + esc(e.class) : ''}</span>` : ''}`,
+    kill: (e) => `${esc(killName(e.name))}${e.level ? ` <span class="dim">${e.level}${e.class && e.class !== 'normal' ? ' ' + esc(e.class) : ''}</span>` : ''}`,
     money: (e) => `<span class="${e.amount >= 0 ? 'pos' : 'neg'}">${e.amount >= 0 ? '+' : ''}${money(e.amount)}</span> <span class="dim">${esc(e.source)}</span>`,
     xp: (e) => `+${(e.amount || 0).toLocaleString()} XP`, level: (e) => `<b>Level ${e.level}</b>`,
     questAccept: (e) => `Accepted <span class="qname">${esc(e.title || '#' + e.quest)}</span>`, questDone: (e) => `Completed <span class="qname">${esc(e.title || '#' + e.quest)}</span>`,
@@ -1029,7 +1041,7 @@
     runStart: (e) => `Entered <b>${esc(e.name)}</b>: dungeon run started`, runEnd: (e) => `Dungeon run <b>${esc(e.name)}</b> over (${dur(e.secs)}, ${e.kills} kills, ${e.bosses || 0} bosses)`,
     groupLoot: (e) => `${e.item ? itemIcon(e.item, { size: 'xs' }) + ' ' : ''}${itemName$(e.item, e.link)} → <b>${esc(e.who)}</b>${e.how === 'won' ? ' (won)' : ''}`,
     runLeft: (e) => `Left ${esc(e.name)}`, runBack: (e) => `Back in ${esc(e.name)}`, boss: (e) => `<b>Killed ${esc(e.name)}</b>`, wipe: (e) => `<span class="neg">Wiped on ${esc(e.name)}</span>`,
-    grindStart: (e) => `Started grind <b>${esc(e.name)}</b>`, grindStop: (e) => `Finished grind <b>${esc(e.name)}</b> (${dur(e.secs)}, ${e.kills} kills)`,
+    grindStart: (e) => `Started grind <b>${esc(e.name)}</b>`, grindPause: (e) => `Paused grind${e.name ? ` <b>${esc(e.name)}</b>` : ''}`, grindResume: (e) => `Resumed grind${e.name ? ` <b>${esc(e.name)}</b>` : ''}`, grindStop: (e) => `Finished grind <b>${esc(e.name)}</b> (${dur(e.secs)}, ${e.kills} kills)`,
     ahPost: (e) => `Posted ${e.link ? itemName$(keyOf(e.link), e.link) : esc(e.name)} ×${e.qty || 1} at ${money(e.unit)}`,
     ahSold: (e) => `Sold ${esc(e.name)}`, ahExpired: (e) => `Expired ${esc(e.name)}`, ahWon: (e) => `Won ${esc(e.name)}`, ahOutbid: (e) => `Outbid on ${esc(e.name)}`, ahRemoved: (e) => `Cancelled ${esc(e.name)}`,
     flightPath: (e) => `New flight path: ${esc(e.name)}`, profession: (e) => `${esc(e.name)} ${e.rank}/${e.max}`,
@@ -1040,10 +1052,12 @@
     recipe: (e) => `Learned recipe ${esc(e.name || e.recipe)}`,
     login: () => 'Logged in', logout: () => 'Logged out', skill: (e) => esc(e.text), rep: (e) => esc(e.text), coin: (e) => esc(e.text),
   };
-  const EV_LABEL = { xp: 'XP', money: 'Money', coin: 'Coin', loot: 'Loot', kill: 'Kills', ahPost: 'AH posts', receive: 'Received', zone: 'Zones', group: 'Group', flightPath: 'Flight paths', equip: 'Gear', craft: 'Crafts', skill: 'Skills', login: 'Logins', logout: 'Logouts', disenchant: 'Disenchants', profession: 'Professions', death: 'Deaths', grindStart: 'Grind start', grindStop: 'Grind end', runStart: 'Run start', runEnd: 'Run end', runLeft: 'Run left', runBack: 'Run back', boss: 'Bosses', wipe: 'Wipes', groupLoot: 'Group loot', ahScan: 'AH scans', spec: 'Spec', questDone: 'Quests done', questAccept: 'Quests taken', questDrop: 'Quests dropped', level: 'Levels', note: 'Notes', session: 'Sessions', ahSold: 'AH sold', ahExpired: 'AH expired', ahWon: 'AH won', ahOutbid: 'AH outbid', ahRemoved: 'AH cancelled', cooldownCraft: 'Cooldowns', learn: 'Learned', recipe: 'Recipes', rep: 'Reputation' };
+  const EV_LABEL = { xp: 'XP', money: 'Money', coin: 'Coin', loot: 'Loot', kill: 'Kills', ahPost: 'AH posts', receive: 'Received', zone: 'Zones', group: 'Group', flightPath: 'Flight paths', equip: 'Gear', craft: 'Crafts', skill: 'Skills', login: 'Logins', logout: 'Logouts', disenchant: 'Disenchants', profession: 'Professions', death: 'Deaths', grindStart: 'Grind start', grindStop: 'Grind end', grindPause: 'Grind paused', grindResume: 'Grind resumed', runStart: 'Run start', runEnd: 'Run end', runLeft: 'Run left', runBack: 'Run back', boss: 'Bosses', wipe: 'Wipes', groupLoot: 'Group loot', ahScan: 'AH scans', spec: 'Spec', questDone: 'Quests done', questAccept: 'Quests taken', questDrop: 'Quests dropped', level: 'Levels', note: 'Notes', session: 'Sessions', ahSold: 'AH sold', ahExpired: 'AH expired', ahWon: 'AH won', ahOutbid: 'AH outbid', ahRemoved: 'AH cancelled', cooldownCraft: 'Cooldowns', learn: 'Learned', recipe: 'Recipes', rep: 'Reputation' };
+  // the loot-money chat line ("You loot 1 Gold ...") is the same money as the 'money' row next to it
+  const EV_HIDDEN = { coin: true };
   const evRow = (e) => `<div class="ev"><span class="t">${fmtTime(e.t)}</span><span class="what">${EV[e.e] ? EV[e.e](e) : esc(e.e)}</span><span class="where">${esc(e.sub || e.zone || '')}</span></div>`;
   V.journal = function () {
-    const all = arr(CH.journal);
+    const all = arr(CH.journal).filter((e) => e && !EV_HIDDEN[e.e]);
     const notes = arr(CH.notes).slice().reverse();
     const kinds = {};
     all.forEach((e) => (kinds[e.e] = (kinds[e.e] || 0) + 1));
@@ -1090,8 +1104,8 @@
     const app = $('#app');
     if (!CH) { app.innerHTML = `<div class="drop"><p><b>Claude Companion</b></p><p>${STATE.loading ? 'Loading your character…' : 'No data yet. Type <b>/cc sync</b> in game and this page fills in by itself.'}</p></div>`; return; }
     const s = CH.snap || {}, c = s.character || {}, w = c.where || {};
-    const xpPct = c.xpMax ? (100 * c.xp) / c.xpMax : 0;
-    const restPct = c.xpMax && c.rested ? Math.min(100 - xpPct, (100 * c.rested) / c.xpMax) : 0;
+    const xpPct = c.level >= MAX_LEVEL ? 100 : c.xpMax ? (100 * (c.xp || 0)) / c.xpMax : 0;
+    const restPct = c.level < MAX_LEVEL && c.xpMax && c.rested ? Math.min(100 - xpPct, (100 * c.rested) / c.xpMax) : 0;
     let body;
     try { body = (V[STATE.tab] || V.overview)(); } catch (e) { body = `<div class="empty">This tab hit an error: ${esc(e.message)}</div>`; console.error(e); }
     const g = CH.grind;
@@ -1102,7 +1116,7 @@
     const navBtn = (k) => { const [, l, ic] = TABS.find((t) => t[0] === k); return `<button data-tab="${k}" title="${l}" class="${STATE.tab === k ? 'on' : ''}"${STATE.tab === k ? ' aria-current="page"' : ''}><img src="${ICON_URL}${ic}.jpg" alt=""><span>${l}</span>${warn[k] ? '<span class="dot old" title="Some data here is out of date"></span>' : ''}</button>`; };
     app.innerHTML = `<aside class="side">
         <div class="me"><div class="av" title="Level ${c.level || '?'}">${c.level || '?'}</div><div class="nm">${esc(c.name && c.name !== 'World' ? c.name : 'Your character')}</div><div class="dim small">Level ${c.level || '?'} ${esc(c.race || '')} ${esc(c.class || '')}</div>
-          <div class="xp" title="${(c.xp || 0).toLocaleString()} / ${(c.xpMax || 0).toLocaleString()} XP"><i style="width:${xpPct}%"></i><i class="rest" style="width:${restPct}%"></i></div>
+          <div class="xp" title="${c.level >= MAX_LEVEL ? 'Max level' : `${(c.xp || 0).toLocaleString()} / ${(c.xpMax || 0).toLocaleString()} XP`}"><i style="width:${xpPct}%"></i><i class="rest" style="width:${restPct}%"></i></div>
           <div class="row sb"><span>${money(c.money, { short: true })}</span><span class="dim small">${esc(w.sub || w.zone || '')}</span></div></div>
         <nav>${NAV_GROUPS.map(([gl, keys]) => `<div class="navg">${gl ? `<div class="navh">${gl}</div>` : ''}${keys.filter((k) => V[k]).map(navBtn).join('')}</div>`).join('')}</nav>
         ${g ? `<div class="live-grind" data-tab="grinds"><span class="tag">${g.paused ? 'paused' : 'grinding'}</span> ${esc(g.name)}</div>` : ''}
@@ -1140,9 +1154,6 @@
     render();
     document.dispatchEvent(new CustomEvent('cc:loaded', { detail: { live: STATE.live } }));
   }
-  // Fixed-size layout that never gets cut off: when the window is narrower than
-  // the design, the whole app is scaled down to fit
-  // instead of reflowing. Wider windows show it at 100%.
   const loadText = (binary, opts) => load(window.CCLua.parse(binary).ClaudeCompanionDB, opts);
   // for view modules in their own files (js/gear.js): they add V.<tab> and use these helpers
   window.CC = {

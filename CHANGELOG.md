@@ -23,6 +23,18 @@ Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
   numbers; the guide's order shows next to them for comparison instead of as separate picks.
 - Snapshot `gear[]`: `ahUpgrades`, `rollsToSearch`, pre-BiS `picked` and `alternatives`, `weightsChosen`,
   `source` and `ah` on each item (SCHEMA.md); `watch` stays as the older name for `ahUpgrades`.
+- **App review fixes.** Professions: the footer showed raw code (`${esc(p.name)} recipes ...`), and the skill
+  bar could read "undefined / undefined". Quests: a reputation loss read "+-750" in green, and a reputation
+  requirement showed raw data; it now says "Needs Friendly with Magram Clan Centaur" (red only if you don't
+  have it). Journal: grind pause / resume have names, the loot-money chat line no longer repeats the money row,
+  kills of a mob you never targeted take its name from QuestieDB when it's known. Bags: the main bank is called
+  "Bank", not "Bag -1". Overview and sidebar: level 60 shows "Max level" instead of 0%. Dungeons: short visits
+  with nothing done fold into one line. Update card: says what changed and the build, not the merge commit.
+- **The Mac's local server only answers this computer's own page.** A web page could point its own domain at
+  127.0.0.1 (DNS rebinding) and read the save and the sync key; requests for any host but localhost are now
+  refused (the PC's server already did this). Part of #18.
+- **Less work in game.** Spellcast events are registered for the player only, so other players' casts (party,
+  raid, nameplates) no longer wake the addon.
 
 - `snapshot.json` (and its copy online) names the app build each computer runs (`app`).
 - **Claude can read where you are and your quest log from anywhere.** Each computer now also sends its

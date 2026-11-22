@@ -22,12 +22,19 @@ function CreateFrame(kind, name, parent, tmpl)
   local scripts = {}
   rawset(f, "SetScript", function(self, k, fn) scripts[k] = fn end)
   rawset(f, "RegisterEvent", function(self, ev) frames[#frames+1] = {f=self, ev=ev, scripts=scripts} end)
+  -- like the game: the event only reaches this frame for the given units
+  rawset(f, "RegisterUnitEvent", function(self, ev, ...) frames[#frames+1] = {f=self, ev=ev, scripts=scripts, units={...}} end)
   rawset(f, "_scripts", scripts)
   if name then _G[name] = f end
   return f
 end
 function Fire(ev, ...)
-  for _, r in ipairs(frames) do if r.ev == ev and r.scripts.OnEvent then r.scripts.OnEvent(r.f, ev, ...) end end
+  local unit = ...
+  for _, r in ipairs(frames) do
+    local wanted = not r.units
+    if r.units then for _, u in ipairs(r.units) do if u == unit then wanted = true end end end
+    if r.ev == ev and wanted and r.scripts.OnEvent then r.scripts.OnEvent(r.f, ev, ...) end
+  end
 end
 function RunTimers() local n=0 while #timers > 0 and n < 50 do local t = timers; timers = {}; for _, fn in ipairs(t) do fn() end n=n+1 end end
 UIParent = obj(); UISpecialFrames = {}; GameTooltip = obj(); SlashCmdList = {}
@@ -233,6 +240,9 @@ Fire("GROUP_ROSTER_UPDATE"); Fire("ACTIVE_TALENT_GROUP_CHANGED", 2, 1)
 RunTimers()
 -- v1.2: disenchant, rep, scan, interaction manager
 Fire("CHAT_MSG_LOOT", "You receive loot: |cff1eff00|Hitem:9999::|h[Green Pants]|h|r.")
+-- a party member's cast never reaches the addon (spellcast events are registered for the player only)
+Fire("UNIT_SPELLCAST_START", "party1", "p", 13262)
+print((ns.deCasting == nil and "PASS " or "FAIL ") .. "a party member's cast is not taken for yours"); if ns.deCasting ~= nil then FAILED = true end
 SetDELock(true); Fire("UNIT_SPELLCAST_START", "player", "g", 13262); Fire("UNIT_SPELLCAST_SUCCEEDED", "player", "g", 13262); SetDELock(false)
 Fire("LOOT_OPENED")
 Fire("CHAT_MSG_LOOT", "You receive loot: |cffffffff|Hitem:11176::|h[Dream Dust]|h|rx2.")

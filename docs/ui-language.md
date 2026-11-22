@@ -65,3 +65,15 @@ Holy" or "your pick"). Random-suffix items ("of Healing") are scored from their 
 or "Your pick"); the select changes it. Below, one profile at a time: its numbers as bars, biggest first,
 then **Why these numbers**: a short paragraph, one line per stat, the guide's order, and the source.
 Built-in profiles are named after their tree, nothing else ("Holy", "Protection (survival)").
+
+## Controls
+
+The same few controls on every page (`css/app.css`):
+
+- **Buttons:** `.btn` for the one main action, `.btn.ghost` for the others, `.linkbtn` inside text.
+  Filters and choices are `.chips` buttons (`.on` = chosen).
+- **Text fields:** `input.search` (with the magnifier) to filter a list, `input.field` for anything
+  else typed in, the same height as the button next to it. `input.field.code` for codes.
+- **Codes** to read off or type in (System, Link another computer): `.code`, monospace and spaced,
+  shown in two groups of four ("ABCD EFGH"); spaces and dashes typed with a code don't matter.
+- A row of controls is a `.toolbar`; no inline styles.

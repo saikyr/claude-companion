@@ -29,6 +29,8 @@ jobs:
         run: |
           git checkout -q -B main
           msg="$(git log -1 --format=%s)"
+          # a merge from GitHub says "Merge pull request #n from ..."; the PR's title is the first line of the body
+          case "$msg" in "Merge pull request "*) t="$(git log -1 --format=%b | sed -n '/./{p;q}')"; [ -n "$t" ] && msg="$t";; esac
           if [ -n "$DIST_REPO" ] && [ -n "$DIST_TOKEN" ]; then
             python3 tools/publish-stable.py --to "$DIST_REPO" "$msg"
           else

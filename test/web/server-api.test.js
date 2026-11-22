@@ -35,6 +35,10 @@ const post = (u, body, h) => fetch(base + u, { method: 'POST', headers: Object.a
   check((await (await get('api/sync-cache')).text()) === cacheText, 'and reads it back byte for byte');
   check((await post('api/snapshot', JSON.stringify({ schema: 1, by: 'test' }))).ok && JSON.parse(fs.readFileSync(path.join(dataDir, 'snapshot.json'), 'utf8')).by === 'test', 'the page writes snapshot.json');
   check((await post('api/sync', '{}', { 'X-CC': '' })).status === 400, 'a write without the app\'s header is refused');
+  // DNS rebinding: a web page that points its own domain at 127.0.0.1 sends that domain as Host
+  const foreign = await new Promise((ok) => require('http').get({ host: '127.0.0.1', port, path: '/api/sync', headers: { Host: 'evil.example:' + port } },
+    (r) => { r.resume(); ok(r.statusCode); }).on('error', () => ok('error')));
+  check(foreign === 400 || foreign === 'error', `a request for another host name is refused (${foreign})`);
   check(JSON.parse(fs.readFileSync(path.join(dataDir, 'sync.json'), 'utf8')).key === k1.key, 'so the key stays');
   const up = await (await get('api/update')).json();
   check(up && 'installed' in up && 'available' in up, 'update status answers');
