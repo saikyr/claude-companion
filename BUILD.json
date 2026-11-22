@@ -1,15 +1,15 @@
 {
  "version": "1.4.0",
- "built": "2026-11-22T15:18:14+00:00",
+ "built": "2026-11-22T15:24:02+00:00",
  "channel": {
   "repo": "saikyr/claude-companion",
   "branch": "stable"
  },
  "from": {
   "branch": "main",
-  "commit": "8ddd8ac42d157ad4ca1285095b3309b8da8fffd4"
+  "commit": "5459dc17bd0b8ee41abb9b0a301aeaf564d9dee8"
  },
- "notes": "Merge pull request #42 from saikyr/claude/project-thread-fvgi7h",
+ "notes": "Merge pull request #43 from saikyr/claude/project-thread-fvgi7h",
  "files": {
   "Bindings.xml": "f4ad14d769e58eb18cd49da688fb23d64dec6be99a7684b9993ea0689616bf09",
   "ClaudeCompanion.toc": "87915db63dcb911f027bc5c400284fe70fa58142f561efc0dea4134bd6625c42",
@@ -33,7 +33,7 @@
   "web/icons/icon-512.png": "658263476e4a5ac0371ed8fe85671973603436e42e550d92b937c495ba78e567",
   "web/index.html": "8d52b89fc72a95a6ea362398d8aca9aaae090a7ee67aafb506c18f979cbf36cb",
   "web/js/advice.js": "6a0420ff07267d55b73b1457edd3f4b90e09465c60ab91f2ea5856bccc17682e",
-  "web/js/app.js": "9ff829717b610308172b861a5f05eb587f7a430e8f74fb9b5b633f1a1a9292dd",
+  "web/js/app.js": "b988e6236b26ec0bc286fd45764f79f7d18671e4a6aeaaed21881d865dccbca2",
   "web/js/cards.js": "27fbd8b2b8ee2a3de0b9d2677d642bbe471fec722c62fce8bb070ac27e78731f",
   "web/js/claude.js": "a41eb4072eba2b2ed042df28a48caa94fd284c87c5b895ca531db88f6aa1ea5d",
   "web/js/gear.js": "b3fe7892ec78f0b24c21649a6be493bfe58a503e8eec6b39c3dc7aa2aef18c76",
@@ -45,7 +45,7 @@
   "web/js/update.js": "f16e01bd7801c40e09dc539b4660f3f1a53839014cad8092f6ac870fd8ddf890",
   "web/js/weights.js": "05819acc26e8b2f6e9d44402b9dfa915f959bce045c79f00d487d182f0a76b64",
   "web/manifest.json": "c2351657716a2425d052efcad63b0ee2f33a217caef17dd844d24c558a004613",
-  "web/server.ps1": "bd21486626ed8c051ef52987e5cf0347a6e2f04161121d185428158891b3224f",
-  "web/server.py": "0970bfc1c12690c4ed42c19754fdcb33c89f64991db13160b40b5b6c711a07dd"
+  "web/server.ps1": "75a4722dd5c96d9a1ec6b1fd481315cb4bc4b28574b8264f03ca2515022d629b",
+  "web/server.py": "276a82eee5d472f5075c42cdd55d303fe87bebd94ec4a562a396f6ec9fa0b799"
  }
 }
