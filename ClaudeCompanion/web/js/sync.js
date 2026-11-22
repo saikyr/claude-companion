@@ -184,8 +184,14 @@
       if (!readying) readying = readyOnce().finally(() => { readying = null; });
       return readying;
     }
-    async function readyOnce() {
+    async function loadState() {
       if (!state) state = Object.assign({ sent: {}, live: {}, settings: {}, settingsT: {}, pendingSince: {} }, (await io.loadState()) || {});
+      return state;
+    }
+    async function readyOnce() {
+      await loadState();
+      // sync turned off on this computer (System tab): nothing goes out and nothing comes in
+      if (state.off) { const e = new Error('sync is off on this computer'); e.off = true; throw e; }
       // the device key is made once by the local server (GET /api/sync), so two pages can't race
       if (!state.key || String(state.key).length < 32) { state = null; throw new Error('no device key yet (the app server makes it)'); }
       if (!state.account || !state.device) {
@@ -316,8 +322,17 @@
       return r;
     }
 
+    // turn sync off (or back on) for this computer. Off keeps everything: what's not sent yet stays
+    // marked "not sent" and goes when it's turned back on; what's online stays online.
+    async function isOff() { await loadState(); return !!state.off; }
+    async function setOff(off) {
+      await loadState();
+      if (off) state.off = true; else delete state.off;
+      await io.saveState(state);
+    }
+
     return {
-      ready, push, pull, pushSnapshot, linkCode, link, status,
+      ready, push, pull, pushSnapshot, linkCode, link, isOff, setOff, status,
       get state() { return state; }, get cache() { return cache; },
       view: (own) => view(own, cache, state && state.device),
     };
@@ -348,7 +363,7 @@
     get device() { return { name: (A.STATE.device || {}).host || null, os: (A.STATE.device || {}).os || null }; },
   });
   CC.sync = C;
-  CC.syncView = (db) => (C.cache ? C.view(db) : db);
+  CC.syncView = (db) => (C.cache && !(C.state || {}).off ? C.view(db) : db);
 
   let running = null, again = false, lastPull = 0, viewed = false;
   async function cycle() {
@@ -359,6 +374,8 @@
         // this browser's settings are the ones in companion-data/settings.json (js/claude.js loads them
         // first), in the app window and in the hidden browser alike
         if (CC.settingsReady) await CC.settingsReady;
+        C.status.off = await C.isOff();
+        if (C.status.off) return;
         // pull first: settings from elsewhere are weighed against changes here before anything goes out
         const r = await C.pull(settingsNow());
         const apply = Object.entries(r.settings).filter(([k, v]) => !LOCAL_ONLY.test(k) && localStorage.getItem(k) !== v);
@@ -374,7 +391,8 @@
         // the first time (cache read from disk) and whenever something new came in
         if ((r.changed || changedSettings || !viewed) && A.RAW) { viewed = true; CC.reload(); }
       } catch (e) {
-        C.status.ok = false; C.status.error = String((e && e.message) || e);
+        if (e && e.off) C.status.off = true;
+        else { C.status.ok = false; C.status.error = String((e && e.message) || e); }
       } finally {
         C.status.busy = false;
         running = null;
@@ -399,6 +417,10 @@
     const st = C.status, s = C.state || {};
     const esc = A.esc, when = (x) => (x ? A.ago(Date.parse(x) / 1000) : 'not yet');
     const devs = (st.devices || []).map((d) => `<div class="li"><div class="grow">${esc(d.name || d.os || 'computer')}${d.id === s.device ? ' <span class="dim">(this one)</span>' : ''}<div class="sub">${esc((d.chars || []).join(', ') || 'no characters yet')}</div></div><div class="num dim small">seen ${when(d.seen)}</div></div>`).join('');
+    if (st.off) {
+      return `<h2>Sync between computers</h2><p class="meta">Sync is off on this computer. Nothing is sent or fetched, and the app shows only this computer's save. What was sent before stays online, and anything new goes when you turn it back on.</p>
+      <div class="toolbar linkbar"><button class="btn" data-sync="on">Turn sync on</button></div>` + baseSystem();
+    }
     const state = st.busy ? 'Syncing…' : st.ok === false ? `<span class="neg">Not synced: ${esc(st.error)}</span> <span class="dim">(it keeps what's new and tries again)</span>`
       : st.ok ? `Synced · sent ${when(st.pushed)} · checked ${when(st.pulled)}` : 'Starting…';
     let h = `<h2>Sync between computers</h2><p class="meta">Your history (journal, grinds, runs, AH prices and sales, settings) is kept online and shared by your computers. Your bags, gear, quests and the rest of what you have now come from whichever computer saved last.</p>
@@ -406,7 +428,8 @@
       ${devs ? `<div class="list">${devs}</div>` : ''}
       <div class="toolbar linkbar"><button class="btn ghost" data-sync="code">Link another computer</button>
       <span class="row"><input class="field code" id="cc-link-code" placeholder="Code from the other computer" maxlength="12" autocomplete="off" spellcheck="false" value="${esc(codeTyped)}"><button class="btn" data-sync="join">Join</button></span></div>
-      ${linkMsg ? `<p class="meta">${linkMsg}</p>` : ''}`;
+      ${linkMsg ? `<p class="meta">${linkMsg}</p>` : ''}
+      <div class="toolbar"><button class="btn ghost" data-sync="off">Turn sync off on this computer</button></div>`;
     return h + baseSystem();
   };
   document.addEventListener('input', (e) => { if (e.target && e.target.id === 'cc-link-code') codeTyped = e.target.value; });
@@ -415,7 +438,12 @@
     const b = e.target.closest('[data-sync]');
     if (!b) return;
     try {
-      if (b.dataset.sync === 'code') {
+      if (b.dataset.sync === 'off' || b.dataset.sync === 'on') {
+        const off = b.dataset.sync === 'off';
+        await C.setOff(off);
+        C.status.off = off; linkMsg = '';
+        if (off) CC.reload(); else { viewed = false; cycle(); }
+      } else if (b.dataset.sync === 'code') {
         const r = await C.linkCode();
         const shown = String(r.code).replace(/^(.{4})(.{4})$/, '$1 $2');
         linkMsg = `On your other computer, open System and enter <span class="code">${A.esc(shown)}</span> (works once, for 30 minutes).`;
