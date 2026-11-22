@@ -116,7 +116,10 @@ when it changed. It may be up to 2 MB, and pulls leave it out (other computers n
 
 **After an update.** The server installs a new build by itself; an app window that stays open loads the
 new page at a quiet moment (at once if it's hidden or minimised, else after 2 minutes without a click or
-key), so an old page never keeps running against a new server.
+key), so an old page never keeps running against a new server. A window from before that code can't reload
+itself, so until a window loads the page after the server's restart, the hidden browser also runs after
+every save (even though a window wrote `snapshot.json`), and the current page's work (sync, the snapshot
+online) still happens.
 
 **Claude's access.** With the Supabase connector, project `jucbngafdnyaizfxgplk`:
 `select * from private.history where account = '<id>' and kind = 'journal' order by t desc`. The account
