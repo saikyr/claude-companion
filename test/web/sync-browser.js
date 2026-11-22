@@ -57,6 +57,8 @@ const check = (ok, what) => { console.log((ok ? 'ok   ' : 'FAIL ') + what); if (
   await page.waitForTimeout(1500);
   const snap = JSON.parse(fs.readFileSync(path.join(dataDir, 'snapshot.json'), 'utf8'));
   check(snap.sync && snap.sync.account === st.account && !JSON.stringify(snap).includes(st.key), 'snapshot.json has the account for Claude, never the key');
+  const inst = fs.existsSync(path.join(dataDir, 'installed.json')) ? JSON.parse(fs.readFileSync(path.join(dataDir, 'installed.json'), 'utf8')) : null;
+  check(inst ? snap.app && snap.app.build === inst.tag : snap.app === null, `the snapshot names the app build (${JSON.stringify(snap.app)})`);
   const online = B.query(`select data->'character'->>'name' from public.records where kind = 'snapshot'`);
   check(online && online === (snap.character || {}).name, `the snapshot is online for Claude too (${online})`);
   if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT, fullPage: false });

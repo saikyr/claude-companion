@@ -4,6 +4,7 @@ Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 
 ## Unreleased (updates itself)
 
+- `snapshot.json` (and its copy online) names the app build each computer runs (`app`).
 - **Claude can read where you are and your quest log from anywhere.** Each computer now also sends its
   current snapshot (position, quest log, gear and bag advice, professions, rep) online after every save,
   one per computer, only when it changed. Other computers don't download it.
