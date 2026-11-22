@@ -7,15 +7,9 @@
   const A = CC.api, V = CC.V, esc = A.esc, arr = A.arr;
 
   // ---------------------------------------------------------------- stat weights
-  // Points per stat, +1 healing (or +1 spell damage) = 1. From stat-weights/weights-18nov-draft.md
-  // (Healing) and the Shadow weights in project memory. 14 crit rating = 1% crit (foreverdb.net/stats),
-  // so a "+1% spell crit" line counts as 14 rating.
-  const PROFILES = {
-    healing: { name: 'Healing', w: { 41: 1, 45: 1, 5: 1.6, 43: 2.3, 6: 0.7, 32: 0.3, 21: 0.3 * 14 } },
-    shadow: { name: 'Shadow', w: { 45: 1, 42: 1, 111: 1, 6: 0.55, 43: 0.66, 5: 0.35, 32: 0.3, 21: 0.3 * 14, 31: 0.2 } },
-  };
-  // which profile a talent tree uses; a tree not listed here has no weights yet
-  const TREE_PROFILE = { PRIEST: { Discipline: 'healing', Holy: 'healing', Shadow: 'shadow' } };
+  // Profiles, default priorities for every class and spec, and item stats live in js/weights.js.
+  const W = window.CCWeights;
+  if (!W) return;
   // What you can wear comes from the game: the Weapon Skills (category 6) and Armor Proficiencies (8)
   // in your skill list, mapped to item subclasses (warcraft.wiki.gg ItemType). A few labels have
   // both the Classic and the modern spelling. Relics have no skill line: they follow the class.
@@ -32,17 +26,6 @@
     if (RELIC[char().classFile] != null) armor.push(RELIC[char().classFile]);
     return { 2: pick(WEAPON_SKILL), 4: armor };
   }
-  // the game's GetItemStats names, for the stats of what you wear
-  const GAME = { ITEM_MOD_AGILITY_SHORT: 3, ITEM_MOD_STRENGTH_SHORT: 4, ITEM_MOD_INTELLECT_SHORT: 5, ITEM_MOD_SPIRIT_SHORT: 6,
-    ITEM_MOD_STAMINA_SHORT: 7, ITEM_MOD_SPELL_HEALING_DONE_SHORT: 41, ITEM_MOD_SPELL_DAMAGE_DONE_SHORT: 42,
-    ITEM_MOD_MANA_REGENERATION_SHORT: 43, ITEM_MOD_SPELL_POWER_SHORT: 45, ITEM_MOD_SHADOW_DAMAGE_DONE_SHORT: 111,
-    ITEM_MOD_HIT_RATING_SHORT: 31, ITEM_MOD_CRIT_RATING_SHORT: 32, ITEM_MOD_SPELL_CRIT_RATING_SHORT: 32,
-    ITEM_MOD_ATTACK_POWER_SHORT: 38, ITEM_MOD_DEFENSE_SKILL_RATING_SHORT: 12, ITEM_MOD_DODGE_RATING_SHORT: 13, ITEM_MOD_PARRY_RATING_SHORT: 14,
-    ITEM_MOD_BLOCK_RATING_SHORT: 15, ITEM_MOD_BLOCK_VALUE_SHORT: 48, ITEM_MOD_HEALTH_REGEN_SHORT: 46, ITEM_MOD_SPELL_PENETRATION_SHORT: 47,
-    RESISTANCE0_NAME: 100, ITEM_MOD_FIRE_RESISTANCE_SHORT: 101, ITEM_MOD_FROST_RESISTANCE_SHORT: 102, ITEM_MOD_NATURE_RESISTANCE_SHORT: 103,
-    ITEM_MOD_SHADOW_RESISTANCE_SHORT: 104, ITEM_MOD_ARCANE_RESISTANCE_SHORT: 105, ITEM_MOD_FIRE_DAMAGE_DONE_SHORT: 110,
-    ITEM_MOD_FROST_DAMAGE_DONE_SHORT: 112, ITEM_MOD_ARCANE_DAMAGE_DONE_SHORT: 113, ITEM_MOD_NATURE_DAMAGE_DONE_SHORT: 114, ITEM_MOD_HOLY_DAMAGE_DONE_SHORT: 115 };
-
   // gear slots: game slot numbers you wear in, and the item inventory types that fit
   const SLOTS = [
     ['Head', [1], [1]], ['Neck', [2], [2]], ['Shoulder', [3], [3]], ['Back', [15], [16]], ['Chest', [5], [5, 20]],
@@ -53,15 +36,10 @@
 
   const char = () => ((A.CH && A.CH.snap) || {}).character || {};
   const idOf = (key) => { const m = /item:(\d+)/.exec(key || ''); return m ? Number(m[1]) : null; };
-  const score = (st, w) => Object.entries(st).reduce((a, [k, v]) => a + (w[k] || 0) * v, 0);
-  const packStats = (id) => { const g = A.gdItem(id); return g ? Object.fromEntries(arr(g[8])) : {}; };
+  const score = W.score;
+  const packStats = (id) => W.fromPack(A.gdItem(id));
   // the game's own numbers for an item you have (random suffixes count), else the pack's
-  function ownStats(mine, id) {
-    if (!(mine && mine.stats)) return packStats(id);
-    const st = {};
-    Object.entries(mine.stats).forEach(([k, v]) => { if (GAME[k]) st[GAME[k]] = (st[GAME[k]] || 0) + v; });
-    return st;
-  }
+  const ownStats = (mine, id) => (mine && mine.stats ? W.fromGame(mine.stats, mine.tip) : packStats(id));
 
   // the spec a gear list is for: chosen in the tab, else the active one
   function specs() {
@@ -76,8 +54,15 @@
   }
   // choices are kept per character and spec, in this browser
   const store = (spec, what) => `cc.gear.${what}.${char().name || ''}.${spec.i}`;
-  const ownWeights = (spec) => { try { return JSON.parse(localStorage.getItem(store(spec, 'own')) || 'null'); } catch (e) { return null; } };
-  const profileKey = (spec) => localStorage.getItem(store(spec, 'profile')) || localStorage.getItem('cc.gear.profile.' + spec.i) || ((TREE_PROFILE[char().classFile] || {})[spec.tree]);
+  // the weights profile a spec uses: your pick (js/weights.js profiles), else the spec's default
+  function profileKey(spec) {
+    const cls = char().classFile;
+    W.migrate(char().name, spec.i, cls);
+    const pick = localStorage.getItem(store(spec, 'profile'));
+    const p = pick && W.get(pick);
+    return p && p.cls === cls ? pick : W.defaultFor(cls, spec.tree);
+  }
+  const setProfile = (spec, id) => { if (id) localStorage.setItem(store(spec, 'profile'), id); else localStorage.removeItem(store(spec, 'profile')); };
   // What a spec's upgrades are measured against: the gear set for that spec, else what you wear now.
   // A set is linked by your pick in the tab, else the game's own spec link, else a name that matches the
   // spec or its weights ("heals" ~ Healing, "shadow" ~ Shadow).
@@ -85,7 +70,7 @@
   function baseline(spec, pk) {
     const sets = SETS(), pick = localStorage.getItem(store(spec, 'set'));
     const stem = (x) => (x || '').toLowerCase().replace(/[^a-z]/g, '').slice(0, 4);
-    const words = [spec.tree, pk && PROFILES[pk] && PROFILES[pk].name].map(stem).filter((x) => x.length === 4);
+    const words = [spec.tree, pk && W.get(pk) && W.get(pk).name].map(stem).filter((x) => x.length === 4);
     const byName = (g) => g.name.toLowerCase().split(/[^a-z]+/).some((t) => words.includes(stem(t)));
     let set = null, why = '';
     if (pick === 'worn') set = null;
@@ -102,9 +87,7 @@
     const lost = set.numLost ? `; the game listed ${set.numLost} of its items as missing when it saved` : '';
     return { key: String(set.id), label: `your “${set.name}” set (${why}${lost})`, worn };
   }
-  const weightsFor = (spec, pk) => (pk === 'own' ? ownWeights(spec) : PROFILES[pk] && PROFILES[pk].w);
-  // stats you can weigh in "Your own weights"
-  const EDITABLE = [4, 3, 7, 5, 6, 38, 31, 117, 32, 116, 21, 18, 45, 42, 41, 43, 12, 100];
+  const weightsFor = (spec, pk) => (W.get(pk) || {}).w || null;
 
   // PvP gear: sold in the two PvP halls (Champions' Hall, Hall of Legends). Bought with Honor; the epic pieces
   // also need a PvP rank (icy-veins.com/wow-forever/pvp-rank-system), so they stay out of PvE lists.
@@ -147,7 +130,7 @@
       const raidQuest = arr(src).some((r) => r[0] === 'quest' && ((A.GD.quests || {})[r[2]] || {}).type === 'Raid');
       if (size >= 20 || raidQuest) { skipped['raid only']++; continue; }
       if (isPvp(id)) { skipped['PvP honor gear']++; continue; }
-      out.push({ id, g, inv: g[4], req: g[3] || 0, st: Object.fromEntries(arr(g[8])), boe, size, how });
+      out.push({ id, g, inv: g[4], req: g[3] || 0, st: W.fromPack(g), boe, size, how });
     }
     cache = { ck, out, skipped };
     return cache;
@@ -327,19 +310,16 @@
     const cur = list.find((s) => s.i === A.STATE.gearSpec) || list.find((s) => s.i === active) || list[0];
     let h = `<div class="seg">${list.map((s) => `<button data-gearspec="${s.i}" class="${s === cur ? 'on' : ''}">${esc(s.label)}${s.i === active ? ' · active' : ''}</button>`).join('')}</div>`;
     const pk = profileKey(cur);
-    const own = ownWeights(cur) || {};
-    h += `<div class="toolbar"><span class="dim small">Weights</span><div class="chips">${Object.entries(PROFILES).map(([k, p]) => `<button data-gearprof="${k}" class="${pk === k ? 'on' : ''}">${p.name}</button>`).join('')}<button data-gearprof="own" class="${pk === 'own' ? 'on' : ''}">Your own</button></div>`;
+    const mine = W.forClass(ch.classFile, cur.tree).filter((p) => p.trees ? p.trees.includes(cur.tree) : true);
+    h += `<div class="toolbar"><span class="dim small">Weights</span><div class="chips">${mine.map((p) => `<button data-gearprof="${esc(p.id)}" class="${pk === p.id ? 'on' : ''}">${esc(p.name)}${p.own ? ' <span>yours</span>' : ''}</button>`).join('')}<button data-tab="weights">Edit weights…</button></div></div>`;
     const w = pk && weightsFor(cur, pk);
+    const cls = classSets();
+    if (!w || !Object.keys(w).length) return h + `<div class="empty">No stat weights for ${esc(cur.tree || cur.label)} yet. Pick a profile above, or make your own on the Stat weights page.</div><h2>Class sets</h2>` + setsView(cls);
+    if (CC.advice) h += CC.advice.bestOwnedHTML(cur);
+    const lvl = ch.level || 60;
     const base = baseline(cur, pk);
     const sets = SETS();
-    if (sets.length) h += `<span class="dim small">Compare with</span><div class="chips">${[['worn', 'What you wear'], ...sets.map((g) => [String(g.id), g.name])].map(([k, l]) => `<button data-gearset="${esc(k)}" class="${base.key === k ? 'on' : ''}">${esc(l)}</button>`).join('')}</div>`;
-    h += '</div>';
-    if (pk === 'own') h += `<div class="wedit">${EDITABLE.map((k) => `<label><span>${esc((A.GD.stat || {})[k] || k)}</span><input type="number" step="0.05" min="0" data-gearw="${k}" value="${own[k] != null ? own[k] : ''}" placeholder="0"></label>`).join('')}</div>`;
-    const cls = classSets();
-    if (!w || !Object.keys(w).length) {
-      return h + `<div class="empty">No stat weights for ${esc(cur.tree || cur.label)} yet. Pick a set above or type your own (points per 1 of each stat), or ask Claude to work out weights for this spec.</div><h2>Class sets</h2>` + setsView(cls);
-    }
-    const lvl = ch.level || 60;
+    if (sets.length) h += `<div class="toolbar"><span class="dim small">Compare with</span><div class="chips">${[['worn', 'What you wear'], ...sets.map((g) => [String(g.id), g.name])].map(([k, l]) => `<button data-gearset="${esc(k)}" class="${base.key === k ? 'on' : ''}">${esc(l)}</button>`).join('')}</div></div>`;
     const plans = plan(w, lvl, base.worn);
     const skipped = plans.pop().skipped;
     const at = owned();
@@ -347,7 +327,7 @@
     const done = pre.filter((r) => r.done).length, have = pre.filter((r) => r.owned).length;
     const nowN = plans.reduce((a, p) => a + p.now.length, 0);
     const best = cls.find((s) => s.have) || cls.find((s) => s.kind === 'Dungeon');
-    h += `<p class="meta">${esc(pk === 'own' ? 'Your own' : PROFILES[pk].name)} weights: ${Object.entries(w).map(([k, v]) => `${esc((A.GD.stat || {})[k] || k)} ${+v.toFixed(2)}`).join(' · ')}. Score = sum of stat × weight. Measured against ${esc(base.label)}.</p>`;
+    h += `<p class="meta">${esc(W.get(pk).name)} weights: ${Object.entries(w).map(([k, v]) => `${esc(W.statName(k, A.GD.stat))} ${+v.toFixed(2)}`).join(' · ')}. Score = sum of stat × weight. Measured against ${esc(base.label)}.</p>`;
     h += `<div class="cards c3"><div class="card"><span class="k">Pre-BiS</span><span class="v">${done}/${pre.length}</span><span class="sub">slots done · ${have - done} more owned, not in this set</span></div>
       <div class="card"><span class="k">Upgrades now</span><span class="v">${nowN}</span><span class="sub">usable at level ${lvl}</span></div>
       <div class="card"><span class="k">Class sets</span><span class="v">${cls.length}</span><span class="sub">${best ? `${esc(best.name)}: ${best.have}/${best.slots} owned` : 'none on Forever yet'}</span></div></div>`;
@@ -374,9 +354,12 @@
       return specs().map((sp) => {
         const pk = profileKey(sp);
         const w = pk && weightsFor(sp, pk);
+        const prof = W.get(pk);
         const out = { spec: sp.i, label: sp.label, tree: sp.tree, active: sp.i === active, weights: w && Object.keys(w).length ? pk : null, classSets: sets };
         if (!out.weights) return out;
-        if (pk === 'own') out.ownWeights = w;
+        out.weightsName = prof.name;
+        out.weightsSource = prof.own ? 'yours' : (prof.src || {}).url || (prof.src || {}).label || null;
+        out.weightValues = w;
         const base = baseline(sp, pk);
         out.comparedWith = base.label;
         const plans = plan(w, ch.level || 60, base.worn);
@@ -389,7 +372,8 @@
         return out;
       });
     },
-    PROFILES,
+    // shared with the Stat weights page and the item advice (js/weights.js, js/advice.js)
+    specs, profileKey, setProfile, baseline, canUse, weightsFor, SLOTS,
   };
 
   document.addEventListener('click', (e) => {
@@ -404,19 +388,8 @@
     const p = e.target.closest('[data-gearprof]');
     if (p) {
       const sp = specs().find((x) => x.i === A.STATE.gearSpec) || specs().find((x) => x.i === (A.CH.snap || {}).activeSpec) || specs()[0];
-      if (sp) localStorage.setItem(store(sp, 'profile'), p.dataset.gearprof);
+      if (sp) setProfile(sp, p.dataset.gearprof);
       A.render();
     }
-  });
-  // typing a weight saves it; the lists redraw when you leave the box
-  document.addEventListener('change', (e) => {
-    const t = e.target.closest('[data-gearw]');
-    if (!t) return;
-    const sp = specs().find((x) => x.i === A.STATE.gearSpec) || specs().find((x) => x.i === (A.CH.snap || {}).activeSpec) || specs()[0];
-    if (!sp) return;
-    const w = ownWeights(sp) || {}, v = parseFloat(t.value);
-    if (v > 0) w[t.dataset.gearw] = v; else delete w[t.dataset.gearw];
-    localStorage.setItem(store(sp, 'own'), JSON.stringify(w));
-    A.render();
   });
 })();

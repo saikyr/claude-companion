@@ -21,10 +21,11 @@
     }
     return (window.CC_ICONS && window.CC_ICONS[ic]) || 'inv_misc_questionmark';
   }
-  // one icon square. o: {item, spell, tip, q, count, key, size, cls, dim}
+  // one icon square. o: {item, spell, tip, q, count, key, size, cls, dim, mark}
+  // mark: the item-advice mark (js/advice.js markOf), a quiet corner sign; docs/ui-language.md
   function icon(ic, o) {
     o = o || {};
-    const cls = ['ic', o.size || '', o.q != null ? 'q' + o.q + 'b' : '', o.dim ? 'dim' : '', o.cls || ''].join(' ').trim();
+    const cls = ['ic', o.size || '', o.q != null ? 'q' + o.q + 'b' : '', o.dim ? 'dim' : '', o.cls || '', o.mark ? o.mark.cls : ''].join(' ').trim();
     let attrs = '';
     if (o.item) attrs = ` data-item="${esc(o.item)}"`;
     else if (o.spell) attrs = ` data-spell="${esc(o.spell)}"${o.rank != null ? ` data-rank="${o.rank}/${o.max}"` : ''}`;
@@ -32,7 +33,8 @@
     const cnt = o.count > 1 ? `<b class="cnt">${o.count}</b>` : '';
     const key = o.key ? `<b class="key">${esc(shortKey(o.key))}</b>` : '';
     const badge = o.badge != null ? `<b class="rk">${o.badge}</b>` : '';
-    return `<span class="${cls}"${attrs}><img loading="lazy" src="${ICON_URL}${iconName(ic)}.jpg" alt="">${cnt}${key}${badge}</span>`;
+    const mk = o.mark ? '<i class="mk"></i>' : '';
+    return `<span class="${cls}"${attrs}><img loading="lazy" src="${ICON_URL}${iconName(ic)}.jpg" alt="">${cnt}${key}${badge}${mk}</span>`;
   }
   const emptySlot = (label) => `<span class="ic empty"${label ? ` title="${esc(label)}"` : ''}></span>`;
   function shortKey(k) { return String(k).replace('SHIFT-', 's').replace('CTRL-', 'c').replace('ALT-', 'a').replace('NUMPAD', 'n').replace('BUTTON', 'm').replace('MOUSEWHEEL', 'w'); }
@@ -220,6 +222,8 @@
     if (it.sell && !/No sell price/.test(h)) extra.push(`<div class="l tipx">Vendor: ${money(it.sell)}</div>`);
     allSourceLines(it).forEach((ln) => extra.push(lineHTML(ln)));
     if (extra.length) h += '<div class="tipsep"></div>' + extra.join('');
+    // what the app advises for this item (js/advice.js)
+    if (window.CC && CC.advice) { try { h += CC.advice.tipHTML(key); } catch (e) { console.warn('advice', e); } }
     return h;
   }
   function spellTip(id, rank) {
@@ -258,12 +262,12 @@
     ['talents', 'Talents & Bars', 'spell_holy_holybolt'], ['grinds', 'Grinds', 'inv_misc_coin_02'], ['runs', 'Dungeons', 'inv_misc_key_10'], ['quests', 'Quests', 'inv_misc_note_01'],
     ['professions', 'Professions', 'trade_engraving'], ['rep', 'Reputation', 'inv_misc_tournaments_banner_human'], ['auction', 'Auction House', 'inv_misc_coin_17'],
     ['journal', 'Journal', 'inv_misc_book_11'], ['system', 'System', 'trade_engineering'], ['gear', 'Gear', 'inv_helmet_06'],
-    ['claude', 'From Claude', 'inv_scroll_03'],
+    ['claude', 'From Claude', 'inv_scroll_03'], ['weights', 'Stat weights', 'inv_misc_note_02'],
   ];
   // sidebar groups (layout only)
   const NAV_GROUPS = [
     [null, ['overview', 'claude']],
-    ['Character', ['character', 'gear', 'bags', 'talents', 'rep']],
+    ['Character', ['character', 'gear', 'weights', 'bags', 'talents', 'rep']],
     ['Activity', ['quests', 'grinds', 'runs', 'journal']],
     ['Gold', ['professions', 'auction']],
   ];
@@ -393,7 +397,10 @@
       if (!e) return `<div class="gs ${side}">${emptySlot(LABEL[name] || name)}<div class="gt"><span class="dim">${LABEL[name] || name}</span></div></div>`;
       const it = item(e.item) || {};
       const broken = e.durMax && e.dur / e.durMax < 0.25 ? ' <span class="neg">damaged</span>' : '';
-      return `<div class="gs ${side}">${icon(e.icon || it.icon, { item: e.item, q: it.q, size: 'lg' })}<div class="gt">${itemName$(e.item, e.link)}<span class="sub">${it.ilvl ? 'ilvl ' + it.ilvl : ''}${broken}</span></div></div>`;
+      // a soft ring on the slot when something you own would do better here (js/advice.js)
+      const up = window.CC && CC.advice ? CC.advice.slotHint(e.slot) : null;
+      const hint = up ? `<span class="sub pos" data-item="${esc(up.key)}">${esc(up.name)} (${up.where === 'bank' ? 'bank' : 'bags'}) +${up.gain.toFixed(1)} ${esc(up.spec)}</span>` : '';
+      return `<div class="gs ${side}">${icon(e.icon || it.icon, { item: e.item, q: it.q, size: 'lg', mark: up ? { cls: 'adv-slot' } : null })}<div class="gt">${itemName$(e.item, e.link)}<span class="sub">${it.ilvl ? 'ilvl ' + it.ilvl : ''}${broken}</span>${hint}</div></div>`;
     };
     const b = st.base || {};
     const stat = (k, v) => `<div class="st"><span>${k}</span><b>${v == null ? '–' : v}</b></div>`;
@@ -442,8 +449,9 @@
     for (let s = 1; s <= (b.slots || 0); s++) {
       const x = bySlot[s];
       if (!x) { if (!compact) cells.push(emptySlot()); continue; }
-      const hide = filter && !itemName(x.item, x.link).toLowerCase().includes(filter);
-      cells.push(icon(x.icon || (item(x.item) || {}).icon, { item: x.item, q: x.q, count: x.count, dim: hide }));
+      const mark = window.CC && CC.advice ? CC.advice.markOf(x.item) : null;
+      const hide = (filter && !itemName(x.item, x.link).toLowerCase().includes(filter)) || (STATE.bagFlag && !(mark && mark.flag === STATE.bagFlag));
+      cells.push(icon(x.icon || (item(x.item) || {}).icon, { item: x.item, q: x.q, count: x.count, dim: hide, mark }));
     }
     const name = label || (b.id === 0 ? 'Backpack' : b.name || 'Bag ' + b.id);
     return `<div class="bagf${b.slots > 24 && !compact ? ' wide' : ''}"><div class="baghd">${b.link ? itemIcon(keyOf(b.link), { size: 'xs' }) : ''}<span>${esc(name)}</span><span class="dim">${b.used || 0}/${b.slots}</span></div><div class="cells">${cells.join('')}</div></div>`;
@@ -454,6 +462,8 @@
     const bags = arr(s.bags);
     const used = bags.reduce((a, b) => a + (b.used || 0), 0), total = bags.reduce((a, b) => a + (b.slots || 0), 0);
     let h = `<div class="toolbar lift"><input class="search" id="bagsearch" placeholder="Search bags and bank" value="${esc(STATE.bagFilter || '')}"><span class="dim">${used}/${total} slots used · ${money(((s.character || {}).money))}</span></div>`;
+    // what to do with things: a quiet mark on each item, the reason in its tooltip; a chip shows only those
+    if (window.CC && CC.advice) h += CC.advice.chipsHTML(STATE.bagFlag);
     h += `<div class="bags">${bags.map((b) => bagFrame(b, f)).join('') || '<div class="empty">Not saved yet.</div>'}</div>`;
     const bank = CH.bank;
     h += `<h2>Bank ${savedPill(bank && bank.taken, 3 * 24 * HOUR)}</h2>`;
@@ -878,48 +888,6 @@
     arr((CH.snap || {}).gearSets).forEach((g) => arr(g.items).forEach((x) => x && x.id > 0 && ids.add(x.id)));
     return ids;
   }
-  function deHelper() {
-    const s = CH.snap || {};
-    const keep = gearIds();
-    const cands = [];
-    const add = (x, where) => {
-      const it = item(x.item) || {};
-      if (!(it.q >= 2 && it.q <= 4) || !(it.class === 2 || it.class === 4) || !it.ilvl || keep.has(it.id)) return;
-      const de = deOutcome(it);
-      if (!de) return;
-      const ahp = x.bound ? null : planPrice(it.id);
-      const sell = ahp ? Math.round(ahp * 0.95) : it.sell || 0;
-      const known = de.missing.length < de.mats.length;
-      cands.push({ x, it, de, sell, how: ahp ? 'AH' : 'vendor', where, known, act: !known ? 'unknown' : de.value > sell ? 'de' : 'sell' });
-    };
-    arr(s.bags).forEach((b) => arr(b.items).forEach((x) => add(x, 'Bags')));
-    arr((CH.bank || {}).bags).forEach((b) => arr(b.items).forEach((x) => add(x, 'Bank')));
-    let h = '';
-    if (!cands.length) return '<div class="empty">Nothing to decide: no unused greens, blues or purples in your bags or bank. Items you wear or keep in a gear set are never listed.</div>';
-    const sum = (k) => cands.filter((c) => c.act === k);
-    const de = sum('de'), sell = sum('sell'), unk = sum('unknown');
-    const ls = (CH.ah || {}).lastScan;
-    h += `<div class="cards c3">
-      <div class="card"><span class="k">Disenchant</span><span class="v">${de.length} item${de.length === 1 ? '' : 's'}</span><span class="sub">worth ≈ ${money(de.reduce((a, c) => a + c.de.value, 0), { short: true })} in materials</span></div>
-      <div class="card"><span class="k">Sell</span><span class="v">${sell.length} item${sell.length === 1 ? '' : 's'}</span><span class="sub">worth ≈ ${money(sell.reduce((a, c) => a + c.sell, 0), { short: true })} after the AH cut</span></div>
-      <div class="card"><span class="k">Prices from</span><span class="v">${ls ? ago(ls.t) : 'no scan'}</span><span class="sub">${ls ? 'your last full AH scan' : 'open the AH in game and press Claude scan'}</span></div>
-    </div>`;
-    h += `<p class="meta">Every green, blue and purple in your bags and bank that you don't wear or keep in a gear set. Do what the right-hand column says.</p>`;
-    const order = { de: 0, sell: 1, unknown: 2 };
-    cands.sort((a, b) => order[a.act] - order[b.act] || Math.abs(b.de.value - b.sell) - Math.abs(a.de.value - a.sell));
-    const likely = (c) => c.de.mats.slice().sort((a, b) => b.ch - a.ch).map((m) => `${m.lo === m.hi ? m.lo : m.lo + '–' + m.hi} ${esc(m.name)} <span class="dim">${Math.round(m.ch * 100)}%</span>`).join(' · ');
-    h += `<div class="table de"><div class="thead"><div>Item</div><div class="c-num">Sell for</div><div class="c-num">Disenchant for</div><div class="c-num">Do this</div></div>`;
-    cands.forEach((c) => {
-      const verdict = c.act === 'de' ? '<span class="badge de">Disenchant</span>' : c.act === 'sell' ? `<span class="badge sell">Sell on ${c.how === 'AH' ? 'AH' : 'vendor'}</span>` : '<span class="badge">No dust price</span>';
-      h += `<div class="tr">
-        <div class="c-main">${itemIcon(c.x.item, { size: 'sm' })}<div class="grow"><div class="nm">${itemName$(c.x.item, c.x.link)}</div><div class="sub">${c.where} · ilvl ${c.it.ilvl}${c.x.bound ? ' · soulbound' : ''} · DE gives ${likely(c)}</div></div></div>
-        <div class="c-num${c.act === 'sell' ? ' best' : ''}">${money(c.sell, { short: true })}</div>
-        <div class="c-num${c.act === 'de' ? ' best' : ''}">${c.known ? '≈ ' + money(c.de.value, { short: true }) : '<span class="dim">–</span>'}</div>
-        <div class="c-num">${verdict}</div></div>`;
-    });
-    h += `</div><details class="how"><summary>How this is worked out</summary><p>Disenchant value is the average result: chance × amount × your AH median for each material, from the disenchanting tables (warcraft.wiki.gg; wow-professions.com/forever lists the same materials). Sell value is the AH median minus the 5% cut, or the vendor price for soulbound items. Materials with no AH price count as zero, so scan the AH first.</p></details>`;
-    return h;
-  }
   // older versions saved a sale twice (again after the gold was taken)
   const salesOf = (ah) => arr(ah.sales).filter((x, i, all) => !(x.net === 0 && all.some((y) => y !== x && y.item === x.item && y.price === x.price && Math.abs(y.t - x.t) < 7200)));
 
@@ -985,12 +953,11 @@
     const prices = Object.entries(ah.prices || {}).map(([k, p]) => ({ k, p })).sort((a, b) => (b.p.last || 0) - (a.p.last || 0));
     const f = (STATE.ahFilter || '').toLowerCase();
     const ls = ah.lastScan;
-    const SECS = [['prices', 'Prices'], ['de', 'Disenchant or sell'], ['sold', 'Sold'], ['flips', 'Flips'], ['mine', 'Your auctions'], ['posted', 'Posted']];
-    const sec = STATE.ahSec || 'prices';
+    const SECS = [['prices', 'Prices'], ['sold', 'Sold'], ['flips', 'Flips'], ['mine', 'Your auctions'], ['posted', 'Posted']];
+    const sec = SECS.some(([k]) => k === STATE.ahSec) ? STATE.ahSec : 'prices';
     const on = (k) => sec === k;
     let h = `<div class="seg">${SECS.map(([k, l]) => `<button data-ahsec="${k}" class="${sec === k ? 'on' : ''}">${l}</button>`).join('')}</div>`;
     h += `<div class="toolbar">${on('prices') ? `<input class="search" id="ahsearch" placeholder="Search prices" value="${esc(STATE.ahFilter || '')}">` : ''}<span class="dim small">${prices.length.toLocaleString()} items priced · ${ls ? `last full scan ${ago(ls.t)} (${ls.auctions.toLocaleString()} auctions)` : 'no full scan yet: open the AH and press <b>Claude scan</b>'}</span></div>`;
-    if (on('de')) h += deHelper();
     const sales = salesOf(ah).slice().reverse();
     if (on('flips')) h += flipsView(ah);
     if (on('sold') && !sales.length) h += '<div class="empty">No sales recorded yet. Sales show up after you take the gold from an AH mail.</div>';
@@ -1165,7 +1132,7 @@
   window.CC = {
     load, loadText, V,
     api: { get CH() { return CH; }, STATE, GD, esc, arr, money, icon, itemIcon, anyItemIcon, anyItemName, gdItem, gdTip,
-      gdSourceLines, planPrice, priceOf, trackerStats, lootStrip, ago, dur, fmtTime, flipsOf, cooldowns, specTrees, specLabel, TREE_NAMES, gearIds, item, byId, render, QCOL },
+      gdSourceLines, planPrice, priceOf, trackerStats, lootStrip, ago, dur, fmtTime, flipsOf, cooldowns, specTrees, specLabel, TREE_NAMES, gearIds, item, byId, render, QCOL, deOutcome },
   };
 
   // ------------------------------------------------------------ data sources

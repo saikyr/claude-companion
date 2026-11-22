@@ -44,8 +44,8 @@ The Overview tab shows what is up to date and what isn't.
 
 Send them the release zip and this README. Their data stays on their computer. The addon works
 for any class and character, with these limits today (see the [issues](../../issues)):
-gear scoring only has default stat weights for Priest specs (other specs can type their own in
-the Gear tab), and the app is English-only.
+every class and spec has starter stat weights from its WoW Forever guide's stat order (see
+docs/STAT-WEIGHTS.md; edit your own copy on the Stat weights page), and the app is English-only.
 
 ### Playing on two computers
 
@@ -85,11 +85,16 @@ Key bindings: Options > Key Bindings > AddOns > Claude Companion.
 | `tools/check-cards.py` | Checks a From Claude `cards.json` before Claude writes it |
 | `docs/ARCHITECTURE.md` | How it fits together, data sources, contracts |
 | `docs/ROADMAP.md` | What's next |
+| `docs/STAT-WEIGHTS.md` | Default stat weights for every spec, and where the numbers come from |
+| `docs/ui-language.md` | The words, marks and colours the app uses for item advice |
 
 ## Develop
 
     # addon tests (mock game API)
     cd /tmp && lua5.1 -e 'ADDONDIR="<repo>/ClaudeCompanion"' <repo>/test/harness.lua
+
+    # app logic: stat weights and item advice (node)
+    node test/web/advice.test.js
 
     # game-data pack (~10 min first time)
     pip install lupa && sh gamedata/build.sh

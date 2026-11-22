@@ -31,7 +31,10 @@ Read that only for things the snapshot leaves out (bag contents, journal, full A
 | `taken` | When each part was last read in game: character, bank, mail, flightPaths, ahScan, ahOwned, professions {name: time}, specs {talent group as saved: time}. Bank, mail, professions, flight paths and the AH only update while that window is open in game. |
 | `pack` | Game-data pack build time and sources (`gamedata/build.sh`). |
 | `character` | name, level, xp, xpMax, rested, class, race, faction, money (copper), where {zone, sub, x, y, map}, hearth. |
-| `gear[]` | One entry per talent spec: `spec` (1/2), `label` ("Holy 16/33/0"), `tree`, `active`, `comparedWith` (the gear set it is measured against, or what you wear), `weights` ("healing" / "shadow" / null = not set up). With weights: `worn[]` {slot, score}, `upgrades[]` (usable now), `preBis[]` (best per slot up to 60, no raids), `watch[]` (BoE upgrades to look for on the AH), `classSets[]` (every item set for the class that Forever has: name, kind, owned/pieces, worn, missing[] with where, bonuses[] with active). `preBis[]` items also carry `status`: done (in the compared set), worn, bags, bank or missing. Each item: slot, id, name, score, gain over worn, reqLevel, boe, where (how to get it), needs[] (unmet reputation / profession gates). |
+| `gear[]` | One entry per talent spec: `spec` (1/2), `label` ("Holy 16/33/0"), `tree`, `active`, `comparedWith` (the gear set it is measured against, or what you wear), `weights` (the profile id, e.g. "healing", "shadow", "iv-arms", or one of yours "u…"; null = none), `weightsName`, `weightsSource` (guide link, "yours" or a note), `weightValues` {statId: weight}. With weights: `worn[]` {slot, score}, `upgrades[]` (usable now), `preBis[]` (best per slot up to 60, no raids), `watch[]` (BoE upgrades to look for on the AH), `classSets[]` (every item set for the class that Forever has: name, kind, owned/pieces, worn, missing[] with where, bonuses[] with active). `preBis[]` items also carry `status`: done (in the compared set), worn, bags, bank or missing. Each item: slot, id, name, score, gain over worn, reqLevel, boe, where (how to get it), needs[] (unmet reputation / profession gates). |
+| `bagAdvice[]` | What the app says about each item you own (bags, bank), from `js/advice.js`. Only items with something to do: `flag` up / de / ah / sell / ask (kept items are left out), `words` ("Upgrade for Shadow", "Sell on the Auction House"), `why`, `value` (copper, the chosen way), `where` [bags, bank], `specs[]` {spec, score, gain (vs what that spec's gear uses in the slot), canWear, level (an upgrade from that level)}. Words and colours: docs/ui-language.md. |
+| `bestOwned[]` | Per spec: `spec`, `comparedWith`, `slots[]` {slot ("Ring", "Trinket", "Weapons", ...), gain, best[] (the best items you own for it: id, name, score, where worn/bags/bank; two for rings and trinkets), now[] (what that spec's set uses)}. |
+| `weightProfiles[]` | Your own weight profiles for this class: id, name, from (the profile it was copied from), weights {statId: weight}. |
 | `equipped[]` | slot, id, name. |
 | `quests[]` | The quest log: id, title, level, complete, failed, objectives[], turnIn {npc, zone, x, y}, xp, money (copper). |
 | `cooldowns[]` | Profession cooldowns: name, profession, readyAt (Unix seconds; in the past = ready now). Shared ones (Transmutes) are one entry. |
@@ -39,8 +42,8 @@ Read that only for things the snapshot leaves out (bag contents, journal, full A
 | `reputation[]` | name, standing (1 Hated ... 4 Neutral ... 8 Exalted), value. |
 | `ah` | lastScan {t, auctions}, itemsPriced, sold[] {t, item, net}, bought[] {t, item, price}, flips {totals, done[] (purchases matched to later sales unit by unit, oldest first, using the stack size from the AH letter: units, paid, price, cut, deposit, profit = price - cut - paid), open[] (bought, not sold: units, paid, listedAt); purchases the player marked "used, not a flip" are left out}, mine[] (your auctions when last saved). Times are Unix seconds; money in copper. |
 
-Scores use the stat weights shown in the app's Gear tab (Healing: healing 1, Int 1.6, MP5 2.3,
-Spirit 0.7, crit rating 0.3; Shadow: spell power 1, Spirit 0.55, MP5 0.66, Int 0.35, crit 0.3, hit 0.2).
+Scores use the stat weights of the profile each spec uses (Stat weights page; defaults and sources in
+docs/STAT-WEIGHTS.md). Stat ids are the game-data pack's (`gamedata/build.py` STAT); `dps` = weapon DPS.
 
 ## from-claude/: cards Claude writes, and what the player did with them
 
