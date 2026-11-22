@@ -7,6 +7,8 @@ $ErrorActionPreference = 'Continue'
 $web = Split-Path -Parent $MyInvocation.MyCommand.Path
 $forever = (Resolve-Path (Join-Path $web '..\..\..\..')).Path   # ...\_forever_
 $accounts = Join-Path $forever 'WTF\Account'
+$dataDir = Join-Path (Split-Path -Parent $web) 'companion-data'
+$cardsDir = Join-Path $dataDir 'from-claude'
 $port = 47615
 $prefix = "http://localhost:$port/"
 $host.UI.RawUI.WindowTitle = 'Claude Companion (close this window to stop)'
@@ -127,19 +129,25 @@ while ($listener.IsListening) {
                 $body = Read-Shared $save.FullName
                 $type = 'application/octet-stream'
             } else { $res.StatusCode = 404; $body = [System.Text.Encoding]::UTF8.GetBytes('no save yet') }
-        } elseif ($path -eq '/api/snapshot' -and $req.HttpMethod -eq 'POST') {
-            # the page's summary for Claude: saved as ..\companion-data\snapshot.json (see SCHEMA.md there).
+        } elseif (($path -eq '/api/cards' -or $path -eq '/api/cards-state') -and $req.HttpMethod -eq 'GET') {
+            # Claude's cards (cards.json, Claude writes it) and what you did with them (state.json, this app writes it)
+            $f = Join-Path $cardsDir $(if ($path -eq '/api/cards') { 'cards.json' } else { 'state.json' })
+            if (Test-Path $f -PathType Leaf) { $body = Read-Shared $f; $type = 'application/json; charset=utf-8' }
+            else { $res.StatusCode = 204; $body = [byte[]]@() }   # none yet
+        } elseif (($path -eq '/api/snapshot' -or $path -eq '/api/cards-state') -and $req.HttpMethod -eq 'POST') {
+            # the page's summary for Claude (..\companion-data\snapshot.json) and what you did with
+            # Claude's cards (..\companion-data\from-claude\state.json); see SCHEMA.md there.
             # Only this app sends the X-CC header; a web page can't add it without the browser asking first.
             if ($req.Headers['X-CC'] -ne '1' -or $req.ContentLength64 -le 0 -or $req.ContentLength64 -gt 20MB) {
                 $res.StatusCode = 400; $body = [System.Text.Encoding]::UTF8.GetBytes('bad request')
             } else {
                 $reader = New-Object System.IO.StreamReader($req.InputStream, [System.Text.Encoding]::UTF8)
                 $text = $reader.ReadToEnd(); $reader.Close()
-                $dir = Join-Path (Split-Path -Parent $web) 'companion-data'
-                if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir | Out-Null }
-                $tmp = Join-Path $dir 'snapshot.json.tmp'
+                if ($path -eq '/api/snapshot') { $dir = $dataDir; $name = 'snapshot.json' } else { $dir = $cardsDir; $name = 'state.json' }
+                if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+                $tmp = Join-Path $dir ($name + '.tmp')
                 [System.IO.File]::WriteAllText($tmp, $text, (New-Object System.Text.UTF8Encoding($false)))
-                Move-Item -LiteralPath $tmp -Destination (Join-Path $dir 'snapshot.json') -Force
+                Move-Item -LiteralPath $tmp -Destination (Join-Path $dir $name) -Force
                 $body = [System.Text.Encoding]::UTF8.GetBytes('ok')
             }
         } else {

@@ -361,3 +361,46 @@ span[data-item], .nm [data-tip] { font-weight: 500; }
 }
 .ph-tools > .toolbar { flex-wrap: nowrap; justify-content: flex-end; min-width: 0; }
 .ph-tools > .toolbar > .dim { white-space: nowrap; }
+
+/* ---------- From Claude cards (js/cards.js) ---------- */
+.btn { height: 1.75rem; padding: 0 var(--sp3); border-radius: var(--r-sm); border: 1px solid var(--acc-line); background: var(--acc-bg); color: var(--t1); font: 500 var(--f-sm) var(--ui); cursor: pointer; white-space: nowrap; }
+.btn:hover { border-color: var(--acc); }
+.btn.ghost { border-color: var(--line2); background: none; color: var(--t2); }
+.btn.ghost:hover { color: var(--t1); border-color: var(--t3); }
+.empty.bad { color: var(--neg); border-color: rgba(242, 116, 116, .35); margin-bottom: var(--sp3); }
+img.kic { width: var(--ic-sm); height: var(--ic-sm); border-radius: var(--r-sm); flex: none; }
+.cardlist { display: flex; flex-direction: column; gap: var(--sp3); max-width: 60rem; }
+.ccard { background: var(--s1); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+.ccard header { display: flex; align-items: center; gap: var(--sp3); padding: var(--sp3) var(--sp4); }
+.ccard .ttl { font: 600 var(--f-body)/1.35 var(--ui); }
+.ccard .sub { color: var(--t3); font-size: var(--f-sm); }
+.ccard .acts { display: flex; gap: var(--sp2); flex: none; }
+.ccard .cmain { padding: 0 var(--sp4) var(--sp4) calc(var(--sp4) + var(--ic-sm) + var(--sp3)); display: flex; flex-direction: column; gap: var(--sp3); }
+.ccard .cmain p { margin: 0; }
+.ccard .sum { color: var(--t2); }
+.ccard .cbody { display: flex; flex-direction: column; gap: var(--sp2); color: var(--t2); font-size: var(--f-sm); }
+.ccard.closed summary { list-style: none; cursor: pointer; }
+.ccard.closed summary::-webkit-details-marker { display: none; }
+.ccard.closed .ttl { color: var(--t2); }
+.ccard.closed img.kic { filter: grayscale(.8) brightness(.8); }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: var(--sp2) var(--sp4); margin: 0; }
+.facts dt { font: 600 var(--f-lbl) var(--ui); text-transform: uppercase; letter-spacing: .08em; color: var(--t3); }
+.facts dd { margin: 0; font-variant-numeric: tabular-nums; }
+.facts dd .sub { display: block; }
+.citems { border: 1px solid var(--line); border-radius: var(--r-sm); }
+.ctrack { font-size: var(--f-sm); }
+.ctrack b { color: var(--t1); }
+.steps { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; counter-reset: st; }
+.steps li { counter-increment: st; }
+.steps label { display: flex; align-items: flex-start; gap: var(--sp2); padding: var(--sp1) var(--sp2); border-radius: var(--r-sm); cursor: pointer; }
+.steps label:hover { background: var(--hover); }
+.steps input { margin: 0.2rem 0 0; accent-color: var(--acc); flex: none; }
+.steps span::before { content: counter(st) ". "; color: var(--t3); font-variant-numeric: tabular-nums; }
+.steps li.done span { color: var(--t3); text-decoration: line-through; }
+.csrc { font-size: var(--f-lbl); color: var(--t3); }
+.csrc a { color: var(--t2); }
+.list.cov { margin-bottom: var(--sp4); border: 1px solid var(--line); border-radius: var(--r); background: var(--s1); }
+@media (max-width: 56rem) {
+  .ccard header { flex-wrap: wrap; }
+  .ccard .cmain { padding-left: var(--sp4); }
+}

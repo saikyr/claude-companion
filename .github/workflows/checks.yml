@@ -18,7 +18,9 @@ jobs:
       - name: JavaScript syntax
         run: for f in ClaudeCompanion/web/js/*.js; do node --check "$f"; done
       - name: Python syntax
-        run: python3 -m py_compile ClaudeCompanion/web/server.py gamedata/*.py
+        run: python3 -m py_compile ClaudeCompanion/web/server.py gamedata/*.py tools/*.py
+      - name: From Claude cards format
+        run: python3 tools/check-cards.py test/fixtures/cards.json
       - name: No personal data
         run: |
           ! git ls-files | grep -E 'SavedVariables|snapshot\.json$|web/data\.js$'

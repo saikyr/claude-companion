@@ -2,6 +2,7 @@
 # Claude Companion app on macOS (and anywhere with Python 3; Windows uses server.ps1).
 # Same small local server as server.ps1, same addresses, so the page is identical:
 #   http://localhost:47615   /api/ping  /api/stamp  /api/data  POST /api/snapshot
+#                            /api/cards  /api/cards-state  POST /api/cards-state
 # It serves the app and reads the game's saved file (ClaudeCompanion.lua) directly.
 # Nothing is sent anywhere: it only answers this computer.
 import glob, json, os, subprocess, sys, threading, time, urllib.request, webbrowser
@@ -11,6 +12,7 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 WEB = os.path.dirname(os.path.abspath(__file__))
 FOREVER = os.path.normpath(os.path.join(WEB, '..', '..', '..', '..'))   # .../_forever_
 DATA_DIR = os.path.join(os.path.dirname(WEB), 'companion-data')
+CARDS_DIR = os.path.join(DATA_DIR, 'from-claude')   # cards.json: Claude writes it; state.json: this app writes it
 PORT = 47615
 URL = f'http://localhost:{PORT}/'
 TYPES = {'.html': 'text/html; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
@@ -55,6 +57,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200, json.dumps({'stamp': stamp, 'size': st.st_size}), TYPES['.json'])
             if not save: return self.send(404, 'no save yet')
             with open(save, 'rb') as f: return self.send(200, f.read(), 'application/octet-stream')
+        if path in ('/api/cards', '/api/cards-state'):
+            f = os.path.join(CARDS_DIR, 'cards.json' if path == '/api/cards' else 'state.json')
+            if not os.path.isfile(f): return self.send(204, b'')   # none yet
+            with open(f, 'rb') as fh: return self.send(200, fh.read(), TYPES['.json'])
         rel = urllib.request.url2pathname(path.lstrip('/')) or 'index.html'
         full = os.path.realpath(os.path.join(WEB, rel))
         # only files inside the app folder, and never the server scripts
@@ -64,16 +70,19 @@ class Handler(BaseHTTPRequestHandler):
         self.send(404, 'not found')
 
     def do_POST(self):
-        # the page's summary for Claude: ../companion-data/snapshot.json (see SCHEMA.md there).
+        # the page's summary for Claude: ../companion-data/snapshot.json, and what you did with
+        # Claude's cards: ../companion-data/from-claude/state.json (see SCHEMA.md there).
         # Only this app sends the X-CC header; a web page can't add it without the browser asking first.
         n = int(self.headers.get('Content-Length') or 0)
-        if self.path.split('?')[0] != '/api/snapshot' or self.headers.get('X-CC') != '1' or n <= 0 or n > 20 * 1024 * 1024:
+        target = {'/api/snapshot': (DATA_DIR, 'snapshot.json'), '/api/cards-state': (CARDS_DIR, 'state.json')}.get(self.path.split('?')[0])
+        if not target or self.headers.get('X-CC') != '1' or n <= 0 or n > 20 * 1024 * 1024:
             return self.send(400, 'bad request')
         body = self.rfile.read(n)
-        os.makedirs(DATA_DIR, exist_ok=True)
-        tmp = os.path.join(DATA_DIR, 'snapshot.json.tmp')
+        folder, name = target
+        os.makedirs(folder, exist_ok=True)
+        tmp = os.path.join(folder, name + '.tmp')
         with open(tmp, 'wb') as f: f.write(body)
-        os.replace(tmp, os.path.join(DATA_DIR, 'snapshot.json'))
+        os.replace(tmp, os.path.join(folder, name))
         self.send(200, 'ok')
 
 

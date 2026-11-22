@@ -258,10 +258,11 @@
     ['talents', 'Talents & Bars', 'spell_holy_holybolt'], ['grinds', 'Grinds', 'inv_misc_coin_02'], ['quests', 'Quests', 'inv_misc_note_01'],
     ['professions', 'Professions', 'trade_engraving'], ['rep', 'Reputation', 'inv_misc_tournaments_banner_human'], ['auction', 'Auction House', 'inv_misc_coin_17'],
     ['journal', 'Journal', 'inv_misc_book_11'], ['system', 'System', 'trade_engineering'], ['gear', 'Gear', 'inv_helmet_06'],
+    ['claude', 'From Claude', 'inv_scroll_03'],
   ];
   // sidebar groups (layout only)
   const NAV_GROUPS = [
-    [null, ['overview']],
+    [null, ['overview', 'claude']],
     ['Character', ['character', 'gear', 'bags', 'talents', 'rep']],
     ['Activity', ['quests', 'grinds', 'journal']],
     ['Gold', ['professions', 'auction']],
@@ -345,7 +346,7 @@
     </div>`;
     const cds = cooldowns();
     const ready = arr(s.quests).filter((q) => q.ready || q.complete);
-    h += '<div class="grid2"><section>';
+    h += (window.CC.cards ? window.CC.cards.overview() : '') + '<div class="grid2"><section>';
     if (cds.length || ready.length) {
       h += '<h2>Now</h2><div class="list">';
       cds.forEach((c) => { h += `<div class="li">${icon(c.icon, { size: 'sm' })}<div class="grow">${esc(c.name)}${c.prof ? `<div class="sub">${esc(c.prof)} cooldown</div>` : ''}</div><div class="num">${cdWhen(c)}</div></div>`; });
@@ -1134,14 +1135,15 @@
   window.CC = {
     load, loadText, V,
     api: { get CH() { return CH; }, STATE, GD, esc, arr, money, icon, itemIcon, anyItemIcon, anyItemName, gdItem, gdTip,
-      gdSourceLines, planPrice, priceOf, flipsOf, cooldowns, specTrees, specLabel, TREE_NAMES, gearIds, item, byId, render, QCOL },
+      gdSourceLines, planPrice, priceOf, trackerStats, ago, dur, fmtTime, flipsOf, cooldowns, specTrees, specLabel, TREE_NAMES, gearIds, item, byId, render, QCOL },
   };
 
   // ------------------------------------------------------------ data sources
   // 1) data embedded in a published copy, 2) data.js written by the watcher
   // (checked every 5 seconds), 3) drag and drop the saved file.
   const hashTab = (location.hash || '').slice(1);
-  if (V[hashTab]) STATE.tab = hashTab;
+  // any tab name: tabs from js/gear.js and js/cards.js register after this runs (an unknown one shows the Overview)
+  if (/^[a-z]+$/.test(hashTab)) STATE.tab = hashTab;
   const embedded = document.getElementById('cc-embedded');
   const binary = (buf) => { const bytes = new Uint8Array(buf); let out = ''; for (let i = 0; i < bytes.length; i += 8192) out += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192)); return out; };
   if (embedded && embedded.textContent.trim().length > 2) {

@@ -3,7 +3,8 @@
 A World of Warcraft **Forever** addon plus a small local app. The addon records your character
 (gear, bags, bank, talents for both specs, action bars, quests, professions, reputation, gold,
 loot, grinds, auction house prices and sales). The app shows it all in one window on your own
-computer and writes a compact `snapshot.json` that Claude reads when it coaches you.
+computer and writes a compact `snapshot.json` that Claude reads when it coaches you. Claude's
+suggestions (farms, flips, quests, gear) come back as cards in the app's **From Claude** tab.
 
 Nothing leaves your computer: the app is a tiny server on `localhost` that reads the game's own
 saved file.
@@ -67,10 +68,11 @@ Key bindings: Options > Key Bindings > AddOns > Claude Companion.
 | --- | --- |
 | `ClaudeCompanion/` | The addon folder exactly as installed: Lua, `.toc`, and `web/` (the app) |
 | `ClaudeCompanion/web/` | App: `index.html`, `js/`, `css/`, `server.ps1` (Windows), `server.py` (macOS) |
-| `ClaudeCompanion/companion-data/SCHEMA.md` | The `snapshot.json` contract Claude reads |
+| `ClaudeCompanion/companion-data/SCHEMA.md` | The `snapshot.json` contract Claude reads, and the From Claude cards format |
 | `gamedata/` | Builds `web/data/gamedata.js` from QuestieDB, endgametools and ForeverDB |
 | `test/harness.lua` | Runs the addon against a mock game API (Lua 5.1) |
 | `tools/make-release.sh` | Builds the release zip |
+| `tools/check-cards.py` | Checks a From Claude `cards.json` before Claude writes it |
 | `docs/ARCHITECTURE.md` | How it fits together, data sources, contracts |
 | `docs/ROADMAP.md` | What's next |
 

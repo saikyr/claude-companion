@@ -2,6 +2,15 @@
 
 Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 
+## Unreleased (From Claude cards)
+
+- New **From Claude** tab, and its open cards on the Overview: Claude's suggestions (farm, flip, quest,
+  gear, craft, route, note) in one card format, with facts, items (icon, tooltip, your AH price), steps
+  you tick off, sources, and live results from `/cc start <name>` runs. Done / Dismiss / Restore.
+- Claude writes `companion-data/from-claude/cards.json`; the app saves your choices to
+  `from-claude/state.json` (servers: `GET /api/cards`, `GET` and `POST /api/cards-state`). Format in SCHEMA.md;
+  `tools/check-cards.py` checks a cards file and runs in CI.
+
 ## Unreleased (data fixes)
 
 - **Item cache no longer stops at 6,000 (#1):** when full, the items seen longest ago make room (a

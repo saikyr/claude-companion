@@ -23,8 +23,12 @@
  ClaudeCompanion/companion-data/snapshot.json   ◀── what Claude reads first
 ```
 
-Claude → player channel: `ClaudeCompanion/Inbox.lua` (`ClaudeCompanionInbox`), shown in the `/cc`
-window after a `/reload`. A richer write channel (`companion-data/from-claude/`) is planned, not built.
+Claude → player channel: **From Claude cards** (`js/cards.js`). Claude writes
+`companion-data/from-claude/cards.json` (one format for farms, flips, quests, gear...; checked with
+`tools/check-cards.py`); the app polls it through the server every 5 s and saves the player's
+done / dismissed / ticked steps to `from-claude/state.json`, which Claude reads back. One writer per
+file. Format: `companion-data/SCHEMA.md`. The older `Inbox.lua` message (shown in the `/cc` window
+after a `/reload`) still works for a note inside the game.
 
 ## Addon modules
 

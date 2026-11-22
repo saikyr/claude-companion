@@ -32,9 +32,53 @@ Read that only for things the snapshot leaves out (bag contents, journal, full A
 Scores use the stat weights shown in the app's Gear tab (Healing: healing 1, Int 1.6, MP5 2.3,
 Spirit 0.7, crit rating 0.3; Shadow: spell power 1, Spirit 0.55, MP5 0.66, Int 0.35, crit 0.3, hit 0.2).
 
-## Room for Claude to write (not built yet)
+## from-claude/: cards Claude writes, and what the player did with them
 
-Planned: Claude drops JSON files into `companion-data/from-claude/` and the app shows them in
-their own tab. Kinds being considered: `plan` (a session plan or route with steps and coords),
-`gear` (a gear decision with the items), `todo` (a checklist that ticks itself off from game
-data, e.g. "turn in 3 quests", "craft Mooncloth"). Nothing reads that folder today.
+Claude's suggestions (a farm, a flip, a quest route, a gear change...) show in the app's **From Claude**
+tab and on the Overview as cards. Two files, one writer each:
+
+| File | Written by | What |
+| --- | --- | --- |
+| `from-claude/cards.json` | **Claude only** | Every card, open or closed. Claude rewrites the whole file (write a temp file, then rename). The app never changes it. |
+| `from-claude/state.json` | **the app only** | What the player did: done, dismissed, which steps are ticked. Claude reads it, never writes it. |
+
+The app checks both every 5 seconds, so a new card shows without a reload.
+**Before writing cards.json, run `python3 tools/check-cards.py cards.json`** (in the repo); it must print `ok`.
+Reinstalling the addon by copying the zip over the folder keeps both files; deleting the folder first loses them.
+
+### cards.json, schema 1
+
+```json
+{ "schema": 1, "cards": [ { "id": "farm-steppes-patterns", "kind": "farm", "title": "...", ... } ] }
+```
+
+| Field | | What |
+| --- | --- | --- |
+| `id` | required | Stable, lower-case letters, digits and dashes. Update a card by keeping its id; the player's choices stay attached to it. |
+| `title` | required | Short, says what to do. |
+| `kind` | | `farm`, `flip`, `quest`, `gear`, `craft`, `route` or `note` (default). Sets the icon and the filter chip. |
+| `summary` | | One or two sentences: what and why. Shown on the Overview too. |
+| `status` | | Claude's side: `open` (default), `done` (Claude saw it finished, e.g. the item is in the bags) or `withdrawn` (no longer a good idea). |
+| `created`, `updated` | | ISO times. Newest `updated` first. |
+| `expires` | | ISO time after which the card closes by itself (a price or a cooldown that won't last). |
+| `character` | | Character name; the card shows only for that character. Leave out for any. |
+| `where` | | Zone or place, as text. |
+| `facts[]` | | `{label, value, note?}`, all text: the numbers that matter (rate, drops per hour, gold per hour), with the sample size or "Classic only" in `note`. |
+| `items[]` | | `{id, note?}`: game item ids. The app shows the icon, tooltip and the player's own AH price. |
+| `track` | | `{grind, mobs?[]}`: the name to use with `/cc start <grind>`. The card then shows the tracked time, kills, gold per hour, kills of each listed mob and drops of the card's items, from every run with that name. |
+| `steps[]` | | Text, in order. The player ticks them off. |
+| `body` | | Longer text: the stop rule, caveats. Blank lines split paragraphs. Plain text, no HTML or Markdown. |
+| `sources[]` | | `{label, url?}`: where each number came from. |
+
+Unknown fields are refused by the checker, so a typo can't hide a field.
+
+### state.json
+
+```json
+{ "schema": 1, "written": "<ISO>", "cards": { "<card id>": { "state": "done" | "dismissed", "steps": [0, 2], "at": "<ISO>" } } }
+```
+
+No `state` means the card is open (the player can restore a closed card). `steps` are the ticked
+step positions, counting from 0. A card is open in the app when the player hasn't closed it, its
+`status` is `open` and it hasn't expired. A dismissed card stays dismissed even if Claude updates it;
+to raise it again, give it a new id.
