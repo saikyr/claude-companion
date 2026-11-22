@@ -3,6 +3,9 @@
 Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 
 ## 1.5.0 (in progress: every merge to main updates itself)
+- **A run's bosses and loot names show on every computer.** The Dungeon Journal addon's boss log goes with
+  each computer's "now" and the view joins both, so a run played on the PC lists its bosses on the Mac;
+  run loot in the snapshot takes its name from the game-data pack when this computer never saw the item.
 - **/reload is the one way to save.** `/cc sync`, the window's Sync button and its key binding are gone:
   they only did a /reload, and refused to in combat, so a stop could go unsaved. `/cc stop` now says
   the app shows it after your next /reload or logout; a running grind's tag says it's as of the last save.

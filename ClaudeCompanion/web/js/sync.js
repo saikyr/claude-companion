@@ -100,7 +100,7 @@
       // from whichever computer saw it last (js/merge.js), so a computer you haven't played on lately
       // still shows what you have now
       const now = { snap: c.snap, bank: c.bank, mail: c.mail, professions: c.professions, specs: c.specs, taxi: c.taxi, taxiRead: c.taxiRead,
-        ah: { owned: (c.ah || {}).owned, lastScan: (c.ah || {}).lastScan } };
+        ah: { owned: (c.ah || {}).owned, lastScan: (c.ah || {}).lastScan }, bossLog: c.bossLog };
       if (c.snap) out.push({ id: `${ck}|now|${device}`, char: ck, kind: 'now', t: Math.round(num((c.snap || {}).taken)), mutable: true, data: now });
       // what's running on this computer right now, and when it last saw the character: replaced each time
       out.push({ id: `${ck}|live|${device}`, char: ck, kind: 'live', t: Math.round(num(c.lastSeen)), mutable: true,
@@ -133,7 +133,7 @@
         p.obs.push(o); p.last = Math.max(p.last, num(o.t));
       } else if (r.kind === 'now' && dev !== hereDevice) {
         const d = r.data;
-        ['snap', 'bank', 'mail', 'professions', 'specs', 'taxi', 'taxiRead'].forEach((f) => { if (d[f] != null) c[f] = d[f]; });
+        ['snap', 'bank', 'mail', 'professions', 'specs', 'taxi', 'taxiRead', 'bossLog'].forEach((f) => { if (d[f] != null) c[f] = d[f]; });
         if (d.ah) { if (d.ah.owned) c.ah.owned = d.ah.owned; if (d.ah.lastScan) c.ah.lastScan = d.ah.lastScan; }
       } else if (r.kind === 'live' && dev !== hereDevice) {
         c.lastSeen = num(r.data.lastSeen);

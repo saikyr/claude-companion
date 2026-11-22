@@ -66,7 +66,7 @@ recorded per craft.
 | **Grinds** (`/cc start <name>`, `/cc stop`) | counted time (pauses and logged-out time left out), kills (by mob), looted coin, loot, XP, deaths, rep, disenchants, zones. Ends by itself at logout, after 30 min with nothing counted (`idle`), or `away`. Shows after the next `/reload` | kind `grind` (running one: kind `live`); Grinds tab | snapshot `grind.running`, `grind.recent[]` (5); all: `kind = 'grind'` |
 | Grind gold per hour | `(looted coin + loot at today's AH median, else vendor price) / counted hours`. Loot value is what it would sell for, not what it sold for | Grinds tab, From Claude cards with `track` | compute from the record the same way, or quote the Grinds tab |
 | Sessions | the same counters from login to logout, automatic | kind `session` | `kind = 'session'` |
-| **Dungeon and raid runs** | automatic from entering an instance: time inside, kills, bosses, wipes, deaths, XP, quests, coin, loot (green+), loot value, group, loot that went to others with the rolls. Ends after 15 min outside, another instance, a reset, or away | kind `run`; Dungeons tab | snapshot `runs[]` (10); all: `kind = 'run'` |
+| **Dungeon and raid runs** | automatic from entering an instance: time inside, kills, bosses, wipes, deaths, XP, quests, coin, loot (green+), loot value, group, loot that went to others with the rolls. Ends after 15 min outside, another instance, a reset, or away. Runs from before the addon tracked runs are rebuilt from the journal (`fromJournal: true`, no `run` row; their bosses come from the Dungeon Journal addon's log, synced to every computer) | kind `run`; Dungeons tab | snapshot `runs[]` (10); all: `kind = 'run'` plus, for `fromJournal` runs, the journal |
 
 ## Character, gear and quests
 
@@ -93,7 +93,7 @@ scores by hand (CLAUDE.md, the scoring rule).
 | --- | --- |
 | From Claude cards (Claude writes, the player ticks or closes) | From Claude tab, Overview; setting `cc.claude.cards`, choices in `cc.claude.cardsState` |
 | Sync between computers (union of history, newest "now" per part); can be turned off per computer | System tab; [ARCHITECTURE.md](ARCHITECTURE.md) |
-| Self-update from `stable` within ~30 min; the app says "type /reload" when the addon is older | System tab; `snapshot.app.build` |
+| Self-update from `stable` within ~30 min; the app says "type /reload" when the addon is older. Each computer checks on its own clock, so for up to ~30 min after a merge two computers can show different builds | System tab; `snapshot.app.build` (and `installedAt`) |
 
 ## Not tracked (say so; don't guess)
 

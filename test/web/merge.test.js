@@ -31,6 +31,9 @@ m.journal = (m.journal || []).concat([{ t: T + 3600, e: 'login' }, { t: T + 3700
 m.grinds = (m.grinds || []).concat([{ name: 'thaurissan', start: T + 3600, finish: T + 7200, kills: 30 }]);
 m.runs = (m.runs || []).concat([{ name: 'Blackrock Depths', start: T + 7300, finish: T + 9000, kills: 90, bosses: [] }]);
 delete m.grind;
+// the Dungeon Journal addon's boss log: this computer has one run in it, the other computer another
+c.bossLog = { from: 'ForeverDungeonJournal', read: T, runs: (((c.bossLog || {}).runs) || []).concat([{ id: 'pc-run', dungeon: 'Blackrock Depths', start: T - 9000, bosses: [{ name: 'Lord Roccor', t: T - 8000 }] }]) };
+m.bossLog = { from: 'ForeverDungeonJournal', read: T + 9000, runs: [{ id: 'mac-run', dungeon: 'Scholomance', start: T + 7300, bosses: [{ name: 'Rattlegore', t: T + 8000 }] }] };
 m.ah = clone(m.ah || {}); m.ah.prices = m.ah.prices || {};
 const pk = Object.keys(m.ah.prices)[0] || '4306';
 m.ah.prices[pk] = m.ah.prices[pk] || { id: 4306, obs: [] };
@@ -56,6 +59,8 @@ check(!o.grind, 'the stale running grind is not shown as running');
 const stale = o.grinds.find((g) => g.ended === 'away' && g.name === c.grind.name);
 check(stale && stale.finish === c.grind.last, 'it is listed as ended "away" at its last counted event');
 check(o.grinds.some((g) => g.name === 'thaurissan') && o.runs.some((r) => r.name === 'Blackrock Depths' && r.start === T + 7300), "the other computer's grind and run are there");
+check(o.bossLog && ['pc-run', 'mac-run'].every((id) => o.bossLog.runs.some((r) => r.id === id)) && o.bossLog.runs.length === c.bossLog.runs.length + 1,
+  "boss logs from both computers: a run's bosses show on the other computer");
 const merged = o.ah.prices[pk].obs;
 check(merged.some((x) => x.t === T + 5000) && merged.length === priceObs + 1, 'price history from both');
 check(o.ah.lastScan.t === T + 5000, 'last AH scan is the newest');
