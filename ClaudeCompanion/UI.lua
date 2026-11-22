@@ -165,9 +165,10 @@ dot:SetSize(6, 6)
 dot:SetPoint("TOPLEFT", PAD, -13)
 local gName = Text(gp, 13, C.t1)
 gName:SetPoint("TOPLEFT", PAD + 12, -9)
-gName:SetPoint("RIGHT", -64, 0)
+-- (its right edge is tied to the clock below, so a long name never runs under it)
 local gClock = Text(gp, 13, C.t1, "RIGHT")
 gClock:SetPoint("TOPRIGHT", -PAD, -9)
+gName:SetPoint("RIGHT", gClock, "LEFT", -8, 0)
 local closeBtn = CreateFrame("Button", nil, gp)
 closeBtn:SetSize(16, 16)
 closeBtn:SetPoint("TOPRIGHT", -6, -7)
@@ -184,6 +185,7 @@ for i = 1, 3 do
     v:SetPoint("TOPLEFT", x, -30)
     local k = Text(gp, 10, C.t3)
     k:SetPoint("TOPLEFT", x, -50)
+    k:SetWidth(math.floor((PW - 2 * PAD) / 3) - 4) -- a long label is cut, never drawn over the next one
     tiles[i] = { v = v, k = k }
 end
 -- where the gold comes from, per hour
@@ -292,7 +294,7 @@ local function TargetText(t)
     local gotTxt = (got > 0 and Hex(C.pos) or Hex(C.t1)) .. got .. "|r"
     if t.expected then return gotTxt .. Hex(C.t3) .. string.format(" of %.2f", t.expected) .. "|r" end
     if t.rated then return gotTxt .. Hex(C.t3) .. " · none killed" .. "|r" end
-    if got > 0 and (t.kills or 0) > 0 then return gotTxt .. Hex(C.t3) .. string.format(" · 1 per %d kills", math.floor(t.kills / got + 0.5)) .. "|r" end
+    if got > 0 and (t.kills or 0) > 0 then return gotTxt .. Hex(C.t3) .. (got >= t.kills and " · 1+ per kill" or string.format(" · 1 per %d kills", math.floor(t.kills / got + 0.5))) .. "|r" end
     return gotTxt .. Hex(C.t3) .. " · rate unknown|r"
 end
 
@@ -393,7 +395,7 @@ local function UpdatePanel()
     tiles[1].v:SetText(Short((coin + items) / hrs))
     tiles[1].k:SetText("gold / hr")
     tiles[2].v:SetText(tostring(math.floor((g.kills or 0) / hrs + 0.5)))
-    tiles[2].k:SetText(string.format("kills / hr · %d", g.kills or 0))
+    tiles[2].k:SetText(string.format("kills/hr · %d", g.kills or 0))
     tiles[3].v:SetText(tostring(g.deaths or 0))
     tiles[3].v:SetTextColor(unpack((g.deaths or 0) > 0 and C.warn or C.t1))
     tiles[3].k:SetText((g.deaths or 0) == 1 and "death" or "deaths")
@@ -517,7 +519,8 @@ for _, b in ipairs(dropBtns) do
         local d = self.d
         if d and IsAltKeyDown and IsAltKeyDown() and ns.char and ns.char.grind then
             local added, name = ns.GrindTarget(d.l.link or tostring(d.l.id or ""))
-            if added ~= nil then ns.Print((added and "target: " or "no longer a target: ") .. (d.l.link or name or "?")) end
+            if added == nil then ns.Print(name)
+            else ns.Print((added and "target: " or "no longer a target: ") .. (d.l.link or name or "?")) end
         end
     end)
 end

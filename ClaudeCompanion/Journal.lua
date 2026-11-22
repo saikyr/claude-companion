@@ -174,7 +174,7 @@ function ns.GrindStop(quiet, at, why)
     ns.Push(c.grinds, g, ns.LIMITS.sessions)
     c.grind = nil
     ns.Log("grindStop", { name = g.name, secs = g.secs, kills = g.kills, coin = g.coin, ah = g.ahValue, ended = why, at = at })
-    -- a stop you made (or the addon's, when idle or away) leaves the summary on the panel
+    -- a stop you made (or the addon's, when idle) leaves the summary on the panel
     if ns.GrindPanel then ns.GrindPanel((not quiet or why == "idle") and g or nil) end
     if not quiet then ns.GrindReport(g) end
     return g
@@ -266,7 +266,7 @@ end
 -- your own rate: got in kills, with a 95% range (Wilson), as drops per 100 kills
 function ns.OwnRange(got, kills)
     if not kills or kills <= 0 then return nil end
-    local z, n, p = 1.96, kills, got / kills
+    local z, n, p = 1.96, kills, math.min(1, got / kills) -- stacks and chests can give more than one per kill
     local d = 1 + z * z / n
     local mid = (p + z * z / (2 * n)) / d
     local half = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / d
@@ -288,7 +288,7 @@ function ns.GrindReport(g)
     if #parts > 0 then ns.Print("Drops: " .. table.concat(parts, ", ")) end
     for _, t in ipairs(g.targets or {}) do
         ns.Print(string.format("Target %s: %d dropped%s.", t.link or t.name or "?", t.got or 0,
-            t.expected and string.format(", %.2f expected from %d kills (Forever rate)", t.expected, t.kills) or ", Forever rate unknown"))
+            t.expected and string.format(", %.2f expected from %d kills (Forever rate)", t.expected, t.kills) or (t.rated and ", nothing you killed drops it" or ", Forever rate unknown")))
     end
 end
 
