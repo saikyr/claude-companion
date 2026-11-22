@@ -10,6 +10,9 @@ Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 - **An open app window picks up updates by itself.** After the server installs a new build, an open
   window loads it at a quiet moment (hidden or minimised, or 2 minutes without a click or key). Before,
   a window left open kept the old page, so a new feature (like sync) didn't start until it was reopened.
+- **Even an app window left open from an older version can't hold sync back.** Until a window has loaded
+  the page since the server last restarted (it restarts after every update), the server's hidden
+  browser also runs after each save, so the new version's sync and snapshot happen anyway.
 - The PC's server (server.ps1) is now tested in CI under Windows PowerShell 5.1.
 
 - **The sidebar says how fresh the data really is.** WoW writes addon data to disk only on `/reload`,

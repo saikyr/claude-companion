@@ -109,6 +109,7 @@ class Handler(BaseHTTPRequestHandler):
             if not os.path.isfile(f): return self.send(204, b'')   # none yet
             with open(f, 'rb') as fh: return self.send(200, fh.read(), TYPES['.json'])
         rel = urllib.request.url2pathname(path.lstrip('/')) or 'index.html'
+        if rel == 'index.html' and 'background=1' not in self.path: PAGE['loaded'] = True
         full = os.path.realpath(os.path.join(WEB, rel))
         # only files inside the app folder, and never the server scripts
         if full.startswith(os.path.realpath(WEB) + os.sep) and os.path.isfile(full) and not full.endswith(('.ps1', '.py')):
@@ -450,6 +451,19 @@ def snapshot_stamp():
     except (OSError, ValueError): return None
 
 
+# Has an app window loaded the page since this server started? The server restarts after every
+# update, so a window left open from before still runs the old page (it can't reload itself if it
+# predates that code). Until one loads, the hidden browser runs after each new save even though a
+# window wrote snapshot.json, so the current page's work (sync, the snapshot online) still happens.
+PAGE = {'loaded': False}
+
+
+def background_due(stamp, tried, snap, page_loaded, age):
+    # a save not tried yet, at least 10 s old (an open, current window writes the snapshot within
+    # seconds), and either no snapshot of it yet or no window since this server started
+    return stamp != tried and age >= 10 and (stamp != snap or not page_loaded)
+
+
 def background_snapshot():
     tried = None
     while True:
@@ -459,7 +473,7 @@ def background_snapshot():
             if not save: continue
             stamp = stamp_of(save)
             # up to date, already tried, or saved under 10 s ago (an open app window writes it within seconds)
-            if stamp in (tried, snapshot_stamp()) or time.time() - os.path.getmtime(save) < 10: continue
+            if not background_due(stamp, tried, snapshot_stamp(), PAGE['loaded'], time.time() - os.path.getmtime(save)): continue
             tried = stamp
             exe = headless_browser()
             if not exe: continue
