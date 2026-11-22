@@ -1,6 +1,6 @@
 # companion-data: what Claude reads
 
-The Companion app (`web/`) writes `snapshot.json` here every time the game saves (after each Sync,
+The Companion app (`web/`) writes `snapshot.json` here every time the game saves (after each
 `/reload` or logout), **also with the app closed**: the server, which starts at login, then has a
 hidden (headless) Chrome or Edge load the page once, about 10-20 seconds after the save. With no
 Chrome or Edge installed it waits until the app is opened (see `saveModified`). It is the page's own view of the
