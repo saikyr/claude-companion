@@ -101,7 +101,8 @@ def parse(h):
     how = L[L.index('How to get it') + 1:] if 'How to get it' in L else []
     how = how[:how.index('Keep going')] if 'Keep going' in how else how[:12]
     stop = ('Bosses and quests from the', 'From the WoW Forever client', 'Where to find it', 'Keep going',
-            'In the BiS list of', 'Worth getting on the leveling route', 'Numbers from', 'Which one:')
+            'In the BiS list of', 'Worth getting on the leveling route', 'Numbers from', 'Which one:',
+            'Where it comes from, after', 'Who gives it, and where')   # endgametools' page layout of 22 Nov 2026
     noise = {'(Wowhead)', '↗', 'Copy the name for the auction house', 'Copied', 'The recipe →'}
     src = []
     for l in how:

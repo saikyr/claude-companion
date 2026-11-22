@@ -159,8 +159,8 @@ observations), a few MB, so one player uses well under 1% of the database a mont
 ```
  World of Warcraft Forever client
  ┌──────────────────────────────────────────┐
- │ ClaudeCompanion addon (Lua)              │   events, C_* APIs, tooltips,
- │  Core · Snapshot · Journal · Market ·    │   QuestieDB globals (if installed)
+ │ ClaudeCompanion addon (Lua)              │   events, C_* APIs, tooltips
+ │  Core · Snapshot · Journal · Market ·    │
  │  Professions · UI · Inbox                │
  └───────────────┬──────────────────────────┘
                  │ on /cc sync (ReloadUI) or logout the game writes
@@ -175,7 +175,8 @@ observations), a few MB, so one player uses well under 1% of the database a mont
                  │
                  ▼
  App (web/index.html + js/)  ── lua.js parses the save ── app.js / gear.js render tabs
-   + web/data/gamedata.js (game-data pack: everything you haven't seen in game) and web/data/suffixes.js
+   + web/data/gamedata.js (game-data pack: everything you haven't seen in game), web/data/suffixes.js,
+     web/data/rules.js and js/icons.js (one source each: see Data sources)
                  │ after each load, js/claude.js POSTs a summary (an open window, or the
                  │ server's hidden headless Chrome/Edge after a save while the app is closed)
                  ▼
@@ -197,7 +198,7 @@ after a `/reload`) still works for a note inside the game.
 | `Snapshot.lua` | Full snapshot on login / logout / sync: character, stats, equipped, bags, gear sets, talents (C_ClassTalents / C_Traits, both specs), action bars, macros, bindings, spellbook, skills, reputation, currencies, quest log + rewards, completed quests, group, buffs |
 | `Journal.lua` | Timeline (loot, kills, XP, quests, deaths, zones, money by source), sessions, grinds (`/cc start`), disenchant results |
 | `Market.lua` | AH prices (browse, search, full scan via `C_AuctionHouse.ReplicateItems`), posts, owned auctions, mailbox + AH invoices (sales, buys) |
-| `Professions.lua` | Recipes, reagents, cooldowns (window open + cast log), bank, flight paths, and `Enrich` (QuestieDB lookups when that addon is loaded) |
+| `Professions.lua` | Recipes, reagents, cooldowns (window open + cast log), bank, flight paths |
 | `UI.lua` | `/cc` window, grind panel, slash commands, key bindings |
 
 Every capture step runs inside `ns.Try`, so a blocked API on Forever never breaks the addon; the
@@ -211,17 +212,39 @@ addons can't read the combat log.
 
 ## Data sources: one owner per kind of data
 
-| Data | Owner | Notes |
-| --- | --- | --- |
-| Your character, items you've seen, your tooltips | **The game** (the addon) | Always wins over pack data |
-| Quests, NPCs, objects, givers / turn-ins, quest-item drops, vendors, quest XP | **QuestieDB** (Forever flavor) | Built from a Wowhead Forever snapshot + QuestieTrace. Lists drops only for quest items |
-| Weapon / armor tooltips and stats, "how to get it", group size | **endgametools** Forever item pages | Matched the game on all 48 items checked |
-| Drop chances, Forever sightings, general loot, crafted-by, icons, reward split, reward money | **ForeverDB** | Crowd uploads. Only a few hundred rates are Forever-measured; the rest are labelled Classic |
-| Random-suffix rolls (the stats of each "of Healing", "of the Owl", ... per base item) | **foreverchanges.pro** (`web/data/suffixes.js`, `gamedata/suffixes.py`) | "Confirmed in game" numbers, per base item (on Forever a suffix's numbers depend on the base) |
-| AH prices | **Your own scans** (`/cc scan`, browsing) | Per character, per realm you scan on. External sites are only a sanity check |
-| Disenchant tables | warcraft.wiki.gg (in `app.js`) | Classic tables; the addon also learns your real results |
+Each kind of game data has exactly one source. The app never mixes two sources for the same fact, and
+what the game itself says (your tooltips, quest log, AH scans) always wins over shipped data. Where
+Forever differs from Classic the Forever source is used, and anything that is only Classic data says so.
 
-Wowhead is not pulled in bulk (bot wall / ToS). Pack build: `gamedata/build.sh`; coverage:
+| Domain | Source of truth | Ships in | Built by | Forever or Classic |
+| --- | --- | --- | --- | --- |
+| Your character, the items you've seen and their tooltips, your quest log | **The game** (the addon reads it) | the save | `Snapshot.lua`, `Core.lua` | Forever (the server's own answers) |
+| Item stats and tooltips (weapons, armor) | **endgametools** Forever item pages | `web/data/gamedata.js` `items` | `gamedata/egt_parse.py` | Forever client build (1.60.1); matched the game on all 48 items checked. Items with no page fall back to ForeverDB stats, marked `f` |
+| Item names, quality, icons and sell price of non-gear | **ForeverDB** | `gamedata.js` `items` | `gamedata/build.py` | Forever uploads |
+| Random-suffix rolls ("of Healing", "of the Owl", per base item) | **foreverchanges.pro** "Confirmed in game" | `web/data/suffixes.js` | `gamedata/suffixes.py` | Forever server numbers |
+| "How to get it" and group size | **endgametools** | `gamedata.js` `how`, `size` | `gamedata/egt_parse.py` | Forever client |
+| Item sets: pieces / name and bonuses | **ForeverDB** / **endgametools** | `gamedata.js` `sets` | `gamedata/build.py` | Forever |
+| Quests: titles, levels, givers, turn-ins, chains, rep needs, quest-item drops, XP | **QuestieDB** (Forever flavor) | `gamedata.js` `quests`, `src` | `gamedata/export_questie.py` | Wowhead Forever snapshot + QuestieTrace player traces; `origin: 'f'` marks Forever-only facts |
+| Quest reward split (fixed vs choose one) and reward money | **ForeverDB** quest guides | `gamedata.js` `quests` | `gamedata/build.py` | Forever uploads |
+| NPCs and spawns: name, levels, rank, zone, up to 4 spawn points | **QuestieDB** (Forever flavor) | `gamedata.js` `npcs` | `gamedata/build.py` | Points already in Forever map coordinates (QuestieDB converted Mulgore, Eastern Plaguelands, Redridge and Stormwind, whose maps changed); used as they are |
+| Drop rates, who drops what, "seen on Forever" | **ForeverDB** | `gamedata.js` `src` | `gamedata/build.py` | Only rates ForeverDB measured on Forever kills (`m`) are called Forever rates; the rest are labelled Classic |
+| Vendors: who sells it, where | **QuestieDB** list, with **ForeverDB** price and "seen selling it on Forever" (ForeverDB adds vendors QuestieDB lacks) | `gamedata.js` `vend` | `gamedata/build.py` | Forever where seen (`[5] = 1`), else Classic list |
+| Recipes you know, reagents, cooldowns | **The game** (profession window) | the save | `Professions.lua` | Forever |
+| Recipes you don't know: crafted-by, skill, what teaches it | **ForeverDB** crafted-by, **endgametools** "how" (pattern and skill) | `gamedata.js` `src`, `how` | `gamedata/build.py` | Forever |
+| AH prices | **Your own scans and browsing** (`/cc scan`) | the save (`ah.prices`), synced between computers | `Market.lua` | Your realm, your faction. No external price feed |
+| Icon names (file id to name) | **wowdev community listfile** | `web/js/icons.js` | `gamedata/icons.py` | Same files in every client |
+| Game rules no source ships per item: standings, reputation thresholds, AH cut, disenchant tables and skill | **Hand-kept**, each with its source in the file | `web/data/rules.js` | by hand | Disenchant numbers are Classic (warcraft.wiki.gg), not measured on Forever; your real results are logged |
+| Stat weights | **Worked out per spec**, sources in `docs/STAT-WEIGHTS.md` | `web/js/weights.js` | by hand | Forever item budgets |
+
+Not used: Wowhead in bulk (bot wall, terms), the QuestieDB addon in game (1.4 and earlier kept a copy of
+its answers in the save that was never refreshed and shifted points in the four converted zones; the
+addon now drops that copy on load), external AH price sites.
+
+**Rebuild** everything with `gamedata/build.sh` (gamedata/README.md), then copy the outputs it names.
+**CI** (`checks.yml`, "Game data complete") runs `gamedata/test_pack.py` (shape, facts checked by hand
+against the sources, coverage floors) and `test/web/data.test.js` (every domain present, the files agree:
+every quest giver is in the NPC table, every pack icon has a name, every suffix base is a pack item,
+disenchant tables have no gaps) and warns when the pack is more than 30 days old. Coverage per build:
 `gamedata/COVERAGE.md`.
 
 ## Contracts

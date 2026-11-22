@@ -113,7 +113,7 @@ ctx.CC = { V: {}, api: {
   anyItemIcon: () => '', itemIcon: () => '', money: (c) => String(c), render() {}, deOutcome: () => null,
   specTrees: (sp) => [{ points: sp.tree === 'Arms' ? 31 : 0 }, { points: 5 }, { points: 15 }], specLabel: (sp) => sp.tree, TREE_NAMES: { WARRIOR: ['Arms', 'Fury', 'Protection'] },
 } };
-load('gear.js'); load('advice.js');
+load('../data/rules.js'); load('gear.js'); load('advice.js');
 const ADV = ctx.CC.advice;
 const flag = (n) => ADV.of('item:' + n);
 test('a better two-hander is an upgrade for Arms', () => { assert.strictEqual(flag(2).flag, 'up'); assert.match(flag(2).words, /Arms/); });

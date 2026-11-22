@@ -1,17 +1,18 @@
 #!/bin/sh
 # Rebuild the Companion app's game-data pack. Needs: git, curl, python3 with lupa (pip install lupa).
 #   sh build.sh [work dir]        (default ./work; about 10 minutes the first time, 2-3 after)
-# Output: <work>/out/gamedata.js and out/suffixes.js (copy both to web/data/), <work>/out/COVERAGE.md, test results.
+# Output: <work>/out/gamedata.js and out/suffixes.js (copy both to web/data/), out/icons.js (copy to web/js/),
+# <work>/out/COVERAGE.md (copy to gamedata/), test results.
 set -e
 HERE=$(cd "$(dirname "$0")" && pwd)
 W=${1:-$HERE/work}; mkdir -p "$W/raw/fdb" "$W/raw/egt" "$W/out"; cd "$W"
 
-echo "1/7 QuestieDB (quests, NPCs, objects, item sources)"
+echo "1/8 QuestieDB (quests, NPCs, objects, item sources)"
 if [ -d questiedb/.git ]; then git -C questiedb pull -q --ff-only
 else GIT_LFS_SKIP_SMUDGE=1 git clone -q --depth 1 https://github.com/Questie/questiedb questiedb; fi
 python3 -I "$HERE/export_questie.py" questiedb out
 
-echo "2/7 ForeverDB (icons, drop chances, reward split)"
+echo "2/8 ForeverDB (icons, drop chances, reward split)"
 B=https://foreverdb.net/data
 { for f in items vendors zones; do echo "url = $B/$f.json"; echo "output = raw/fdb/$f.json"; done
   for d in sources questguides; do mkdir -p raw/fdb/$d
@@ -19,7 +20,7 @@ B=https://foreverdb.net/data
 } > raw/fdb/list.txt
 curl -sf --retry 3 --parallel --parallel-max 8 -K raw/fdb/list.txt
 
-echo "3/7 endgametools item pages (weapons and armor; only pages not fetched in the last 30 days)"
+echo "3/8 endgametools item pages (weapons and armor; only pages not fetched in the last 30 days)"
 python3 -I - "$W" <<'EOF'
 import json, os, sys, time
 w = sys.argv[1]
@@ -37,11 +38,14 @@ EOF
 [ -s raw/egt/list.txt ] && curl -s --retry 3 --parallel --parallel-max 6 -K raw/egt/list.txt || true
 python3 -I "$HERE/egt_parse.py" raw/egt out/egt.json
 
-echo "4/7 build"
+echo "4/8 build"
 python3 -I "$HERE/build.py" "$W" > out/build.log
-echo "5/7 tests"
+echo "5/8 tests"
 python3 -I "$HERE/test_pack.py" out/gamedata.js ${SAVEDVARIABLES:+"$SAVEDVARIABLES"} | tail -3
-echo "6/7 coverage report: $W/out/COVERAGE.md"
+echo "6/8 coverage report: $W/out/COVERAGE.md"
 python3 -I "$HERE/coverage_md.py" out/coverage.json out/COVERAGE.md
-echo "7/7 random-suffix rolls (foreverchanges.pro; only pages not cached yet): $W/out/suffixes.js (copy to web/data/)"
+echo "7/8 random-suffix rolls (foreverchanges.pro; only pages not cached yet): $W/out/suffixes.js (copy to web/data/)"
 python3 -I "$HERE/suffixes.py" out/gamedata.js raw/fc out/suffixes.js
+echo "8/8 icon names (wowdev community listfile): $W/out/icons.js (copy to web/js/)"
+curl -sfL --retry 3 -o raw/listfile.csv https://github.com/wowdev/wow-listfile/releases/latest/download/community-listfile.csv
+python3 -I "$HERE/icons.py" raw/listfile.csv out/icons.js

@@ -3,6 +3,21 @@
 Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 
 ## Unreleased (updates itself)
+
+- **One source per kind of game data, checked in CI.** docs/ARCHITECTURE.md (Data sources) names the one
+  source for items, random-suffix rolls, quests, NPCs and spawns, drop rates, vendors, recipes, AH prices
+  and icons. New CI step "Game data complete" (`gamedata/test_pack.py`, `test/web/data.test.js`).
+- **NPCs come from the pack.** The pack now has every QuestieDB Forever NPC (15,561: levels, rank, zone,
+  spawn points). The addon no longer keeps its own copy of QuestieDB answers in the save (it was never
+  refreshed, and it moved spawn points in Mulgore, Eastern Plaguelands, Redridge and Stormwind a second
+  time); it drops that copy on load, which makes the save smaller.
+- **Game data rebuilt 22 Nov** from today's QuestieDB (e3c3bc4), ForeverDB and endgametools pages.
+  endgametools changed its page layout today; "How to get it" now reads the new layout ("Boss Drop ·
+  Herod · Scarlet Monastery · Level 30–46 · 5 players"), for 10,429 items instead of 1,994.
+- **Icons rebuilt from the wowdev listfile** (`gamedata/icons.py`): 3,227 broken names (".blp.meta") gone.
+- **Hand-kept game rules in one file** (`web/data/rules.js`): standings, reputation thresholds, AH cut and
+  the disenchant tables, each with its source, instead of copies in app.js and advice.js.
+
 - **Gear page, organised by slot.** A slot list (with Compare with on it) and the chosen slot in full:
   every upgrade at your level (best 15, then Show all), source chips with counts, and that slot's pre-BiS
   with your target on top and "Make target" on the rest. Random greens now count as upgrades even when

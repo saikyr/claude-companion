@@ -54,6 +54,12 @@ check(q64['t'] == 'The Forgotten Heirloom' and q64['from'][0][1] == 'Farmer Furl
 check(G['quests']['272'].get('side') == 'Alliance', "quest 272 (Night Elf + Skyborne Alliance) is Alliance")
 check(any(r[0] == 'drop' and r[1] == 'Princess Theradras' for r in G['src'].get('17710', [])), 'Charstone Dirk drops from Princess Theradras')
 check(all(q.get('t') for q in G['quests'].values()), 'every quest has a title')
+npc = G.get('npcs') or {}
+# QuestieDB Forever npc 1261: Veron Amberstill, Ram Breeder, level 10, Dun Morogh 63.5, 50.6 (same as quest 7674's giver)
+v = npc.get('1261') or []
+check(v[:2] == ['Veron Amberstill', 10] and v[4] == 'Ram Breeder' and v[5] == 'Dun Morogh' and v[6][:1] == [[63.5, 50.6]],
+      f'npc 1261 Veron Amberstill {v}')
+check((npc.get('9019') or [''])[0] == 'Emperor Dagran Thaurissan', 'npc 9019 is Emperor Dagran Thaurissan (BRD)')
 
 # ---------------------------------------------------------------- 3. coverage floors
 n = lambda c: sum(1 for x in c)
@@ -63,6 +69,7 @@ check(len(G['quests']) > 6000, f'>6,000 quests (got {len(G["quests"])})')
 check(len(G['src']) > 15000, f'>15,000 items with sources (got {len(G["src"])})')
 fq = n(q for q in G['quests'].values() if q.get('origin') == 'f')
 check(fq > 1500, f'>1,500 Forever-only quests (got {fq})')
+check(len(npc) > 15000, f'>15,000 NPCs (got {len(npc)})')
 
 # ---------------------------------------------------------------- 4. the player's own game data
 GAME = {'ITEM_MOD_AGILITY_SHORT': 3, 'ITEM_MOD_STRENGTH_SHORT': 4, 'ITEM_MOD_INTELLECT_SHORT': 5,
