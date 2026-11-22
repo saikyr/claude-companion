@@ -120,6 +120,12 @@ function ns.GrindStart(name)
     local w = ns.Where()
     c.grind = NewTracker(name and name ~= "" and name or w.sub or w.zone or "Grind")
     c.grind.device = ns.Device()
+    -- the items you farm here last time (/cc target) are targets again
+    local saved = c.grindTargets and c.grindTargets[c.grind.name:lower()]
+    if saved and #saved > 0 then
+        c.grind.targets = {}
+        for i, t in ipairs(saved) do c.grind.targets[i] = { id = t.id, name = t.name, link = t.link } end
+    end
     ns.Log("grindStart", { name = c.grind.name, device = c.grind.device })
     if ns.GrindPanel then ns.GrindPanel() end
     return c.grind
@@ -163,13 +169,108 @@ function ns.GrindStop(quiet, at, why)
     g.secs = ActiveSecs(g)
     g.vendorValue, g.ahValue = ns.LootValue(g)
     g.coin = (g.bySource and g.bySource.loot) or 0
+    for _, t in ipairs(g.targets or {}) do ns.TargetStats(g, t) end
     c.grinds = c.grinds or {}
     ns.Push(c.grinds, g, ns.LIMITS.sessions)
     c.grind = nil
     ns.Log("grindStop", { name = g.name, secs = g.secs, kills = g.kills, coin = g.coin, ah = g.ahValue, ended = why, at = at })
-    if ns.GrindPanel then ns.GrindPanel() end
+    -- a stop you made (or the addon's, when idle) leaves the summary on the panel
+    if ns.GrindPanel then ns.GrindPanel((not quiet or why == "idle") and g or nil) end
     if not quiet then ns.GrindReport(g) end
     return g
+end
+
+---------------------------------------------------------------- targets (/cc target <item>)
+-- Items you farm for. Each shows on the panel with how many dropped and how many the kills so far
+-- should have given: the drop chance ForeverDB measured on Forever kills (Drops.lua; never a
+-- Classic rate) times your kills of each creature that drops it. No Forever rate: "rate unknown",
+-- and only your own count. Kept per grind name, so the next /cc start with that name has them again.
+function ns.ItemFromText(text)
+    text = strtrim(text or "")
+    if text == "" then return nil end
+    local id = tonumber(text:match("item:(%d+)")) or tonumber(text:match("^(%d+)$"))
+    local link = text:match("(|c%x+|Hitem:.-|h|r)") or text:match("(|Hitem:.-|h)")
+    local name = link and link:match("%[(.-)%]")
+    if id then
+        name = name or ns.Clean(ns.Call(C_Item and C_Item.GetItemNameByID, id))
+        return id, name or ("item " .. id), link
+    end
+    -- a typed name: an item this computer has seen, else one the game knows
+    local want = text:gsub("^%[", ""):gsub("%]$", ""):lower()
+    for _, e in pairs(ClaudeCompanionDB.items or {}) do
+        if e.id and e.name and e.name:lower() == want then return e.id, e.name, e.link end
+    end
+    local GetInfo = (C_Item and C_Item.GetItemInfo) or GetItemInfo
+    local n, l = ns.Call(GetInfo, want)
+    l = ns.Clean(l)
+    id = l and tonumber(l:match("item:(%d+)"))
+    if id then return id, ns.Clean(n) or want, l end
+end
+
+-- adds the item to the running grind's targets, or takes it off if it is one. Returns true when
+-- added, false when removed, nil (and why) when it can't.
+function ns.GrindTarget(text)
+    local c = ns.char
+    local g = c and c.grind
+    if not g then return nil, "start a grind first: /cc start <name>" end
+    local id, name, link = ns.ItemFromText(text)
+    if not id then return nil, "shift-click the item into the command, e.g. /cc target [Pattern: Cindercloth Cloak]" end
+    g.targets = g.targets or {}
+    local added = true
+    for i, t in ipairs(g.targets) do
+        if t.id == id then table.remove(g.targets, i); added = false; break end
+    end
+    if added then
+        if #g.targets >= 3 then return nil, "three targets at most: /cc target an item again to take it off" end
+        g.targets[#g.targets + 1] = { id = id, name = name, link = link }
+    end
+    c.grindTargets = c.grindTargets or {}
+    local keep = {}
+    for i, t in ipairs(g.targets) do keep[i] = { id = t.id, name = t.name, link = t.link } end
+    c.grindTargets[(g.name or "grind"):lower()] = keep
+    ns.Log(added and "grindTarget" or "grindUntarget", { name = g.name, id = id, item = name })
+    if ns.GrindPanel then ns.GrindPanel() end
+    return added, name
+end
+
+-- got: how many dropped. expected: what your kills should have given, from Forever-measured chances
+-- only; nil when there is no Forever rate for it (rated = false), when you killed nothing that drops
+-- it, or when Drops.lua isn't loaded (it needs a game restart after the update that added it).
+-- none: the chance of no drop at all after these kills. sample: the fewest Forever kills behind a
+-- chance used. kills: kills of the creatures that drop it; with no rate, every kill of the grind.
+function ns.TargetStats(g, t)
+    local l = g.loot and g.loot[tostring(t.id)]
+    t.got = l and l.count or 0
+    local rows = ns.DROPS and ns.DROPS[t.id]
+    t.expected, t.none, t.sample, t.rated, t.kills = nil, nil, nil, rows ~= nil, 0
+    t.forever = nil -- older builds' Classic/Forever flag: only Forever rates are used now
+    if rows then
+        local exp, none, sample = 0, 1, nil
+        for i = 1, #rows, 3 do
+            local k = g.killsBy and g.killsBy[rows[i]]
+            if k and k > 0 then
+                local p = rows[i + 1] / 100
+                exp = exp + k * p
+                none = none * (1 - math.min(p, 1)) ^ k
+                t.kills = t.kills + k
+                sample = math.min(sample or rows[i + 2], rows[i + 2])
+            end
+        end
+        if t.kills > 0 then t.expected, t.none, t.sample = exp, none, sample end
+    else
+        t.kills = g.kills or 0
+    end
+    return t
+end
+
+-- your own rate: got in kills, with a 95% range (Wilson), as drops per 100 kills
+function ns.OwnRange(got, kills)
+    if not kills or kills <= 0 then return nil end
+    local z, n, p = 1.96, kills, math.min(1, got / kills) -- stacks and chests can give more than one per kill
+    local d = 1 + z * z / n
+    local mid = (p + z * z / (2 * n)) / d
+    local half = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / d
+    return p * 100, math.max(0, mid - half) * 100, math.min(1, mid + half) * 100
 end
 
 function ns.GrindReport(g)
@@ -185,6 +286,10 @@ function ns.GrindReport(g)
     local parts = {}
     for i = 1, math.min(5, #best) do parts[#parts + 1] = (best[i].link or best[i].name or "?") .. "x" .. best[i].count end
     if #parts > 0 then ns.Print("Drops: " .. table.concat(parts, ", ")) end
+    for _, t in ipairs(g.targets or {}) do
+        ns.Print(string.format("Target %s: %d dropped%s.", t.link or t.name or "?", t.got or 0,
+            t.expected and string.format(", %.2f expected from %d kills (Forever rate)", t.expected, t.kills) or (t.rated and ", nothing you killed drops it" or ", Forever rate unknown")))
+    end
 end
 
 ---------------------------------------------------------------- money, with where it came from
