@@ -1,5 +1,5 @@
 // Game rules the app needs that no data source ships per item: one place, each with its source.
-// Hand-kept (they change only with a game patch). Checked by gamedata/test_data.py in CI.
+// Hand-kept (they change only with a game patch). Checked by test/web/data.test.js in CI.
 // Per-item facts (stats, sources, drop rates, NPCs, quests, vendors) live in data/gamedata.js instead.
 window.GAMERULES = {
   v: 1,
