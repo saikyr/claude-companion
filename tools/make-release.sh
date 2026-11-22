@@ -13,5 +13,5 @@ for f in ClaudeCompanion/companion-data/snapshot.json ClaudeCompanion/web/data.j
 done
 mkdir -p dist
 OUT="dist/ClaudeCompanion-$VER.zip"; rm -f "$OUT"
-zip -qr -X "$OUT" ClaudeCompanion -x '*/.DS_Store' '*/from-claude/*'
+zip -qr -X "$OUT" ClaudeCompanion -x '*/.DS_Store' '*/from-claude/*' '*/__pycache__/*' '*.pyc'
 echo "$OUT ($(du -h "$OUT" | cut -f1))"
