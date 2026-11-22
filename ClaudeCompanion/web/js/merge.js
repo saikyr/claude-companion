@@ -58,9 +58,12 @@
     out.snap = pick('snap', (s) => s.taken);
     out.bank = pick('bank', (b) => b.taken);
     out.mail = pick('mail', (m) => m.taken);
+    // a Lua table keyed 1, 2, ... arrives as a JS array (index 0, 1, ...): keep the game's keys, so spec 1
+    // from one computer and spec 1 from another are the same entry
+    const entries = (x) => (Array.isArray(x) ? x.map((v, i) => [String(i + 1), v]) : Object.entries(x || {}));
     const byName = (field, t) => {
       const m = {};
-      parts.forEach((p) => Object.entries(p.c[field] || {}).forEach(([k, v]) => { if (!m[k] || num(t(v)) > num(t(m[k]))) m[k] = v; }));
+      parts.forEach((p) => entries(p.c[field]).forEach(([k, v]) => { if (!m[k] || num(t(v)) > num(t(m[k]))) m[k] = v; }));
       return m;
     };
     out.professions = byName('professions', (x) => x && x.taken);
