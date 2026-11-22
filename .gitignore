@@ -6,6 +6,8 @@ ClaudeCompanion/companion-data/snapshot.json
 ClaudeCompanion/companion-data/snapshot.json.tmp
 ClaudeCompanion/companion-data/settings.json*
 ClaudeCompanion/companion-data/from-claude/
+ClaudeCompanion/companion-data/update.json
+ClaudeCompanion/companion-data/installed.json
 
 # Generated: the game-data pack (12 MB, rebuilt by gamedata/build.sh; shipped in the release zip)
 ClaudeCompanion/web/data/

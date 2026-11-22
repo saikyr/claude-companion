@@ -9,6 +9,10 @@ character, so Claude's answers match what the app shows. Claude sessions read it
 (Windows: `server.ps1`, set up by `Claude Companion.bat`; macOS: `server.py`, set up by `Claude Companion.app`;
 both start the server at login, hidden).
 
+`update.json` (yours, optional): `{"auto": true, "repo": "saikyr/claude-companion", "token": "..."}` for the
+self-updater; `installed.json` (the app writes it): `{tag, at, backup, files}`, the release installed. Neither is
+ever shipped or overwritten by an update.
+
 `settings.json` here holds the app's own choices (gear weights, compare-with picks, flips set aside),
 copied from the browser so every browser and the hidden one give the same advice. The app writes it; Claude can read it.
 

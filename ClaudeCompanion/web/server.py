@@ -7,7 +7,7 @@
 #                            /api/settings  POST /api/settings
 # It serves the app and reads the game's saved file (ClaudeCompanion.lua) directly.
 # Nothing is sent anywhere: it only answers this computer.
-import glob, json, os, shutil, subprocess, sys, tempfile, threading, time, urllib.request, webbrowser
+import glob, json, os, shutil, subprocess, sys, tempfile, threading, time, urllib.error, urllib.request, webbrowser
 from datetime import datetime, timezone
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 
@@ -15,7 +15,7 @@ WEB = os.path.dirname(os.path.abspath(__file__))
 FOREVER = os.path.normpath(os.path.join(WEB, '..', '..', '..', '..'))   # .../_forever_
 DATA_DIR = os.path.join(os.path.dirname(WEB), 'companion-data')
 CARDS_DIR = os.path.join(DATA_DIR, 'from-claude')   # cards.json: Claude writes it; state.json: this app writes it
-PORT = 47615
+PORT = int(os.environ.get('CC_PORT') or 47615)   # CC_PORT: only for testing a second copy
 # which computer this is: snapshot.json says so, because the PC and the Mac each keep their own save (#11)
 import platform, socket
 DEVICE_HOST = (socket.gethostname() or '').split('.')[0]
@@ -67,6 +67,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200, json.dumps({'stamp': stamp_of(save), 'size': os.path.getsize(save), **dev}), TYPES['.json'])
             if not save: return self.send(404, 'no save yet')
             with open(save, 'rb') as f: return self.send(200, f.read(), 'application/octet-stream')
+        if path == '/api/update':
+            return self.send(200, json.dumps(update_status(force='force=1' in self.path)), TYPES['.json'])
         if path in ('/api/cards', '/api/cards-state', '/api/settings'):
             f = {'/api/cards': os.path.join(CARDS_DIR, 'cards.json'), '/api/cards-state': os.path.join(CARDS_DIR, 'state.json'),
                  '/api/settings': os.path.join(DATA_DIR, 'settings.json')}[path]
@@ -85,6 +87,18 @@ class Handler(BaseHTTPRequestHandler):
         # Claude's cards: ../companion-data/from-claude/state.json (see SCHEMA.md there).
         # Only this app sends the X-CC header; a web page can't add it without the browser asking first.
         n = int(self.headers.get('Content-Length') or 0)
+        if self.path.split('?')[0] in ('/api/update', '/api/update-auto'):
+            if self.headers.get('X-CC') != '1': return self.send(400, 'bad request')
+            if n: self.rfile.read(min(n, 4096))
+            if self.path.startswith('/api/update-auto'):
+                cfg = read_json(UPDATE_CFG, {})
+                cfg['auto'] = 'on=1' in self.path
+                write_json(UPDATE_CFG, cfg)
+                return self.send(200, json.dumps(update_status()), TYPES['.json'])
+            r = install_update()
+            self.send(200, json.dumps(r), TYPES['.json'])
+            if r.get('ok'): restart_soon()
+            return
         target = {'/api/snapshot': (DATA_DIR, 'snapshot.json'), '/api/cards-state': (CARDS_DIR, 'state.json'),
                   '/api/settings': (DATA_DIR, 'settings.json')}.get(self.path.split('?')[0])
         if not target or self.headers.get('X-CC') != '1' or n <= 0 or n > 20 * 1024 * 1024:
@@ -96,6 +110,183 @@ class Handler(BaseHTTPRequestHandler):
         with open(tmp, 'wb') as f: f.write(body)
         os.replace(tmp, os.path.join(folder, name))
         self.send(200, 'ok')
+
+
+# ---------------------------------------------------------------- updates
+# The app updates itself from the project's GitHub releases: each tested build is a release with
+# ClaudeCompanion-*.zip attached. The server checks every 30 minutes (and when the page asks), and
+# installs the newest one by itself when "auto" is on (the default), or when you click Install.
+# Installing: download, check the zip has the whole addon, copy the current addon folder to a backup
+# (the last 5 are kept), then copy the new files over it. Never touched: companion-data/ (your
+# snapshot, settings, Claude's cards; only its SCHEMA.md is updated) and the game's saved data (WTF/).
+# Files the release doesn't have are left alone. Afterwards the server restarts itself on the new code;
+# the addon's own Lua takes effect at the next /reload in game.
+# The repository is private, so downloads need a GitHub token: companion-data/update.json "token",
+# else CC_GITHUB_TOKEN, else the GitHub CLI's (`gh auth token`). A public repository needs none.
+REPO = 'saikyr/claude-companion'
+ADDON = os.path.dirname(WEB)
+UPDATE_CFG = os.path.join(DATA_DIR, 'update.json')      # {repo, auto, token}: yours, never shipped or overwritten
+INSTALLED = os.path.join(DATA_DIR, 'installed.json')    # {tag, at, backup}: which release is installed
+REQUIRED = ['ClaudeCompanion.toc', 'Core.lua', 'Journal.lua', 'web/index.html', 'web/js/app.js', 'web/server.py', 'web/server.ps1']
+if sys.platform == 'darwin': BACKUPS = os.path.expanduser('~/Library/Application Support/Claude Companion/backups')
+elif os.name == 'nt': BACKUPS = os.path.join(os.environ.get('LOCALAPPDATA', os.path.expanduser('~')), 'Claude Companion', 'backups')
+else: BACKUPS = os.path.expanduser('~/.local/share/claude-companion/backups')
+_upd = {'checked': 0.0, 'latest': None, 'error': None, 'busy': False, 'last': None}
+
+
+def read_json(path, default):
+    try:
+        with open(path, encoding='utf-8') as f: return json.load(f)
+    except (OSError, ValueError): return default
+
+
+def write_json(path, data):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + '.tmp'
+    with open(tmp, 'w', encoding='utf-8') as f: json.dump(data, f, indent=1)
+    os.replace(tmp, path)
+
+
+def upd_cfg():
+    c = {'repo': REPO, 'auto': True}
+    c.update(read_json(UPDATE_CFG, {}))
+    return c
+
+
+def gh_token(cfg):
+    if cfg.get('token'): return cfg['token']
+    if os.environ.get('CC_GITHUB_TOKEN'): return os.environ['CC_GITHUB_TOKEN']
+    for gh in (shutil.which('gh'), '/opt/homebrew/bin/gh', '/usr/local/bin/gh'):
+        if gh and os.path.isfile(gh):
+            try:
+                r = subprocess.run([gh, 'auth', 'token'], capture_output=True, text=True, timeout=10)
+                if r.returncode == 0 and r.stdout.strip(): return r.stdout.strip()
+            except Exception: pass
+    return None
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *a, **k): return None
+
+
+def gh_get(url, tok, accept='application/vnd.github+json'):
+    req = urllib.request.Request(url, headers={'Accept': accept, 'User-Agent': 'claude-companion', 'X-GitHub-Api-Version': '2022-11-28'})
+    if tok: req.add_header('Authorization', 'Bearer ' + tok)
+    if accept == 'application/octet-stream':
+        # assets redirect to a signed download link, which must be fetched without the token
+        try:
+            with urllib.request.build_opener(_NoRedirect).open(req, timeout=30) as r: return r.read()
+        except urllib.error.HTTPError as e:
+            if e.code not in (301, 302, 303, 307, 308): raise
+            with urllib.request.urlopen(urllib.request.Request(e.headers['Location'], headers={'User-Agent': 'claude-companion'}), timeout=300) as r:
+                return r.read()
+    with urllib.request.urlopen(req, timeout=30) as r: return json.loads(r.read().decode('utf-8'))
+
+
+def check_update(force=False):
+    if not force and time.time() - _upd['checked'] < 15 * 60: return _upd['latest']
+    cfg = upd_cfg()
+    _upd['checked'] = time.time()
+    try:
+        rels = gh_get(f"https://api.github.com/repos/{cfg['repo']}/releases?per_page=10", gh_token(cfg))
+        latest = None
+        for r in rels:
+            if r.get('draft'): continue
+            asset = next((a for a in r.get('assets', []) if a['name'].startswith('ClaudeCompanion') and a['name'].endswith('.zip')), None)
+            if asset:
+                latest = {'tag': r['tag_name'], 'name': r.get('name') or r['tag_name'], 'published': r.get('published_at'),
+                          'notes': (r.get('body') or '')[:3000], 'asset': asset['id'], 'size': asset['size']}
+                break
+        _upd['latest'], _upd['error'] = latest, None
+    except urllib.error.HTTPError as e:
+        _upd['error'] = ('GitHub said %d. ' % e.code) + ('The repository is private: add a token (see companion-data/SCHEMA.md, update.json), or sign in with the GitHub CLI.' if e.code in (401, 403, 404) else '')
+    except Exception as e:
+        _upd['error'] = 'Could not reach GitHub: %s' % e
+    return _upd['latest']
+
+
+def update_status(force=False):
+    latest = check_update(force)
+    inst = read_json(INSTALLED, {})
+    cfg = upd_cfg()
+    return {'installed': inst or None, 'latest': latest, 'available': bool(latest and latest['tag'] != inst.get('tag')),
+            'auto': bool(cfg.get('auto', True)), 'busy': _upd['busy'], 'error': _upd['error'], 'last': _upd['last'],
+            'checked': datetime.fromtimestamp(_upd['checked'], timezone.utc).isoformat() if _upd['checked'] else None}
+
+
+def install_update():
+    import zipfile
+    if _upd['busy']: return {'ok': False, 'error': 'An update is already being installed.'}
+    _upd['busy'] = True
+    try:
+        latest = check_update(force=True)
+        if not latest: return {'ok': False, 'error': _upd['error'] or 'No release found.'}
+        cfg = upd_cfg()
+        data = gh_get(f"https://api.github.com/repos/{cfg['repo']}/releases/assets/{latest['asset']}", gh_token(cfg), 'application/octet-stream')
+        work = tempfile.mkdtemp(prefix='cc-update-')
+        zpath = os.path.join(work, 'release.zip')
+        with open(zpath, 'wb') as f: f.write(data)
+        with zipfile.ZipFile(zpath) as z:
+            for n in z.namelist():   # nothing may land outside the work folder
+                if n.startswith('/') or '..' in n.replace('\\', '/').split('/'): raise ValueError('unsafe path in the zip: ' + n)
+            z.extractall(os.path.join(work, 'x'))
+        src = None
+        for root, dirs, files in os.walk(os.path.join(work, 'x')):
+            if 'ClaudeCompanion.toc' in files: src = root; break
+        if not src: raise ValueError('the release zip has no ClaudeCompanion.toc')
+        missing = [r for r in REQUIRED if not os.path.isfile(os.path.join(src, *r.split('/')))]
+        if missing: raise ValueError('the release zip is missing ' + ', '.join(missing))
+        # back up the current addon (without companion-data, which is never overwritten anyway)
+        stamp = datetime.now().strftime('%Y%m%d-%H%M%S')
+        backup = os.path.join(BACKUPS, f'ClaudeCompanion-{stamp}')
+        shutil.copytree(ADDON, backup, ignore=shutil.ignore_patterns('companion-data', '__pycache__'))
+        olds = sorted(d for d in os.listdir(BACKUPS) if d.startswith('ClaudeCompanion-'))
+        for d in olds[:-5]: shutil.rmtree(os.path.join(BACKUPS, d), ignore_errors=True)
+        copied = 0
+        for root, dirs, files in os.walk(src):
+            rel = os.path.relpath(root, src)
+            parts = [] if rel == '.' else rel.split(os.sep)
+            if parts[:1] == ['companion-data']:
+                files = [f for f in files if parts == ['companion-data'] and f == 'SCHEMA.md']
+            for f in files:
+                dest = os.path.join(ADDON, *parts, f)
+                os.makedirs(os.path.dirname(dest), exist_ok=True)
+                shutil.copy2(os.path.join(root, f), dest)
+                if f == 'launcher' or f.endswith(('.command', '.sh')): os.chmod(dest, 0o755)   # zips don't keep the run bit
+                copied += 1
+        shutil.rmtree(work, ignore_errors=True)
+        info = {'tag': latest['tag'], 'at': datetime.now(timezone.utc).isoformat(), 'backup': backup, 'files': copied}
+        write_json(INSTALLED, info)
+        _upd['last'] = info
+        print(f"updated to {latest['tag']} ({copied} files; backup {backup})", flush=True)
+        return {'ok': True, **info}
+    except Exception as e:
+        print('update failed:', e, flush=True)
+        return {'ok': False, 'error': str(e)}
+    finally:
+        _upd['busy'] = False
+
+
+def restart_soon():
+    # start this server again on the new code: the same process, new program (the port is released)
+    def go():
+        time.sleep(1)
+        try: os.execv(sys.executable, [sys.executable, os.path.abspath(__file__), '--serve'])
+        except Exception as e: print('restart failed:', e, flush=True); os._exit(1)   # launchd then starts it again
+    threading.Thread(target=go, daemon=True).start()
+
+
+def auto_update():
+    time.sleep(60)
+    while True:
+        try:
+            st = update_status()
+            if st['available'] and st['auto'] and not st['busy']:
+                r = install_update()
+                if r.get('ok'): restart_soon(); return
+        except Exception as e:
+            print('auto update:', e, flush=True)
+        time.sleep(30 * 60)
 
 
 # ---------------------------------------------------------------- starting and opening
@@ -238,6 +429,7 @@ def serve(open_after):
     if not os.path.isdir(os.path.join(FOREVER, 'WTF')):
         print('Note: no WTF folder found next to Interface. Put ClaudeCompanion in _forever_/Interface/AddOns.', flush=True)
     threading.Thread(target=background_snapshot, daemon=True).start()
+    threading.Thread(target=auto_update, daemon=True).start()
     if open_after: open_app()
     try: srv.serve_forever()
     except KeyboardInterrupt: pass
