@@ -1,15 +1,15 @@
 {
  "version": "1.4.0",
- "built": "2026-11-22T15:56:56+00:00",
+ "built": "2026-11-22T16:17:17+00:00",
  "channel": {
   "repo": "saikyr/claude-companion",
   "branch": "stable"
  },
  "from": {
   "branch": "main",
-  "commit": "3ce6a5005b8c0d5ed60eade2beac07188802bc02"
+  "commit": "ad2defcc1082b8526776379bc1bda65f6a21ba0d"
  },
- "notes": "Merge pull request #44 from saikyr/claude/project-thread-fvgi7h",
+ "notes": "Merge pull request #45 from saikyr/claude/project-thread-fvgi7h",
  "files": {
   "Bindings.xml": "f4ad14d769e58eb18cd49da688fb23d64dec6be99a7684b9993ea0689616bf09",
   "ClaudeCompanion.toc": "87915db63dcb911f027bc5c400284fe70fa58142f561efc0dea4134bd6625c42",
@@ -45,7 +45,7 @@
   "web/js/update.js": "ebcc47aed61efde92220eb361e1bf4013298023d99d21fd0e1d8330e3c2086e8",
   "web/js/weights.js": "05819acc26e8b2f6e9d44402b9dfa915f959bce045c79f00d487d182f0a76b64",
   "web/manifest.json": "c2351657716a2425d052efcad63b0ee2f33a217caef17dd844d24c558a004613",
-  "web/server.ps1": "75a4722dd5c96d9a1ec6b1fd481315cb4bc4b28574b8264f03ca2515022d629b",
-  "web/server.py": "276a82eee5d472f5075c42cdd55d303fe87bebd94ec4a562a396f6ec9fa0b799"
+  "web/server.ps1": "925be18926c4fb653a10970da254d357aec965fd949ecbf91d21189f32f675c5",
+  "web/server.py": "01992873a562676a517929ab317a2f3e73433eaebe60505660e5bd202421bb16"
  }
 }

@@ -171,6 +171,10 @@ function Get-Save {
 # one gives the same gear advice. Same as server.py.
 $bgProfile = Join-Path $env:TEMP 'claude-companion-background'
 $bgTried = $null; $bgProc = $null; $bgStart = $null; $bgNext = [DateTime]::MinValue
+# Has an app window loaded the page since this server started? (same as server.py: a window left open
+# through an update runs the old page; until a window loads the new one, the hidden browser runs after
+# each save even when a window wrote snapshot.json)
+$script:pageLoaded = $false
 function Find-Browser {
     @(
         (Join-Path ${env:ProgramFiles(x86)} 'Microsoft\Edge\Application\msedge.exe'),
@@ -193,7 +197,7 @@ function Check-Background {
     if ($stamp -eq $script:bgTried -or ([DateTime]::UtcNow - $s.LastWriteTimeUtc).TotalSeconds -lt 10) { return }
     $snapFile = Join-Path $dataDir 'snapshot.json'
     $have = if (Test-Path $snapFile) { [regex]::Match([System.IO.File]::ReadAllText($snapFile), '"saveModified":\s*"([^"]*)"').Groups[1].Value } else { '' }
-    if ($stamp -eq $have) { return }
+    if ($script:pageLoaded -and $stamp -eq $have) { return }
     $script:bgTried = $stamp
     $exe = Find-Browser
     if (-not $exe) { return }
@@ -429,6 +433,7 @@ while ($listener.IsListening) {
             }
         } else {
             if ($path -eq '/' -or $path -eq '') { $path = '/index.html' }
+            if ($path -eq '/index.html' -and $req.Url.Query -notmatch 'background=1') { $script:pageLoaded = $true }
             $file = [System.IO.Path]::GetFullPath((Join-Path $webFull ($path.TrimStart('/') -replace '/', '\')))
             # only files inside the app folder, and never the server script itself
             if ($file.StartsWith($webFull, [StringComparison]::OrdinalIgnoreCase) -and (Test-Path $file -PathType Leaf) -and -not $file.EndsWith('.ps1')) {
