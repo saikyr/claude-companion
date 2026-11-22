@@ -44,6 +44,8 @@
       saveModified: A.STATE.saveStamp || null,
       // which computer wrote this: the PC and the Mac each keep their own save and their own snapshot.json
       device: Object.assign({ host: null, os: CH.device || null }, A.STATE.device || {}),
+      // the other computers whose saves are merged into this one (sync); [] = only this computer's
+      mergedWith: (A.STATE.peers || []).map((p) => ({ device: p.dev, saveModified: p.savedAt })),
       // the grind running now (if any) and the last few finished ones; ended: logout / away / idle when the addon ended it
       grind: (() => {
         const g = CH.grind;

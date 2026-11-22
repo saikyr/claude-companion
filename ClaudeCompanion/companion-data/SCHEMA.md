@@ -13,6 +13,11 @@ both start the server at login, hidden).
 self-updater; `installed.json` (the app writes it): `{tag, at, backup, files}`, the release installed. Neither is
 ever shipped or overwritten by an update.
 
+`devices/<computer>/` (the app writes it): the other computers' latest saves (`save.lua`, `meta.json`), downloaded
+through the private repository. The app merges them with this computer's save, so `snapshot.json` describes one
+character across the PC and the Mac; `mergedWith` lists which saves are in it. For raw data from another computer,
+read `devices/<computer>/save.lua` the same way as the save itself.
+
 `settings.json` here holds the app's own choices (gear weights, compare-with picks, flips set aside),
 copied from the browser so every browser and the hidden one give the same advice. The app writes it; Claude can read it.
 

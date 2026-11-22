@@ -54,7 +54,8 @@ done
 cp "$SRC/companion-data/SCHEMA.md" "$DEST/companion-data/SCHEMA.md" 2>/dev/null || true
 chmod +x "$DEST/web/Claude Companion.app/Contents/MacOS/launcher" 2>/dev/null || true
 xattr -dr com.apple.quarantine "$DEST/web/Claude Companion.app" 2>/dev/null || true
-printf '{"tag": "%s", "at": "%s", "by": "install.sh"}\n' "$TAG" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$DEST/companion-data/installed.json"
+printf '{"tag": "%s", "sha": "%s", "at": "%s", "by": "install.sh"}
+' "$TAG" "$SHA" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$DEST/companion-data/installed.json"
 
 # restart the app's server (login item) on the new code and open the app
 /usr/bin/python3 "$DEST/web/server.py"
