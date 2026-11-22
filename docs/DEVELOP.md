@@ -7,15 +7,25 @@ every installed app updates from and friends download from.
 
 ## Releases
 
-- Every merge to `main` that passes CI becomes a build: a commit on the `stable` branch, and the zips
-  plus `latest.json` in the download folder (`supabase/functions/publish-build`), which installed apps
-  update from. The repository stays private.
+- Every merge to `main` that passes CI **and changes something in `ClaudeCompanion/`** becomes a build:
+  a commit on the `stable` branch, and the zips plus `latest.json` in the download folder
+  (`supabase/functions/publish-build`), which installed apps update from. A merge that only touches
+  docs, tests, CI or `.claude/` is not published, so no computer is asked to `/reload` for it. A manual
+  run of `publish.yml` always publishes. The repository stays private.
 - The version is `## Version` in `ClaudeCompanion/ClaudeCompanion.toc`; `Core.lua` `ns.VERSION` and the
   newest `CHANGELOG.md` section must say the same (CI checks). To start a new version, change all three
   in one PR.
 - Write what changed for players in `CHANGELOG.md` under the current version.
 - The upload function's source is `supabase/functions/publish-build/index.ts`; deploy it to the sync
   project with `verify_jwt` off (it checks the caller's GitHub OIDC token itself).
+
+## Repo hooks (test)
+
+`.claude/settings.json` holds a test hook (`.claude/hooks/hook-test.sh`) that only reports: at
+session start it adds one line, "REPO HOOK TEST: …", saying whether hooks from this repository load
+in a Claude session and whether the sync backend is reachable from there; tool calls are logged to
+`/tmp/cc-hook-test.log`. It never blocks anything. It is replaced once the answer is recorded
+(project-files `foundation/`).
 
 ## Layout
 

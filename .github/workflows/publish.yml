@@ -24,16 +24,20 @@ jobs:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           fetch-depth: 0
       - name: Publish to stable, and build the download zips
+        id: pub
         run: |
           git checkout -q -B main
           msg="$(git log -1 --format=%s)"
           # a merge from GitHub says "Merge pull request #n from ..."; the PR's title is the first line of the body
           case "$msg" in "Merge pull request "*) t="$(git log -1 --format=%b | sed -n '/./{p;q}')"; [ -n "$t" ] && msg="$t";; esac
-          python3 tools/publish-stable.py --release dist "$msg"
+          # a manual run always publishes; a merge publishes only when ClaudeCompanion/ changed
+          force=""; [ "${{ github.event_name }}" = workflow_dispatch ] && force="--force"
+          python3 tools/publish-stable.py $force --release dist "$msg"
       # The download folder (public to read; the repository stays private): the first-install zips and
       # latest.json, which every installed app's updater reads. supabase/functions/publish-build checks
       # this job's GitHub OIDC token (this repository, publish.yml, main), so no secret is stored anywhere.
       - name: Upload to the download folder
+        if: steps.pub.outputs.published == 'true'
         run: |
           tok=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=claude-companion-publish" \
                 | python3 -c 'import json, sys; print(json.load(sys.stdin)["value"])')
