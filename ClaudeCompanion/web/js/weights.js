@@ -175,7 +175,7 @@
 
   // ---------------------------------------------------------------- your own profiles
   // Saved in this browser (localStorage 'cc.weights.v1'), per class so alts of the same class share
-  // them. Which profile a spec uses is kept per character and spec ('cc.gear.profile.<name>.<spec>',
+  // them. Which profile a spec uses is kept per character and spec ('cc.gear.profile.<name>.spec<1|2>',
   // the key the Gear tab always used).
   const KEY = 'cc.weights.v1';
   const store = () => {
@@ -339,7 +339,7 @@
     const ch = char(), cls = ch.classFile;
     if (!cls) return '<div class="empty">Your character isn\'t saved yet: Sync in game.</div>';
     const specs = specList();
-    specs.forEach((sp) => W.migrate(ch.name, sp.i, cls));
+    specs.forEach((sp) => W.migrate(ch.name, sp.i - 1, cls));   // older own weights were keyed by the array index
     const active = (A.CH.snap || {}).activeSpec;
     const builtIn = Object.values(BUILTIN).filter((p) => p.cls === cls), mine = W.custom(cls);
     const activeSpec = specs.find((s) => s.i === active) || specs[0];

@@ -7,6 +7,18 @@ Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
   like the rest of the app (label, value, one line). Reputation names come from data/rules.js, and items
   whose source is "World Drop" are listed as world drops.
 
+- **The active spec is right everywhere.** With both specs saved, the save's reader numbered them 0 and 1
+  instead of the game's 1 and 2, and merging the PC's and Mac's copies mixed the two numberings, so the
+  Talents page could show Shadow's name on the active (Holy) spec and spec 2 wouldn't open. Specs now keep
+  the game's numbers from the moment the save is read (and when computers are merged), for Talents, Gear
+  and Stat weights alike. Gear choices made before carry over.
+- **Talents & Bars:** action bars use the game's own names (Action Bar 1 to 8, as in the Action Bars settings),
+  plus Action Bar 1's second page and its Shadowform page, instead of guessed positions like "Bottom left".
+- **Professions:** one selector (in the header) and the selected profession's skill bar; other skills in one
+  line at the bottom. Hovering a recipe shows its reagents: how many you have and what each costs.
+- **AH flips:** the same AH letter read on both computers counts once, and the Flips view explains exactly
+  how purchases are matched to sales (and how many copies it left out).
+
 - **One source per kind of game data, checked in CI.** docs/ARCHITECTURE.md (Data sources) names the one
   source for items, random-suffix rolls, quests, NPCs and spawns, drop rates, vendors, recipes, AH prices
   and icons. New CI step "Game data complete" (`gamedata/test_pack.py`, `test/web/data.test.js`).

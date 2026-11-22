@@ -226,6 +226,8 @@
       else if (el.dataset.spell) html = spellTip(el.dataset.spell, el.dataset.rank);
       else { try { html = arr(JSON.parse(el.dataset.tip)).map(lineHTML).join(''); } catch (_) {} }
     }
+    const rr = el && !el.closest('.c-reag') && el.closest('[data-reagents]');
+    if (html && rr) { try { html += '<div class="tipsep"></div>' + arr(JSON.parse(rr.dataset.reagents)).map(lineHTML).join(''); } catch (_) {} }
     if (!html) { tip.style.display = 'none'; return; }
     tip.innerHTML = html;
     tip.style.display = 'block';
@@ -542,7 +544,7 @@
   const TREE_NAMES = { PRIEST: ['Discipline', 'Holy', 'Shadow'], MAGE: ['Arcane', 'Fire', 'Frost'], WARLOCK: ['Affliction', 'Demonology', 'Destruction'], DRUID: ['Balance', 'Feral', 'Restoration'], PALADIN: ['Holy', 'Protection', 'Retribution'], SHAMAN: ['Elemental', 'Enhancement', 'Restoration'], WARRIOR: ['Arms', 'Fury', 'Protection'], ROGUE: ['Assassination', 'Combat', 'Subtlety'], HUNTER: ['Beast Mastery', 'Marksmanship', 'Survival'] };
   V.talents = function () {
     const raw = CH.specs || {};
-    const specs = (Array.isArray(raw) ? raw.map((sp, i) => ({ sp, i: i + 1 })) : Object.entries(raw).map(([k, sp]) => ({ sp, i: Number(k) }))).filter((x) => x.sp);
+    const specs = Object.entries(raw).map(([k, sp]) => ({ sp, i: Number(k) })).filter((x) => x.sp && (x.i === 1 || x.i === 2));
     if (!specs.length) return '<div class="empty">Talents not saved yet.</div>';
     const active = (CH.snap || {}).activeSpec;
     const cur = STATE.spec && specs.find((x) => x.i === STATE.spec) ? STATE.spec : active || specs[0].i;
@@ -586,7 +588,12 @@
     else {
       const bySlot = {};
       bars.forEach((a) => (bySlot[a.slot] = a));
-      const rows = [[1, 'Main'], [61, 'Bottom left'], [49, 'Bottom right'], [25, 'Right'], [37, 'Right 2'], [13, 'Page 2'], [73, 'Bar 7'], [85, 'Bar 8'], [97, 'Bar 9'], [109, 'Bar 10']];
+      // the game's action slots, named the way its Action Bars settings name them
+      const cls = ((CH.snap || {}).character || {}).classFile;
+      const FORM = { PRIEST: ['Shadowform'], DRUID: ['Cat Form', 'Prowl', 'Bear Form', 'Moonkin Form'], ROGUE: ['Stealth'], WARRIOR: ['Battle Stance', 'Defensive Stance', 'Berserker Stance'] }[cls] || [];
+      const rows = [[1, 'Action Bar 1'], [13, 'Action Bar 1, page 2'],
+        ...[73, 85, 97, 109].map((st, k) => [st, `Action Bar 1${FORM[k] ? ` (${FORM[k]})` : `, form ${k + 1}`}`]),
+        [61, 'Action Bar 2'], [49, 'Action Bar 3'], [25, 'Action Bar 4'], [37, 'Action Bar 5'], [145, 'Action Bar 6'], [157, 'Action Bar 7'], [169, 'Action Bar 8']];
       h += '<div class="abars">';
       rows.forEach(([start, lbl]) => {
         const cells = [];
@@ -684,7 +691,7 @@
       if (qi === 0) header = Symbol('start');
       if (q.header !== header) { h += `${typeof header !== 'symbol' ? '</div></div>' : ''}<div class="grp"><h3>${esc(q.header || 'Other')}</h3><div class="panel">`; header = q.header; }
       const done = q.ready || q.complete;
-      h += `<div class="quest"><div class="qt"><span class="qlvl">${q.level || ''}</span><span class="qname">${esc(q.title)}</span>${done ? '<span class="tag ok">complete</span>' : q.failed ? '<span class="tag bad">failed</span>' : ''}${q.id ? `<a class="dim small" href="${QUEST_PAGE}${q.id}" target="_blank" rel="noopener">quest page</a>` : ''}</div>`;
+      h += `<div class="quest"><div class="qt"><span class="qlvl">${q.level || ''}</span><span class="qname">${esc(q.title)}</span>${done ? '<span class="tag ok">complete</span>' : q.failed ? '<span class="tag bad">failed</span>' : ''}${q.id ? `<a class="dim small" href="${QUEST_PAGE}${q.id}" target="_blank" rel="noopener" title="Turn-in, rewards and XP here come from QuestieDB Forever and your game; this opens the quest's Forever page on ForeverChanges">ForeverChanges page</a>` : ''}</div>`;
       arr(q.objectives).forEach((o) => { h += `<div class="qo ${o.done ? 'done' : ''}">${esc(o.text)}</div>`; });
       const rw = q.rewards;
       const gq = GD && GD.quests[q.id];
@@ -716,6 +723,26 @@
   };
 
   // ------------------------------------------------------------ professions
+  // plain-text coins for tooltip lines ("1g 20s")
+  const coinText = (c) => { c = Math.round(c || 0); const g = Math.floor(c / 10000), s = Math.floor(c / 100) % 100, cp = c % 100; return [g && g + 'g', s && s + 's', !g && (cp || !s) && cp + 'c'].filter(Boolean).join(' '); };
+  // how many of an item you have, bags and bank
+  function ownedCount(id) {
+    let n = 0;
+    const take = (bags) => arr(bags).forEach((b) => arr(b.items).forEach((x) => { const m = /item:(\d+)/.exec(x.item || x.link || ''); if (m && Number(m[1]) === Number(id)) n += x.count || 1; }));
+    take((CH.snap || {}).bags); take((CH.bank || {}).bags);
+    return n;
+  }
+  // a recipe's reagents as tooltip lines: what it takes, what you have, what it costs
+  function reagentLines(r, cp) {
+    const out = [{ l: 'Reagents', lc: 'ffd100', r: 'have · each', rc: '8a8f98' }];
+    arr(r.reagents).forEach((g) => {
+      const it = byId(g.id), gd = gdItem(g.id), have = ownedCount(g.id), need = g.need || 1;
+      const pr = planPrice(g.id), each = pr ? '≈ ' + coinText(pr) : it && it.sell ? `vendor ≈ ${coinText(it.sell * 4)}` : 'no price';
+      out.push({ l: `${need}× ${anyItemName(g.id)}`, lc: QCOL[(it && it.q) != null ? it.q : gd ? gd[1] : 1] || 'ffffff', r: `${have} · ${each}`, rc: have >= need ? '1eff00' : 'ff6060' });
+    });
+    if (cp && !cp.missing) out.push({ l: `Cost ${coinText(cp.cost)} · sells ${coinText(cp.value)} · ${cp.profit >= 0 ? 'profit' : 'loss'} ${coinText(Math.abs(cp.profit))}`, lc: cp.profit >= 0 ? '1eff00' : 'ff6060' });
+    return out;
+  }
   // what a craft costs (reagents at AH median) against what the result sells for
   function craftProfit(r) {
     if (!r.output) return null;
@@ -749,11 +776,14 @@
     const profs = Object.values(CH.professions || {}).filter((p) => p.name).sort((a, b) => arr(b.recipes).length - arr(a.recipes).length);
     // rank from the skill line, or from the profession window if the skill line didn't have it
     const ranked = skills.map((s) => { const p = (CH.professions || {})[s.name] || {}; return { name: s.name, rank: s.rank != null ? s.rank : p.rank, max: skillMax(s) || p.max }; }).filter((s) => s.rank != null && s.max);
-    const skillStrip = `<div class="skills">${ranked.map((s) => `<div class="skill"><div class="skt"><span>${esc(s.name)}</span><b>${s.rank}<span class="dim"> / ${s.max}</span></b></div><div class="bar"><i style="width:${(100 * s.rank) / s.max}%"></i></div></div>`).join('')}</div>`;
+    const bar = (s) => `<div class="skills"><div class="skill"><div class="skt"><span>${esc(s.name)} skill</span><b>${s.rank}<span class="dim"> / ${s.max}</span></b></div><div class="bar"><i style="width:${(100 * s.rank) / s.max}%"></i></div></div></div>`;
+    const others = (but) => { const o = ranked.filter((s) => s.name !== but); return o.length ? `<p class="meta">Other skills: ${o.map((s) => `${esc(s.name)} ${s.rank}/${s.max}`).join(' · ')}</p>` : ''; };
     let h = '';
-    if (!profs.length) return skillStrip + '<div class="empty">Open each profession window once in game, then Sync.</div>';
+    if (!profs.length) return '<div class="empty">Open each profession window once in game, then Sync.</div>' + others(null);
     const p = profs.find((x) => x.name === STATE.prof) || profs[0];
-    h += `<div class="seg">${profs.map((x) => `<button data-prof="${esc(x.name)}" class="${x === p ? 'on' : ''}">${PROF_ICON[x.name] ? `<img src="${ICON_URL}${PROF_ICON[x.name]}.jpg" alt="">` : ''}${esc(x.name)} <span class="n">${arr(x.recipes).length}</span></button>`).join('')}</div>` + skillStrip;
+    const mine = ranked.find((s) => s.name === p.name);
+    // one selector (in the page header), then the selected profession's own skill bar
+    h += `<div class="seg">${profs.map((x) => `<button data-prof="${esc(x.name)}" class="${x === p ? 'on' : ''}">${PROF_ICON[x.name] ? `<img src="${ICON_URL}${PROF_ICON[x.name]}.jpg" alt="">` : ''}${esc(x.name)} <span class="n">${arr(x.recipes).length}</span></button>`).join('')}</div>` + (mine ? bar(mine) : '');
     const q = (STATE.recFilter || '').toLowerCase().trim();
     const flt = STATE.recF || 'all', sort = STATE.recSort || 'profit';
     const all = arr(p.recipes).map((r) => ({ r, cp: craftProfit(r), sec: recipeSection(r) }));
@@ -785,7 +815,7 @@
         const reag = arr(r.reagents).map((g) => `<span class="rg">${anyItemIcon(g.id, { size: 'xs' })}<span>${g.need > 1 ? g.need + '×' : ''}</span></span>`).join('');
         const d = DIFF[r.difficulty];
         const name = out ? itemName$(out.key) : r.output && gdItem(r.output) ? `<span class="q${gdItem(r.output)[1]}" data-tip="${esc(JSON.stringify(gdTip(r.output)))}">${esc(r.name)}</span>` : esc(r.name);
-        h += `<div class="tr">
+        h += `<div class="tr" data-tip="${esc(JSON.stringify([{ l: r.name, lc: 'ffffff' }]))}" data-reagents="${esc(JSON.stringify(reagentLines(r, cp)))}">
           <div class="c-main">${out ? itemIcon(out.key, { size: 'sm' }) : r.output && gdItem(r.output) ? anyItemIcon(r.output, { size: 'sm' }) : icon(r.icon, { size: 'sm' })}<div class="grow"><div class="nm">${name}</div>${d ? `<div class="sub"><span class="diff ${d[0]}"></span>${d[1]}</div>` : ''}</div></div>
           <div class="c-reag">${reag}</div>
           ${cell(cp && !cp.missing ? money(cp.cost, { short: true }) : null)}${cell(cp ? money(cp.value, { short: true }) : null)}
@@ -793,7 +823,7 @@
         </div>`;
       });
     });
-    h += `</div><p class="foot-note">${esc(p.name)} recipes ${savedPill(p.taken, 14 * 24 * HOUR)} · Cost = reagents at your AH scan median (vendor reagents at 4× their sell price). Sells for = AH median minus the 5% cut. A dash means no AH price yet.</p>`;
+    h += `</div>${others(p.name)}<p class="foot-note">${esc(p.name)} recipes ${savedPill(p.taken, 14 * 24 * HOUR)} · Cost = reagents at your AH scan median (vendor reagents at 4× their sell price). Sells for = AH median minus the 5% cut. A dash means no AH price yet.</p>`;
     return h;
   };
 
@@ -857,8 +887,23 @@
     arr((CH.snap || {}).gearSets).forEach((g) => arr(g.items).forEach((x) => x && x.id > 0 && ids.add(x.id)));
     return ids;
   }
-  // older versions saved a sale twice (again after the gold was taken)
-  const salesOf = (ah) => arr(ah.sales).filter((x, i, all) => !(x.net === 0 && all.some((y) => y !== x && y.item === x.item && y.price === x.price && Math.abs(y.t - x.t) < 7200)));
+  // One AH letter, one record. The addon saves a letter once per computer (same item, price and hour), and
+  // works out when it was sent from the days it has left, so the PC and the Mac reading the same letter
+  // save it a few seconds apart; such a pair from two computers counts once. Older versions also saved a
+  // sale a second time after the gold was taken (net 0).
+  const sameLetter = (x, y) => y.item === x.item && y.price === x.price && (y.count || 1) === (x.count || 1) && Math.abs(y.t - x.t) < 3600;
+  function oneLetterEach(list, isLegacyCopy) {
+    const kept = [];
+    let dropped = 0;
+    arr(list).filter(Boolean).slice().sort((a, b) => a.t - b.t).forEach((x, _, all) => {
+      if ((isLegacyCopy && isLegacyCopy(x, all)) || kept.some((y) => (y.dev || '') !== (x.dev || '') && sameLetter(x, y))) dropped++;
+      else kept.push(x);
+    });
+    return { list: kept, dropped };
+  }
+  const salesInfo = (ah) => oneLetterEach(ah.sales, (x, all) => x.net === 0 && all.some((y) => y !== x && y.item === x.item && y.price === x.price && Math.abs(y.t - x.t) < 7200));
+  const salesOf = (ah) => salesInfo(ah).list;
+  const buysInfo = (ah) => oneLetterEach(ah.buys);
 
   // Flips: AH purchases matched to later sales of the same item, unit by unit, oldest purchase first.
   // Buys and sales carry the stack size (count) from the AH letter; older records without one count as a
@@ -869,7 +914,7 @@
   const usedSet = () => { try { return new Set(JSON.parse(localStorage.getItem(usedKey()) || '[]')); } catch (e) { return new Set(); } };
   function flipsOf(ah) {
     const used = usedSet();
-    const buys = arr(ah.buys).filter((b) => b && b.item && !used.has(buyId(b))).slice().sort((a, b) => a.t - b.t)
+    const buys = buysInfo(ah).list.filter((b) => b.item && !used.has(buyId(b)))
       .map((b) => ({ b, left: b.count || 1, unit: (b.price || 0) / (b.count || 1) }));
     const done = [];
     salesOf(ah).slice().sort((a, b) => a.t - b.t).forEach((x) => {
@@ -899,7 +944,7 @@
 
   function flipsView(ah) {
     const F = flipsOf(ah), T = F.totals;
-    if (!arr(ah.buys).length) return '<div class="empty">No AH purchases recorded yet. Buys are saved when the item arrives in your mailbox and you take it.</div>';
+    if (!arr(ah.buys).length) return '<div class="empty">No AH purchases recorded yet. A purchase is saved when you open the mailbox with its "Auction won" letter in it.</div>';
     const sign = (v) => `<span class="${v >= 0 ? 'pos' : 'neg'}">${v < 0 ? '−' : ''}${money(Math.abs(v))}</span>`;
     const qty = (n) => (n > 1 ? ` <span class="dim">×${n}</span>` : '');
     let h = `<p class="meta">${T.flips} sold · ${sign(T.profit)} profit after the AH cut · ${T.listed} still listed (${money(T.tiedUp)} tied up) · ${T.notListed} bought, not listed${T.setAside ? ` · ${T.setAside} set aside as used` : ''}</p>`;
@@ -914,6 +959,11 @@
       h += '</div>';
     }
     if (T.setAside) h += `<p class="meta"><button class="linkbtn" data-flipused="">Count the ${T.setAside} set-aside purchase${T.setAside === 1 ? '' : 's'} as flips again</button></p>`;
+    const dupB = buysInfo(ah).dropped, dupS = salesInfo(ah).dropped;
+    h += `<details class="how"><summary>How flips are counted</summary>
+      <p>A flip is something you bought on the AH and later sold there. Purchases come from the "Auction won" letters and sales from the "Auction successful" letters, each with its stack size, once you open the mailbox. Each sale is matched to earlier purchases of the same item, unit by unit, oldest purchase first; a sale with no purchase before it (your own loot or crafts) isn't a flip.</p>
+      <p>Profit = what it sold for − the AH's 5% cut − what you paid. The deposit comes back when an auction sells, so it isn't a cost. Two separate purchases of the same item at the same price are both counted. The same letter seen on two computers (or saved twice by an older version) counts once${dupB || dupS ? `: ${[dupB ? `${dupB} purchase${dupB > 1 ? 's' : ''}` : '', dupS ? `${dupS} sale${dupS > 1 ? 's' : ''}` : ''].filter(Boolean).join(' and ')} left out as copies` : ''}.</p>
+      <p>Something you bought to use rather than resell: press "Used, not a flip" so it stops waiting for a sale.</p></details>`;
     return h;
   }
 
@@ -1078,10 +1128,19 @@
   }
 
   let RAW = null;   // this computer's own save, as read; DB is what's shown (with other computers' history, js/sync.js)
+  // Dual spec is keyed by the game's talent group, 1 and 2 (snap.activeSpec is one of them). The save's
+  // reader turns a table with both keys into an array (index 0 and 1), so every page would be one off;
+  // the specs are put back under the game's own numbers here, before anything reads them.
+  function specsByGroup(db) {
+    Object.values((db && db.chars) || {}).forEach((c) => {
+      if (c && Array.isArray(c.specs)) c.specs = Object.fromEntries(c.specs.map((sp, i) => [String(i + 1), sp]).filter(([, sp]) => sp));
+    });
+    return db;
+  }
   function load(db, opts) {
-    RAW = db || {};
+    RAW = specsByGroup(db || {});
     DB = RAW;
-    try { if (window.CC && window.CC.syncView) DB = window.CC.syncView(RAW) || RAW; } catch (e) { console.warn('sync view', e); DB = RAW; }
+    try { if (window.CC && window.CC.syncView) DB = specsByGroup(window.CC.syncView(RAW) || RAW); } catch (e) { console.warn('sync view', e); DB = RAW; }
     NAME_PRICE = null;
     const chars = DB.chars || {};
     const keys = Object.keys(chars).filter((k) => chars[k] && chars[k].snap);
