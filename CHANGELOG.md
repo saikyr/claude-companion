@@ -2,6 +2,26 @@
 
 Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 
+## Unreleased (one character on every computer)
+
+- **The PC and the Mac show the same character.** The game keeps a separate save on each computer
+  (and writes it itself), so each computer's server now publishes its save to the others through the
+  private repository: one branch per computer (`sync/<computer>`), one commit without a parent
+  (save.lua.gz, meta.json with the save's SHA-256, settings.json), so the repository doesn't grow.
+  Each server downloads the others into `companion-data/devices/<computer>/` (checked against the
+  SHA-256) and the page merges them (`js/merge.js`) before it shows anything or writes snapshot.json:
+  - history (journal, sessions, grinds, runs, notes, AH sales/buys/posts, price history, disenchants)
+    is the union of both, without duplicates and without dropping identical events, in time order;
+    entries from the other computer carry `dev`
+  - what's current (bags, gear, gold, bank, mail, professions, specs, flight paths) comes from the
+    computer that saw it last
+  - a grind or run left running on one computer while you played on the other is shown as ended
+    "away", like the addon does at login
+  - settings (gear weights and picks) follow the computer where they changed last; the replaced file
+    is kept as settings.json.bak
+- No save file is ever written. `snapshot.json` has `mergedWith` (the other computers in it).
+  `GET /api/devices` says what's synced; `"sync": false` in update.json turns it off.
+
 ## Unreleased (updates itself)
 
 - **The app updates itself.** Each tested build is pushed to the `stable` branch

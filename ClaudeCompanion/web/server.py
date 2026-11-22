@@ -62,11 +62,19 @@ class Handler(BaseHTTPRequestHandler):
         if path in ('/api/stamp', '/api/data'):
             save = find_save()
             if path == '/api/stamp':
-                dev = {'host': DEVICE_HOST, 'os': DEVICE_OS}
+                # peers: the other computers' saves; the page loads them again when this changes
+                dev = {'host': DEVICE_HOST, 'os': DEVICE_OS, 'device': DEV, 'peers': '|'.join(f"{p['device']}:{p['saveModified']}" for p in peers())}
                 if not save: return self.send(200, json.dumps({'stamp': None, **dev}), TYPES['.json'])
                 return self.send(200, json.dumps({'stamp': stamp_of(save), 'size': os.path.getsize(save), **dev}), TYPES['.json'])
             if not save: return self.send(404, 'no save yet')
             with open(save, 'rb') as f: return self.send(200, f.read(), 'application/octet-stream')
+        if path == '/api/devices':
+            return self.send(200, json.dumps(sync_status()), TYPES['.json'])
+        if path == '/api/device-data':
+            dev = (self.path.split('dev=', 1)[1] if 'dev=' in self.path else '').split('&')[0]
+            f = os.path.join(DEVICES_DIR, dev, 'save.lua')
+            if not re.fullmatch(r'[a-z0-9-]+', dev) or not os.path.isfile(f): return self.send(404, 'no such computer')
+            with open(f, 'rb') as fh: return self.send(200, fh.read(), 'application/octet-stream')
         if path == '/api/update':
             return self.send(200, json.dumps(update_status(force='force=1' in self.path)), TYPES['.json'])
         if path in ('/api/cards', '/api/cards-state', '/api/settings'):
@@ -295,6 +303,141 @@ def auto_update():
         time.sleep(30 * 60)
 
 
+# ---------------------------------------------------------------- one character on every computer
+# The game keeps a separate save on each computer, and writes it itself, so the saves can't be one
+# file. Instead each computer's server publishes its save to the others through the same private
+# repository the updates come from: a branch per computer (sync/<computer>) holding one commit with
+# save.lua.gz, meta.json and the app's settings.json. The commit has no parent, so the repository
+# doesn't grow with every save. Each server downloads the other computers' latest into
+# companion-data/devices/<computer>/, and the page merges them with this computer's save
+# (js/merge.js) before showing anything or writing snapshot.json. Nothing is ever written to a save.
+# Settings (gear weights and picks) follow the computer where they were changed last; the replaced
+# file is kept as settings.json.bak. Turn it off with "sync": false in companion-data/update.json.
+import base64, gzip, hashlib, re
+DEVICES_DIR = os.path.join(DATA_DIR, 'devices')
+DEV = os.environ.get('CC_DEVICE') or re.sub(r'[^a-z0-9-]+', '-', DEVICE_HOST.lower()).strip('-') or 'computer'   # CC_DEVICE: tests only
+SYNC_SECS = float(os.environ.get('CC_SYNC_SECS') or 15)   # tests only: how often to look
+_sync = {'pushed': None, 'lastPush': None, 'lastPull': None, 'error': None, 'nextPull': 0.0}
+
+
+def gh_send(method, url, tok, body):
+    req = urllib.request.Request(url, data=json.dumps(body).encode('utf-8'), method=method,
+                                 headers={'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json', 'User-Agent': 'claude-companion'})
+    if tok: req.add_header('Authorization', 'Bearer ' + tok)
+    with urllib.request.urlopen(req, timeout=60) as r: return json.loads(r.read().decode('utf-8') or '{}')
+
+
+def gh_raw(url, tok):
+    req = urllib.request.Request(url, headers={'Accept': 'application/vnd.github.raw', 'User-Agent': 'claude-companion'})
+    if tok: req.add_header('Authorization', 'Bearer ' + tok)
+    with urllib.request.urlopen(req, timeout=120) as r: return r.read()
+
+
+def push_save(save, cfg, tok):
+    base = f"{cfg['api']}/repos/{cfg['repo']}/git"
+    with open(save, 'rb') as f: raw = f.read()
+    meta = {'device': DEV, 'host': DEVICE_HOST, 'os': DEVICE_OS, 'saveModified': stamp_of(save), 'uploaded': datetime.now(timezone.utc).isoformat(),
+            'sha256': hashlib.sha256(raw).hexdigest(), 'size': len(raw)}
+    entries = [('save.lua.gz', base64.b64encode(gzip.compress(raw, mtime=0)).decode('ascii'), 'base64'), ('meta.json', json.dumps(meta, indent=1), 'utf-8')]
+    sfile = os.path.join(DATA_DIR, 'settings.json')
+    if os.path.isfile(sfile):
+        with open(sfile, encoding='utf-8') as f: entries.append(('settings.json', f.read(), 'utf-8'))
+        meta['settingsModified'] = datetime.fromtimestamp(os.path.getmtime(sfile), timezone.utc).isoformat()
+        entries[1] = ('meta.json', json.dumps(meta, indent=1), 'utf-8')
+    tree = []
+    for path, content, enc in entries:
+        b = gh_send('POST', base + '/blobs', tok, {'content': content, 'encoding': enc})
+        tree.append({'path': path, 'mode': '100644', 'type': 'blob', 'sha': b['sha']})
+    t = gh_send('POST', base + '/trees', tok, {'tree': tree})
+    c = gh_send('POST', base + '/commits', tok, {'message': f"{DEV}: save of {meta['saveModified']}", 'tree': t['sha'], 'parents': []})
+    try: gh_send('PATCH', base + f'/refs/heads/sync/{DEV}', tok, {'sha': c['sha'], 'force': True})
+    except urllib.error.HTTPError as e:
+        if e.code not in (404, 422): raise
+        gh_send('POST', base + '/refs', tok, {'ref': f'refs/heads/sync/{DEV}', 'sha': c['sha']})
+    return meta
+
+
+def pull_peers(cfg, tok):
+    base = f"{cfg['api']}/repos/{cfg['repo']}/git"
+    try: refs = gh_get(base + '/matching-refs/heads/sync/', tok)
+    except urllib.error.HTTPError as e:
+        if e.code == 404: return
+        raise
+    for r in refs:
+        dev = r['ref'].rsplit('/', 1)[-1]
+        if dev == DEV or not re.fullmatch(r'[a-z0-9-]+', dev): continue
+        folder = os.path.join(DEVICES_DIR, dev)
+        have = read_json(os.path.join(folder, 'meta.json'), {})
+        if have.get('commit') == r['object']['sha']: continue
+        commit = gh_get(base + '/commits/' + r['object']['sha'], tok)
+        tree = {e['path']: e['sha'] for e in gh_get(base + '/trees/' + commit['tree']['sha'], tok)['tree']}
+        if 'save.lua.gz' not in tree or 'meta.json' not in tree: continue
+        meta = json.loads(gh_raw(base + '/blobs/' + tree['meta.json'], tok).decode('utf-8'))
+        raw = gzip.decompress(gh_raw(base + '/blobs/' + tree['save.lua.gz'], tok))
+        if hashlib.sha256(raw).hexdigest() != meta.get('sha256'): raise ValueError(f'{dev}: the save arrived damaged')
+        os.makedirs(folder, exist_ok=True)
+        with open(os.path.join(folder, 'save.lua.tmp'), 'wb') as f: f.write(raw)
+        os.replace(os.path.join(folder, 'save.lua.tmp'), os.path.join(folder, 'save.lua'))
+        # settings: the computer where they changed last wins; the replaced file is kept as .bak
+        if 'settings.json' in tree and meta.get('settingsModified'):
+            mine = os.path.join(DATA_DIR, 'settings.json')
+            mine_t = datetime.fromtimestamp(os.path.getmtime(mine), timezone.utc).isoformat() if os.path.isfile(mine) else ''
+            if meta['settingsModified'] > mine_t:
+                body = gh_raw(base + '/blobs/' + tree['settings.json'], tok)
+                json.loads(body.decode('utf-8'))
+                if os.path.isfile(mine): shutil.copy2(mine, mine + '.bak')
+                with open(mine + '.tmp', 'wb') as f: f.write(body)
+                os.replace(mine + '.tmp', mine)
+        meta['commit'] = r['object']['sha']
+        meta['downloaded'] = datetime.now(timezone.utc).isoformat()
+        write_json(os.path.join(folder, 'meta.json'), meta)
+        print(f"sync: got {dev}'s save of {meta.get('saveModified')}", flush=True)
+
+
+def peers():
+    out = []
+    if os.path.isdir(DEVICES_DIR):
+        for dev in sorted(os.listdir(DEVICES_DIR)):
+            m = read_json(os.path.join(DEVICES_DIR, dev, 'meta.json'), None)
+            if m and os.path.isfile(os.path.join(DEVICES_DIR, dev, 'save.lua')):
+                out.append({k: m.get(k) for k in ('device', 'host', 'os', 'saveModified', 'uploaded', 'downloaded')})
+    return out
+
+
+def sync_status():
+    return {'here': DEV, 'enabled': bool(upd_cfg().get('sync', True)), 'peers': peers(), 'lastPush': _sync['lastPush'], 'lastPull': _sync['lastPull'], 'error': _sync['error']}
+
+
+def sync_loop():
+    state = os.path.join(DEVICES_DIR, '.pushed')
+    while True:
+        time.sleep(SYNC_SECS)
+        cfg = upd_cfg()
+        if not cfg.get('sync', True): continue
+        try:
+            tok = gh_token(cfg)
+            save = find_save()
+            # publish this computer's save once the game has finished writing it (10 s quiet)
+            if save and time.time() - os.path.getmtime(save) > 10:
+                stamp = stamp_of(save)
+                pushed = _sync['pushed'] or (open(state).read().strip() if os.path.isfile(state) else None)
+                if stamp != pushed:
+                    push_save(save, cfg, tok)
+                    os.makedirs(DEVICES_DIR, exist_ok=True)
+                    with open(state, 'w') as f: f.write(stamp)
+                    _sync['pushed'], _sync['lastPush'] = stamp, datetime.now(timezone.utc).isoformat()
+                    print('sync: published the save of', stamp, flush=True)
+            if time.time() >= _sync['nextPull']:
+                _sync['nextPull'] = time.time() + SYNC_SECS * 4
+                pull_peers(cfg, tok)
+                _sync['lastPull'] = datetime.now(timezone.utc).isoformat()
+            _sync['error'] = None
+        except urllib.error.HTTPError as e:
+            _sync['error'] = 'GitHub said %d' % e.code + (' (sign in with the GitHub CLI or add a token, see SCHEMA.md)' if e.code in (401, 403, 404) else '')
+        except Exception as e:
+            _sync['error'] = str(e)[:300]
+
+
 # ---------------------------------------------------------------- starting and opening
 # Daily use: the app is installed from the browser as its own app (Dock / Launchpad), and this
 # server starts by itself at login, hidden (a LaunchAgent), so there is no Terminal window.
@@ -436,6 +579,7 @@ def serve(open_after):
         print('Note: no WTF folder found next to Interface. Put ClaudeCompanion in _forever_/Interface/AddOns.', flush=True)
     threading.Thread(target=background_snapshot, daemon=True).start()
     threading.Thread(target=auto_update, daemon=True).start()
+    threading.Thread(target=sync_loop, daemon=True).start()
     if open_after: open_app()
     try: srv.serve_forever()
     except KeyboardInterrupt: pass

@@ -1155,12 +1155,24 @@
       try {
         const st = await (await fetch('api/stamp', { cache: 'no-store' })).json();
         if (st.host || st.os) STATE.device = { host: st.host || null, os: st.os || null };   // which computer (snapshot.device)
-        if (st.stamp && st.stamp !== lastStamp) {
+        const both = (st.stamp || '') + '#' + (st.peers || '');
+        if (st.stamp && both !== lastStamp) {
           const buf = await (await fetch('api/data', { cache: 'no-store' })).arrayBuffer();
-          lastStamp = st.stamp;
+          lastStamp = both;
           STATE.saveStamp = st.stamp;   // the save file's modified time this data came from (snapshot.saveModified)
           STATE.loading = false;
-          loadText(binary(buf), { live: true });
+          // the other computers' saves (sync): merged in, so every computer shows one character
+          const peers = [];
+          for (const part of String(st.peers || '').split('|').filter(Boolean)) {
+            const dev = part.split(':')[0];
+            try {
+              const pb = await (await fetch('api/device-data?dev=' + encodeURIComponent(dev), { cache: 'no-store' })).arrayBuffer();
+              peers.push({ dev, savedAt: part.slice(dev.length + 1), db: window.CCLua.parse(binary(pb)).ClaudeCompanionDB });
+            } catch (e) { console.warn('could not read the save from ' + dev, e); }
+          }
+          STATE.peers = peers.map((p) => ({ dev: p.dev, savedAt: p.savedAt }));
+          const own = window.CCLua.parse(binary(buf)).ClaudeCompanionDB;
+          load(window.CCMerge && peers.length ? window.CCMerge.merge(own, peers, st.device || 'here') : own, { live: true });
         } else if (!st.stamp) { STATE.loading = false; if (!CH) render(); }
         if (STATE.live === false && CH) { STATE.live = true; render(); }
       } catch (e) {
