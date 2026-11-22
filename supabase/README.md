@@ -10,6 +10,8 @@ on top of it (applied 22 Nov 2026 as `sync_v2`): per-account lock, replaceable t
 codes with an attempt limit, Cloudflare client IP, record counter, retired accounts, no table grants.
 `migrations/20261122160000_sync_snapshot.sql`
 (applied as `sync_snapshot`): each computer's current snapshot as one row, up to 2 MB, left out of pulls.
+`migrations/20261122170000_sync_now.sql` (applied as `sync_now`): each computer's "now" per character
+(kind `now`, up to 2 MB), pulled by the other computers but not by itself.
 Change the schema with a new migration file, applied with the Supabase connector (`apply_migration`),
 and keep the files identical to what runs on the project.
 

@@ -51,12 +51,13 @@ async function main() {
     const r1 = S.recordsOf(base, 'devA'), r2 = S.recordsOf(clone(base), 'devA');
     check(JSON.stringify(r1.map((r) => r.id)) === JSON.stringify(r2.map((r) => r.id)), `ids are stable (${r1.length} records)`);
     check(new Set(r1.map((r) => r.id)).size === r1.length, 'every record has its own id (identical events in one second stay apart)');
-    check(r1.every((r) => r.id.length <= 400 && JSON.stringify(r.data).length <= 65536), 'every record fits the backend limits');
+    check(r1.every((r) => r.id.length <= 400 && JSON.stringify(r.data).length <= (r.kind === 'now' ? 2097152 : 65536)), 'every record fits the backend limits');
     const c0 = base.chars[key];
     const obsN = Object.values((c0.ah || {}).prices || {}).reduce((a, p) => a + (p.obs ? Object.keys(p.obs).length : 0), 0);
     check(r1.filter((r) => r.kind === 'ah_obs').length === obsN, `one record per AH price observation (${obsN})`);
-    const sameOther = S.recordsOf(base, 'devB').filter((r) => r.kind !== 'live').map((r) => r.id);
-    check(JSON.stringify(sameOther) === JSON.stringify(r1.filter((r) => r.kind !== 'live').map((r) => r.id)), 'the same history from another computer has the same ids');
+    const perComputer = (r) => r.kind === 'live' || r.kind === 'now';
+    const sameOther = S.recordsOf(base, 'devB').filter((r) => !perComputer(r)).map((r) => r.id);
+    check(JSON.stringify(sameOther) === JSON.stringify(r1.filter((r) => !perComputer(r)).map((r) => r.id)), 'the same history from another computer has the same ids');
 
     // ---- two computers, each on its own first
     const pc = computer(B.fetch, 'Gab', 'pc'), mac = computer(B.fetch, 'MacBook', 'mac');
@@ -112,13 +113,14 @@ async function main() {
     const vc = pc.client.view(pcDb).chars[key];
     const kills = arrOf(vc.journal).filter((e) => e.e === 'kill' && e.name === 'Thaurissan Firewalker' && e.t === T + 3700).length;
     check(kills === 2, `the Mac's two identical kills both show, once each (${kills})`);
-    check(arrOf(vc.grinds).some((g) => g.name === 'thaurissan'), 'the Mac\'s grind shows on the PC');
+    check(arrOf(vc.grinds).some((g) => g.name === 'thaurissan' && g.start === T + 3600), 'the Mac\'s grind shows on the PC');
     check(arrOf(vc.runs).some((g) => g.name === 'Blackrock Depths'), 'the Mac\'s dungeon run shows on the PC');
     check(arrOf((vc.ah || {}).sales).some((x) => x.item === 'Robe'), 'the Mac\'s AH sale shows on the PC');
     const ownJournal = arrOf(c0.journal).length;
     check(arrOf(vc.journal).length === ownJournal + 3, `journal = this save + the Mac's 3 new events, no duplicates (${arrOf(vc.journal).length})`);
     check(vc.run && vc.run.name === 'Stratholme', 'the Mac played last: its dungeon run in progress shows as running on the PC too');
-    check(vc.snap.taken === pcDb.chars[key].snap.taken, 'the "now" parts are this computer\'s own save');
+    const newestSnap = Math.max(pcDb.chars[key].snap.taken, macDb.chars[key].snap.taken);
+    check(vc.snap.taken === newestSnap, 'the "now" parts come from the computer that saved last');
     check(!arrOf(pcDb.chars[key].journal).some((e) => e && e.dev), 'the save itself is never changed');
     const mv = mac.client.view(macDb).chars[key];
     check(!c0.grind || (!mv.grind && arrOf(mv.grinds).some((g) => g.name === c0.grind.name && g.start === c0.grind.start && g.ended === 'away')),
@@ -160,7 +162,7 @@ async function main() {
     await sync(third, big, thirdSet);
     check(thirdSet['cc.weights.v1'] === 'Mac at 12:11', `the third computer takes the account's newest setting (${thirdSet['cc.weights.v1']})`);
     const tv = third.client.view(big).chars[key];
-    check(arrOf(tv.grinds).filter((g) => g.name === 'thaurissan').length === 1, 'it sees the Mac\'s grind once');
+    check(arrOf(tv.grinds).filter((g) => g.name === 'thaurissan' && g.start === T + 3600).length === 1, 'it sees the Mac\'s grind once');
 
     // overlapping pushes: a push that started first but commits last must still reach a computer that
     // pulled in between (the pull cursor is the row number, so rows must commit in number order)
@@ -176,6 +178,24 @@ async function main() {
     check(got('slow') === 50 && got('fast') === 50, `overlapping pushes: a push that commits late still reaches the others (${got('slow')} + ${got('fast')} of 100)`);
 
     // closed to the API: nothing but the functions
+    // ---- "now": a computer not played on lately shows what the character has now (the other's newer save)
+    {
+      const T = 1796000000;
+      const pcDb = clone(base), macDb = clone(base);
+      pcDb.chars[key].snap = Object.assign({}, pcDb.chars[key].snap, { taken: T + 5000, bags: { marker: 'from the PC' } });
+      pcDb.chars[key].lastSeen = T + 5000;
+      macDb.chars[key].snap = Object.assign({}, macDb.chars[key].snap, { taken: T, bags: { marker: 'old, on the Mac' } });
+      await sync(pc, pcDb, {});
+      await mac.client.pull(null);
+      const v = mac.client.view(macDb).chars[key];
+      check(v.snap.taken === T + 5000 && v.snap.bags.marker === 'from the PC', 'the Mac shows the bags and gear the PC saved last');
+      check(macDb.chars[key].snap.bags.marker === 'old, on the Mac', 'its own save is untouched');
+      macDb.chars[key].snap = Object.assign({}, macDb.chars[key].snap, { taken: T + 9000, bags: { marker: 'newer, on the Mac' } });
+      check(mac.client.view(macDb).chars[key].snap.bags.marker === 'newer, on the Mac', 'once the Mac saves later, its own wins');
+      const nowRows = B.query(`select count(*) from public.records where kind = 'now'`);
+      await pc.client.pull(null);
+      check(!Object.values(pc.client.cache.recs).some((x) => x.kind === 'now' && x.dev === pc.client.state.device), `a computer doesn't pull its own "now" back (${nowRows} rows)`);
+    }
     // ---- snapshots: each computer's "now" online for Claude, one row per computer, never pulled
     const snap = { schema: 1, written: '2026-11-22T15:30:00Z', by: 'app', savedInGame: '2026-11-22T15:29:50Z',
       character: { name: 'Gabriel', where: { zone: 'Felwood', x: 0.5, y: 0.4 } }, quests: [{ id: 1, title: 'Cleansing Felwood' }] };

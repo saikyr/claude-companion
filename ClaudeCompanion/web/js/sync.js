@@ -1,9 +1,9 @@
 // Claude Companion: history sync between computers (docs/ARCHITECTURE.md, "Sync between computers").
 //
-// The game server is the truth for how your character is NOW (gear, bags, quests, rep, skills), and
-// every computer reads that from its own save. What only the addon remembers is HISTORY: the journal,
-// grinds, dungeon runs, sessions, AH prices / sales / buys / posts, disenchant results, notes, plus the
-// app's settings (gear weights and picks). That is what syncs, through a small Supabase backend:
+// HISTORY (the journal, grinds, dungeon runs, sessions, AH prices / sales / buys / posts, disenchant
+// results, notes, plus the app's settings) is the union of every computer's. NOW (bags, gear, quests,
+// talents, rep, bank, professions...) is each save's copy of the game server's: each computer sends its
+// copy, and the view shows each part from whichever computer saw it last. Through a small Supabase backend:
 //
 //  - every record has an id made from its content (character, kind, time, what it was), so the same
 //    event seen by two computers is ONE record, a re-send changes nothing, and there are no conflicts
@@ -95,6 +95,13 @@
             data: Object.assign({ key: ik, item: p.id, name: p.name || undefined, q: p.q }, o) });
         });
       });
+      // how the character is now, as this computer last saw it (bags, gear, quests, talents, rep, bank,
+      // mail, professions, flight paths, own auctions): replaced each time. The view shows each part
+      // from whichever computer saw it last (js/merge.js), so a computer you haven't played on lately
+      // still shows what you have now
+      const now = { snap: c.snap, bank: c.bank, mail: c.mail, professions: c.professions, specs: c.specs, taxi: c.taxi, taxiRead: c.taxiRead,
+        ah: { owned: (c.ah || {}).owned, lastScan: (c.ah || {}).lastScan } };
+      if (c.snap) out.push({ id: `${ck}|now|${device}`, char: ck, kind: 'now', t: Math.round(num((c.snap || {}).taken)), mutable: true, data: now });
       // what's running on this computer right now, and when it last saw the character: replaced each time
       out.push({ id: `${ck}|live|${device}`, char: ck, kind: 'live', t: Math.round(num(c.lastSeen)), mutable: true,
         data: { lastSeen: num(c.lastSeen) || num((c.snap || {}).taken), grind: slim(c.grind), run: slim(c.run), session: slim(c.session) } });
@@ -124,6 +131,10 @@
         const p = c.ah.prices[k] || (c.ah.prices[k] = { id: d.item, name: d.name, q: d.q, obs: [], last: 0 });
         const o = Object.assign({}, d); delete o.key; delete o.item; delete o.name; delete o.q;
         p.obs.push(o); p.last = Math.max(p.last, num(o.t));
+      } else if (r.kind === 'now' && dev !== hereDevice) {
+        const d = r.data;
+        ['snap', 'bank', 'mail', 'professions', 'specs', 'taxi', 'taxiRead'].forEach((f) => { if (d[f] != null) c[f] = d[f]; });
+        if (d.ah) { if (d.ah.owned) c.ah.owned = d.ah.owned; if (d.ah.lastScan) c.ah.lastScan = d.ah.lastScan; }
       } else if (r.kind === 'live' && dev !== hereDevice) {
         c.lastSeen = num(r.data.lastSeen);
         if (r.data.grind) c.grind = r.data.grind;
@@ -390,7 +401,7 @@
     const devs = (st.devices || []).map((d) => `<div class="li"><div class="grow">${esc(d.name || d.os || 'computer')}${d.id === s.device ? ' <span class="dim">(this one)</span>' : ''}<div class="sub">${esc((d.chars || []).join(', ') || 'no characters yet')}</div></div><div class="num dim small">seen ${when(d.seen)}</div></div>`).join('');
     const state = st.busy ? 'Syncing…' : st.ok === false ? `<span class="neg">Not synced: ${esc(st.error)}</span> <span class="dim">(it keeps what's new and tries again)</span>`
       : st.ok ? `Synced · sent ${when(st.pushed)} · checked ${when(st.pulled)}` : 'Starting…';
-    let h = `<h2>Sync between computers</h2><p class="meta">Your history (journal, grinds, runs, AH prices and sales, settings) is kept online and shared by your computers. What you wear and carry always comes from this computer's save.</p>
+    let h = `<h2>Sync between computers</h2><p class="meta">Your history (journal, grinds, runs, AH prices and sales, settings) is kept online and shared by your computers. Your bags, gear, quests and the rest of what you have now come from whichever computer saved last.</p>
       <p>${state}${st.queued ? ` · ${st.queued} waiting to send` : ''}</p>
       ${devs ? `<div class="list">${devs}</div>` : ''}
       <div class="toolbar linkbar"><button class="btn ghost" data-sync="code">Link another computer</button>
