@@ -187,9 +187,144 @@ function Check-Background {
     $script:bgStart = Get-Date
 }
 
+# ---------------------------------------------------------------- updates (same as server.py)
+# Each tested build is a GitHub release with ClaudeCompanion-*.zip attached. Checked every 30 min and
+# when the page asks; installed by itself when "auto" is on (default), or with the page's Install button.
+# Download, check the zip has the whole addon, back up the current addon folder (last 5 kept, in
+# %LOCALAPPDATA%\Claude Companion\backups), copy the new files over. Never touched: companion-data\
+# (only its SCHEMA.md is updated) and the game's saved data. Then the server restarts on the new code;
+# the addon's Lua takes effect at the next /reload in game.
+# Private repository: the token comes from companion-data\update.json "token", CC_GITHUB_TOKEN, or `gh auth token`.
+$updCfgFile = Join-Path $dataDir 'update.json'
+$installedFile = Join-Path $dataDir 'installed.json'
+$addonDir = Split-Path -Parent $web
+$backupDir = Join-Path $env:LOCALAPPDATA 'Claude Companion\backups'
+$upd = @{ checked = [DateTime]::MinValue; latest = $null; error = $null; last = $null }
+$updNext = (Get-Date).AddSeconds(60)
+function Read-Json([string]$f) { if (Test-Path $f) { try { return (Get-Content -Raw -LiteralPath $f | ConvertFrom-Json) } catch { } }; $null }
+function Write-Json([string]$f, $o) {
+    $tmp = "$f.tmp"; [System.IO.File]::WriteAllText($tmp, ($o | ConvertTo-Json -Depth 5), (New-Object System.Text.UTF8Encoding($false)))
+    Move-Item -LiteralPath $tmp -Destination $f -Force
+}
+function Get-UpdCfg {
+    $c = Read-Json $updCfgFile
+    $repo = if ($c -and $c.repo) { $c.repo } else { 'saikyr/claude-companion' }
+    $auto = if ($c -and $null -ne $c.auto) { [bool]$c.auto } else { $true }
+    $tok = if ($c -and $c.token) { $c.token } elseif ($env:CC_GITHUB_TOKEN) { $env:CC_GITHUB_TOKEN } else { $null }
+    if (-not $tok) { $gh = Get-Command gh -ErrorAction SilentlyContinue; if ($gh) { try { $t = (& $gh.Source auth token 2>$null); if ($LASTEXITCODE -eq 0 -and $t) { $tok = ([string]$t).Trim() } } catch { } } }
+    @{ repo = $repo; auto = $auto; token = $tok }
+}
+function Invoke-GitHub([string]$url, $cfg, [switch]$Raw) {
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    $rq = [System.Net.HttpWebRequest]::Create($url)
+    $rq.UserAgent = 'claude-companion'; $rq.Timeout = 30000
+    $rq.Accept = if ($Raw) { 'application/octet-stream' } else { 'application/vnd.github+json' }
+    if ($cfg.token) { $rq.Headers.Add('Authorization', 'Bearer ' + $cfg.token) }
+    $rq.AllowAutoRedirect = $false
+    $rs = $rq.GetResponse()
+    try {
+        if ([int]$rs.StatusCode -ge 300 -and [int]$rs.StatusCode -lt 400) {
+            # assets redirect to a signed link, fetched without the token
+            $loc = $rs.Headers['Location']; $rs.Close()
+            $rq = [System.Net.HttpWebRequest]::Create($loc); $rq.UserAgent = 'claude-companion'; $rq.Timeout = 300000
+            $rs = $rq.GetResponse()
+        }
+        $ms = New-Object System.IO.MemoryStream; $rs.GetResponseStream().CopyTo($ms)
+        if ($Raw) { return ,$ms.ToArray() }
+        return ([System.Text.Encoding]::UTF8.GetString($ms.ToArray()) | ConvertFrom-Json)
+    } finally { $rs.Close() }
+}
+function Check-Update([switch]$Force) {
+    if (-not $Force -and ((Get-Date) - $upd.checked).TotalMinutes -lt 15) { return $upd.latest }
+    $cfg = Get-UpdCfg
+    $upd.checked = Get-Date
+    try {
+        $rels = Invoke-GitHub "https://api.github.com/repos/$($cfg.repo)/releases?per_page=10" $cfg
+        $latest = $null
+        foreach ($r in @($rels)) {
+            if ($r.draft) { continue }
+            $a = @($r.assets) | Where-Object { $_.name -like 'ClaudeCompanion*.zip' } | Select-Object -First 1
+            if ($a) {
+                $notes = [string]$r.body; if ($notes.Length -gt 3000) { $notes = $notes.Substring(0, 3000) }
+                $latest = @{ tag = $r.tag_name; name = $(if ($r.name) { $r.name } else { $r.tag_name }); published = $r.published_at; notes = $notes; asset = $a.id; size = $a.size }
+                break
+            }
+        }
+        $upd.latest = $latest; $upd.error = $null
+    } catch {
+        $msg = $_.Exception.Message
+        $upd.error = if ($msg -match '\((401|403|404)\)') { "GitHub said no ($($Matches[1])). The repository is private: add a token to companion-data\update.json, or sign in with the GitHub CLI (gh auth login)." } else { "Could not reach GitHub: $msg" }
+    }
+    $upd.latest
+}
+function Get-UpdStatus([switch]$Force) {
+    $latest = Check-Update -Force:$Force
+    $inst = Read-Json $installedFile
+    $cfg = Get-UpdCfg
+    @{ installed = $inst; latest = $latest; available = [bool]($latest -and (-not $inst -or $latest.tag -ne $inst.tag)); auto = $cfg.auto
+       busy = $false; error = $upd.error; last = $upd.last; checked = $(if ($upd.checked -ne [DateTime]::MinValue) { $upd.checked.ToUniversalTime().ToString('o') } else { $null }) }
+}
+function Install-Update {
+    $work = $null
+    try {
+        $latest = Check-Update -Force
+        if (-not $latest) { return @{ ok = $false; error = $(if ($upd.error) { $upd.error } else { 'No release found.' }) } }
+        $cfg = Get-UpdCfg
+        $bytes = Invoke-GitHub "https://api.github.com/repos/$($cfg.repo)/releases/assets/$($latest.asset)" $cfg -Raw
+        $work = Join-Path $env:TEMP ('cc-update-' + [guid]::NewGuid().ToString('N'))
+        New-Item -ItemType Directory -Path $work | Out-Null
+        $zip = Join-Path $work 'release.zip'
+        [System.IO.File]::WriteAllBytes($zip, $bytes)
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        $x = Join-Path $work 'x'
+        $za = [System.IO.Compression.ZipFile]::OpenRead($zip)
+        try { foreach ($e in $za.Entries) { $n = $e.FullName -replace '\\', '/'; if ($n.StartsWith('/') -or ($n.Split('/') -contains '..')) { throw "unsafe path in the zip: $n" } } } finally { $za.Dispose() }
+        [System.IO.Compression.ZipFile]::ExtractToDirectory($zip, $x)
+        $toc = Get-ChildItem -Path $x -Filter 'ClaudeCompanion.toc' -Recurse -File | Select-Object -First 1
+        if (-not $toc) { throw 'the release zip has no ClaudeCompanion.toc' }
+        $src = $toc.DirectoryName
+        $missing = @('ClaudeCompanion.toc', 'Core.lua', 'Journal.lua', 'web\index.html', 'web\js\app.js', 'web\server.py', 'web\server.ps1') | Where-Object { -not (Test-Path (Join-Path $src $_)) }
+        if ($missing) { throw ('the release zip is missing ' + ($missing -join ', ')) }
+        # back up the current addon (without companion-data, which is never overwritten anyway)
+        $backup = Join-Path $backupDir ('ClaudeCompanion-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
+        New-Item -ItemType Directory -Path $backup -Force | Out-Null
+        Get-ChildItem -LiteralPath $addonDir -Force | Where-Object { $_.Name -ne 'companion-data' } | Copy-Item -Destination $backup -Recurse -Force
+        Get-ChildItem -LiteralPath $backupDir -Directory | Where-Object { $_.Name -like 'ClaudeCompanion-*' } | Sort-Object Name | Select-Object -SkipLast 5 | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+        $copied = 0
+        foreach ($f in (Get-ChildItem -LiteralPath $src -Recurse -File)) {
+            $rel = $f.FullName.Substring($src.Length).TrimStart('\')
+            if ($rel -like 'companion-data\*' -and $rel -ne 'companion-data\SCHEMA.md') { continue }
+            $dest = Join-Path $addonDir $rel
+            $dd = Split-Path -Parent $dest
+            if (-not (Test-Path $dd)) { New-Item -ItemType Directory -Path $dd -Force | Out-Null }
+            Copy-Item -LiteralPath $f.FullName -Destination $dest -Force
+            $copied++
+        }
+        $info = @{ tag = $latest.tag; at = (Get-Date).ToUniversalTime().ToString('o'); backup = $backup; files = $copied }
+        Write-Json $installedFile $info
+        $upd.last = $info
+        return @{ ok = $true; tag = $info.tag; at = $info.at; backup = $backup; files = $copied }
+    } catch {
+        return @{ ok = $false; error = $_.Exception.Message }
+    } finally {
+        if ($work) { Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue }
+    }
+}
+# after an update: let this listener go and start the server again, hidden, on the new code
+function Restart-Server {
+    try { $listener.Stop() } catch { }
+    Start-Hidden '-Serve'
+    exit
+}
+
+$restartAfter = $false
 $pending = $listener.GetContextAsync()
 while ($listener.IsListening) {
     if ((Get-Date) -ge $bgNext) { try { Check-Background } catch { }; $bgNext = (Get-Date).AddSeconds(5) }
+    if ((Get-Date) -ge $updNext) {
+        $updNext = (Get-Date).AddMinutes(30)
+        try { $st = Get-UpdStatus; if ($st.available -and $st.auto) { $r = Install-Update; if ($r.ok) { Restart-Server } } } catch { }
+    }
     if (-not $pending.AsyncWaitHandle.WaitOne(5000)) { continue }
     try { $ctx = $pending.GetAwaiter().GetResult() } catch { break }
     $pending = $listener.GetContextAsync()
@@ -215,6 +350,24 @@ while ($listener.IsListening) {
                 $body = Read-Shared $save.FullName
                 $type = 'application/octet-stream'
             } else { $res.StatusCode = 404; $body = [System.Text.Encoding]::UTF8.GetBytes('no save yet') }
+        } elseif ($path -eq '/api/update' -and $req.HttpMethod -eq 'GET') {
+            $type = 'application/json; charset=utf-8'
+            $body = [System.Text.Encoding]::UTF8.GetBytes((Get-UpdStatus -Force:($req.Url.Query -like '*force=1*') | ConvertTo-Json -Depth 5))
+        } elseif (($path -eq '/api/update' -or $path -eq '/api/update-auto') -and $req.HttpMethod -eq 'POST') {
+            $type = 'application/json; charset=utf-8'
+            if ($req.Headers['X-CC'] -ne '1') { $res.StatusCode = 400; $body = [System.Text.Encoding]::UTF8.GetBytes('bad request') }
+            elseif ($path -eq '/api/update-auto') {
+                $c = Read-Json $updCfgFile
+                $h = @{}; if ($c) { $c.PSObject.Properties | ForEach-Object { $h[$_.Name] = $_.Value } }
+                $h.auto = ($req.Url.Query -like '*on=1*')
+                if (-not (Test-Path $dataDir)) { New-Item -ItemType Directory -Path $dataDir -Force | Out-Null }
+                Write-Json $updCfgFile $h
+                $body = [System.Text.Encoding]::UTF8.GetBytes((Get-UpdStatus | ConvertTo-Json -Depth 5))
+            } else {
+                $r = Install-Update
+                $body = [System.Text.Encoding]::UTF8.GetBytes(($r | ConvertTo-Json -Depth 5))
+                if ($r.ok) { $restartAfter = $true }
+            }
         } elseif ($files.ContainsKey($path) -and $req.HttpMethod -eq 'GET') {
             # Claude's cards (cards.json, Claude writes it), what you did with them (state.json) and the app's settings
             $f = $files[$path]
@@ -256,4 +409,5 @@ while ($listener.IsListening) {
     } finally {
         try { $res.OutputStream.Close() } catch { }
     }
+    if ($restartAfter) { Start-Sleep -Milliseconds 300; Restart-Server }
 }
