@@ -19,7 +19,7 @@ const n = (o) => Object.keys(o || {}).length;
 
 // ---------------------------------------------------------------- every domain is there
 test('pack has every domain the app reads', () => {
-  for (const k of ['items', 'src', 'quests', 'vend', 'npcs', 'stat', 'sets', 'size', 'how']) assert.ok(GD[k] && n(GD[k]) > 0, 'missing ' + k);
+  for (const k of ['items', 'src', 'quests', 'vend', 'npcs', 'req', 'teach', 'stat', 'sets', 'size', 'how']) assert.ok(GD[k] && n(GD[k]) > 0, 'missing ' + k);
   for (const k of ['quests_npcs_sources', 'item_tooltips', 'drop_rates_icons_reward_split']) assert.ok(GD.from && GD.from[k], 'no source named for ' + k);
 });
 test('items: >25,000, >10,000 with Forever client tooltips', () => {
@@ -48,6 +48,15 @@ test('drop rates: >5,000 items, every rate a percentage and labelled Forever or 
 test('vendors: >3,500 items, every row names the vendor', () => {
   assert.ok(n(GD.vend) > 3500);
   assert.ok(Object.values(GD.vend).flat().every((v) => v[0]));
+});
+
+test('recipes and reputation gates: crafted items name their recipe item, faction recipes their reputation', () => {
+  assert.ok(n(GD.teach) > 1000 && n(GD.req) > 300, `teach ${n(GD.teach)}, req ${n(GD.req)}`);
+  assert.strictEqual(JSON.stringify(GD.teach[17015]), '[[17059,300]]');                       // Dark Iron Reaver <- Plans: Dark Iron Reaver
+  assert.strictEqual(JSON.stringify(GD.req[17059]), '["Thorium Brotherhood",5]');              // the plans need Friendly
+  const bad = Object.entries(GD.teach).filter(([id, rs]) => !GD.items[id] || rs.some(([r]) => !GD.items[r] || GD.items[r][9] !== 9));   // the recipe is a Recipe-class item
+  assert.strictEqual(bad.length, 0, bad.slice(0, 3).map((x) => x[0]).join(', '));
+  assert.ok(Object.values(GD.req).every(([f, st]) => f && st >= 5 && st <= 8));
 });
 
 // ---------------------------------------------------------------- files agree with each other

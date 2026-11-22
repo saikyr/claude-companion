@@ -230,7 +230,9 @@ Forever differs from Classic the Forever source is used, and anything that is on
 | Drop rates, who drops what, "seen on Forever" | **ForeverDB** | `gamedata.js` `src` | `gamedata/build.py` | Only rates ForeverDB measured on Forever kills (`m`) are called Forever rates; the rest are labelled Classic |
 | Vendors: who sells it, where | **QuestieDB** list, with **ForeverDB** price and "seen selling it on Forever" (ForeverDB adds vendors QuestieDB lacks) | `gamedata.js` `vend` | `gamedata/build.py` | Forever where seen (`[5] = 1`), else Classic list |
 | Recipes you know, reagents, cooldowns | **The game** (profession window) | the save | `Professions.lua` | Forever |
-| Recipes you don't know: crafted-by, skill, what teaches it | **ForeverDB** crafted-by, **endgametools** "how" (pattern and skill) | `gamedata.js` `src`, `how` | `gamedata/build.py` | Forever |
+| Recipes you don't know: which recipe item teaches it (`teach`: the recipe's taught spell is the craft's spell), skill to learn it, where the recipe comes from (that item's own sources) | **ForeverDB** | `gamedata.js` `teach`, `src`, `vend` | `gamedata/build.py` | Forever |
+| Skill to craft an item | **endgametools** "how" ("Requires Tailoring (260)") | `gamedata.js` `how` | `gamedata/egt_parse.py` | Forever client |
+| Reputation an item needs (rep-vendor gear, faction recipes such as Thorium Brotherhood plans) | **ForeverDB** (the item's own requirement) | `gamedata.js` `req` | `gamedata/build.py` | Forever |
 | AH prices | **Your own scans and browsing** (`/cc scan`) | the save (`ah.prices`), synced between computers | `Market.lua` | Your realm, your faction. No external price feed |
 | Icon names (file id to name) | **wowdev community listfile** | `web/js/icons.js` | `gamedata/icons.py` | Same files in every client |
 | Game rules no source ships per item: standings, reputation thresholds, AH cut, disenchant tables and skill | **Hand-kept**, each with its source in the file | `web/data/rules.js` | by hand | Disenchant numbers are Classic (warcraft.wiki.gg), not measured on Forever; your real results are logged |
@@ -239,6 +241,12 @@ Forever differs from Classic the Forever source is used, and anything that is on
 Links out of the app go to Forever sites: a quest's page is ForeverChanges (`foreverchanges.pro/quest/<id>`).
 The only Wowhead address left is its icon image CDN (`wow.zamimg.com`), for pictures: icon files are the same
 in every client and no Forever site serves them by name. CI fails if any other Wowhead address appears in the app.
+
+**One presentation.** Every page shows sources and needs the same way, from `app.js`: `gdSourceLines`
+(the item tooltip on every page, and the Gear page's source line) and `itemGates` (what an item needs: its own
+reputation, a reward quest's, its recipe's, the skill to craft it; each "Needs Friendly with Thorium Brotherhood
+(you: Neutral)"). A crafted item shows "Crafted (Blacksmithing) · Recipe: Plans: Dark Iron Reaver (skill 300), sold by
+Lokhtos Darkbargainer, Blackrock Depths". No page builds its own.
 
 Not used: Wowhead for any data or link (bot wall, terms; QuestieDB's Forever layer already includes a Wowhead
 Forever snapshot), the QuestieDB addon in game (1.4 and earlier kept a copy of

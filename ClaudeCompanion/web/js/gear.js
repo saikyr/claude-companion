@@ -138,7 +138,7 @@
     return 'world';
   }
   // a random-suffix roll drops from any creature of its level: its base's drop list says nothing about the roll
-  const whereOf = (c) => (c.roll ? `Random-suffix ${c.g[1] === 3 ? 'blue' : 'green'} · drops from creatures of its level, or the AH` : c.how || ((A.gdSourceLines(c.id, 1, false)[0] || {}).l) || (c.boe ? 'BoE: not seen on your AH yet' : ''));
+  const whereOf = (c) => (c.roll ? `Random-suffix ${c.g[1] === 3 ? 'blue' : 'green'} · drops from creatures of its level, or the AH` : (c.kind === 'crafted' && A.recipeLine(c.id) && `${c.how ? c.how.split(' · Learnt from')[0] + ' · ' : ''}${A.recipeLine(c.id)}`) || c.how || ((A.gdSourceLines(c.id, 1, false)[0] || {}).l) || (c.boe ? 'BoE: not seen on your AH yet' : ''));
 
   // ---------------------------------------------------------------- candidates
   // The fixed-stat items Forever is known to have, and every roll of the random-suffix ones. Cached per
@@ -234,27 +234,14 @@
     return out;
   }
 
-  // ---------------------------------------------------------------- what you still need for an item
-  // Reputation and profession gates from the tooltip, the recipe line and the reward quest; only unmet ones show.
-  // standing names and where each starts: data/rules.js
-  const RULES = window.GAMERULES || {};
-  const STANDING = RULES.standing || [];
-  const REP_AT = (RULES.repFloor || []).map((n, i) => [n, i]).filter(([n, i]) => n != null && i >= 4).reverse();
+  // ---------------------------------------------------------------- what you still need for an item (only unmet gates show)
   const NEEDS = new Map();
+  // what you still need for it: the shared gates (app.js itemGates: the item's reputation, a reward quest's,
+  // the recipe's, and the profession skill to craft it; a BoE crafted item can be bought, so no skill gate)
   function needs(c) {
     const ck = c.id + '|' + (A.CH.snap || {}).taken;
     if (NEEDS.has(ck)) return NEEDS.get(ck);
-    const snap = A.CH.snap || {};
-    const rep = (name) => { const r = arr(snap.reputation).find((x) => x.name === name); return r ? r.reaction : 0; };
-    const skill = (name) => { const r = arr(snap.skills).find((x) => x.name === name); return r ? r.rank : 0; };
-    const out = [];
-    const wantRep = (f, lvl) => { const have = rep(f); if (have < lvl) out.push(`${f} ${STANDING[lvl]} (you: ${STANDING[have] || 'none'})`); };
-    arr(c.g[10]).forEach((l) => { const m = /^Requires (.+) - (Friendly|Honored|Revered|Exalted)$/.exec(l); if (m) wantRep(m[1], STANDING.indexOf(m[2])); });
-    const m = /Requires ([A-Z][a-z]+(?: [A-Z][a-z]+)?) \((\d+)\)/.exec(c.how || '');
-    if (m && !c.boe && skill(m[1]) < Number(m[2])) out.push(`${m[1]} ${m[2]} (you: ${skill(m[1]) || 'none'})`);
-    arr((A.GD.src || {})[c.id]).filter((r) => r[0] === 'quest').map((r) => (A.GD.quests || {})[r[2]]).filter((q) => q && q.repReq)
-      .forEach((q) => { const [f, v] = q.repReq[0] || []; if (f) wantRep(f, (REP_AT.find(([n]) => v >= n) || [0, 4])[1]); });
-    const res = [...new Set(out)];
+    const res = A.itemGates(c.id).filter((x) => !x.met && !(x.craft && c.boe)).map((x) => x.short);
     NEEDS.set(ck, res);
     return res;
   }

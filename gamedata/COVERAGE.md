@@ -1,4 +1,4 @@
-# Game-data coverage (2026-11-22 17:14 UTC)
+# Game-data coverage (2026-11-22 17:50 UTC)
 
 Sources: quests npcs sources: QuestieDB Forever e3c3bc43a0; item tooltips: endgametools, client build 1.60.1.71037; drop rates icons reward split: ForeverDB (foreverdb.net/data)
 
@@ -14,6 +14,8 @@ Sources: quests npcs sources: QuestieDB Forever e3c3bc43a0; item tooltips: endga
 | Seen dropping on Forever (player uploads) | 5,219 items | |
 | Drop chance | 6,210 items | only 371 are Forever-measured rates; the rest are labelled Classic rates |
 | Vendors | 3,996 items | |
+| Recipe item for crafted items (ForeverDB) | 1,577 of 2,058 | the rest are trainer recipes, or ForeverDB has no recipe item |
+| Reputation an item needs (ForeverDB) | 415 items | |
 | Item sets (pieces: ForeverDB; name and bonuses: endgametools) | 307 sets, 207 named | the rest have no piece the client shows yet |
 
 Pack size 14.2 MB. endgametools pages missing: 2,275 (404: not on Forever, or test/monster items).

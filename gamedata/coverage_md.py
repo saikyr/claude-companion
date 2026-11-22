@@ -17,6 +17,8 @@ L = [f"# Game-data coverage ({r['built']})", '',
      f"| Seen dropping on Forever (player uploads) | {c['items_seen_dropping_on_forever']:,} items | |",
      f"| Drop chance | {c['items_with_drop_rate']:,} items | only {c['items_with_forever_rate']:,} are Forever-measured rates; the rest are labelled Classic rates |",
      f"| Vendors | {c['items_with_vendor']:,} items | |",
+     f"| Recipe item for crafted items (ForeverDB) | {c.get('crafted_items_with_recipe_item', 0):,} of {c.get('crafted_items', 0):,} | the rest are trainer recipes, or ForeverDB has no recipe item |",
+     f"| Reputation an item needs (ForeverDB) | {c.get('items_needing_rep', 0):,} items | |",
      f"| Item sets (pieces: ForeverDB; name and bonuses: endgametools) | {c.get('item_sets', 0):,} sets, {c.get('item_sets_named', 0):,} named | the rest have no piece the client shows yet |",
      '', f"Pack size {c['pack_kb'] / 1024:.1f} MB. endgametools pages missing: {c['egt_pages_missing']:,} (404: not on Forever, or test/monster items).",
      'The game always wins in the app: your own tooltips, quest log rewards and AH scans replace pack data.']
