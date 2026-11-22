@@ -303,7 +303,7 @@ select:focus { border-color: var(--acc-line); }
 .tn.max .rk { color: var(--acc); } .tn.off .rk { color: #888; }
 .tbars { grid-template-columns: auto minmax(0, 1fr); }
 .abars { display: flex; flex-direction: column; gap: 3px; background: var(--s1); border: 1px solid var(--line); border-radius: var(--r); padding: var(--sp3); }
-.abar { display: flex; align-items: center; gap: 2px; } .abar .lbl { width: 5.25rem; flex: none; color: var(--t3); font-size: var(--f-sm); }
+.abar { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; } .abar .lbl { flex: 0 0 100%; margin: var(--sp2) 0 2px; color: var(--t3); font-size: var(--f-sm); }
 .macros { max-height: 26.25rem; overflow-y: auto; }
 
 /* ---------- grinds ---------- */

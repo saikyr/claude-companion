@@ -63,5 +63,16 @@ const again = merge(out, [{ dev: 'mac', db: mac }], 'pc').chars[key];
 check(again.journal.length === o.journal.length && again.grinds.length === o.grinds.length, 'merging twice adds nothing');
 check((own.chars[key].journal || []).length === before.journal && (own.chars[key].grinds || []).length === before.grinds, 'the input saves are not changed');
 check(merge(own, [], 'pc') === own, 'no other computer: the save as it is');
+// dual spec: a save with both specs reads as an array (index 0 = spec 1); one with only spec 2 as { 2: ... }.
+// Merged, they must keep the game's numbers, or spec 2 shows up as spec 1 (the "Shadow is active" bug).
+{
+  const a = clone(own), b = clone(own);
+  a.chars[key].lastSeen = T + 1; b.chars[key].lastSeen = T + 2;
+  a.chars[key].specs = [{ name: 'Holy', talentsTaken: T }, { name: 'Shadow', talentsTaken: T }];
+  b.chars[key].specs = { 2: { name: 'Shadow', talentsTaken: T + 50 } };
+  const s = merge(a, [{ dev: 'mac', db: b }], 'pc').chars[key].specs;
+  check(Object.keys(s).sort().join() === '1,2' && s[1].name === 'Holy' && s[2].name === 'Shadow' && s[2].talentsTaken === T + 50,
+    `specs keep the game's numbers across computers (${Object.keys(s).join(', ')})`);
+}
 console.log(failed ? `${failed} failed` : 'all passed');
 process.exit(failed ? 1 : 0);
