@@ -110,7 +110,7 @@
     peers = (peers || []).filter((p) => p && p.db && p.db.chars);
     if (!peers.length) return own;
     const out = Object.assign({}, own);
-    for (const f of ['items', 'spells', 'npcs', 'quests']) {
+    for (const f of ['items', 'spells']) {   // quests and NPCs come from the game-data pack, not the save
       out[f] = Object.assign({}, ...peers.map((p) => p.db[f] || {}), own[f] || {});
     }
     const keys = new Set([...Object.keys(own.chars || {}), ...peers.flatMap((p) => Object.keys(p.db.chars))]);

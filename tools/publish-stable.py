@@ -36,6 +36,15 @@ def origin_repo():
     return url.rstrip('/').removesuffix('.git').split('github.com')[-1].lstrip(':/')
 
 
+def stamp_build(path, sha):
+    # the addon names the build it came from (Core.lua ns.BUILD), so the app can tell when the game
+    # still runs the previous build's Lua and needs a /reload
+    with open(path, 'rb') as f: src = f.read()
+    line = b'ns.BUILD = "dev"'
+    if src.count(line) != 1: sys.exit('Core.lua must have exactly one line ns.BUILD = "dev"')
+    with open(path, 'wb') as f: f.write(src.replace(line, b'ns.BUILD = "' + sha[:12].encode() + b'"'))
+
+
 def publish(repo, remote, notes, ver, src_branch, src_sha):
     work = tempfile.mkdtemp(prefix='cc-stable-')
     try:
@@ -61,13 +70,15 @@ def publish(repo, remote, notes, ver, src_branch, src_sha):
                 dest = os.path.join(work, 'ClaudeCompanion', *rel.split('/'))
                 os.makedirs(os.path.dirname(dest), exist_ok=True)
                 shutil.copy2(full, dest)
-                with open(full, 'rb') as fh: files[rel] = hashlib.sha256(fh.read()).hexdigest()
+                if rel == 'Core.lua': stamp_build(dest, src_sha)
+                with open(dest, 'rb') as fh: files[rel] = hashlib.sha256(fh.read()).hexdigest()
         # the channel this build keeps updating from
-        chan = json.dumps({'repo': repo, 'branch': BRANCH}, indent=1).encode()
+        # (and which build it is: the app compares it with the build the game last saved with)
+        chan = json.dumps({'repo': repo, 'branch': BRANCH, 'version': ver, 'build': src_sha[:12]}, indent=1).encode()
         with open(os.path.join(work, 'ClaudeCompanion', 'web', 'channel.json'), 'wb') as f: f.write(chan)
         files['web/channel.json'] = hashlib.sha256(chan).hexdigest()
         build = {'version': ver, 'built': datetime.now(timezone.utc).isoformat(timespec='seconds'), 'channel': {'repo': repo, 'branch': BRANCH},
-                 'from': {'branch': src_branch, 'commit': src_sha}, 'notes': notes, 'files': dict(sorted(files.items()))}
+                 'from': {'branch': src_branch, 'commit': src_sha}, 'build': src_sha[:12], 'notes': notes, 'files': dict(sorted(files.items()))}
         with open(os.path.join(work, 'BUILD.json'), 'w', encoding='utf-8') as f: json.dump(build, f, indent=1)
         with open(os.path.join(work, '.gitattributes'), 'w') as f: f.write('* -text\n')   # byte-exact: the checksums must match
         with open(os.path.join(work, 'README.md'), 'w', encoding='utf-8') as f:

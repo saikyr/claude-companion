@@ -208,7 +208,7 @@ Enum.PlayerInteractionType = { Banker = 8, TaxiNode = 5, Auctioneer = 21, Mercha
 
 -- load addon
 local ns = {}
-local files = { "Inbox.lua", "Core.lua", "Snapshot.lua", "Journal.lua", "Market.lua", "Professions.lua", "UI.lua" }
+local files = { "Core.lua", "Snapshot.lua", "Journal.lua", "Market.lua", "Professions.lua", "UI.lua" }
 for _, f in ipairs(files) do local chunk = assert(loadfile(ADDONDIR .. "/" .. f)); chunk("ClaudeCompanion", ns) end
 -- a save from 1.4: copies of QuestieDB facts the addon used to keep (now the app's pack owns them)
 ClaudeCompanionDB = { npcs = { [1] = { name = "Old" } }, quests = { [1] = { name = "Old" } },

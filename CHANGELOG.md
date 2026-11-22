@@ -2,7 +2,22 @@
 
 Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 
-## Unreleased (updates itself)
+## 1.5.0 (in progress: every merge to main updates itself)
+- **One contract between the parts, checked in CI.** New first CI step `test/contract.test.js`: the
+  addon version is the same in the .toc, Core.lua and this changelog; every file the .toc loads exists
+  and every addon file is loaded; the save and snapshot schemas agree with their docs; the Mac and Windows
+  servers serve the same API and the page calls only that; every sync call has its backend function; a
+  migration already on main is never edited. The table is in docs/ARCHITECTURE.md (Contracts).
+- **The app knows when the game needs a /reload.** Each build stamps its commit into the addon
+  (`addonBuild` in the save) and the app (`web/channel.json`). While the game still runs an older addon
+  than the app, the app says so until you /reload, instead of only for 15 minutes after an update.
+- **Updates leave no old files behind.** The updater copies exactly the build's files and removes files
+  an older build had (they are in the backup); companion-data is never touched. The Windows server's
+  update is now tested end to end in CI too.
+- **Removed:** the old in-game message from Claude (`Inbox.lua`, a stale 1.3 note; Claude's suggestions
+  are From Claude cards in the app; the `/cc` window says where they are), and the merge of QuestieDB
+  quests and NPCs from saves (they come from the game-data pack since 1.4).
+
 - **Gear page fixes.** The spec you are looking at is marked in the switcher again. The four cards read
   like the rest of the app (label, value, one line). Reputation names come from data/rules.js, and items
   whose source is "World Drop" are listed as world drops.
