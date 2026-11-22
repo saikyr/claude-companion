@@ -4,6 +4,16 @@ Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 
 ## Unreleased (updates itself)
 
+- **App review fixes.** Professions: the footer showed raw code (`${esc(p.name)} recipes ...`), and the skill
+  bar could read "undefined / undefined". Quests: a reputation loss read "+-750" in green, and a reputation
+  requirement showed raw data; it now says "Needs Friendly with Magram Clan Centaur" (red only if you don't
+  have it). Journal: grind pause / resume have names, the loot-money chat line no longer repeats the money row,
+  kills of a mob you never targeted take its name from QuestieDB when it's known. Bags: the main bank is called
+  "Bank", not "Bag -1". Overview and sidebar: level 60 shows "Max level" instead of 0%. Dungeons: short visits
+  with nothing done fold into one line. Update card: says what changed and the build, not the merge commit.
+- **Less work in game.** Spellcast events are registered for the player only, so other players' casts (party,
+  raid, nameplates) no longer wake the addon.
+
 - `snapshot.json` (and its copy online) names the app build each computer runs (`app`).
 - **Claude can read where you are and your quest log from anywhere.** Each computer now also sends its
   current snapshot (position, quest log, gear and bag advice, professions, rep) online after every save,
