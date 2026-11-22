@@ -1,7 +1,7 @@
 #!/bin/sh
 # One-time install (or repair) of Claude Companion on a Mac, from the newest build on the "stable" branch.
 # After this the app updates itself; nothing else to run per build except /reload in game.
-#   gh api repos/saikyr/claude-companion/contents/tools/install.sh -H "Accept: application/vnd.github.raw" | sh
+#   gh api repos/saikyr/claude-companion/contents/tools/install.sh?ref=main -H "Accept: application/vnd.github.raw" | sh
 # Needs the GitHub CLI signed in (gh auth login), because the repository is private; the app's
 # updater uses the same sign-in. Never touches companion-data/ or the game's saved data (WTF/).
 set -e
