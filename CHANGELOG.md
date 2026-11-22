@@ -11,6 +11,9 @@ Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
   kills of a mob you never targeted take its name from QuestieDB when it's known. Bags: the main bank is called
   "Bank", not "Bag -1". Overview and sidebar: level 60 shows "Max level" instead of 0%. Dungeons: short visits
   with nothing done fold into one line. Update card: says what changed and the build, not the merge commit.
+- **The Mac's local server only answers this computer's own page.** A web page could point its own domain at
+  127.0.0.1 (DNS rebinding) and read the save and the sync key; requests for any host but localhost are now
+  refused (the PC's server already did this). Part of #18.
 - **Less work in game.** Spellcast events are registered for the player only, so other players' casts (party,
   raid, nameplates) no longer wake the addon.
 
