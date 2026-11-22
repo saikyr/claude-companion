@@ -6,9 +6,8 @@ loot, grinds, auction house prices and sales). The app shows it all in one windo
 computer and writes a compact `snapshot.json` that Claude reads when it coaches you. Claude's
 suggestions (farms, flips, quests, gear) come back as cards in the app's **From Claude** tab.
 
-The app is a tiny server on `localhost` that reads the game's own saved file. It updates itself
-when a new tested build is out, and, if you pick a cloud drive your computers share, it shows the same
-character on all of them. Nothing goes anywhere else. How it all fits: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+The app is a tiny server on `localhost` that reads the game's own saved file, and updates itself when
+a new tested build is out. Your data goes nowhere else. How it all fits: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Install
 
@@ -102,10 +101,9 @@ Key bindings: Options > Key Bindings > AddOns > Claude Companion.
     pip install lupa && sh gamedata/build.sh
     cp gamedata/work/out/gamedata.js ClaudeCompanion/web/data/
 
-    # web tests: merge rules, self-update and sync end to end (no network)
+    # web tests: merge rules (for the planned sync), self-update end to end (no network)
     node test/web/merge.test.js
     python3 test/update_test.py
-    python3 test/sync_test.py
 
 CI (`.github/workflows/checks.yml`) runs all of it, plus syntax checks, and refuses commits that
 contain a saved file or snapshot. A merge to `main` that passes is published to `stable` by

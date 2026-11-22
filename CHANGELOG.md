@@ -2,28 +2,6 @@
 
 Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 
-## Unreleased (one character on every computer)
-
-- **The PC and the Mac (and a friend's computers) show the same character.** The game keeps a
-  separate save on each computer and writes it itself, so the saves can't be one file. Instead you
-  pick, once, the cloud drive your computers already share (Google Drive for desktop, OneDrive,
-  Dropbox, iCloud Drive: the app lists the ones it finds). The server keeps a `Claude Companion`
-  folder there with one subfolder per computer (save.lua.gz, settings.json, snapshot.json.gz, and
-  meta.json written last with the save's SHA-256), so two computers never write the same file and the
-  drive never has a conflict. It copies the other computers' saves into `companion-data/devices/`
-  (only when complete and matching their SHA-256), and the page merges them (`js/merge.js`) before it
-  shows anything or writes snapshot.json:
-  - history (journal, sessions, grinds, runs, notes, AH sales/buys/posts, price history, disenchants)
-    is the union of both, without duplicates and without dropping identical events, in time order;
-    entries from the other computer carry `dev`
-  - what's current (bags, gear, gold, bank, mail, professions, specs, flight paths) comes from the
-    computer that saw it last
-  - a grind or run left running on one computer while you played on the other is shown as ended
-    "away", like the addon does at login
-  - settings follow the computer where they changed last (the replaced file is kept as settings.json.bak)
-- No save file is ever written. Same mechanism for everyone; no account beyond the drive.
-  `GET /api/devices`, `POST /api/sync-config {"folder": ...}`. snapshot.json has `mergedWith`.
-
 ## Unreleased (updates itself)
 
 - **Builds publish themselves.** When a PR merges to `main` and the checks pass, CI

@@ -8,7 +8,6 @@ ClaudeCompanion/companion-data/settings.json*
 ClaudeCompanion/companion-data/from-claude/
 ClaudeCompanion/companion-data/update.json
 ClaudeCompanion/companion-data/installed.json
-ClaudeCompanion/companion-data/devices/
 
 # The game-data pack (web/data/gamedata.js, rebuilt by gamedata/build.sh) IS committed: CI builds from it.
 # file-mode fallback output of server.ps1 (contains the save)

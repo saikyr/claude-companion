@@ -1,11 +1,11 @@
 # Architecture
 
-## The whole picture: build, ship, sync
+## The whole picture: build and ship
 
 ```
  developers (people, Claude sessions)            GitHub, private: saikyr/claude-companion
- ─ change code on a branch, open a PR ─────────▶  checks.yml: harness, merge rules, self-update and
-                                                  sync end-to-end tests, syntax, no personal data
+ ─ change code on a branch, open a PR ─────────▶  checks.yml: harness, merge rules, self-update
+                                                  end-to-end test, syntax, no personal data
  ─ a person merges the PR to main  ────────────▶  publish.yml (after checks pass on main):
                                                   tools/publish-stable.py → branch "stable"
                                                   (+ optional public download repo for friends)
@@ -15,38 +15,25 @@
  Each computer: AddOns/ClaudeCompanion  (the addon + the app + its local server)
    server checks "stable" → downloads → checks every file's SHA-256 (BUILD.json) → backs up →
    installs → restarts. companion-data/ and the game's saves are never written. Then /reload in game.
-          │
-          │ the game writes this computer's save; the server reads it
-          ▼
- Cloud drive the person's computers already share (Google Drive for desktop, OneDrive, Dropbox,
- iCloud Drive) — chosen once in the app:
-   <drive>/Claude Companion/<computer>/  save.lua.gz · settings.json · snapshot.json.gz · meta.json
-          │ each computer writes only its own subfolder, reads the others'
-          ▼
- The app merges this computer's save with the others' (js/merge.js) → one character →
- shows it, and writes companion-data/snapshot.json (also copied to the drive, where Claude reads it)
 ```
 
 **Principles**
 
 1. **Nothing is installed by hand or by an agent.** Code reaches a computer only through the
    updater, from a build that passed CI and that a person merged. The merge is the approval.
-2. **One mechanism for everyone.** Gabriel's PC and Mac and a friend's computers use the same
-   updater and the same sync. Nothing is special-cased for one person.
-3. **The game owns its saves.** Each computer's `SavedVariables` is written by the game and only
-   read by the app. Sharing happens one level up, in files the app owns.
-4. **One writer per file.** The updater writes the addon folder (never `companion-data/`). Each
-   computer writes only its own subfolder in the sync folder. The page writes `snapshot.json` and
-   `settings.json`. Claude writes `from-claude/cards.json`.
-5. **Verify before you touch.** Builds are checked file by file against `BUILD.json`. Synced saves
-   are checked against the SHA-256 in `meta.json`, which is written last, so a half-synced file is
-   never taken. Backups are made before every install.
+2. **One mechanism for everyone.** Gabriel's PC and Mac and a friend's computers use the same updater.
+3. **The game owns its saves.** Each computer's `SavedVariables` is written by the game and only read
+   by the app.
+4. **One writer per file.** The updater writes the addon folder (never `companion-data/`); the page
+   writes `snapshot.json` and `settings.json`; Claude writes `from-claude/cards.json`.
+5. **Verify before you touch.** Builds are checked file by file against `BUILD.json`; a backup is made
+   before every install.
 
 ### Delivery: builds and updates
 
 | Piece | What it does |
 | --- | --- |
-| `.github/workflows/checks.yml` | On every push and PR: addon harness (mock game API), merge-rule tests, self-update and sync end-to-end tests (mock GitHub, temp folders, both servers), syntax, no personal data |
+| `.github/workflows/checks.yml` | On every push and PR: addon harness (mock game API), merge-rule tests, self-update end-to-end test (mock GitHub, both servers on Windows), syntax, no personal data |
 | `.github/workflows/publish.yml` | After the checks pass on `main`: `tools/publish-stable.py` |
 | `tools/publish-stable.py` | Copies `ClaudeCompanion/` (with the game-data pack) to the `stable` branch with `BUILD.json` (version, source commit, every file's SHA-256) and `web/channel.json` (where this build keeps updating from). One commit per build. Never packs personal data |
 | Public download repo (optional) | Set the repository variable `DIST_REPO` and secret `DIST_TOKEN`: the same build also goes to a public repo, whose builds point their updater at it. Friends need no GitHub account or token |
@@ -56,42 +43,66 @@
 
 The private repository needs a token to read: `gh auth token` (GitHub CLI signed in), or
 `companion-data/update.json` `"token"`. Builds from the public download repo need none.
+Verified for real on Gabriel's PC on 22 Nov: the app installed build `d7dd338` from `stable` by itself
+(36 files, checksums matched, backup made, server restarted).
 
-### Sync: one character on every computer
+### Today: one save per computer
 
-The game writes a separate save per computer, so the saves are never merged on disk. Instead:
+Each computer has its own save and its own `snapshot.json`; the snapshot says which computer wrote it
+(`device`). The addon ends a grind or dungeon run that was left running when you come back after
+playing elsewhere (`ended: "away"`), so a stale tracker from the other computer never runs on.
+There is no sync between computers yet.
 
-- **Store:** a `Claude Companion` folder in a cloud drive the computers already sync, chosen once in
-  the app (it lists Google Drive, OneDrive, Dropbox and iCloud Drive when it finds them). Kept in
-  `companion-data/update.json` as `"sync": {"folder": ...}`. Off until chosen.
-- **Write:** after each save in game (10 s quiet), the server writes `save.lua.gz`, `settings.json`,
-  `snapshot.json.gz` and finally `meta.json` (device, OS, save time, SHA-256) into its own subfolder.
-- **Read:** it copies the other subfolders' saves into `companion-data/devices/<computer>/`, only
-  when complete (the SHA-256 matches).
-- **Merge** (`js/merge.js`, tested by `test/web/merge.test.js` on a real save):
-  - History (journal, sessions, grinds, runs, notes, AH sales/buys/posts, price history, disenchants)
-    is the union of all saves, in time order. Identical events in one save stay separate, so nothing
-    is lost or doubled. Entries from another computer carry `dev`.
-  - What's current (bags, gear, gold, bank, mail, professions, specs, flight paths) comes from the
-    computer that saw it last.
-  - A grind or run still running on a computer you then stopped using is shown as ended "away", the
-    same rule the addon applies at login.
-  - Settings follow the computer where they changed last. The replaced file is kept as `settings.json.bak`.
-- **Claude** reads the merged `snapshot.json.gz` from the sync folder (for Gabriel, through his Google
-  Drive connector), so routine reads need no session on his computer.
-- **Pluggable:** a store is three operations (`put` its own files, list `versions`, `get` another
-  computer's files). A hosted store could be added later without touching the merge.
+## Planned: sync through a hosted backend (not built)
 
-### For friends
+A real account-based backend, so any person with any number of computers sees one character, and
+Claude can read it without a session on anyone's computer. Proposed: **Supabase** (Auth + Postgres
+with row-level security + an API), because it is hosted, free at this size, and already connected to
+this project. Not created yet: it starts when Gabriel says go.
 
-1. Download the latest build from the public download repo (a zip of `ClaudeCompanion/`), unzip into
-   AddOns, run `Claude Companion.bat` (Windows) or `Claude Companion.app` (Mac) once.
-2. The app updates itself from the public repo. No GitHub account.
-3. Optional: pick their own cloud drive in the app to share their character between their computers.
-   Their data never goes near anyone else's.
+**Accounts and security**
+- Sign-in from the app: email magic link or Discord (Supabase Auth). The app keeps the user's
+  session token locally (`companion-data/`), never a service key: the client only has the public
+  anon key, and every table has row-level security `user_id = auth.uid()`.
+- Claude reads Gabriel's data through the Supabase connector (his project), read-only by default.
 
-Still to do: the public download repository itself (creating it is Gabriel's call), and a
-first-run page that walks through the game folder and the drive in one screen.
+**Schema (Postgres)**
+
+| Table | Key | What |
+| --- | --- | --- |
+| `characters` | id, user_id, name, realm | One row per character |
+| `devices` | id, user_id, name, os, last_seen | Each computer that syncs |
+| `snapshots` | character_id, device_id, taken | The latest "now" state per part (bags, gear, bank, professions, specs, flight paths) with its own time; newest wins |
+| `events` | character_id, device_id, t, kind, n | The journal: append only; unique on (character, device, t, kind, n) where n numbers identical events in one second, so re-sending is harmless |
+| `trackers` | character_id, kind (session/grind/run), start, device_id | Sessions, grinds, dungeon runs; upsert by (character, kind, start, device) |
+| `ah_observations` | character_id, item_key, t, src | Price history; append only |
+| `ah_records` | character_id, kind (sale/buy/post), t, item | AH ledger; append only |
+| `settings` | user_id, key | App settings; per key, last writer wins with its time |
+
+**Sync protocol**
+- After each save in game, the local server parses the save (it already ships the same parser the
+  page uses) and sends only what is new since its last acknowledged position per table (deltas),
+  batched, to a Postgres function (`sync_push`) that upserts idempotently. Ids are the natural keys
+  above, so a retry or an offline backlog never duplicates.
+- To show the character, the app asks for the merged view (`sync_pull` since a time): the union of
+  history, the newest "now" parts, trackers ended "away" by the same rule as `js/merge.js` (the merge
+  rules are already written and tested there, on a real save).
+- **Offline:** the app always works from the local save; unsent deltas wait in `companion-data/` and
+  go when the network is back. Nothing in the game depends on the backend.
+- **Conflicts:** history is append-only (no conflicts); "now" parts and settings carry their own
+  times (newest wins); trackers are keyed by start time and device.
+
+**Cost (Supabase pricing page, read 22 Nov 2026)**
+- Free plan: 500 MB database per project, 50,000 monthly active users, 5 GB egress, 1 GB file
+  storage, 500,000 edge function invocations, 2 active projects. Free projects **pause after one week
+  without activity** (they resume when opened; a scheduled ping or regular play avoids it).
+- Gabriel's save is about 5 MB raw; as rows (journal events, price history) a character is well
+  under 50 MB, so a handful of players fit the free plan. Daily backups are not in the free plan.
+- Next step up: Pro, from $25 a month (no pausing, backups).
+
+**What it would take:** the schema and RLS policies (one migration), sign-in in the app, the delta
+push/pull in both servers, and the merge on the server side (from `js/merge.js`). Until then each
+computer keeps working on its own save, as today.
 
 ## On one computer: addon, save, local app
 
