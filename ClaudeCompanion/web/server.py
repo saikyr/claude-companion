@@ -158,7 +158,10 @@ def write_json(path, data):
 
 
 def upd_cfg():
+    # where updates come from: web/channel.json, written by the build (the private repository for
+    # Gabriel's builds, the public download repository for everyone else's); update.json can override
     c = {'repo': REPO, 'auto': True, 'branch': 'stable', 'api': 'https://api.github.com'}   # api: only changed for testing
+    c.update({k: v for k, v in read_json(os.path.join(WEB, 'channel.json'), {}).items() if k in ('repo', 'branch')})
     c.update(read_json(UPDATE_CFG, {}))
     return c
 

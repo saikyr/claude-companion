@@ -19,6 +19,12 @@ jobs:
         run: for f in ClaudeCompanion/web/js/*.js; do node --check "$f"; done
       - name: Python syntax
         run: python3 -m py_compile ClaudeCompanion/web/server.py gamedata/*.py tools/*.py
+      - name: One character across computers (merge rules)
+        run: node test/web/merge.test.js
+      - name: Self-update, end to end (mock GitHub)
+        run: python3 test/update_test.py
+      - name: Save sync between computers, end to end (mock GitHub)
+        run: python3 test/sync_test.py
       - name: From Claude cards format
         run: python3 tools/check-cards.py test/fixtures/cards.json
       - name: No personal data

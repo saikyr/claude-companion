@@ -1,0 +1,36 @@
+name: publish
+# Every merge to main that passes the checks becomes a build on the "stable" branch, and every
+# computer's Companion app installs it by itself (see docs/ARCHITECTURE.md, "Delivery"). Merging the
+# PR is the approval; nothing is published by hand.
+# Optional public download channel for friends: set the repository variable DIST_REPO (owner/name of
+# a public repository) and the secret DIST_TOKEN (a token that can push to it).
+on:
+  workflow_run:
+    workflows: [checks]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency: publish
+jobs:
+  publish:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 0
+      - name: Publish to stable
+        env:
+          DIST_TOKEN: ${{ secrets.DIST_TOKEN }}
+          DIST_REPO: ${{ vars.DIST_REPO }}
+        run: |
+          git checkout -q -B main
+          msg="$(git log -1 --format=%s)"
+          if [ -n "$DIST_REPO" ] && [ -n "$DIST_TOKEN" ]; then
+            python3 tools/publish-stable.py --to "$DIST_REPO" "$msg"
+          else
+            python3 tools/publish-stable.py "$msg"
+          fi

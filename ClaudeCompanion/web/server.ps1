@@ -208,13 +208,15 @@ function Write-Json([string]$f, $o) {
     Move-Item -LiteralPath $tmp -Destination $f -Force
 }
 function Get-UpdCfg {
+    # where updates come from: web\channel.json, written by the build; update.json can override
     $c = Read-Json $updCfgFile
-    $repo = if ($c -and $c.repo) { $c.repo } else { 'saikyr/claude-companion' }
+    $ch = Read-Json (Join-Path $web 'channel.json')
+    $repo = if ($c -and $c.repo) { $c.repo } elseif ($ch -and $ch.repo) { $ch.repo } else { 'saikyr/claude-companion' }
     $auto = if ($c -and $null -ne $c.auto) { [bool]$c.auto } else { $true }
     $tok = if ($c -and $c.token) { $c.token } elseif ($env:CC_GITHUB_TOKEN) { $env:CC_GITHUB_TOKEN } else { $null }
     if (-not $tok) { $gh = Get-Command gh -ErrorAction SilentlyContinue; if ($gh) { try { $t = (& $gh.Source auth token 2>$null); if ($LASTEXITCODE -eq 0 -and $t) { $tok = ([string]$t).Trim() } } catch { } } }
     $api = if ($c -and $c.api) { $c.api } else { 'https://api.github.com' }   # api: only changed for testing
-    $branch = if ($c -and $c.branch) { $c.branch } else { 'stable' }
+    $branch = if ($c -and $c.branch) { $c.branch } elseif ($ch -and $ch.branch) { $ch.branch } else { 'stable' }
     @{ repo = $repo; auto = $auto; token = $tok; api = $api; branch = $branch }
 }
 function Invoke-GitHub([string]$url, $cfg, [switch]$Raw) {
