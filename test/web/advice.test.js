@@ -108,7 +108,7 @@ const esc = (s) => String(s == null ? '' : s);
 const arr = (x) => (Array.isArray(x) ? x : x && typeof x === 'object' ? Object.values(x) : []);
 ctx.CC = { V: {}, api: {
   get CH() { return CH; }, STATE: {}, GD: { items: {}, src: {}, vend: {}, quests: {}, how: {}, stat: {} }, esc, arr,
-  item: (k) => ITEMS[k] || null, byId: (id) => BY_ID[id] || null, gdItem: () => null, gdSourceLines: () => [],
+  item: (k) => ITEMS[k] || null, byId: (id) => BY_ID[id] || null, gdItem: () => null, gdSourceLines: () => [], itemGates: () => [], recipeLine: () => null,
   planPrice: (id) => { const p = CH.ah.prices[id]; return p ? p.obs[0].med : null; }, anyItemName: (id) => (BY_ID[id] || {}).name || '#' + id,
   anyItemIcon: () => '', itemIcon: () => '', money: (c) => String(c), render() {}, deOutcome: () => null,
   specTrees: (sp) => [{ points: sp.tree === 'Arms' ? 31 : 0 }, { points: 5 }, { points: 15 }], specLabel: (sp) => sp.tree, TREE_NAMES: { WARRIOR: ['Arms', 'Fury', 'Protection'] },

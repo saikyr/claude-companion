@@ -21,6 +21,8 @@ ONE OWNER PER FIELD (see README.md for the why):
   Item sets: which items belong together ............................. ForeverDB (set id per item)
   Item sets: name and bonuses .......................................... endgametools (the set lines of a member's tooltip)
   NPCs: name, levels, rank, zone, spawn points ......................... QuestieDB Forever (points already in Forever map coordinates)
+  Reputation an item needs (to buy or use it) .......................... ForeverDB (the item's own requirement)
+  Which recipe item teaches a crafted item, and the skill to learn it ... ForeverDB (the recipe's taught spell = the craft's spell)
 The game itself always wins in the app: your quest log rewards, your tooltips, your AH scans.
 """
 import json, os, re, sys, time
@@ -371,13 +373,36 @@ for nid, row in Q['npc'].items():
 cov['npcs'] = len(npcs)
 cov['npcs_with_spawn_point'] = sum(1 for n in npcs.values() if n[6])
 
+# ------------------------------------------------------------------ item gates and recipes (ForeverDB)
+# req[id] = [faction name, standing 5 Friendly .. 8 Exalted]: the reputation the item itself needs (rep vendor
+# gear, faction recipes). teach[crafted id] = [[recipe item id, skill to learn it], ...]: the recipe whose taught
+# spell is the spell that crafts the item (ForeverDB's craft rows carry that spell). No entry = a trainer recipe
+# or one ForeverDB has no recipe item for; the item's "how" line says which.
+req = {}
+for it in FDB_ITEMS.values():
+    r = it.get('rep')
+    if it['id'] in items and isinstance(r, list) and len(r) == 3 and r[2] and 4 < (r[1] or 0) <= 8:
+        req[it['id']] = [r[2], r[1]]
+TEACHES = defaultdict(set)
+for it in FDB_ITEMS.values():
+    if it.get('c') != 9 or it['id'] not in items: continue
+    spells = {x[1] for x in it.get('sp') or [] if isinstance(x, list) and len(x) > 1 and x[0] == 6} | set((it.get('chg') or {}).get('sp') or [])
+    for sp in spells: TEACHES[sp].add(it['id'])
+teach = {}
+for iid, rows in src.items():
+    got = sorted({(rid, (FDB_ITEMS[rid].get('rs') or [0, 0])[1]) for r in rows if r[0] == 'craft' for rid in TEACHES.get(r[2], ())})
+    if got: teach[iid] = [list(x) for x in got[:3]]
+cov['items_needing_rep'] = len(req)
+cov['crafted_items_with_recipe_item'] = len(teach)
+cov['crafted_items'] = sum(1 for rows in src.values() if any(r[0] == 'craft' for r in rows))
+
 builds = Counter(v.get('build') for v in EGT.values())
 pack = {
     'v': 2, 'built': int(time.time()),
     'from': {'quests_npcs_sources': 'QuestieDB Forever ' + QMAN['questiedb_commit'][:10],
              'item_tooltips': 'endgametools, client build ' + (builds.most_common(1)[0][0] if builds else '?'),
              'drop_rates_icons_reward_split': 'ForeverDB (foreverdb.net/data)'},
-    'items': items, 'src': src, 'quests': quests, 'vend': vend, 'npcs': npcs, 'stat': STAT,
+    'items': items, 'src': src, 'quests': quests, 'vend': vend, 'npcs': npcs, 'req': req, 'teach': teach, 'stat': STAT,
     'sets': {sid: v for sid, v in sets.items()},
     # group size of the dungeon / raid an item drops in, from endgametools ("5 players", "10 players")
     'size': {int(k): v['size'] for k, v in EGT.items() if v.get('size')},
