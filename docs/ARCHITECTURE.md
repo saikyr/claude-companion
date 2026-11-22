@@ -108,16 +108,29 @@ records, 64 KB per record; 2 million records per account (a counter on the accou
 itself (seen in the project's edge logs), not the caller. The API roles have no table grants at all.
 An account marked `retired` is closed: its computers' calls are refused and Claude's view leaves it out.
 
+**Each computer's "now", for Claude.** The game save stays the truth for the character as it is now, and
+no computer takes another's. But Claude must read it without touching the computers, so each one also
+sends its current snapshot (what `snapshot.json` has: position, quest log, gear and bag advice,
+professions, rep) as one replaced `snapshot` row per computer, after every save the page reads and only
+when it changed. It may be up to 2 MB, and pulls leave it out (other computers never need it).
+
+**After an update.** The server installs a new build by itself; an app window that stays open loads the
+new page at a quiet moment (at once if it's hidden or minimised, else after 2 minutes without a click or
+key), so an old page never keeps running against a new server.
+
 **Claude's access.** With the Supabase connector, project `jucbngafdnyaizfxgplk`:
 `select * from private.history where account = '<id>' and kind = 'journal' order by t desc`. The account
 id is in each `snapshot.json` (`sync.account`). Kinds: journal, session, grind, run, note, history, de,
-ah_obs, ah_sale, ah_buy, ah_post, live, setting.
+ah_obs, ah_sale, ah_buy, ah_post, live, setting, snapshot. The newest "now":
+`select computer, at, data from private.history where account = '<id>' and kind = 'snapshot' order by t desc limit 1`.
 
 **Schema:** `supabase/migrations/` (`supabase/README.md`). Client: `js/sync.js`.
 Tests run the real migration files on a plain Postgres (`test/sql/backend.js`; CI has a Postgres
 service): `test/web/sync.test.js` (stable ids, no duplicates, offline, link codes and their limits,
 settings when linking and after, edited runs, the merged view, a third computer, overlapping pushes,
-closed tables, retired accounts) and `test/web/sync-browser.js` (the real page in Chromium). CI blocks
+closed tables, retired accounts, snapshots) and `test/web/sync-browser.js` (the real page in Chromium, also
+as the hidden browser). `test/web/server-api.test.js` checks the local server's API on both servers
+(server.py on Linux, server.ps1 under Windows PowerShell 5.1 on a Windows runner). CI blocks
 the live project's host for the whole job, so no test can reach it. Checked on the real project on
 22 Nov 2026 with SQL as the anon role, in a transaction rolled back afterwards: register, history
 written once, an edited grind replaced, link code, a wrong code, joining, pull, a retired computer

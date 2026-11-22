@@ -54,6 +54,8 @@ jobs:
           npm install --no-save --no-package-lock playwright@1.49.1
           npx playwright install --with-deps chromium
           node test/web/sync-browser.js 47999 $F/Interface/AddOns/ClaudeCompanion/companion-data
+      - name: Local server API (server.py)
+        run: node test/web/server-api.test.js 47999 /tmp/f/_forever_/Interface/AddOns/ClaudeCompanion/companion-data
       - name: Self-update, end to end (mock GitHub)
         run: python3 test/update_test.py
       - name: From Claude cards format
@@ -61,3 +63,28 @@ jobs:
       - name: No personal data
         run: |
           ! git ls-files | grep -E 'SavedVariables|snapshot\.json$|settings\.json$|sync(-cache)?\.json$|web/data\.js$'
+
+  # The PC's server (server.ps1) under Windows PowerShell 5.1, the one Windows ships: the same API test.
+  windows-server:
+    runs-on: windows-latest
+    steps:
+      - name: Block the live sync backend
+        shell: pwsh
+        run: |
+          Add-Content -Path "$env:SystemRoot\System32\drivers\etc\hosts" -Value "`n0.0.0.0 jucbngafdnyaizfxgplk.supabase.co`n:: jucbngafdnyaizfxgplk.supabase.co"
+      - uses: actions/checkout@v4
+      - name: Local server API (server.ps1)
+        shell: pwsh
+        run: |
+          $F = "$env:RUNNER_TEMP\f\_forever_"
+          New-Item -ItemType Directory -Force "$F\Interface\AddOns", "$F\WTF\Account\T\SavedVariables" | Out-Null
+          Copy-Item -Recurse ClaudeCompanion "$F\Interface\AddOns\"
+          Set-Content -Path "$F\WTF\Account\T\SavedVariables\ClaudeCompanion.lua" -Value 'ClaudeCompanionDB = { ["schema"] = 1, ["chars"] = {} }'
+          Set-Content -Path "$F\Interface\AddOns\ClaudeCompanion\companion-data\update.json" -Value '{"auto": false}'
+          $env:CC_PORT = '47999'; $env:CC_BACKGROUND = '0'
+          $srv = Start-Process -PassThru -NoNewWindow -FilePath powershell.exe -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "$F\Interface\AddOns\ClaudeCompanion\web\server.ps1", '-Serve' -RedirectStandardOutput "$env:RUNNER_TEMP\server.log" -RedirectStandardError "$env:RUNNER_TEMP\server.err"
+          node test/web/server-api.test.js 47999 "$F\Interface\AddOns\ClaudeCompanion\companion-data"
+          $code = $LASTEXITCODE
+          if ($code -ne 0) { Get-Content "$env:RUNNER_TEMP\server.log", "$env:RUNNER_TEMP\server.err" -ErrorAction SilentlyContinue }
+          Stop-Process -Id $srv.Id -Force -ErrorAction SilentlyContinue
+          exit $code

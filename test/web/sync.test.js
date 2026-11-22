@@ -176,6 +176,25 @@ async function main() {
     check(got('slow') === 50 && got('fast') === 50, `overlapping pushes: a push that commits late still reaches the others (${got('slow')} + ${got('fast')} of 100)`);
 
     // closed to the API: nothing but the functions
+    // ---- snapshots: each computer's "now" online for Claude, one row per computer, never pulled
+    const snap = { schema: 1, written: '2026-11-22T15:30:00Z', by: 'app', savedInGame: '2026-11-22T15:29:50Z',
+      character: { name: 'Gabriel', where: { zone: 'Felwood', x: 0.5, y: 0.4 } }, quests: [{ id: 1, title: 'Cleansing Felwood' }] };
+    check(await pc.client.pushSnapshot(snap), 'a computer sends its snapshot');
+    check(!(await pc.client.pushSnapshot(Object.assign({}, snap, { written: '2026-11-22T15:31:00Z', by: 'background' }))), 'the same snapshot again (a new write time only) is not sent');
+    await pc.client.pushSnapshot(Object.assign({}, snap, { quests: [] }));
+    const snaps = B.query(`select count(*) || '|' || max(data->>'savedInGame') || '|' || max(jsonb_array_length(data->'quests')) from public.records where kind = 'snapshot'`);
+    check(snaps === '1|2026-11-22T15:29:50Z|0', `one current snapshot per computer, replaced when it changes (${snaps})`);
+    const hist = B.query(`select count(*) from private.history where kind = 'snapshot' and data->'character'->'where'->>'zone' = 'Felwood'`);
+    check(hist === '1', 'Claude reads it in private.history');
+    const before = Object.values(mac.client.cache.recs).filter((x) => x.kind === 'snapshot').length;
+    await mac.client.pull(null);
+    check(before === 0 && !Object.values(mac.client.cache.recs).some((x) => x.kind === 'snapshot'), 'other computers don\'t pull it');
+    const huge = 'x'.repeat(100000);
+    await pc.client.pushSnapshot(Object.assign({}, snap, { big: huge }));
+    check(B.query(`select length(data->>'big') from public.records where kind = 'snapshot'`) === '100000', 'a snapshot may be bigger than a history record');
+    let forged = false;
+    try { await B.fetch(S.CONFIG.url + '/rest/v1/rpc/cc_push', { body: JSON.stringify({ p_key: pc.files.state && JSON.parse(pc.files.state).key, p_records: [{ id: 'snapshot|someone-else', char: '*', kind: 'snapshot', t: 1, data: { big: huge }, mutable: true }] }) }).then(async (r) => { if (!r.ok) throw new Error(await r.text()); }); } catch (e) { forged = /bad record/.test(e.message); }
+    check(forged, 'a big record must be this computer\'s own snapshot');
     let closed = 0;
     for (const sql of ['select count(*) from public.records', 'select count(*) from public.accounts', 'select count(*) from private.link_codes', "insert into public.records(account_id,id,char_key,kind,data) values (gen_random_uuid(),'x','x','x','{}')"]) {
       try { B.query('set role anon; ' + sql); } catch (e) { closed++; }
