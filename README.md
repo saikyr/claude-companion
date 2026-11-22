@@ -1,68 +1,51 @@
 # Claude Companion
 
-A World of Warcraft **Forever** addon plus a small local app. The addon records your character
-(gear, bags, bank, talents for both specs, action bars, quests, professions, reputation, gold,
-loot, grinds, auction house prices and sales). The app shows it all in one window on your own
-computer and writes a compact `snapshot.json` that Claude reads when it coaches you. Claude's
-suggestions (farms, flips, quests, gear) come back as cards in the app's **From Claude** tab.
+An addon for **World of Warcraft Forever** plus a small app on your own computer. The addon records
+your character: gear, bags and bank, both specs' talents and action bars, quests, professions,
+reputation, gold, loot, grinds and dungeon runs, and auction house prices and sales. The app shows all
+of it in one window, scores gear for your spec, tracks farms and flips, and writes a compact summary
+that Claude reads when it coaches you. Claude's suggestions come back as cards in the app's
+**From Claude** tab.
 
-The app is a tiny server on `localhost` that reads the game's own saved file, and updates itself when
-a new tested build is out. Your data goes nowhere else. How it all fits: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Works for any class and spec. English game client only, for now.
 
 ## Install
 
-1. Get the newest build: the `stable` branch of this repository (Code > Download ZIP on that branch),
-   or the public download repository once there is one. After this first install the app updates itself.
-2. Unzip it into your Forever AddOns folder, so you get `.../AddOns/ClaudeCompanion/ClaudeCompanion.toc`:
-   - **Windows:** `C:\...\World of Warcraft\_forever_\Interface\AddOns\`
-   - **macOS:** `/Applications/World of Warcraft/_forever_/Interface/AddOns/`
-3. Start the game, log in, type `/cc sync` once. That saves everything the addon can see.
-4. Set up the app, once:
-   - **Windows:** double-click `AddOns\ClaudeCompanion\web\Claude Companion.bat` once. It adds
-     **Claude Companion** to the Start menu (right-click it there and pin it to the taskbar) and opens the
-     app in its own window. No console window opens, then or later.
-   - **macOS:** open `AddOns/ClaudeCompanion/web/Claude Companion.app`. The first time, macOS blocks it
-     because it came from the internet and isn't from the App Store: choose **Done**, then
-     **System Settings > Privacy & Security > Open Anyway** (macOS 15 and later; on older versions,
-     Control-click the app and choose **Open**). It uses the Python 3
-     that comes with Apple's Command Line Tools and offers to install them if they're missing.
+1. Download the newest build for your computer (no account needed):
+   **[ClaudeCompanion-Windows.zip](https://jucbngafdnyaizfxgplk.supabase.co/storage/v1/object/public/releases/latest/ClaudeCompanion-Windows.zip)** or **[ClaudeCompanion-Mac.zip](https://jucbngafdnyaizfxgplk.supabase.co/storage/v1/object/public/releases/latest/ClaudeCompanion-Mac.zip)**.
+2. Open it:
+   - **Windows:** right-click the zip, **Extract All**, then double-click **Install Claude Companion** in
+     the extracted folder. If Windows asks, choose **Run** (or **More info > Run anyway**).
+   - **Mac:** double-click the zip, then **Install Claude Companion**. The first time, macOS says it can't
+     check the app: click **Done**, open **System Settings > Privacy & Security**, scroll down and click
+     **Open Anyway** (on macOS 14 and older: Control-click the app, **Open**). If the Mac has no Python 3
+     yet, it offers Apple's free Command Line Tools; install them and open the app again.
+3. The installer finds your WoW Forever folder (or asks you to pick the **World of Warcraft** folder),
+   puts the addon in `_forever_/Interface/AddOns/ClaudeCompanion` and opens the app in your browser.
+4. In game: `/reload` if the game was running, then `/cc sync`. The app shows your character a few
+   seconds later.
 
-   This makes the app's small server start by itself, hidden, whenever you sign in to your computer
-   (no window to keep open), and opens the app in your browser. There, click **Install as an app**
-   at the bottom of the sidebar (Chrome or Edge), or in Safari choose **File > Add to Dock**. From
-   then on Claude Companion is a normal app: Dock, Launchpad and Spotlight on a Mac; Start menu and
-   taskbar on Windows. After updating the addon, run the setup once more so the new server runs.
-   To remove it from startup: `Claude Companion.bat uninstall` (Windows) or
-   `/usr/bin/python3 server.py --uninstall` in that folder (macOS).
-5. The app updates by itself a few seconds after each `/cc sync` (or logout) in game.
+From then on the app starts by itself (hidden) when you sign in to your computer, and **updates
+itself**: every tested build installs within about 30 minutes; type `/reload` in game when the app
+says so. To keep it handy: **Install as an app** in the app's sidebar (Chrome, Edge), or in Safari
+**File > Add to Dock**. On Windows it is also in the Start menu.
 
-To fill in everything once: open your bank, each profession window, a flight master, a mailbox
-and the auction house (press **Claude scan**), switch to your other spec, then `/cc sync`.
-The Overview tab shows what is up to date and what isn't.
+To fill everything in once: open your bank, each profession window, a flight master, a mailbox and
+the auction house (press **Claude scan**), switch to your other spec, then `/cc sync`. The Overview tab
+shows what is up to date.
 
-### Sharing with friends
+## Several computers
 
-Send them the release zip and this README. Their data stays on their computer. The addon works
-for any class and character, with these limits today (see the [issues](../../issues)):
-every class and spec has starter stat weights from its WoW Forever guide's stat order (see
-docs/STAT-WEIGHTS.md; edit your own copy on the Stat weights page), and the app is English-only.
-
-### Playing on two computers
-
-Each computer has its own saved file and its own `snapshot.json`; they are not synced. Sync on the
-computer you played on last before asking Claude about your character.
-
-### Updating
-
-Close the app window and its server window, delete the old `AddOns/ClaudeCompanion` folder,
-unzip the new release in its place, start the app again. Your data is in the game's
-`WTF/.../SavedVariables` folder, not in the addon folder, so it is kept.
+Each install makes its own private sync account, with no sign-up. To see the same history on another
+computer, install there too, then on the first computer open **System > Link another computer** and
+type the code it shows on the second one. Each computer shows your character as the computer that
+played last saw it.
 
 ## In game
 
 | Command | What |
 | --- | --- |
-| `/cc` | Open the Claude window (message from Claude, note box, Sync) |
+| `/cc` | The Claude Companion window: a note to Claude, and Sync |
 | `/cc sync` | Save everything now (reloads the UI) |
 | `/cc start <name>` / `/cc stop` / `/cc pause` | Track a grind: time, kills, loot, gold and XP per hour |
 | `/cc status` | Gold, kills and XP per hour so far |
@@ -71,46 +54,30 @@ unzip the new release in its place, start the app again. Your data is in the gam
 
 Key bindings: Options > Key Bindings > AddOns > Claude Companion.
 
-## Repository
+## Your data
 
-| Path | What |
-| --- | --- |
-| `ClaudeCompanion/` | The addon folder exactly as installed: Lua, `.toc`, and `web/` (the app) |
-| `ClaudeCompanion/web/` | App: `index.html`, `js/`, `css/`, `server.ps1` + `Claude Companion.bat` (Windows), `server.py` + `Claude Companion.app` (macOS) |
-| `ClaudeCompanion/companion-data/SCHEMA.md` | The `snapshot.json` contract Claude reads, and the From Claude cards format |
-| `gamedata/` | Builds the app's game data: `web/data/gamedata.js` (QuestieDB, endgametools, ForeverDB), `web/data/suffixes.js` (foreverchanges.pro), `web/js/icons.js` (wowdev listfile) |
-| `test/harness.lua` | Runs the addon against a mock game API (Lua 5.1) |
-| `tools/publish-stable.py` | Publishes a build to the `stable` branch (CI runs it after a merge to main) |
-| `tools/install.sh` | One-time install on a Mac from the stable branch |
-| `tools/make-icons.py` | Draws the app icon (PNG for the installed app, `.icns` for the Mac launcher) |
-| `tools/check-cards.py` | Checks a From Claude `cards.json` before Claude writes it |
-| `docs/ARCHITECTURE.md` | How it fits together, data sources, contracts |
-| `docs/ROADMAP.md` | What's next |
-| `docs/STAT-WEIGHTS.md` | Default stat weights for every spec, and where the numbers come from |
-| `docs/ui-language.md` | The words, marks and colours the app uses for item advice |
+- The addon writes only the game's own saved file (`WTF/.../SavedVariables/ClaudeCompanion.lua`). The
+  app reads it through a small server that answers only your own computer (`localhost:47615`).
+- **Sync:** your history (journal, grinds, runs, AH prices and sales, settings) and your character's
+  current state are sent to the Companion's sync database (Supabase), under a random key made on your
+  computer, so your own computers can share them. The person who runs this project's sync database can
+  see what is stored there. Nothing else leaves your computer.
+- Updates come from the same download folder as the zips, only builds that passed every test; every
+  file is checked against the build's checksums before anything is installed, and a backup is kept
+  (the last 5).
 
-## Develop
+## Remove
 
-    # addon tests (mock game API)
-    cd /tmp && lua5.1 -e 'ADDONDIR="<repo>/ClaudeCompanion"' <repo>/test/harness.lua
+- **Windows:** in `AddOns\ClaudeCompanion\web`, run `Claude Companion.bat uninstall` (from a Command
+  Prompt in that folder), then delete the `AddOns\ClaudeCompanion` folder.
+- **Mac:** in Terminal, `/usr/bin/python3 "<your AddOns folder>/ClaudeCompanion/web/server.py" --uninstall`,
+  then delete the `AddOns/ClaudeCompanion` folder.
 
-    # app logic: stat weights and item advice (node)
-    node test/web/advice.test.js
+Your saved data stays in the game's `WTF` folder until you delete it.
 
-    # game data: one source per domain (docs/ARCHITECTURE.md, Data sources); rebuild ~10 min first time
-    pip install lupa && sh gamedata/build.sh
-    cp gamedata/work/out/{gamedata,suffixes}.js ClaudeCompanion/web/data/ && cp gamedata/work/out/icons.js ClaudeCompanion/web/js/
-    cp gamedata/work/out/COVERAGE.md gamedata/
-    # check the shipped data is complete (CI runs both)
-    python3 -I gamedata/test_pack.py ClaudeCompanion/web/data/gamedata.js && node test/web/data.test.js
+## More
 
-    # web tests: merge rules (for the planned sync), self-update end to end (no network)
-    node test/web/merge.test.js
-    python3 test/update_test.py
-
-CI (`.github/workflows/checks.yml`) runs all of it, plus syntax checks, and refuses commits that
-contain a saved file or snapshot. A merge to `main` that passes is published to `stable` by
-`.github/workflows/publish.yml`, and every installed app picks it up by itself.
-
-**Never commit personal data**: `SavedVariables`, `snapshot.json`, `web/data.js` and AH scans are
-in `.gitignore`.
+- What changed: [CHANGELOG.md](CHANGELOG.md)
+- How it works: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (the source code itself is private)
+- Developing, tests and releases: [docs/DEVELOP.md](docs/DEVELOP.md)
+- License: [MIT](LICENSE). Not affiliated with Blizzard Entertainment.

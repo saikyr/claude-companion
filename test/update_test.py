@@ -12,6 +12,7 @@ a spare port; the test asks for the update status, installs, and checks:
   - the server came back up on its own after the restart
     python test/update_test.py            (server.py)
     python test/update_test.py --ps1      (server.ps1, Windows)
+    add --url to update from a download folder (latest.json + zip, no token) instead of GitHub
 """
 import hashlib, io, json, os, shutil, subprocess, sys, tempfile, threading, time, urllib.request, zipfile
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
@@ -19,6 +20,7 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, 'ClaudeCompanion')
 PS1 = '--ps1' in sys.argv
+URL = '--url' in sys.argv   # the download folder (web/channel.json "url"), what installed apps use
 API_PORT, APP_PORT = 47700, 47616 if not PS1 else 47617
 seen = {'api_auth': None, 'dl_auth': 'unset'}
 
@@ -41,7 +43,7 @@ def build_zip(corrupt=False):
     b = io.BytesIO()
     with zipfile.ZipFile(b, 'w', zipfile.ZIP_DEFLATED) as z:
         for k, v in files.items(): z.writestr(top + 'ClaudeCompanion/' + k, v)
-        z.writestr(top + 'BUILD.json', json.dumps({'version': '1.4.0', 'files': sums}))
+        z.writestr(top + 'BUILD.json', json.dumps({'version': '1.4.0', 'build': 'newbuild5678', 'files': sums}))
     return b.getvalue()
 
 
@@ -58,6 +60,11 @@ class GitHub(BaseHTTPRequestHandler):
                 self.send_response(415); self.end_headers(); return
             seen['api_auth'] = self.headers.get('Authorization')
             self.send_response(302); self.send_header('Location', f'http://127.0.0.1:{API_PORT}/dl/release.zip'); self.end_headers(); return
+        if self.path == '/dl/latest.json':
+            seen['api_auth'] = self.headers.get('Authorization')
+            body = json.dumps({'tag': 'abc123def456', 'sha': 'abc123def4567890abc123def4567890abc123de', 'version': '1.4.0', 'build': 'newbuild5678',
+                               'name': 'Build 1.4.0 from main abc: test', 'zip': 'latest/ClaudeCompanion-Windows.zip'}).encode()
+            self.send_response(200); self.send_header('Content-Type', 'application/json'); self.send_header('Content-Length', str(len(body))); self.end_headers(); self.wfile.write(body); return
         if self.path.startswith('/dl/'):
             seen['dl_auth'] = self.headers.get('Authorization')
             z = ZIP[SERVE['which']]
@@ -96,6 +103,7 @@ def main():
     for k, v in personal.items():
         with open(os.path.join(cd, k), 'w') as f: f.write(v)
     cfg = {'repo': 'me/cc', 'api': f'http://127.0.0.1:{API_PORT}', 'token': 'test-token', 'auto': False}
+    if URL: cfg['url'] = f'http://127.0.0.1:{API_PORT}/dl/'   # a token is configured, and must not be sent there
     with open(os.path.join(cd, 'update.json'), 'w') as f: json.dump(cfg, f)
     old_server = open(os.path.join(addon, 'web', 'server.py'), 'rb').read()
     env = dict(os.environ, CC_PORT=str(APP_PORT), CC_BACKGROUND='0', LOCALAPPDATA=os.path.join(tmp, 'local'), HOME=os.path.join(tmp, 'home'))
@@ -134,7 +142,8 @@ def main():
         b = inst.get('backup') or ''
         check(os.path.isdir(b) and os.path.isfile(os.path.join(b, 'web', 'server.py')) and not os.path.exists(os.path.join(b, 'companion-data')),
               'backup made, without companion-data: ' + b)
-        check(seen['api_auth'] == 'Bearer test-token' and seen['dl_auth'] is None, f"token sent to the API, not to the download ({seen['api_auth']!r}, {seen['dl_auth']!r})")
+        if URL: check(seen['api_auth'] is None and seen['dl_auth'] is None, f"no token sent to the download folder ({seen['api_auth']!r}, {seen['dl_auth']!r})")
+        else: check(seen['api_auth'] == 'Bearer test-token' and seen['dl_auth'] is None, f"token sent to the API, not to the download ({seen['api_auth']!r}, {seen['dl_auth']!r})")
         # the server restarts itself on the new code
         up = False
         time.sleep(2)

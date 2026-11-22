@@ -1,0 +1,31 @@
+Claude Companion for World of Warcraft Forever
+===============================================
+
+Install (once)
+  Windows: unzip this file (right-click > Extract All), then double-click "Install Claude Companion".
+           If Windows asks whether to run it, choose Run (or More info > Run anyway).
+  Mac:     double-click "Install Claude Companion". The first time, macOS says it can't check the
+           app: click Done, open System Settings > Privacy & Security, scroll down and click
+           Open Anyway next to "Install Claude Companion" (on older macOS: Control-click > Open).
+
+The installer finds your WoW Forever folder (or asks you to pick it), puts the addon in
+_forever_/Interface/AddOns/ClaudeCompanion and opens the app in your browser. From then on the app
+starts by itself when you sign in to your computer and updates itself. Nothing else to download.
+
+In game: type /reload if the game was running, then /cc sync. The app shows your character a few
+seconds later. Open your bank, profession windows, a flight master and the auction house once
+(press "Claude scan"), switch to your other spec once, then /cc sync again to fill everything in.
+
+Your data
+  Everything the addon records stays in your game's own saved file. The app syncs your history
+  between your own computers through the Companion's sync service, under a private random key made
+  on your computer. To use a second computer: System tab > Link another computer.
+
+Remove
+  Windows: run "Claude Companion.bat uninstall" in AddOns\ClaudeCompanion\web, then delete the
+           AddOns\ClaudeCompanion folder.
+  Mac:     in Terminal, /usr/bin/python3 "<AddOns>/ClaudeCompanion/web/server.py" --uninstall,
+           then delete the AddOns/ClaudeCompanion folder.
+
+Newest download: https://jucbngafdnyaizfxgplk.supabase.co/storage/v1/object/public/releases/latest/ClaudeCompanion-Windows.zip
+            or https://jucbngafdnyaizfxgplk.supabase.co/storage/v1/object/public/releases/latest/ClaudeCompanion-Mac.zip
