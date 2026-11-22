@@ -241,7 +241,7 @@ Fire("LOOT_CLOSED")
 Fire("CHAT_MSG_LOOT", "You receive loot: |cffffffff|Hitem:4338::|h[Mageweave Cloth]|h|r.")
 Fire("CHAT_MSG_COMBAT_FACTION_CHANGE", "Reputation with Timbermaw Hold increased by 15.")
 Fire("PLAYER_INTERACTION_MANAGER_FRAME_SHOW", 21)
-SlashCmdList.CLAUDECOMPANION("scan"); Fire("REPLICATE_ITEM_LIST_UPDATE"); RunTimers()
+SlashCmdList.CLAUDECOMPANION("scan"); Fire("REPLICATE_ITEM_LIST_UPDATE"); Advance(3); RunTimers()
 SlashCmdList.CLAUDECOMPANION("scan")
 Fire("PLAYER_INTERACTION_MANAGER_FRAME_SHOW", 8); RunTimers(); Fire("PLAYER_INTERACTION_MANAGER_FRAME_HIDE", 8)
 Fire("PLAYER_INTERACTION_MANAGER_FRAME_SHOW", 5); RunTimers()
@@ -554,6 +554,62 @@ do
   check(ns.ImportBossLog() == nil, "without the journal addon nothing breaks")
   IsInInstance, GetInstanceInfo = oldII, oldGI
   if FAILED then error("boss log checks failed") end
+end
+-- AH scan: read a slice per frame with progress, only ask links for " of " items, reread only the missing
+do
+  local function check(ok, what) print((ok and "PASS " or "FAIL ") .. what); if not ok then FAILED = true end end
+  local c; for _, v in pairs(ClaudeCompanionDB.chars) do c = v end
+  local AHm = C_AuctionHouse
+  local oldN, oldInfo, oldLink = AHm.GetNumReplicateItems, AHm.GetReplicateItemInfo, AHm.GetReplicateItemLink
+  local N, loaded, linkCalls = 1000, false, 0
+  AHm.GetNumReplicateItems = function() return N end
+  AHm.GetReplicateItemInfo = function(i)
+    if i % 10 == 0 then -- every 10th: a random-suffix cape, details not loaded on the first read
+      return "Gossamer Cape of Healing", 1, 1, 2, true, 40, 0, 1, 1, 50000 + i, 0, false, nil, "x", "x", 0, 7524, loaded
+    end
+    return "Silk Cloth", 1, 20, 1, true, 40, 0, 1, 1, 2000 + i, 0, false, nil, "x", "x", 0, 4306, true
+  end
+  AHm.GetReplicateItemLink = function(i) linkCalls = linkCalls + 1; return "|cff1eff00|Hitem:7524::::::903:::|h[Gossamer Cape of Healing]|h|r" end
+  c.ah.lastScan = nil
+  local refreshes, pcts = 0, {}
+  local oldRefresh = ns.ScanButtonRefresh
+  ns.ScanButtonRefresh = function() refreshes = refreshes + 1; if ns.ahScan.total then pcts[#pcts + 1] = ns.ahScan.done end end
+  local oldAfter, delayed = C_Timer.After, {}
+  C_Timer.After = function(d, fn) if d >= 15 then delayed[#delayed + 1] = fn else oldAfter(d, fn) end end
+  ns.AHScan()
+  check(ns.ahScan.state == "scanning", "scan waits for the list")
+  Fire("REPLICATE_ITEM_LIST_UPDATE"); Advance(1); RunTimers()
+  -- a timer loop that keeps checking while updates arrive: still waiting, not read yet
+  Fire("REPLICATE_ITEM_LIST_UPDATE")
+  check(ns.ahScan.state == "scanning", "still waiting while the list grows")
+  Advance(3)
+  local frames = 0
+  -- run timers one round at a time to count the frames the read takes
+  for _ = 1, 100 do RunTimers(); frames = frames + 1; if ns.ahScan.state == "idle" then break end end
+  local ls = c.ah.lastScan
+  check(ls and ls.auctions == N, "all " .. N .. " auctions read (" .. tostring(ls and ls.auctions) .. ")")
+  check(#pcts >= 3, "read in slices with progress (" .. #pcts .. " progress updates)")
+  check(linkCalls == 0, "no link asked for plain items, and none for capes whose details weren't loaded (" .. linkCalls .. ")")
+  check(ls and ls.missingInfo == 100, "100 capes waiting for details (" .. tostring(ls and ls.missingInfo) .. ")")
+  local silk = c.ah.prices["4306"] or c.ah.prices[4306]
+  check(silk and silk.obs[#silk.obs].qty == 900 * 20 and silk.obs[#silk.obs].min == 100, "Silk priced per unit from 900 auctions")
+  -- the reread: only the 100 missing rows, now with details
+  loaded = true; linkCalls = 0
+  for _, fn in ipairs(delayed) do fn() end; delayed = {}
+  for _ = 1, 100 do RunTimers(); if ns.ahScan.state == "idle" and c.ah.lastScan.pass then break end end
+  ls = c.ah.lastScan
+  check(ls.pass == 2 and ls.missingInfo == 0 and linkCalls == 100, "second pass rereads only the 100 capes (" .. linkCalls .. " links)")
+  local capeKey; for k, p in pairs(c.ah.prices) do if p.id == 7524 and p.suffix == 903 then capeKey = k end end
+  check(capeKey ~= nil, "the cape is priced with its suffix (of Healing)")
+  -- closing the AH while reading stops cleanly
+  c.ah.lastScan.t = c.ah.lastScan.t - 3600
+  ns.AHScan(); Fire("REPLICATE_ITEM_LIST_UPDATE"); Advance(3)
+  ns.ahScan.state = "reading" -- as if mid-read
+  Fire("AUCTION_HOUSE_CLOSED")
+  check(ns.ahScan.state == "idle", "closing the AH mid-scan stops it")
+  ns.ScanButtonRefresh = oldRefresh; C_Timer.After = oldAfter
+  AHm.GetNumReplicateItems, AHm.GetReplicateItemInfo, AHm.GetReplicateItemLink = oldN, oldInfo, oldLink
+  if FAILED then error("AH scan checks failed") end
 end
 local f = io.open("out.lua", "w"); f:write("ClaudeCompanionDB = " .. ser(ClaudeCompanionDB)); f:close()
 print("DIAG:")

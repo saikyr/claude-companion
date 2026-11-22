@@ -2,6 +2,17 @@
 
 Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 
+## Unreleased (smooth AH scan)
+
+- **The full AH scan no longer freezes the game.** With 200,000+ auctions it read everything in one
+  frame, up to three times. Now it waits until the list stops growing, reads a slice per frame (about
+  6 ms), only asks for item links on items whose name has " of " (random suffixes), and the second
+  pass rereads only the auctions whose details hadn't loaded. Closing the AH mid-scan stops it cleanly.
+  `lastScan.secs` says how long it took.
+- **The button moved** just below the AH window's right edge ("Scan AH"), where the game's own
+  buttons and tabs can't overlap it. It shows Waiting, Reading 45%, Saving, and next to it when the
+  next scan is allowed.
+
 ## Unreleased (dungeon runs)
 
 - **Dungeon and raid runs are tracked by themselves.** Entering an instance starts a run on the same
