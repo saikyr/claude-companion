@@ -60,17 +60,28 @@
     }).sort((a, b) => a.i - b.i);
   }
   // choices are kept per character and spec, in this browser
-  const store = (spec, what) => `cc.gear.${what}.${char().name || ''}.${spec.i}`;
+  // Keys use the game's talent group (spec1 / spec2). Choices made before that were saved under the
+  // reader's array index (0 = group 1, 1 = group 2; a lone group 2 under 2) and are read from there
+  // until something new is saved.
+  const store = (spec, what) => `cc.gear.${what}.${char().name || ''}.spec${spec.i}`;
+  const legacy = (spec, what) => (spec.i === 1 ? [0] : [1, 2]).map((n) => `cc.gear.${what}.${char().name || ''}.${n}`);
+  const readChoice = (spec, what) => {
+    const v = localStorage.getItem(store(spec, what));
+    if (v != null) return v;
+    for (const k of legacy(spec, what)) { const o = localStorage.getItem(k); if (o != null) return o; }
+    return null;
+  };
   // the profile you picked for a spec (null: the default for its biggest tree)
   function pickedProfile(spec) {
     const cls = char().classFile;
-    W.migrate(char().name, spec.i, cls);
-    const pick = localStorage.getItem(store(spec, 'profile'));
+    W.migrate(char().name, spec.i - 1, cls);
+    const pick = readChoice(spec, 'profile');
     const p = pick && W.get(pick);
     return p && p.cls === cls ? pick : null;
   }
   const profileKey = (spec) => pickedProfile(spec) || W.defaultFor(char().classFile, spec.tree);
-  const setProfile = (spec, id) => { if (id) localStorage.setItem(store(spec, 'profile'), id); else localStorage.removeItem(store(spec, 'profile')); };
+  // clearing a pick stores '' so an older pick under the legacy key doesn't come back
+  const setProfile = (spec, id) => localStorage.setItem(store(spec, 'profile'), id || '');
   const weightsFor = (spec, pk) => (W.get(pk) || {}).w || null;
 
   // What a spec's upgrades are measured against: the gear set for that spec, else what you wear now.
@@ -78,7 +89,7 @@
   // weights ("heals" ~ Healing, "shadow" ~ Shadow).
   const SETS = () => arr((A.CH.snap || {}).gearSets).filter((g) => g && g.name && arr(g.items).length);
   function baseline(spec, pk) {
-    const sets = SETS(), pick = localStorage.getItem(store(spec, 'set'));
+    const sets = SETS(), pick = readChoice(spec, 'set');
     const stem = (x) => (x || '').toLowerCase().replace(/[^a-z]/g, '').slice(0, 4);
     const role = (W.get(W.defaultFor(char().classFile, spec.tree)) || W.get(pk) || {}).role;
     const words = [spec.tree, pk && W.get(pk) && W.get(pk).name, role === 'heal' ? 'heal' : ''].map(stem).filter((x) => x.length === 4);
@@ -342,7 +353,7 @@
 
   // ---------------------------------------------------------------- pre-BiS picks (per character, spec and slot)
   const pickKey = (spec) => store(spec, 'prebis');
-  const getPicks = (spec) => { try { return JSON.parse(localStorage.getItem(pickKey(spec)) || '{}') || {}; } catch (e) { return {}; } };
+  const getPicks = (spec) => { try { return JSON.parse(readChoice(spec, 'prebis') || '{}') || {}; } catch (e) { return {}; } };
   function setPick(spec, slot, key, unpick) {
     const p = getPicks(spec);
     if (key) {
