@@ -704,6 +704,13 @@
     if (!d.length) return '';
     return `<div class="destrip"><span class="dim small">Disenchanted</span>${d.map((x) => `${x.item ? itemIcon(x.item, { size: 'xs', count: x.count }) : ''}<span class="arrow">→</span>${Object.values(x.out || {}).map((o) => (o.item ? itemIcon(o.item, { size: 'xs', count: o.count }) : '')).join('')}`).join('<span class="gap"></span>')}</div>`;
   }
+  // items farmed for (/cc target): how many dropped, and how many the kills should have given (the
+  // addon works it out from Drops.lua: only chances ForeverDB measured on Forever, never Classic)
+  function targetsLine(g) {
+    const t = arr(g.targets);
+    if (!t.length) return '';
+    return `<div class="small">${t.map((x) => `${esc(x.name || '?')}: <b>${x.got || 0}</b>${x.expected != null ? ` <span class="dim">of ${x.expected.toFixed(2)} expected from ${x.kills} kills (Forever rate, ${x.sample}+ kills measured)</span>` : x.rated ? '' : ` <span class="dim">in ${x.kills || 0} kills · Forever rate unknown</span>`}`).join(' · ')}</div>`;
+  }
   function grindCard(g, live) {
     const s = trackerStats(g);
     // the app sees a /cc stop only once the game has saved it
@@ -713,6 +720,7 @@
       <div class="ghd"><span class="gname">${esc(g.name || 'Grind')}</span>${live ? `<span class="tag" title="${esc(liveTip)}">${g.paused ? 'paused' : 'running'}</span>` : ''}<span class="dim small">${fmtDay(g.start)} · ${dur(s.secs)}${g.startZone ? ' · ' + esc(g.startZone) : ''}</span></div>
       <div class="gnums"><div><span class="k">Per hour</span><span class="v">${gph(s.perHour)}</span></div><div><span class="k">Total</span><span class="v">${money(s.total, { short: true })}</span></div><div><span class="k">Gold looted</span><span class="v">${money(s.coin, { short: true })}</span></div><div><span class="k">Items</span><span class="v">${money(s.ah, { short: true })}</span></div><div><span class="k">Kills</span><span class="v">${g.kills || 0} <span class="dim small">${Math.round((g.kills || 0) / s.hrs)}/hr</span></span></div>${g.xp ? `<div><span class="k">XP/hr</span><span class="v">${Math.round(g.xp / s.hrs).toLocaleString()}</span></div>` : ''}</div>
       <div class="row wrap">${lootStrip(g) || '<span class="dim small">no drops</span>'}</div>
+      ${targetsLine(g)}
       ${deStrip(g)}
       ${Object.keys(g.rep || {}).length ? `<div class="small">${Object.entries(g.rep).map(([f, n]) => `<span class="${n >= 0 ? 'pos' : 'neg'}">${n >= 0 ? '+' : ''}${n}</span> ${esc(f)}`).join(' · ')}</div>` : ''}
       ${kills ? `<div class="dim small">${kills}</div>` : ''}</div>`;

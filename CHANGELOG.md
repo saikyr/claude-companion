@@ -6,6 +6,14 @@ Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 - **A run's bosses and loot names show on every computer.** The Dungeon Journal addon's boss log goes with
   each computer's "now" and the view joins both, so a run played on the PC lists its bosses on the Mac;
   run loot in the snapshot takes its name from the game-data pack when this computer never saw the item.
+- **A new grind panel.** In the app's Graphite look: the time, gold per hour, kills per hour and
+  deaths at a glance, coin per hour next to items per hour (at your AH prices), and your most valuable
+  drops as icons. **Targets**: `/cc target [item]` (or alt-click a drop) counts an item you farm for,
+  dropped against expected from your kills and its drop chance as measured on Forever (never a Classic
+  rate: without one it says "rate unknown" and shows your own rate), with the odds of none so far in
+  the tooltip; they come back the next time you `/cc start` the same name. `/cc stop` leaves the summary
+  on the panel until you close it. Stop is now shift-right-click, so a stray click can't end a grind.
+  Drop chances need one game restart after this update (a /reload doesn't load new files).
 - **/reload is the one way to save.** `/cc sync`, the window's Sync button and its key binding are gone:
   they only did a /reload, and refused to in combat, so a stop could go unsaved. `/cc stop` now says
   the app shows it after your next /reload or logout; a running grind's tag says it's as of the last save.

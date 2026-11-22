@@ -76,7 +76,9 @@
         const g = CH.grind;
         const t = (x) => (x ? new Date(x * 1000).toISOString() : null);
         const one = (x) => ({ name: x.name, device: x.device || null, start: t(x.start), last: t(x.last), finish: t(x.finish),
-          secs: x.secs != null ? x.secs : null, kills: x.kills || 0, paused: !!x.paused, ended: x.ended || null });
+          secs: x.secs != null ? x.secs : null, kills: x.kills || 0, deaths: x.deaths || 0, paused: !!x.paused, ended: x.ended || null,
+          targets: arr(x.targets).map((g) => ({ id: g.id, name: g.name, got: g.got || 0, expected: g.expected != null ? g.expected : null,
+            kills: g.kills || 0, rated: !!g.rated, sample: g.sample || null })) });
         return { running: g ? one(g) : null, recent: arr(CH.grinds).slice(-5).reverse().map(one) };
       })(),
       // flight paths you know, by continent; read{} = when that continent's flight map was last open
