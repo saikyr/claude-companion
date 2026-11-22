@@ -61,6 +61,17 @@
     return out;
   }
 
+  // bosses for a run from the ForeverDungeonJournal addon's log (copied into CH.bossLog by the addon)
+  function loggedBosses(CH, r) {
+    const out = [];
+    const to = r.finish || r.last || Date.now() / 1000;
+    arr((CH.bossLog || {}).runs).forEach((x) => {
+      if (x.dungeon !== r.name) return;
+      arr(x.bosses).forEach((b) => { if (b.t >= r.start - 60 && b.t <= to + 60 && !out.some((o) => o.name === b.name)) out.push({ name: b.name, t: b.t, source: 'journal addon' }); });
+    });
+    return out.sort((a, b) => a.t - b.t);
+  }
+
   // every run, newest first: the one going on, the addon's, then older ones from the journal
   function all(CH) {
     CH = CH || A.CH;
@@ -68,6 +79,12 @@
     const tracked = arr(CH.runs);
     const first = tracked.length ? tracked[0].start : CH.run ? CH.run.start : null;
     const list = fromJournal(CH, first).concat(tracked);
+    // runs with no boss list (rebuilt from the Journal, or the encounter events missed them)
+    list.forEach((r) => {
+      if (arr(r.bosses).length) return;
+      const b = loggedBosses(CH, r);
+      if (b.length) { r.bosses = b; r.bossSource = 'journal addon'; }
+    });
     if (CH.run) list.push(Object.assign({ live: true }, CH.run));
     return list.sort((a, b) => b.start - a.start);
   }
@@ -80,17 +97,17 @@
     const kills = Object.entries(r.killsBy || {}).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([n, k]) => `${esc(n)} ×${k}`).join(', ');
     const bosses = arr(r.bosses);
     return `<div class="grind${r.live ? ' live' : ''}">
-      <div class="ghd"><span class="gname">${esc(r.name || 'Dungeon')}</span>${r.live ? `<span class="tag">${r.inside ? 'inside' : 'outside'}</span>` : ''}${r.fromJournal ? '<span class="tag" title="Rebuilt from the Journal: no boss list, kills counted from XP gains">from the journal</span>' : ''}<span class="dim small">${A.fmtTime(r.start)} · ${A.dur(s.secs)}${r.difficulty ? ' · ' + esc(r.difficulty) : ''}${r.ended && ENDED[r.ended] ? ' · ended: ' + ENDED[r.ended] : ''}</span></div>
+      <div class="ghd"><span class="gname">${esc(r.name || 'Dungeon')}</span>${r.live ? `<span class="tag">${r.inside ? 'inside' : 'outside'}</span>` : ''}${r.fromJournal ? '<span class="tag" title="From before the addon tracked runs: rebuilt from the Journal, kills counted from XP gains">from the journal</span>' : ''}<span class="dim small">${A.fmtTime(r.start)} · ${A.dur(s.secs)}${r.difficulty ? ' · ' + esc(r.difficulty) : ''}${r.ended && ENDED[r.ended] ? ' · ended: ' + ENDED[r.ended] : ''}</span></div>
       <div class="gnums">
         <div><span class="k">Kills</span><span class="v">${r.kills || 0}</span></div>
-        <div><span class="k">Bosses</span><span class="v">${r.fromJournal ? '?' : bosses.length}</span></div>
+        <div><span class="k">Bosses</span><span class="v">${bosses.length || !r.fromJournal ? bosses.length : '<span class="dim small" title="This run is from before the addon tracked bosses, and the Dungeon Journal addon has no log of it">not recorded</span>'}</span></div>
         <div><span class="k">Deaths</span><span class="v">${r.deaths || 0}${r.wipes ? ` <span class="dim small">${r.wipes} wipe${r.wipes > 1 ? 's' : ''}</span>` : ''}</span></div>
         <div><span class="k">XP</span><span class="v">${(r.xp || 0).toLocaleString()}${xph ? ` <span class="dim small">${xph.toLocaleString()}/hr</span>` : ''}</span></div>
         <div><span class="k">Gold looted</span><span class="v">${A.money(s.coin, { short: true })}</span></div>
         <div><span class="k">Items</span><span class="v">${A.money(s.ah, { short: true })}</span></div>
         <div><span class="k">Quests</span><span class="v">${r.quests || 0}</span></div>
       </div>
-      ${bosses.length ? `<div class="small">Bosses: ${bosses.map((b) => esc(b.name)).join(', ')}</div>` : ''}
+      ${bosses.length ? `<div class="small">Bosses: ${bosses.map((b) => esc(b.name)).join(', ')}${r.bossSource ? ' <span class="dim">(from the Dungeon Journal addon\'s log)</span>' : ''}</div>` : ''}
       ${epics.length ? `<div class="small">Blues and better: ${epics.map((l) => (l.item ? A.itemIcon(l.item, { size: 'xs' }) : '') + ' ' + esc(l.name || (A.item(l.item) || {}).name || (l.link || '').replace(/.*\[(.*)\].*/, '$1'))).join(', ')}</div>` : ''}
       <div class="row wrap">${A.lootStrip(r) || '<span class="dim small">no drops</span>'}</div>
       ${arr(r.groupLoot).length ? `<div class="small">Went to others: ${r.groupLoot.map((g) => `${g.item ? A.itemIcon(g.item, { size: 'xs' }) : ''} ${esc((g.link || '').replace(/.*\[(.*)\].*/, '$1'))} → <b>${esc(g.who)}</b>${g.how === 'won' ? ' (won' + (arr(g.rolls).length ? ': ' + g.rolls.map((x) => esc(x.who) + ' ' + esc(x.choice) + (x.roll != null ? ' ' + x.roll : '')).join(', ') : '') + ')' : ''}`).join(' · ')}</div>` : ''}

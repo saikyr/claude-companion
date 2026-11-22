@@ -70,7 +70,7 @@
           const st = A.trackerStats(r);
           return { name: r.name, kind: r.kind || null, difficulty: r.difficulty || null, device: r.device || null, live: !!r.live, inside: r.live ? !!r.inside : null,
             start: t(r.start), finish: t(r.finish), ended: r.ended || null, secs: Math.round(st.secs), kills: r.kills || 0,
-            bosses: arr(r.bosses).map((b) => b.name), wipes: r.wipes || 0, deaths: r.deaths || 0, xp: r.xp || 0, quests: r.quests || 0,
+            bosses: arr(r.bosses).map((b) => b.name), bossSource: arr(r.bosses).length ? (r.bossSource || 'encounter events') : null, wipes: r.wipes || 0, deaths: r.deaths || 0, xp: r.xp || 0, quests: r.quests || 0,
             coin: st.coin, itemsValue: Math.round(st.ah),
             loot: Object.values(r.loot || {}).map((l) => ({ id: l.id, name: l.name || (A.item(l.item) || {}).name || null, q: l.q != null ? l.q : (A.item(l.item) || {}).q, count: l.count }))
               .filter((l) => (l.q || 0) >= 2),
