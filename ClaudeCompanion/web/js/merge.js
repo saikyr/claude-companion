@@ -53,6 +53,13 @@
     out.grinds = unionBy(all('grinds'), tracker, (s) => s.start);
     out.runs = unionBy(all('runs'), tracker, (s) => s.start);
     out.deResults = unionBy(all('deResults'), (d) => JSON.stringify([d.t, d.item]), (d) => d.t);
+    // the Dungeon Journal addon's boss log, copied by each computer that has it: runs from both, so a
+    // run played on one computer shows its bosses on the other (runs rebuilt from the journal use it)
+    const logs = parts.map((p) => p.c.bossLog).filter((l) => l && typeof l === 'object');
+    if (logs.length > 1) {
+      const runs = unionBy(logs.map((l) => [l.runs]), (r) => [r.id, r.start, r.dungeon].join('|'), (r) => r.start);
+      out.bossLog = Object.assign({}, logs.slice().sort((a, b) => num(b.read) - num(a.read))[0], { runs });
+    }
     // the latest-seen copy of each "now" part
     const pick = (field, t) => { const n = newest(parts.map((p) => ({ v: p.c[field] })), t); return n ? n.v : undefined; };
     out.snap = pick('snap', (s) => s.taken);

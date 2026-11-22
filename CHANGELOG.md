@@ -3,6 +3,9 @@
 Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 
 ## 1.5.0 (in progress: every merge to main updates itself)
+- **A run's bosses and loot names show on every computer.** The Dungeon Journal addon's boss log goes with
+  each computer's "now" and the view joins both, so a run played on the PC lists its bosses on the Mac;
+  run loot in the snapshot takes its name from the game-data pack when this computer never saw the item.
 - **A new grind panel.** In the app's Graphite look: the time, gold per hour, kills per hour and
   deaths at a glance, coin per hour next to items per hour (at your AH prices), and your most valuable
   drops as icons. **Targets**: `/cc target [item]` (or alt-click a drop) counts an item you farm for,

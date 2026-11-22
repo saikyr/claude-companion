@@ -68,7 +68,7 @@ recorded per craft.
 | **Grind panel** (in game) | while a grind runs: time counted, gold per hour, kills per hour and total, deaths, coin per hour vs items per hour (AH median of your newest scan, else vendor), the most valuable drops with icons, and targets: dropped vs expected (your kills of each creature that drops it × the drop chance ForeverDB **measured on Forever**, with its sample size; the tooltip gives the chance of none so far). Classic rates are never used: with no Forever rate it says "rate unknown" and shows your own count (1 per N kills, with a 95% range in the tooltip). After `/cc stop` it shows the grind's summary until closed. Shift-click pause, shift-right-click stop, alt-click a drop to make it a target | `UI.lua`; drop chances `Drops.lua` (made from the pack by `tools/make-drops.py`; loads after a game restart, not a /reload) | the grind record's `targets[]` (`id`, `name`, `got`, `expected`, `kills`, `rated`, `sample`); snapshot `grind.*.targets` |
 | Grind gold per hour | `(looted coin + loot at today's AH median, else vendor price) / counted hours`. Loot value is what it would sell for, not what it sold for | Grinds tab, From Claude cards with `track` | compute from the record the same way, or quote the Grinds tab |
 | Sessions | the same counters from login to logout, automatic | kind `session` | `kind = 'session'` |
-| **Dungeon and raid runs** | automatic from entering an instance: time inside, kills, bosses, wipes, deaths, XP, quests, coin, loot (green+), loot value, group, loot that went to others with the rolls. Ends after 15 min outside, another instance, a reset, or away | kind `run`; Dungeons tab | snapshot `runs[]` (10); all: `kind = 'run'` |
+| **Dungeon and raid runs** | automatic from entering an instance: time inside, kills, bosses, wipes, deaths, XP, quests, coin, loot (green+), loot value, group, loot that went to others with the rolls. Ends after 15 min outside, another instance, a reset, or away. Runs from before the addon tracked runs are rebuilt from the journal (`fromJournal: true`, no `run` row; their bosses come from the Dungeon Journal addon's log, synced to every computer) | kind `run`; Dungeons tab | snapshot `runs[]` (10); all: `kind = 'run'` plus, for `fromJournal` runs, the journal |
 
 ## Character, gear and quests
 
@@ -95,7 +95,7 @@ scores by hand (CLAUDE.md, the scoring rule).
 | --- | --- |
 | From Claude cards (Claude writes, the player ticks or closes) | From Claude tab, Overview; setting `cc.claude.cards`, choices in `cc.claude.cardsState` |
 | Sync between computers (union of history, newest "now" per part); can be turned off per computer | System tab; [ARCHITECTURE.md](ARCHITECTURE.md) |
-| Self-update from `stable` within ~30 min; the app says "type /reload" when the addon is older | System tab; `snapshot.app.build` |
+| Self-update from `stable` within ~30 min; the app says "type /reload" when the addon is older. Each computer checks on its own clock, so for up to ~30 min after a merge two computers can show different builds | System tab; `snapshot.app.build` (and `installedAt`) |
 
 ## Not tracked (say so; don't guess)
 
