@@ -725,6 +725,42 @@ local function Roster()
     return out
 end
 
+-- Boss kills logged by the ForeverDungeonJournal addon, if it's installed: it keeps a log of each
+-- run with the boss of every encounter. Copied (read only) into c.bossLog, so runs from before this
+-- addon tracked bosses, and any boss the encounter events missed, still show. Nothing depends on it.
+function ns.ImportBossLog()
+    local c = ns.char
+    local db = rawget(_G, "ForeverDungeonJournalCharacterDB")
+    local runs = c and type(db) == "table" and type(db.runLog) == "table" and db.runLog.runs
+    if type(runs) ~= "table" then return end
+    local out = {}
+    for i = math.max(1, #runs - 29), #runs do
+        local r = runs[i]
+        if type(r) == "table" and type(r.kills) == "table" then
+            local bosses, seen = {}, {}
+            for _, k in ipairs(r.kills) do
+                local b = type(k) == "table" and Clean(k.b)
+                if type(b) == "string" and not seen[b] then seen[b] = true; bosses[#bosses + 1] = { name = b, t = Clean(k.t) } end
+            end
+            out[#out + 1] = { id = Clean(r.id), dungeon = Clean(r.dungeon) or Clean(r.instanceName), start = Clean(r.created),
+                finish = Clean(r.endedAt) or Clean(r.lastSeen), bosses = bosses }
+        end
+    end
+    c.bossLog = { from = "ForeverDungeonJournal", read = ns.Now(), runs = out }
+    return out
+end
+-- bosses the journal addon logged between from and to in this dungeon
+local function LoggedBosses(name, from, to)
+    local log = ns.ImportBossLog() or {}
+    local list = {}
+    for _, r in ipairs(log) do
+        if r.dungeon == name then
+            for _, b in ipairs(r.bosses) do if b.t and b.t >= from and b.t <= to then list[#list + 1] = { name = b.name, t = b.t, source = "journal addon" } end end
+        end
+    end
+    return list
+end
+
 -- at: when it ended (default: when you were last inside). why: left / other / reset / away / logout / you
 function ns.RunEnd(why, at)
     local c = ns.char
@@ -733,6 +769,12 @@ function ns.RunEnd(why, at)
     at = at or r.leftAt or ns.Now()
     r.finish = at
     r.ended = why
+    -- a boss the encounter events didn't report (or none at all): take it from the journal addon's log
+    local have = {}
+    for _, b in ipairs(r.bosses or {}) do have[b.name] = true end
+    for _, b in ipairs(LoggedBosses(r.name, r.start, at)) do
+        if not have[b.name] then have[b.name] = true; r.bosses[#r.bosses + 1] = b end
+    end
     r.secs = math.max(0, at - r.start - (r.outsideSecs or 0) - (r.pausedSecs or 0))
     r.vendorValue, r.ahValue = ns.LootValue(r)
     r.coin = (r.bySource and r.bySource.loot) or 0
@@ -853,6 +895,7 @@ ns.OnLogin(function()
         end
     end
     C_Timer.After(2, function() ns.Try("run", ns.RunCheck) end)
+    C_Timer.After(5, function() ns.Try("bossLog", ns.ImportBossLog) end)
     local g = c.grind
     -- a /reload that wasn't recognised as one ended the grind at "logout": seconds later, bring it back
     local last = c.grinds and c.grinds[#c.grinds]
@@ -881,6 +924,7 @@ ns.OnLogout(function()
     if c.grind and not reloading then ns.GrindStop(true, nil, "logout") end
     -- a dungeon run stays open over a logout (a disconnect); the next login decides
     if c.run then c.run.last = ns.Now() end
+    ns.Try("bossLog", ns.ImportBossLog)
     ns.Log("logout", { money = Clean(GetMoney()), reload = reloading or nil })
 end)
 

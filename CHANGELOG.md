@@ -23,6 +23,10 @@ Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
   when, the app groups them and says which continent still needs a flight map opened, and
   `snapshot.json` has `flightPaths`. Old "zzOLD" nodes are dropped.
 - Bosses come from the game's own encounter events, not from the Dungeon Journal addon.
+- **Bosses for older runs:** when the ForeverDungeonJournal addon is installed, its per-run boss log is
+  copied (read only) into `c.bossLog` at login and logout. Runs rebuilt from the Journal, and tracked
+  runs the encounter events missed, take their bosses from it. Without it, the Dungeons tab says "not
+  recorded" instead of "?".
 - `snapshot.json`: `runs[]` (the last 10, newest first). Journal: `runStart`, `runLeft`, `runBack`,
   `boss`, `wipe`, `runEnd`.
 

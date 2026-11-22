@@ -505,6 +505,35 @@ do
   GetTaxiMapID, C_Map = oldTM, oldMap
   if FAILED then error("group loot / flight path checks failed") end
 end
+-- bosses from the ForeverDungeonJournal addon's run log (same shape as Gabriel's save)
+do
+  local function check(ok, what) print((ok and "PASS " or "FAIL ") .. what); if not ok then FAILED = true end end
+  local c; for _, v in pairs(ClaudeCompanionDB.chars) do c = v end
+  local t0 = ns.Now()
+  ForeverDungeonJournalCharacterDB = { runLog = { runs = { { id = 57, dungeon = "Blackrock Depths", created = t0, lastSeen = t0 + 2700, kills = {
+    { a = 1, t = t0 + 10, m = "Anvilrage Overseer", x = 160 },
+    { a = 1, t = t0 + 900, m = "Golem Lord Argelmach", b = "Golem Lord Argelmach" },
+    { a = 1, t = t0 + 1500, m = "Anger'rel", b = "The Seven" }, { a = 1, t = t0 + 1600, m = "Gloom'rel", b = "The Seven" },
+    { a = 1, t = t0 + 2600, m = "Emperor Dagran Thaurissan", b = "Emperor Dagran Thaurissan", f = 1 } } } } } }
+  local log = ns.ImportBossLog()
+  check(log and #log == 1 and #log[1].bosses == 3, "journal addon log read: 3 bosses, The Seven once (" .. tostring(log and #log[1].bosses) .. ")")
+  check(c.bossLog and c.bossLog.runs[1].bosses[3].name == "Emperor Dagran Thaurissan", "kept in the save for the app")
+  -- a tracked run whose encounter events didn't come gets them at the end
+  local oldII, oldGI = IsInInstance, GetInstanceInfo
+  IsInInstance = function() return true, "party" end
+  GetInstanceInfo = function() return "Blackrock Depths", "party", 1, "Normal", 5, 0, false, 230 end
+  c.run = nil
+  local now0 = ns.Now
+  ns.Now = function() return t0 end; Fire("PLAYER_ENTERING_WORLD")
+  ns.Now = function() return t0 + 2700 end
+  local r = ns.RunEnd("left", t0 + 2700)
+  ns.Now = now0
+  check(r and #r.bosses == 3 and r.bosses[1].source == "journal addon", "run with no encounter events gets its bosses from the log")
+  ForeverDungeonJournalCharacterDB = nil
+  check(ns.ImportBossLog() == nil, "without the journal addon nothing breaks")
+  IsInInstance, GetInstanceInfo = oldII, oldGI
+  if FAILED then error("boss log checks failed") end
+end
 local f = io.open("out.lua", "w"); f:write("ClaudeCompanionDB = " .. ser(ClaudeCompanionDB)); f:close()
 print("DIAG:")
 for k, d in pairs(ClaudeCompanionDB.chars["Gabriel-Atlas"].diag) do if d.err > 0 then print(k, d.err, d.lastErr) end end
