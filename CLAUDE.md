@@ -10,6 +10,14 @@ computers (Supabase). **The app is complete without Claude.** Claude is an optio
 what the app computed and writes suggestions back as From Claude cards. Every boundary, its owner and
 its CI check: [docs/INTERFACES.md](docs/INTERFACES.md).
 
+## Before answering
+
+1. Read [docs/FEATURES.md](docs/FEATURES.md): what the app records, where, and what it doesn't. Never say a
+   feature exists or doesn't without checking it there and in the code.
+2. Query the app's own data (the snapshot and `private.history`) and say how old it is.
+3. Never call money profit without a cost basis: profit is only `ah.flips` (sales matched to recorded
+   buys). A sale alone is revenue; loot and crafts have no recorded cost.
+
 ## Where the truth lives
 
 | Question | Read | Never |
