@@ -39,6 +39,7 @@ test('every class and spec has a sourced default', () => {
   }
   assert(Object.values(W.BUILTIN).every((p) => !/guide order|mana model|project weights|:/.test(p.name)), 'plain profile names');
   assert(Object.values(W.BUILTIN).filter((p) => p.basis).every((p) => Object.values(p.basis).every((b) => !/× cost/.test(b))), 'reasons in plain words');
+  assert(['healing', 'disc', 'shadow'].every((id) => Object.keys(W.BUILTIN[id].w).every((k) => !W.PCT[k])), 'worked-out profiles leave "%" lines to their rating');
 });
 test('weapon specs weigh weapon DPS at 14 attack power', () => {
   const arms = W.get('iv-arms');

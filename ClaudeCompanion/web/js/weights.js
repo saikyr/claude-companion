@@ -26,6 +26,7 @@
   const SCHOOL = { fire: 110, shadow: 111, frost: 112, arcane: 113, nature: 114, holy: 115 };
   // a % line is worth this many rating points (CONV)
   const PCT = { 116: [S.crit, 14], 21: [S.crit, 14], 117: [S.hit, 10], 18: [S.hit, 10], 118: [S.dodge, 12], 119: [S.parry, 15], 120: [S.block, 5] };
+  const PCT_KEYS = Object.keys(PCT);
   // COST per point, Stamina = 1. n = items the cost was measured on; 'assumed' = no clean sample
   const COST = {
     [S.str]: [1, 'measured, 31 item groups'], [S.agi]: [1, 'measured, 30'], [S.int]: [1, 'measured, 30'], [S.spi]: [1, 'measured, 35'],
@@ -126,7 +127,7 @@
   // Priest: worked out for this project from Forever's own spell and regen numbers (18 Nov 2026, the
   // project's stat-weights notes), because the guides give an order but no numbers and their order is for
   // level-60 raids. They replace the guide-order sets for Priests; the guide's order is kept for comparison.
-  const HEAL_W = { 41: 1, 45: 1, 5: 1.6, 43: 2.3, 6: 0.7, 32: 0.3, 116: 4.2, 21: 4.2 };
+  const HEAL_W = { 41: 1, 45: 1, 5: 1.6, 43: 2.3, 6: 0.7, 32: 0.3 };
   const HEAL_WHY = {
     41: 'The unit: every other number is "worth this many points of +healing".',
     45: 'Spell power heals for the same amount as +healing.',
@@ -141,7 +142,7 @@
     { id: 'healing', cls: 'PRIEST', trees: ['Holy'], name: 'Holy', role: 'heal', w: HEAL_W, why: HEAL_WHY, note: HEAL_NOTE, src: HEAL_SRC },
     { id: 'disc', cls: 'PRIEST', trees: ['Discipline'], name: 'Discipline', role: 'heal', w: HEAL_W, why: HEAL_WHY, note: HEAL_NOTE, src: HEAL_SRC },
     { id: 'shadow', cls: 'PRIEST', trees: ['Shadow'], name: 'Shadow', role: 'spell',
-      w: { 45: 1, 42: 1, 111: 1, 6: 0.55, 43: 0.66, 5: 0.35, 32: 0.3, 116: 4.2, 21: 4.2, 31: 0.2, 117: 2, 18: 2 },
+      w: { 45: 1, 42: 1, 111: 1, 6: 0.55, 43: 0.66, 5: 0.35, 32: 0.3, 31: 0.2 },
       why: {
         45: 'The unit: every other number is "worth this many points of shadow spell power".',
         42: 'Spell damage counts for shadow spells in full.', 111: 'Shadow damage counts in full.',
@@ -177,9 +178,15 @@
   // them. Which profile a spec uses is kept per character and spec ('cc.gear.profile.<name>.<spec>',
   // the key the Gear tab always used).
   const KEY = 'cc.weights.v1';
-  const store = () => { try { return JSON.parse(localStorage.getItem(KEY) || 'null') || { profiles: {} }; } catch (e) { return { profiles: {} }; } };
+  const store = () => {
+    let st; try { st = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { st = null; }
+    st = st && st.profiles ? st : { profiles: {} };
+    // older saves could carry a fixed weight for a "%" line, which hid edits to its rating: drop it
+    Object.values(st.profiles).forEach((p) => { if (p && p.w) PCT_KEYS.forEach((k) => delete p.w[k]); });
+    return st;
+  };
   const save = (st) => localStorage.setItem(KEY, JSON.stringify(st));
-  const clean = (w) => { const o = {}; Object.entries(w || {}).forEach(([k, v]) => { v = Number(v); if (v > 0 && isFinite(v)) o[k] = +v.toFixed(3); }); return o; };
+  const clean = (w) => { const o = {}; Object.entries(w || {}).forEach(([k, v]) => { v = Number(v); if (v > 0 && isFinite(v) && !PCT[k]) o[k] = +v.toFixed(3); }); return o; };   // "%" lines follow their rating
 
   const W = {
     S, PCT, COST, RANK, ALSO, AP_PER, SPECS, BUILTIN, GUIDE, WORD,

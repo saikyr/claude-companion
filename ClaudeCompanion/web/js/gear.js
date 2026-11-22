@@ -192,7 +192,8 @@
       const id = Number(p.id || key.split(':')[0]);
       const obs = arr(p.obs), o = obs[obs.length - 1];
       if (!o || !o.min || !o.qty) continue;                              // the newest reading found none
-      if (o.src === 'scan' ? ls.t && o.t < ls.t - 600 : now - o.t > 86400) continue;
+      // a browse sighting counts for a day, and not once a newer scan has run without finding it
+      if (o.src === 'scan' ? ls.t && o.t < ls.t - 600 : now - o.t > 86400 || (ls.t && o.t < ls.t - 600)) continue;
       if (now - o.t > LISTED_FOR) continue;
       let c = null;
       const sfx = key.includes(':') ? key.slice(key.indexOf(':') + 1) : null;
@@ -206,12 +207,12 @@
     return out;
   }
 
-  // Items in your bags and bank you could wear, scored from the game's own numbers.
+  // Items you have that you could wear (worn ones too: a gear set you compare with may not use them), scored from the game's own numbers.
   function ownedCands(use) {
     const adv = CC.advice;
     if (!adv || !adv.owned) return [];
     const seen = new Set(), out = [];
-    adv.owned().filter((o) => o.where !== 'worn').forEach((o) => {
+    adv.owned().forEach((o) => {
       const it = A.item(o.key);
       if (!it || seen.has(o.key) || !adv.wearable(it, use)) return;
       seen.add(o.key);
@@ -275,7 +276,8 @@
       const cur = nums.map((n) => worn[n] ? { n, id: worn[n].id, key: worn[n].key, st: worn[n].st, s: score(worn[n].st, w) } : { n, id: null, s: 0 });
       const weakest = cur.reduce((a, c) => (c.s < a.s ? c : a), cur[0]);
       const blocked = name === 'Off hand' && twoHand;
-      const fits = (c) => invs.includes(c.inv) && !blocked;
+      const fitsPre = (c) => invs.includes(c.inv);
+      const fits = (c) => fitsPre(c) && !blocked;          // usable now (a worn two-hander blocks the off hand)
       // a two-hander replaces the main hand and the off hand
       const gain = (c, s) => s - weakest.s - (name === 'Main hand' && c.inv === TWO_HAND ? offScore : 0);
       const x = (c, extra) => { const s = score(c.st, w); return Object.assign({ c, s, d: gain(c, s) }, extra || {}); };
@@ -304,11 +306,11 @@
       const search = Object.values(bestRoll).map((r) => Object.assign(r, { d: gain(r.c, r.s) })).filter((r) => r.d > 0.5).sort(byGain).slice(0, 3);
       // ---- pre-BiS: the best up to level 60, counting what you own; one random roll at most (its best base)
       const preRolls = {};
-      cand.rolls.forEach((c) => { if (fits(c) && c.req <= 60) { const s = score(c.st, w); if (!preRolls[c.roll] || s > preRolls[c.roll].s) preRolls[c.roll] = { c, s }; } });
-      const prePool = mine.filter(fits).map((c) => x(c))
-        .concat(cand.fixed.filter((c) => fits(c) && c.req <= 60).map((c) => x(c)))
+      cand.rolls.forEach((c) => { if (fitsPre(c) && c.req <= 60) { const s = score(c.st, w); if (!preRolls[c.roll] || s > preRolls[c.roll].s) preRolls[c.roll] = { c, s }; } });
+      const prePool = mine.filter(fitsPre).map((c) => x(c))
+        .concat(cand.fixed.filter((c) => fitsPre(c) && c.req <= 60).map((c) => x(c)))
         .concat(cur.filter((y) => y.id && !cand.byId[String(y.id)] && !mine.some((m) => m.id === y.id))
-          .map((y) => x({ id: y.id, key: y.key || String(y.id), g: A.gdItem(y.id) || [A.anyItemName(y.id), 1], name: A.anyItemName(y.id), inv: invs[0], req: 0, st: y.st, kind: 'owned' })));
+          .map((y) => x({ id: y.id, key: y.key || String(y.id), g: A.gdItem(y.id) || [A.anyItemName(y.id), 1], name: A.anyItemName(y.id), inv: (A.gdItem(y.id) || [])[4] || invs[0], req: 0, st: y.st, kind: 'owned' })));
       const topRoll = Object.values(preRolls).sort((a, b) => b.s - a.s)[0];
       if (topRoll) prePool.push(x(topRoll.c));
       // "only what you can get": no unmet reputation or profession gates (your own items always count)
@@ -318,13 +320,13 @@
       const want = arr(picks[name]).map((k) => pre.find((y) => y.c.key === k)).filter(Boolean);
       const targets = want.concat(pre.filter((y) => !want.includes(y))).slice(0, n).map((y) => Object.assign({ picked: want.includes(y) }, y));
       const alts = pre.filter((y) => !targets.some((t) => t.c.name === y.c.name)).slice(0, PRE_ALTS);
-      return { name, nums, cur, weakest, blocked, ups: ups.slice(0, 40), now, ahUps, search, targets, alts };
+      return { name, nums, cur, weakest, blocked, ups, now, ahUps, search, targets, alts, pre };
     });
     // Main hand: a two-hander target makes the off hand target moot (and the other way round)
     const mh = slots.find((s) => s.name === 'Main hand'), oh = slots.find((s) => s.name === 'Off hand');
     if (mh && oh && mh.targets[0]) {
       const t = mh.targets[0];
-      const best1h = (t.c.inv === TWO_HAND ? mh.alts.find((y) => y.c.inv !== TWO_HAND) : t);
+      const best1h = (t.c.inv === TWO_HAND ? mh.pre.find((y) => y.c.inv !== TWO_HAND) : t);
       const ohBest = oh.targets[0] ? oh.targets[0].s : 0;
       if (t.c.inv === TWO_HAND && !t.picked && best1h && best1h.s + ohBest > t.s) {
         // a one-hander and an off hand together beat the two-hander

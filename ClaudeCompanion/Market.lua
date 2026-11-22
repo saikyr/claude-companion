@@ -402,6 +402,15 @@ local function Finish(by, n, missing)
             scan.state, scan.phase, scan.total, scan.done = "rereading", "rereading", #again, 0
             local by2, still = {}, {}
             Sliced(1, #again, function(k) Row(by2, again[k], still) end, function()
+                -- the reread replaces this scan's reading of a key, so add what the first pass found for it
+                -- (an item's own key and a roll's key often have listings from both passes)
+                for key, b2 in pairs(by2) do
+                    local b1 = by[key]
+                    if b1 then
+                        b2.qty, b2.n = b2.qty + b1.qty, b2.n + b1.n
+                        for _, u in ipairs(b1.units) do b2.units[#b2.units + 1] = u end
+                    end
+                end
                 Store(by2, n, still, 2, function() scan.state = "idle"; scan.phase = nil; Refresh() end)
             end)
         end)

@@ -633,6 +633,21 @@ do
   check(heal and heal.suffix == "of Healing" and heal.obs[#heal.obs].min == 1000 and heal.obs[#heal.obs].qty == 2, "a roll with no suffix in its link is priced by its name (of Healing: 2 listed from 10s)")
   check(owl and owl.obs[#owl.obs].min == 3000 and owl.obs[#owl.obs].qty == 1, "each roll gets its own price (of the Owl: 1 listed at 30s)")
   check(any and any.obs[#any.obs].qty == 3, "the item's own key still counts every roll")
+  -- a roll seen in both passes: the reread adds to the first pass's listings instead of replacing them
+  N, loaded, delayed = 4, false, {}
+  AHm.GetReplicateItemInfo = function(i)
+    local nm = ({ "Short Bastard Sword of Healing", "Short Bastard Sword of Healing", "Short Bastard Sword of Healing", "Short Bastard Sword of the Owl" })[i + 1]
+    return nm, 1, 1, 2, true, 40, 0, 1, 1, (i + 1) * 1000, 0, false, nil, "x", "x", 0, 3192, (i ~= 2) or loaded
+  end
+  c.ah.lastScan.t = c.ah.lastScan.t - 3600
+  ns.AHScan(); Fire("REPLICATE_ITEM_LIST_UPDATE"); Advance(3)
+  for _ = 1, 100 do RunTimers(); if ns.ahScan.state == "idle" then break end end
+  loaded = true
+  for _, fn in ipairs(delayed) do fn() end; delayed = {}
+  for _ = 1, 100 do RunTimers(); if ns.ahScan.state == "idle" and c.ah.lastScan.pass then break end end
+  heal, any = c.ah.prices["3192:of Healing"], c.ah.prices["3192"]
+  check(heal and heal.obs[#heal.obs].qty == 3 and heal.obs[#heal.obs].min == 1000, "reread: of Healing keeps both passes (3 listed, from 10s; got " .. tostring(heal and heal.obs[#heal.obs].qty) .. ")")
+  check(any and any.obs[#any.obs].qty == 4, "reread: the item's own key keeps both passes (4 listed)")
   C_Item.GetItemNameByID = oldNameByID
   ns.ScanButtonRefresh = oldRefresh; C_Timer.After = oldAfter
   AHm.GetNumReplicateItems, AHm.GetReplicateItemInfo, AHm.GetReplicateItemLink = oldN, oldInfo, oldLink
