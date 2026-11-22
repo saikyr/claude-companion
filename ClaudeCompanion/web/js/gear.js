@@ -111,7 +111,7 @@
   const howVendor = (id) => { const m = /^Vendor · ([^·]+)/.exec((A.GD.how || {})[id] || ''); return m ? vendorInfo(m[1].trim()) : null; };
   const isPvp = (id) => arr((A.GD.vend || {})[id]).some((v) => PVP_HALLS.includes(v[1])) || PVP_RANK.test((A.gdItem(id) || [''])[0]) || !!(howVendor(id) || {}).hall;
   // One word for the kind of source, used for the source column and the filters.
-  const KINDS = [['owned', 'Yours'], ['ah', 'On the AH'], ['dungeon', 'Dungeon'], ['quest', 'Quest'], ['crafted', 'Crafted'], ['vendor', 'Vendor'], ['world', 'World drop'], ['raid', 'Raid'], ['pvp', 'PvP']];
+  const KINDS = [['owned', 'Yours'], ['ah', 'On the AH'], ['dungeon', 'Dungeon'], ['quest', 'Quest'], ['crafted', 'Crafted'], ['vendor', 'Vendor'], ['roll', 'Random green'], ['world', 'World drop'], ['raid', 'Raid'], ['pvp', 'PvP']];
   const KIND_WORD = Object.fromEntries(KINDS);
   function kindOf(id) {
     const size = (A.GD.size || {})[id] || 0, rows = arr((A.GD.src || {})[id]);
@@ -169,7 +169,7 @@
         rr.forEach(([ni, rows]) => {
           const roll = SFX.names[ni], st = Object.assign({}, armor);
           Object.entries(rollStats(rows)).forEach(([s, v]) => { st[s] = (st[s] || 0) + v; });
-          const c = Object.assign({}, base, { roll, key: k + ':' + roll, name: g[0] + ' ' + roll, st, kind: 'world' });
+          const c = Object.assign({}, base, { roll, key: k + ':' + roll, name: g[0] + ' ' + roll, st, kind: 'roll' });
           rolls.push(c); byId[c.key] = c;
         });
       } else {
@@ -285,9 +285,19 @@
       const byGain = (a, b) => b.d - a.d;
       // ---- usable now: fixed items, your own, AH listings
       // what you own comes first, so an item you have shows as yours rather than as a drop
+      // ---- random greens: the best base for each suffix at your level (any creature of its level drops it)
+      const bestRoll = {};
+      cand.rolls.forEach((c) => {
+        if (!fits(c) || c.req > lvl) return;
+        // ranked by gain: in the main hand a two-hander also replaces the off hand
+        const s = score(c.st, w), d = gain(c, s);
+        if (!bestRoll[c.roll] || d > bestRoll[c.roll].d) bestRoll[c.roll] = { c, s, d, n: 0 };
+      });
+      cand.rolls.forEach((c) => { if (bestRoll[c.roll] && fits(c) && c.req <= lvl) bestRoll[c.roll].n++; });
       const pool = mine.filter((c) => fits(c) && c.req <= lvl && !wornIds.has(c.id)).map((c) => x(c))
         .concat(cand.fixed.filter((c) => fits(c) && c.req <= lvl && !wornIds.has(c.id)).map((c) => x(c, listedBy[c.key] ? { ah: listedBy[c.key] } : null)))
-        .concat(listed.filter((l) => l.c.roll && fits(l.c) && l.c.req <= lvl).map((l) => x(l.c, { ah: listedBy[l.c.key] })));
+        .concat(listed.filter((l) => l.c.roll && fits(l.c) && l.c.req <= lvl).map((l) => x(l.c, { ah: listedBy[l.c.key] })))
+        .concat(Object.values(bestRoll).map((r) => x(r.c, listedBy[r.c.key] ? { ah: listedBy[r.c.key] } : { bases: r.n })));
       const ups = distinct(pool.filter((y) => y.d > 0.5).sort(byGain));
       // the best few, plus the best of each other kind (yours, the AH, crafted, ...) so you see real choices
       const now = ups.slice(0, NOW_MAX - 2);
@@ -295,14 +305,6 @@
       KINDS.forEach(([k]) => { if (now.length < NOW_MAX + 2 && !now.some((y) => kind(y) === k)) { const b = ups.find((y) => kind(y) === k); if (b) now.push(b); } });
       now.sort(byGain);
       const ahUps = distinct(pool.filter((y) => y.ah && y.d > 0.5).sort(byGain));
-      // ---- rolls worth searching the AH for: the best base for each suffix, at your level
-      const bestRoll = {};
-      cand.rolls.forEach((c) => {
-        if (!fits(c) || c.req > lvl) return;
-        const s = score(c.st, w);
-        if (!bestRoll[c.roll] || s > bestRoll[c.roll].s) bestRoll[c.roll] = { c, s, n: 0 };
-      });
-      cand.rolls.forEach((c) => { if (bestRoll[c.roll] && fits(c) && c.req <= lvl) bestRoll[c.roll].n++; });
       const search = Object.values(bestRoll).map((r) => Object.assign(r, { d: gain(r.c, r.s) })).filter((r) => r.d > 0.5).sort(byGain).slice(0, 3);
       // ---- pre-BiS: the best up to level 60, counting what you own; one random roll at most (its best base)
       const preRolls = {};
@@ -341,13 +343,14 @@
   // ---------------------------------------------------------------- pre-BiS picks (per character, spec and slot)
   const pickKey = (spec) => store(spec, 'prebis');
   const getPicks = (spec) => { try { return JSON.parse(localStorage.getItem(pickKey(spec)) || '{}') || {}; } catch (e) { return {}; } };
-  function setPick(spec, slot, key) {
+  function setPick(spec, slot, key, unpick) {
     const p = getPicks(spec);
     if (key) {
       const isPair = slot === 'Ring' || slot === 'Trinket';
       const cur = arr(p[slot]).filter((k) => k !== key);
       p[slot] = isPair ? [key].concat(cur).slice(0, 2) : [key];
-    } else delete p[slot];
+    } else if (unpick && arr(p[slot]).length > 1) p[slot] = arr(p[slot]).filter((k) => k !== unpick);   // one of two ring / trinket picks
+    else delete p[slot];
     localStorage.setItem(pickKey(spec), JSON.stringify(p));
   }
 
@@ -405,52 +408,63 @@
     return `<div><span class="src src-${k}">${esc(word)}</span></div>`;
   };
   const priceCell = (y) => (y.ah ? `<div class="c-num">${A.money(y.ah.price, { short: true })}<div class="sub">${y.ah.qty} listed · ${esc(A.ago(y.ah.t))}</div></div>` : '<div class="c-num dim">—</div>');
-  const curCell = (sl) => sl.cur.map((x) => (x.id ? `<span class="have">${A.anyItemIcon(x.id, { size: 'xs' })}<span>${esc(A.anyItemName(x.id))}</span><span class="dim">${fmt1(x.s)}</span></span>` : '<span class="have dim">empty</span>')).join('');
+  const kindKey = (y) => (y.ah ? 'ah' : y.c.kind);
+  const statusOf = (P, baseIds, c) => {
+    if (baseIds.has(c.id) && !c.roll) return ['done', 'in use'];
+    const at = c.kind === 'owned' ? c.where : (!c.roll && P.at[c.id]);
+    return at ? ['have', AT_WORD[at] || 'yours'] : ['get', 'to get'];
+  };
 
-  // Upgrades: one block per slot that has any, then one line for the slots that don't
-  function upgradesView(P, lvl, base, filter) {
-    let h = `<p class="meta">Everything you can use at level ${lvl} that scores higher than ${esc(base.label)}, slot by slot. Rings and trinkets are measured against the weaker one you wear. Score = each stat × its weight, added up.</p>`;
-    h += `<div class="chips">${[['all', 'All sources']].concat(KINDS.filter(([k]) => k !== 'raid' && k !== 'pvp')).map(([k, l]) => `<button data-gearsrc="${k}" class="${filter === k ? 'on' : ''}">${esc(l)}</button>`).join('')}</div>`;
-    const none = [];
+  // The slot list: every slot, what the compared gear has there, its score and the biggest gain you can get now.
+  function slotList(P, sel, setSel) {
+    let h = `<div class="slotlist"><div class="sl-h">${setSel}</div><div class="sl-cols"><span>Slot</span><span>Has</span><span class="c-num">Score</span><span class="c-num">Best</span></div>`;
     P.slots.forEach((sl) => {
-      // all sources: the best few and the best of each kind; one source: its best few
-      const list = filter === 'all' ? sl.now : filter === 'ah' ? sl.ahUps.slice(0, NOW_MAX) : sl.ups.filter((y) => y.c.kind === filter).slice(0, NOW_MAX);
-      if (sl.blocked) { none.push(`${sl.name} (two-hander)`); return; }
-      if (!list.length) { none.push(sl.name); return; }
-      const top = list[0].d;
-      h += `<div class="slotblk"><div class="slot-h"><span class="sn">${esc(sl.name)}</span><span class="cur">${curCell(sl)}</span><span class="up pos">up to ${gainTxt(top)}</span></div>`;
-      h += `<div class="table gopt"><div class="thead"><div>Upgrade</div><div>Source</div><div class="c-num">AH price</div><div class="c-num">Score</div><div class="c-num">Gain</div></div>`;
-      list.forEach((y) => { h += `<div class="tr">${itemCell(y.c)}${srcCell(y)}${priceCell(y)}<div class="c-num">${fmt1(y.s)}</div><div class="c-num pos">${gainTxt(y.d)}</div></div>`; });
-      h += '</div></div>';
+      const best = sl.blocked ? null : sl.ups[0];
+      const cur = sl.cur.map((x) => (x.id ? `<span class="have">${A.anyItemIcon(x.id, { size: 'xs' })}<span>${esc(A.anyItemName(x.id))}</span></span>` : '<span class="have dim">empty</span>')).join('');
+      h += `<button class="slotrow${sl.name === sel ? ' on' : ''}" data-gearslot="${esc(sl.name)}"><span class="sn">${esc(sl.name)}</span><span class="cur">${cur}</span><span class="c-num">${fmt1(sl.weakest.s)}</span><span class="c-num ${best ? 'pos' : 'dim'}">${best ? gainTxt(best.d) : sl.blocked ? '2H' : '—'}</span></button>`;
     });
-    if (none.length) h += `<p class="meta nothing">${filter === 'all' ? `Nothing beats ${esc(base.short)} at level ${lvl} in` : 'No upgrades from this source in'}: ${esc(none.join(' · '))}.</p>`;
-    return h;
+    return h + '</div>';
   }
 
-  // Pre-BiS: per slot the target (best up to 60, or your pick) and alternatives you can switch to
-  function preBisView(P, base) {
+  // One slot in full: every upgrade you can use now (filter by source), then the pre-BiS list with your target.
+  const UP_SHOW = 15, PRE_SHOW = 10;
+  function slotDetail(P, sl, lvl, base, filter) {
     const baseIds = new Set(Object.values(base.worn).map((x) => x.id));
-    let rows = '', total = 0, done = 0, owned = 0;
-    P.slots.forEach((sl) => {
-      if (sl.twoHander) {
-        rows += `<div class="tr"><div class="sn">${esc(sl.name)}</div><div class="dim">Not needed: your main-hand target is a two-hander.</div><div></div><div></div></div>`;
-        return;
-      }
-      sl.targets.forEach((t, k) => {
-        total++;
-        const c = t.c, isDone = baseIds.has(c.id) && !c.roll, have = !isDone && (c.kind === 'owned' || (P.at[c.id] && !c.roll));
-        if (isDone) done++; else if (have) owned++;
-        const status = isDone ? '<span class="badge on">done</span>' : have ? `<span class="badge on">${esc(AT_WORD[c.where || P.at[c.id]] || 'owned')}</span>` : '<span class="badge">to get</span>';
-        const alts = k === 0 ? sl.alts.map((y) => `<button class="alt" data-gearpick="${esc(sl.name)}" data-key="${esc(y.c.key)}" title="${esc(whereOf(y.c))}">${A.anyItemIcon(y.c.id, { size: 'xs' })}<span class="q${y.c.roll ? 2 : y.c.g[1]}">${esc(y.c.name)}</span><span class="dim">${fmt1(y.s)}</span>${y.c.kind === 'owned' || P.at[y.c.id] ? `<span class="pos">${esc(AT_WORD[y.c.where || P.at[y.c.id]] || 'yours')}</span>` : needs(y.c).length ? '<span class="need" title="Needs reputation or a profession you don\'t have yet">needs</span>' : ''}</button>`).join('') : '';
-        const pickNote = t.picked ? ` <button class="linkbtn" data-gearpick="${esc(sl.name)}" data-key="">use the best instead</button>` : '';
-        rows += `<div class="tr"><div class="sn">${k === 0 ? esc(sl.name) : ''}</div>${itemCell(c, whereOf(c) + (t.picked ? ' · your pick' : ''))}<div><span class="num">${fmt1(t.s)}</span> ${status}${pickNote}</div><div class="alts">${alts}</div></div>`;
-      });
+    let h = `<section class="slotdet"><div class="det-h"><h2>${esc(sl.name)}</h2>${sl.cur.length > 1 ? '<span class="dim small">gains are measured against the weaker one</span>' : ''}</div>`;
+    // ---- upgrades now
+    h += `<h3>Upgrades at level ${lvl} <span>· better than ${esc(base.short)}</span></h3>`;
+    if (sl.blocked) h += `<div class="empty">You wear a two-hander: an off hand only counts with a one-hand weapon (see Main hand).</div>`;
+    else if (!sl.ups.length) h += `<div class="empty">Nothing you can use at level ${lvl} beats what ${esc(base.short)} has here.</div>`;
+    else {
+      const counts = {};
+      sl.ups.forEach((y) => { const k = kindKey(y); counts[k] = (counts[k] || 0) + 1; });
+      const f = filter !== 'all' && counts[filter] ? filter : 'all';
+      h += `<div class="chips"><button data-gearsrc="all" class="${f === 'all' ? 'on' : ''}">All<span>${sl.ups.length}</span></button>${KINDS.filter(([k]) => counts[k]).map(([k, l]) => `<button data-gearsrc="${k}" class="${f === k ? 'on' : ''}">${esc(l)}<span>${counts[k]}</span></button>`).join('')}</div>`;
+      const full = f === 'all' ? sl.ups : sl.ups.filter((y) => kindKey(y) === f);
+      const open = A.STATE.gearUpAll === sl.name, list = open ? full : full.slice(0, UP_SHOW);
+      h += `<div class="table gopt"><div class="thead"><div>Item</div><div>Source</div><div class="c-num">AH price</div><div class="c-num">Score</div><div class="c-num">Gain</div></div>`;
+      list.forEach((y) => { h += `<div class="tr">${itemCell(y.c)}${srcCell(y)}${priceCell(y)}<div class="c-num">${fmt1(y.s)}</div><div class="c-num pos">${gainTxt(y.d)}</div></div>`; });
+      h += '</div>';
+      if (full.length > UP_SHOW) h += `<button class="linkbtn more" data-gearupall="${open ? '' : esc(sl.name)}">${open ? 'Show the best ' + UP_SHOW : `Show all ${full.length}`}</button>`;
+    }
+    // ---- pre-BiS
+    h += `<h3>Pre-BiS <span>· the best up to level 60, raids left out</span></h3>`;
+    if (sl.twoHander) return h + `<div class="empty">Not needed: your main-hand target is a two-hander.</div></section>`;
+    const n = sl.targets.length;
+    h += `<div class="toolbar"><div class="chips"><button data-gearreach="" class="${A.STATE.gearReach ? '' : 'on'}">Everything</button><button data-gearreach="1" class="${A.STATE.gearReach ? 'on' : ''}">Only what I can get now</button></div><span class="dim small">${n > 1 ? 'Your two targets are on top.' : 'Your target is on top.'} Make any other item ${n > 1 ? 'one of them' : 'your target'}.</span></div>`;
+    const rest = sl.pre.filter((y) => !sl.targets.some((t) => t.c.name === y.c.name));
+    const all = A.STATE.gearPreAll === sl.name;
+    const shown = sl.targets.concat(all ? rest : rest.slice(0, PRE_SHOW));
+    h += `<div class="table prelist"><div class="thead"><div>Item</div><div>Status</div><div class="c-num">Score</div><div></div></div>`;
+    shown.forEach((y, i) => {
+      const isT = i < n, [st, word] = statusOf(P, baseIds, y.c);
+      const act = isT ? (y.picked ? `<span class="badge on">your pick</span> <button class="linkbtn" data-gearpick="${esc(sl.name)}" data-key="" data-unpick="${esc(y.c.key)}">use the best</button>` : '<span class="badge on">target</span>')
+        : `<button class="btn ghost" data-gearpick="${esc(sl.name)}" data-key="${esc(y.c.key)}">Make target</button>`;
+      h += `<div class="tr${isT ? ' target' : ''}">${itemCell(y.c)}<div><span class="st st-${st}">${esc(word)}</span></div><div class="c-num">${fmt1(y.s)}</div><div class="act">${act}</div></div>`;
     });
-    let h = `<p class="meta">The best item per slot up to level 60 (raids left out), counting what you own. Pick any alternative to make it your target: the plan and the snapshot for Claude follow your picks.</p>`;
-    h += `<div class="chips"><button data-gearreach="" class="${A.STATE.gearReach ? '' : 'on'}">Everything</button><button data-gearreach="1" class="${A.STATE.gearReach ? 'on' : ''}">Only what I can get now (no missing reputation or profession skill)</button></div>`;
-    h += `<div class="meter"><span style="--w:${total ? ((100 * done) / total).toFixed(1) : 0}%"></span><span class="own" style="--w:${total ? ((100 * owned) / total).toFixed(1) : 0}%"></span></div><p class="meta">${done} of ${total} done · ${owned} more owned, not in ${esc(base.short)} · ${total - done - owned} to get</p>`;
-    h += `<div class="table prebis"><div class="thead"><div>Slot</div><div>Target</div><div>Score</div><div>Alternatives (click to pick)</div></div>${rows}</div>`;
-    return h;
+    h += '</div>';
+    if (rest.length > PRE_SHOW) h += `<button class="linkbtn more" data-gearpreall="${all ? '' : esc(sl.name)}">${all ? 'Show fewer' : `Show all ${rest.length + n}`}</button>`;
+    return h + '</section>';
   }
 
   // Auction House: upgrades listed now, then the random-suffix rolls worth searching for
@@ -498,7 +512,7 @@
   }
 
   // ---------------------------------------------------------------- the page
-  const VIEWS = [['up', 'Upgrades'], ['pre', 'Pre-BiS'], ['ah', 'Auction House'], ['sets', 'Class sets']];
+  const VIEWS = [['up', 'By slot'], ['ah', 'Auction House'], ['sets', 'Class sets']];
   const curSpec = () => { const l = specs(); return l.find((s) => s.i === A.STATE.gearSpec) || l.find((s) => s.i === (A.CH.snap || {}).activeSpec) || l[0]; };
 
   V.gear = function () {
@@ -515,13 +529,13 @@
     const view = VIEWS.some(([k]) => k === A.STATE.gearView) ? A.STATE.gearView : 'up';
     const base = baseline(cur, pk);
     const sets = SETS();
-    const setSel = sets.length ? `<label class="sel"><span class="dim small">Compare with</span><select data-gearset>${[['worn', 'What you wear'], ...sets.map((g) => [String(g.id), `“${g.name}” set`])].map(([k, l]) => `<option value="${esc(k)}"${base.key === k ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select></label>` : '';
-    h += `<div class="toolbar gtools"><div class="seg">${VIEWS.map(([k, l]) => `<button data-gearview="${k}" class="${view === k ? 'on' : ''}">${l}</button>`).join('')}</div><span class="grow"></span>${setSel}</div>`;
+    const setSel = `<label class="sel"><span class="k">Compare with</span>${sets.length ? `<select data-gearset>${[['worn', 'What you wear'], ...sets.map((g) => [String(g.id), `“${g.name}” set`])].map(([k, l]) => `<option value="${esc(k)}"${base.key === k ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>` : '<span>What you wear</span>'}</label>`;
+    h += `<div class="toolbar"><div class="seg">${VIEWS.map(([k, l]) => `<button data-gearview="${k}" class="${view === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>`;
     if (!w || !Object.keys(w).length) return h + `<div class="empty">No stat weights for ${esc(cur.tree || cur.label)} yet. Pick or make some on the <button class="linkbtn" data-tab="weights">Stat weights</button> page.</div>`;
     const lvl = ch.level || 60;
     const P = plan(w, lvl, base, getPicks(cur), !!A.STATE.gearReach);
-    const upSlots = P.slots.filter((s) => s.now.length && !s.blocked);
-    const bigUp = upSlots.slice().sort((a, b) => b.now[0].d - a.now[0].d)[0];
+    const upSlots = P.slots.filter((s) => s.ups.length && !s.blocked);
+    const bigUp = upSlots.slice().sort((a, b) => b.ups[0].d - a.ups[0].d)[0];
     const ahN = P.slots.reduce((a, s) => a + s.ahUps.length, 0);
     const cheapest = P.slots.flatMap((s) => s.ahUps).sort((a, b) => a.ah.price - b.ah.price)[0];
     const preT = P.slots.filter((s) => !s.twoHander).flatMap((s) => s.targets);
@@ -529,16 +543,16 @@
     const preDone = preT.filter((t) => baseIds.has(t.c.id) && !t.c.roll).length;
     const top = Object.entries(w).filter(([k]) => !W.PCT[k]).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([k, v]) => `${W.statName(k, A.GD.stat)} ${+v.toFixed(2)}`).join(' · ');
     const why = pickedProfile(cur) ? 'your pick' : `default for ${cur.tree}`;
+    const sel = P.slots.some((s) => s.name === A.STATE.gearSlot) ? A.STATE.gearSlot : (bigUp || P.slots[0]).name;
     h += `<div class="cards c4">
-      <button class="card link" data-gearview="up"><span class="k">Upgrades now</span><span class="v">${upSlots.length} <span class="dim small">of ${P.slots.length} slots</span></span><span class="sub">${upSlots.length ? `biggest: ${esc(bigUp.name)} ${gainTxt(bigUp.now[0].d)}` : `nothing beats ${esc(base.short)}`}</span></button>
+      <button class="card link" data-gearview="up" data-gearslot="${esc(bigUp ? bigUp.name : sel)}"><span class="k">Upgrades now</span><span class="v">${upSlots.length} <span class="dim small">of ${P.slots.length} slots</span></span><span class="sub">${upSlots.length ? `biggest: ${esc(bigUp.name)} ${gainTxt(bigUp.ups[0].d)}` : `nothing beats ${esc(base.short)}`}</span></button>
       <button class="card link" data-gearview="ah"><span class="k">On your AH</span><span class="v">${ahN}</span><span class="sub">${cheapest ? `cheapest ${A.money(cheapest.ah.price, { short: true })}: ${esc(cheapest.c.name)}` : 'no upgrades listed'}</span></button>
-      <button class="card link" data-gearview="pre"><span class="k">Pre-BiS</span><span class="v">${preDone}/${preT.length}</span><span class="sub">slots done in ${esc(base.short)}</span></button>
+      <div class="card"><span class="k">Pre-BiS</span><span class="v">${preDone}/${preT.length}</span><span class="sub">targets already in ${esc(base.short)}</span></div>
       <button class="card link" data-tab="weights"><span class="k">Weights: ${esc(prof.name)}</span><span class="v small">${esc(top)}</span><span class="sub">${esc(why)} · change on Stat weights</span></button></div>`;
-    if (view === 'up') h += upgradesView(P, lvl, base, KIND_WORD[A.STATE.gearSrc] ? A.STATE.gearSrc : 'all');
-    else if (view === 'pre') h += preBisView(P, base);
-    else if (view === 'ah') h += ahView(P, lvl);
+    if (view === 'up') h += `<div class="gearlay">${slotList(P, sel, setSel)}${slotDetail(P, P.slots.find((s) => s.name === sel), lvl, base, KIND_WORD[A.STATE.gearSrc] ? A.STATE.gearSrc : 'all')}</div>`;
+    else if (view === 'ah') h += `<div class="toolbar">${setSel}</div>` + ahView(P, lvl);
     else h += setsView(classSets());
-    if (view !== 'sets') h += `<details class="how"><summary>What's left out</summary><p>${Object.entries(P.skipped).map(([k, v]) => `${v.toLocaleString()} ${esc(k)}`).join(' · ')}. Items with no endgametools page are mostly ones Forever's client carries but doesn't drop. Use and proc effects aren't in the score. Sources and drop chances follow the item tooltip: Forever data is marked, Classic-only rates say so.</p></details>`;
+    if (view !== 'sets') h += `<details class="how"><summary>How this works, and what's left out</summary><p>Score = each stat × its weight, added up. Gain = score minus what ${esc(base.short)} has in that slot (rings and trinkets: the weaker one). Random greens ("of Healing") are scored from their roll's exact stats (foreverchanges.pro, confirmed in game); for each roll, the best base you can wear at your level is shown. Left out: ${Object.entries(P.skipped).map(([k, v]) => `${v.toLocaleString()} ${esc(k)}`).join(' · ')}. Use and proc effects aren't in the score. Sources follow the item tooltip: Forever data is marked, Classic-only rates say so.</p></details>`;
     return h;
   };
 
@@ -588,14 +602,20 @@
   document.addEventListener('click', (e) => {
     const s = e.target.closest('[data-gearspec]');
     if (s) { A.STATE.gearSpec = Number(s.dataset.gearspec); A.render(); return; }
-    const v = e.target.closest('[data-gearview]');
-    if (v) { A.STATE.gearView = v.dataset.gearview; A.render(); return; }
+    const v = e.target.closest('[data-gearview]'), sl = e.target.closest('[data-gearslot]');
+    if (sl) { A.STATE.gearSlot = sl.dataset.gearslot; A.STATE.gearSrc = 'all'; A.STATE.gearPreAll = null; A.STATE.gearUpAll = null; }
+    if (v) A.STATE.gearView = v.dataset.gearview;
+    if (v || sl) { A.render(); return; }
     const f = e.target.closest('[data-gearsrc]');
     if (f) { A.STATE.gearSrc = f.dataset.gearsrc; A.render(); return; }
+    const ua = e.target.closest('[data-gearupall]');
+    if (ua) { A.STATE.gearUpAll = ua.dataset.gearupall || null; A.render(); return; }
+    const pa = e.target.closest('[data-gearpreall]');
+    if (pa) { A.STATE.gearPreAll = pa.dataset.gearpreall || null; A.render(); return; }
     const r = e.target.closest('[data-gearreach]');
     if (r) { A.STATE.gearReach = !!r.dataset.gearreach; A.render(); return; }
     const p = e.target.closest('[data-gearpick]');
-    if (p) { const sp = curSpec(); if (sp) setPick(sp, p.dataset.gearpick, p.dataset.key || null); A.render(); }
+    if (p) { const sp = curSpec(); if (sp) setPick(sp, p.dataset.gearpick, p.dataset.key || null, p.dataset.unpick || null); A.render(); }
   });
   document.addEventListener('change', (e) => {
     const gs = e.target.closest('select[data-gearset]');
