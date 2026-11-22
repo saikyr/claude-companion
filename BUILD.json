@@ -1,19 +1,19 @@
 {
  "version": "1.4.0",
- "built": "2026-11-22T16:23:04+00:00",
+ "built": "2026-11-22T16:37:20+00:00",
  "channel": {
   "repo": "saikyr/claude-companion",
   "branch": "stable"
  },
  "from": {
   "branch": "main",
-  "commit": "9679c9351d6c73d953fde4cf4402ee1c3e2d07e9"
+  "commit": "e71927ef49156ad7878fb26816aaef0b17783fa8"
  },
- "notes": "Merge pull request #46 from saikyr/claude/project-thread-fvgi7h",
+ "notes": "App review: fix raw code and wrong signs, clearer Journal, Bank, level 60, short dungeon visits, update card; spellcasts for the player only",
  "files": {
   "Bindings.xml": "f4ad14d769e58eb18cd49da688fb23d64dec6be99a7684b9993ea0689616bf09",
   "ClaudeCompanion.toc": "87915db63dcb911f027bc5c400284fe70fa58142f561efc0dea4134bd6625c42",
-  "Core.lua": "0662f26dd9ea44b470483ae19c1b63525091e968a22cbefdff13c3d745130b1e",
+  "Core.lua": "85a15c3878a6cf809fa8faac676512b2659f48923f534ccaca35eb32e36ae6aa",
   "Inbox.lua": "0abfc22603711ab1a44034212478f62e0f3b194f107fdcca170ad284838fb5aa",
   "Journal.lua": "63ef98784aa43cb41b6418af94102372bedbb8c8af3218a6efbc4c5648c4d149",
   "Market.lua": "c6be21df06ebb18c7e451ce5d3a9db417cd0145969289e97b41754335c17ebc8",
@@ -33,19 +33,19 @@
   "web/icons/icon-512.png": "658263476e4a5ac0371ed8fe85671973603436e42e550d92b937c495ba78e567",
   "web/index.html": "8d52b89fc72a95a6ea362398d8aca9aaae090a7ee67aafb506c18f979cbf36cb",
   "web/js/advice.js": "6a0420ff07267d55b73b1457edd3f4b90e09465c60ab91f2ea5856bccc17682e",
-  "web/js/app.js": "b988e6236b26ec0bc286fd45764f79f7d18671e4a6aeaaed21881d865dccbca2",
+  "web/js/app.js": "09f6661cca25f06793742f515cec6f32f3d955bea4f7344f7cae6670af37894b",
   "web/js/cards.js": "27fbd8b2b8ee2a3de0b9d2677d642bbe471fec722c62fce8bb070ac27e78731f",
   "web/js/claude.js": "3df1e52be93aafcb3518313b7bc1889e61014a8ff5dea2d225e95f9ac6b88fa7",
   "web/js/gear.js": "b3fe7892ec78f0b24c21649a6be493bfe58a503e8eec6b39c3dc7aa2aef18c76",
   "web/js/icons.js": "9a589c086b0c7f02837345b8f69baad6670e86b6ebe195117b9b540094d9be46",
   "web/js/lua.js": "e14c5df02bbfa98ec07196ec363d017beb4bd6ac50e075b78a3ba32b72234f77",
   "web/js/merge.js": "85f8a6447c366be89dc676408f854fd7022d13d5610eb7e3598b641077162dd8",
-  "web/js/runs.js": "bcab59cab6ae359b0466a8c77b6295653362d1e6087d71d6394721eaf307d4d3",
+  "web/js/runs.js": "b97d44cd3387a5f79e359a257f3ea69757b98524bb7f0e67166110f84d9250d5",
   "web/js/sync.js": "fb04bc1c8fea514df4688b4993e2d620570a75b59c85bb0e7d20501888a1b420",
-  "web/js/update.js": "ebcc47aed61efde92220eb361e1bf4013298023d99d21fd0e1d8330e3c2086e8",
+  "web/js/update.js": "06128695622d2cb5f11fba046031109eb73b89a70d05b587ef2768c6ac83245e",
   "web/js/weights.js": "05819acc26e8b2f6e9d44402b9dfa915f959bce045c79f00d487d182f0a76b64",
   "web/manifest.json": "c2351657716a2425d052efcad63b0ee2f33a217caef17dd844d24c558a004613",
   "web/server.ps1": "925be18926c4fb653a10970da254d357aec965fd949ecbf91d21189f32f675c5",
-  "web/server.py": "01992873a562676a517929ab317a2f3e73433eaebe60505660e5bd202421bb16"
+  "web/server.py": "a68873d396c6e23fdd2552b0fd626991d653288ab48d82f22f0bd5cde35f3914"
  }
 }
