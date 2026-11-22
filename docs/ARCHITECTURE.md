@@ -238,6 +238,7 @@ Forever differs from Classic the Forever source is used, and anything that is on
 | AH prices | **Your own scans and browsing** (`/cc scan`) | the save (`ah.prices`), synced between computers | `Market.lua` | Your realm, your faction. No external price feed |
 | Icon names (file id to name) | **wowdev community listfile** | `web/js/icons.js` | `gamedata/icons.py` | Same files in every client |
 | Game rules no source ships per item: standings, reputation thresholds, AH cut, disenchant tables and skill | **Hand-kept**, each with its source in the file | `web/data/rules.js` | by hand | Disenchant numbers are Classic (warcraft.wiki.gg), not measured on Forever; your real results are logged |
+| Attunements and keys: which quest or item opens which instance, and what it opens | **Hand-kept**, sources in the file (conquestcapped Forever attunement guide, warcraft.wiki.gg WoW Forever) | `web/data/rules.js` `unlocks` | by hand; quest, item and boss ids checked against the pack in CI | Forever guides; the chains themselves come from QuestieDB Forever |
 | Stat weights | **Worked out per spec**, sources in `docs/STAT-WEIGHTS.md` | `web/js/weights.js` | by hand | Forever item budgets |
 
 Links out of the app go to Forever sites: a quest's page is ForeverChanges (`foreverchanges.pro/quest/<id>`).

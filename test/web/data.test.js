@@ -95,6 +95,21 @@ test('rules: disenchant tables cover item levels without gaps, chances add up to
   for (let i = 1; i < D.skill.length; i++) assert.ok(D.skill[i][0] > D.skill[i - 1][0] && D.skill[i][1] > D.skill[i - 1][1]);
 });
 
+test('rules: every attunement and key names quests, items, bosses and zones the pack has', () => {
+  const U = RULES.unlocks;
+  assert.ok(U.length >= 6);
+  const zones = new Set();
+  for (const rows of Object.values(GD.src)) for (const r of rows) if (r[0] === 'drop' && r[7]) zones.add(r[7]);
+  for (const u of U) {
+    assert.ok(u.id && u.name && u.what && u.src && ['dungeon', 'raid', 'shortcut'].includes(u.kind) && ['one', 'each'].includes(u.who), u.id);
+    assert.ok(u.quests.length || u.items.length, u.id + ': a quest or an item gives it');
+    u.quests.forEach((q) => assert.ok(GD.quests[q], `${u.id}: quest ${q} in the pack`));
+    u.items.forEach((i) => assert.ok(GD.items[i], `${u.id}: item ${i} in the pack`));
+    if (u.value && u.value.npcs) u.value.npcs.forEach((n) => assert.ok(GD.npcs[n], `${u.id}: boss ${n} in the pack`));
+    if (u.value && u.value.zone) assert.ok(zones.has(u.value.zone), `${u.id}: drops listed for ${u.value.zone}`);
+  }
+});
+
 // ---------------------------------------------------------------- no Wowhead data or links
 test('the app links to Forever sites, never Wowhead (only its icon image CDN)', () => {
   const files = ['index.html', ...fs.readdirSync(path.join(WEB, 'js')).filter((f) => f.endsWith('.js') && f !== 'icons.js').map((f) => 'js/' + f),

@@ -3,6 +3,12 @@
 Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 
 ## 1.5.0 (in progress: every merge to main updates itself)
+- **Gear no longer counts quest rewards you already took** (or quests for another class or faction) as
+  a place to get an item. One shared check (`js/quests.js`) knows which quests you can do: faction,
+  class, level, earlier steps of the chain and reputation, from QuestieDB Forever and your save.
+- **Attunements and keys** (UBRS, Scholomance, City of Dalaran, Dire Maul, the Shadowforge and
+  Stratholme keys, Onyxia, Molten Core) are listed once in `data/rules.js`, each with its source, for the
+  coming Now page.
 - **Quest rewards are scored for every spec.** The Quest log shows, under each quest's rewards, which
   specs each item upgrades and by how much (the same engine as Bags and Gear), also for quests whose
   rewards come from the game-data pack. The snapshot carries the same scores per reward and for the

@@ -147,10 +147,11 @@
   const rollStats = (rows) => { const st = {}; rows.forEach(([k, v]) => { st[k] = (st[k] || 0) + v; }); return st; };
   let cache = null;
   function candidates(use, cls) {
-    const ck = JSON.stringify(use) + cls + (SFX ? SFX.built : '');
+    const Q = CC.quests;
+    const ck = JSON.stringify(use) + cls + (SFX ? SFX.built : '') + '|' + (((A.CH && A.CH.snap) || {}).taken || 0) + '|' + arr(((A.CH && A.CH.snap) || {}).completedQuests).length;
     if (cache && cache.ck === ck) return cache;
     const fixed = [], rolls = [], byId = {};
-    const skipped = { 'raid only': 0, 'PvP honor gear': 0, 'other faction only': 0, 'only Classic data says where it comes from': 0, 'no endgametools tooltip': 0, 'not for your class': 0, 'no known source': 0 };
+    const skipped = { 'quest reward you already took (or not for you)': 0, 'raid only': 0, 'PvP honor gear': 0, 'other faction only': 0, 'only Classic data says where it comes from': 0, 'no endgametools tooltip': 0, 'not for your class': 0, 'no known source': 0 };
     const side = (char().faction || '')[0];            // 'A' or 'H'; vendors that only serve the other side don't count
     for (const [k, g] of Object.entries((A.GD && A.GD.items) || {})) {
       const c = g[9], sub = g[12];
@@ -174,6 +175,8 @@
       const raidQuest = arr(src).some((r) => r[0] === 'quest' && ((A.GD.quests || {})[r[2]] || {}).type === 'Raid');
       if (size >= 20 || raidQuest) { skipped['raid only']++; continue; }
       if (isPvp(id)) { skipped['PvP honor gear']++; continue; }
+      // only a quest gives it, and every such quest is done (or for the other faction or another class)
+      if (Q && !vend && (!how || /^Quest/.test(how) && !/ · (Vendor|World Drop|Drop|Boss Drop|Profession|PvP reward) · /.test(' · ' + how + ' · ')) && arr(src).every((r) => r[0] === 'quest') && Q.rewardGone(id)) { skipped['quest reward you already took (or not for you)']++; continue; }
       const base = { id, g, inv: g[4], req: g[3] || 0, boe, size, how, kind: kindOf(id) };
       if (rr) {
         // each roll is its own item: "Elegant Mantle of Healing"; the base's armor still counts
