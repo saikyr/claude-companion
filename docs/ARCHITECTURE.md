@@ -236,7 +236,12 @@ Forever differs from Classic the Forever source is used, and anything that is on
 | Game rules no source ships per item: standings, reputation thresholds, AH cut, disenchant tables and skill | **Hand-kept**, each with its source in the file | `web/data/rules.js` | by hand | Disenchant numbers are Classic (warcraft.wiki.gg), not measured on Forever; your real results are logged |
 | Stat weights | **Worked out per spec**, sources in `docs/STAT-WEIGHTS.md` | `web/js/weights.js` | by hand | Forever item budgets |
 
-Not used: Wowhead in bulk (bot wall, terms), the QuestieDB addon in game (1.4 and earlier kept a copy of
+Links out of the app go to Forever sites: a quest's page is ForeverChanges (`foreverchanges.pro/quest/<id>`).
+The only Wowhead address left is its icon image CDN (`wow.zamimg.com`), for pictures: icon files are the same
+in every client and no Forever site serves them by name. CI fails if any other Wowhead address appears in the app.
+
+Not used: Wowhead for any data or link (bot wall, terms; QuestieDB's Forever layer already includes a Wowhead
+Forever snapshot), the QuestieDB addon in game (1.4 and earlier kept a copy of
 its answers in the save that was never refreshed and shifted points in the four converted zones; the
 addon now drops that copy on load), external AH price sites.
 

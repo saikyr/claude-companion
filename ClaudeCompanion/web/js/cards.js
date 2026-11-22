@@ -6,6 +6,7 @@
   const CC = window.CC;
   if (!CC || !CC.api || !CC.V) return;
   const A = CC.api, V = CC.V, esc = A.esc, arr = A.arr;
+  // icon images only, as in app.js (docs/ARCHITECTURE.md, Data sources)
   const ICON_URL = 'https://wow.zamimg.com/images/wow/icons/large/';
   const KINDS = {
     farm: ['Farm', 'inv_misc_coin_02'], flip: ['AH flip', 'inv_misc_coin_17'], quest: ['Quest', 'inv_misc_note_01'],
