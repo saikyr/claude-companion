@@ -1,15 +1,15 @@
 {
  "version": "1.4.0",
- "built": "2026-11-22T13:54:11+00:00",
+ "built": "2026-11-22T14:34:11+00:00",
  "channel": {
   "repo": "saikyr/claude-companion",
   "branch": "stable"
  },
  "from": {
   "branch": "main",
-  "commit": "b43a1ef38fbda6acb9a4a9f3b37359f3994de6d4"
+  "commit": "37b9762225119cf0126cd83374f780451b0d6848"
  },
- "notes": "Merge pull request #40 from saikyr/pc-build",
+ "notes": "Merge pull request #41 from saikyr/claude/project-thread-fvgi7h",
  "files": {
   "Bindings.xml": "f4ad14d769e58eb18cd49da688fb23d64dec6be99a7684b9993ea0689616bf09",
   "ClaudeCompanion.toc": "87915db63dcb911f027bc5c400284fe70fa58142f561efc0dea4134bd6625c42",
@@ -20,7 +20,7 @@
   "Professions.lua": "a3b2dac598413b50f149781fb0374c96371009249fda8c32f95f81aaf70f222b",
   "Snapshot.lua": "700d98226344326bb72fda0ec0abb38ff1b471bd4fd475adb25d17ac7cf9c6bc",
   "UI.lua": "c501d76e644498beec7e1d5fbb98f830faaacd1ae2ed1d95e3836c60e2d8cb78",
-  "companion-data/SCHEMA.md": "704e8c88d534a41f3c5f54efec453d9fb973c3de1f3a93c1243d64a3859f42d7",
+  "companion-data/SCHEMA.md": "3715258c02f27abc647e49cd8b4e1de3ca6a1cb265e0fa122f6e9cd98c1b58e2",
   "web/Claude Companion.app/Contents/Info.plist": "cdf5f33d28ce203d9307b765ef33199602fa77a52b4c9b3fee9e7a00cd65a009",
   "web/Claude Companion.app/Contents/MacOS/launcher": "65fe025ebb1acad0f786633f5b30f6bdcfa6b49f2912eca1f87385dcec0224c4",
   "web/Claude Companion.app/Contents/Resources/AppIcon.icns": "467ef964fdaff99ca47e80e7aff3d4db96306b984293aeb98251d68d2e4a2fdd",
@@ -31,20 +31,21 @@
   "web/icons/app.ico": "890d1ad4b13ed82791c3fa3ad175798ed2fbe7f304af6cb6af5e15e5ce01c7a3",
   "web/icons/icon-192.png": "7ba20877d554551a5378b001f9fe2a60caa7e2224e2d84c42359c069dfc33ca3",
   "web/icons/icon-512.png": "658263476e4a5ac0371ed8fe85671973603436e42e550d92b937c495ba78e567",
-  "web/index.html": "cab7404aa539088f746f1e6fccf4c9a6ea9610653e12f59588e27956dc543584",
+  "web/index.html": "8d52b89fc72a95a6ea362398d8aca9aaae090a7ee67aafb506c18f979cbf36cb",
   "web/js/advice.js": "6a0420ff07267d55b73b1457edd3f4b90e09465c60ab91f2ea5856bccc17682e",
-  "web/js/app.js": "e40126cf14fe77728d5ba90aa39c546b2e31f0497334be8596f204e3df6420e0",
+  "web/js/app.js": "9ff829717b610308172b861a5f05eb587f7a430e8f74fb9b5b633f1a1a9292dd",
   "web/js/cards.js": "27fbd8b2b8ee2a3de0b9d2677d642bbe471fec722c62fce8bb070ac27e78731f",
-  "web/js/claude.js": "d4067c877758cf395c9914095bb963898a3881299773c6b9d87cd901a15a5a9b",
+  "web/js/claude.js": "a41eb4072eba2b2ed042df28a48caa94fd284c87c5b895ca531db88f6aa1ea5d",
   "web/js/gear.js": "b3fe7892ec78f0b24c21649a6be493bfe58a503e8eec6b39c3dc7aa2aef18c76",
   "web/js/icons.js": "9a589c086b0c7f02837345b8f69baad6670e86b6ebe195117b9b540094d9be46",
   "web/js/lua.js": "e14c5df02bbfa98ec07196ec363d017beb4bd6ac50e075b78a3ba32b72234f77",
-  "web/js/merge.js": "e3f0a6065c75bbfe3c86ddfccd4c68e880333f01b61cde6008da8265553e22c0",
+  "web/js/merge.js": "85f8a6447c366be89dc676408f854fd7022d13d5610eb7e3598b641077162dd8",
   "web/js/runs.js": "bcab59cab6ae359b0466a8c77b6295653362d1e6087d71d6394721eaf307d4d3",
+  "web/js/sync.js": "71552bc889b4081d3f633126aa074f07e995cf60191fabc7bb12187c12c74dcb",
   "web/js/update.js": "f16e01bd7801c40e09dc539b4660f3f1a53839014cad8092f6ac870fd8ddf890",
   "web/js/weights.js": "05819acc26e8b2f6e9d44402b9dfa915f959bce045c79f00d487d182f0a76b64",
   "web/manifest.json": "c2351657716a2425d052efcad63b0ee2f33a217caef17dd844d24c558a004613",
-  "web/server.ps1": "21f85e79f25d78d80c3f3430df49ec43dd3c06d6026e285f44512472ce39b523",
-  "web/server.py": "e6f91102c9e78d23ad8a00bca67a0cdea0816762201b657db4021648fa23e854"
+  "web/server.ps1": "bd21486626ed8c051ef52987e5cf0347a6e2f04161121d185428158891b3224f",
+  "web/server.py": "0970bfc1c12690c4ed42c19754fdcb33c89f64991db13160b40b5b6c711a07dd"
  }
 }
