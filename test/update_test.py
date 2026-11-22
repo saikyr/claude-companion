@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """End-to-end test of the self-updater, for server.py and (on Windows) server.ps1, with no GitHub:
-a mock GitHub API serves one release whose zip is this checkout's ClaudeCompanion folder plus a
-marker file. A throwaway copy of the addon (with fake personal data in companion-data) is served on
+a mock GitHub API serves a "stable" branch whose zipball is this checkout's ClaudeCompanion folder
+plus a marker file and BUILD.json (SHA-256 of every file). A corrupted build is refused first. A throwaway copy of the addon (with fake personal data in companion-data) is served on
 a spare port; the test asks for the update status, installs, and checks:
   - the update was offered, and installed (marker present, installed.json written)
   - companion-data (snapshot, settings, update.json, cards) is untouched, SCHEMA.md is updated
@@ -11,7 +11,7 @@ a spare port; the test asks for the update status, installs, and checks:
     python test/update_test.py            (server.py)
     python test/update_test.py --ps1      (server.ps1, Windows)
 """
-import io, json, os, shutil, subprocess, sys, tempfile, threading, time, urllib.request, zipfile
+import hashlib, io, json, os, shutil, subprocess, sys, tempfile, threading, time, urllib.request, zipfile
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -21,39 +21,46 @@ API_PORT, APP_PORT = 47700, 47616 if not PS1 else 47617
 seen = {'api_auth': None, 'dl_auth': 'unset'}
 
 
-def release_zip():
+def build_zip(corrupt=False):
+    files = {}
+    for root, dirs, fs in os.walk(SRC):
+        dirs[:] = [d for d in dirs if d not in ('__pycache__', 'from-claude', 'data')]
+        for f in fs:
+            rel = os.path.relpath(os.path.join(root, f), SRC).replace(os.sep, '/')
+            if rel.startswith('companion-data/'): continue
+            files[rel] = open(os.path.join(root, f), 'rb').read()
+    files['web/UPDATE_MARKER.txt'] = b'new build'
+    files['companion-data/SCHEMA.md'] = b'# new schema'
+    sums = {k: hashlib.sha256(v).hexdigest() for k, v in files.items()}
+    files['companion-data/settings.json'] = b'{"evil": "must not be copied"}'   # not in BUILD.json, never copied anyway
+    if corrupt: files['Core.lua'] = files['Core.lua'] + b'-- damaged in transit'
+    top = 'me-cc-abc123/'   # GitHub zipballs put everything in one top folder
     b = io.BytesIO()
     with zipfile.ZipFile(b, 'w', zipfile.ZIP_DEFLATED) as z:
-        for root, dirs, files in os.walk(SRC):
-            dirs[:] = [d for d in dirs if d not in ('__pycache__', 'from-claude', 'data')]
-            for f in files:
-                rel = os.path.relpath(os.path.join(root, f), SRC).replace(os.sep, '/')
-                if rel.startswith('companion-data/'): continue
-                z.write(os.path.join(root, f), 'ClaudeCompanion/' + rel)
-        z.writestr('ClaudeCompanion/web/UPDATE_MARKER.txt', 'new build')
-        z.writestr('ClaudeCompanion/companion-data/settings.json', '{"evil": "must not be copied"}')
-        z.writestr('ClaudeCompanion/companion-data/SCHEMA.md', '# new schema')
+        for k, v in files.items(): z.writestr(top + 'ClaudeCompanion/' + k, v)
+        z.writestr(top + 'BUILD.json', json.dumps({'version': '1.4.0', 'files': sums}))
     return b.getvalue()
 
 
-ZIP = release_zip()
+ZIP = {'good': build_zip(), 'bad': build_zip(corrupt=True)}
+SERVE = {'which': 'bad'}
 
 
 class GitHub(BaseHTTPRequestHandler):
     def log_message(self, *a): pass
 
     def do_GET(self):
-        if self.path.startswith('/repos/me/cc/releases/assets/7'):
+        if self.path.startswith('/repos/me/cc/zipball/'):
             seen['api_auth'] = self.headers.get('Authorization')
             self.send_response(302); self.send_header('Location', f'http://127.0.0.1:{API_PORT}/dl/release.zip'); self.end_headers(); return
         if self.path.startswith('/dl/'):
             seen['dl_auth'] = self.headers.get('Authorization')
-            self.send_response(200); self.send_header('Content-Length', str(len(ZIP))); self.end_headers(); self.wfile.write(ZIP); return
-        if self.path.startswith('/repos/me/cc/releases'):
+            z = ZIP[SERVE['which']]
+            self.send_response(200); self.send_header('Content-Length', str(len(z))); self.end_headers(); self.wfile.write(z); return
+        if self.path.startswith('/repos/me/cc/commits/stable'):
             if self.headers.get('Authorization') != 'Bearer test-token':
                 self.send_response(404); self.end_headers(); return
-            body = json.dumps([{'tag_name': 'build-test-2', 'name': 'Test build 2', 'draft': False, 'published_at': '2026-11-22T00:00:00Z',
-                                'body': 'notes', 'assets': [{'id': 7, 'name': 'ClaudeCompanion-1.4.0-test.zip', 'size': len(ZIP)}]}]).encode()
+            body = json.dumps({'sha': 'abc123def4567890abc123def4567890abc123de', 'commit': {'message': 'Build 1.4.0 from pc-build: test', 'committer': {'date': '2026-11-22T00:00:00Z'}}}).encode()
             self.send_response(200); self.send_header('Content-Type', 'application/json'); self.send_header('Content-Length', str(len(body))); self.end_headers(); self.wfile.write(body); return
         self.send_response(404); self.end_headers()
 
@@ -94,7 +101,14 @@ def main():
                 if get(base + 'api/ping') == 'claude-companion': break
             except Exception: time.sleep(0.5)
         st = json.loads(get(base + 'api/update?force=1'))
-        check(st.get('available') is True and (st.get('latest') or {}).get('tag') == 'build-test-2', 'update offered: ' + json.dumps({k: st.get(k) for k in ('available', 'error')}))
+        check(st.get('available') is True and (st.get('latest') or {}).get('tag') == 'abc123def456', 'update offered: ' + json.dumps({k: st.get(k) for k in ('available', 'error')}))
+        # a build damaged in transit (one file doesn't match BUILD.json) installs nothing
+        before = open(os.path.join(addon, 'Core.lua'), 'rb').read()
+        r = json.loads(get(base + 'api/update', post=True))
+        check(r.get('ok') is False and 'checksum' in (r.get('error') or ''), 'damaged build refused: ' + str(r.get('error'))[:80])
+        check(open(os.path.join(addon, 'Core.lua'), 'rb').read() == before and not os.path.exists(os.path.join(addon, 'web', 'UPDATE_MARKER.txt'))
+              and not os.path.exists(os.path.join(cd, 'installed.json')), 'nothing changed after the refused build')
+        SERVE['which'] = 'good'
         r = json.loads(get(base + 'api/update', post=True))
         check(r.get('ok') is True, 'installed: ' + json.dumps(r)[:200])
         check(os.path.isfile(os.path.join(addon, 'web', 'UPDATE_MARKER.txt')), 'new files copied')
@@ -103,7 +117,7 @@ def main():
         check(json.load(open(os.path.join(cd, 'update.json'))) == cfg, 'update.json (token) untouched')
         check(open(os.path.join(cd, 'SCHEMA.md')).read() == '# new schema', 'SCHEMA.md updated')
         inst = json.load(open(os.path.join(cd, 'installed.json')))
-        check(inst.get('tag') == 'build-test-2', 'installed.json says build-test-2')
+        check(inst.get('tag') == 'abc123def456' and inst.get('version') == '1.4.0', 'installed.json names the build')
         b = inst.get('backup') or ''
         check(os.path.isdir(b) and os.path.isfile(os.path.join(b, 'web', 'server.py')) and not os.path.exists(os.path.join(b, 'companion-data')),
               'backup made, without companion-data: ' + b)
