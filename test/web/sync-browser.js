@@ -27,8 +27,8 @@ const check = (ok, what) => { console.log((ok ? 'ok   ' : 'FAIL ') + what); if (
   check(B.records.size > 0, `the page sent its save (${B.records.size} records)`);
   const key = await page.evaluate(() => Object.keys(window.CC.api.RAW.chars)[0]);
   // another computer, linked to this one, with history this save doesn't have
-  const files = {};
-  const mac = S.client({ fetch: B.fetch, now: () => Date.now(), crypto: crypto.webcrypto, device: { name: 'MacBook', os: 'mac' },
+  const files = { s: { key: crypto.randomBytes(32).toString('hex') } };
+  const mac = S.client({ fetch: B.fetch, now: () => Date.now(), device: { name: 'MacBook', os: 'mac' },
     loadState: async () => files.s || null, saveState: async (s) => { files.s = s; }, loadCache: async () => null, saveCache: async () => {} });
   const t = 1795400000;
   await mac.push({ chars: { [key]: { lastSeen: t, journal: [{ t, e: 'kill', name: 'Browser Test Mob' }], grinds: [{ name: 'browser test grind', start: t - 600, finish: t, kills: 1 }] } } }, { 'cc.test.fromMac': 'yes' });
@@ -57,6 +57,8 @@ const check = (ok, what) => { console.log((ok ? 'ok   ' : 'FAIL ') + what); if (
   await page.evaluate(() => window.CC.syncNow());
   const off = await page.evaluate(() => ({ ok: window.CC.sync.status.ok, err: window.CC.sync.status.error, ch: !!window.CC.api.CH }));
   check(off.ok === false && off.ch, `offline: the app keeps working and shows "${off.err}"`);
+  const side = await page.textContent('aside .sync');
+  check(/Saved in game|In game · last saved/.test(side), `the sidebar says how fresh the save is ("${side.trim()}")`);
   check(!errors.length, 'no page errors' + (errors.length ? ': ' + errors.join(' | ') : ''));
   await browser.close();
   console.log(failed ? `\n${failed} FAILED` : '\nall passed');

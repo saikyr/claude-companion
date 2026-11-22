@@ -41,6 +41,36 @@ def find_save():
         return _save['path']
 
 
+_game = {'at': 0.0, 'on': None}
+
+
+def game_running():
+    # is this game client running? (the app says "in game" instead of only "saved N ago"); checked at most every 10 s
+    if time.time() - _game['at'] < 10: return _game['on']
+    _game['at'] = time.time()
+    try:
+        if os.name == 'nt': return None
+        out = subprocess.run(['ps', '-axo', 'comm='], capture_output=True, text=True, timeout=5).stdout
+        root = os.path.realpath(FOREVER)
+        _game['on'] = any(l.strip().startswith(root) or l.strip().startswith(FOREVER) for l in out.splitlines())
+    except Exception: _game['on'] = None
+    return _game['on']
+
+
+_sync_lock = threading.Lock()
+
+
+def ensure_sync_key(path):
+    # this install's sync device key (js/sync.js), made once, here: one place makes it, so an app
+    # window and the hidden browser starting at the same moment can't each make their own
+    with _sync_lock:
+        st = read_json(path, None)
+        if isinstance(st, dict) and len(str(st.get('key') or '')) >= 32: return
+        st = st if isinstance(st, dict) else {}
+        st['key'] = os.urandom(32).hex()
+        write_json(path, st)
+
+
 def stamp_of(path):
     # the save file's modified time; the page copies it into snapshot.json as saveModified
     return datetime.fromtimestamp(os.path.getmtime(path), timezone.utc).isoformat()
@@ -64,7 +94,7 @@ class Handler(BaseHTTPRequestHandler):
         if path in ('/api/stamp', '/api/data'):
             save = find_save()
             if path == '/api/stamp':
-                dev = {'host': DEVICE_HOST, 'os': DEVICE_OS}
+                dev = {'host': DEVICE_HOST, 'os': DEVICE_OS, 'game': game_running()}
                 if not save: return self.send(200, json.dumps({'stamp': None, **dev}), TYPES['.json'])
                 return self.send(200, json.dumps({'stamp': stamp_of(save), 'size': os.path.getsize(save), **dev}), TYPES['.json'])
             if not save: return self.send(404, 'no save yet')
@@ -75,6 +105,7 @@ class Handler(BaseHTTPRequestHandler):
             f = {'/api/cards': os.path.join(CARDS_DIR, 'cards.json'), '/api/cards-state': os.path.join(CARDS_DIR, 'state.json'),
                  '/api/settings': os.path.join(DATA_DIR, 'settings.json'), '/api/sync': os.path.join(DATA_DIR, 'sync.json'),
                  '/api/sync-cache': os.path.join(DATA_DIR, 'sync-cache.json')}[path]
+            if path == '/api/sync': ensure_sync_key(f)
             if not os.path.isfile(f): return self.send(204, b'')   # none yet
             with open(f, 'rb') as fh: return self.send(200, fh.read(), TYPES['.json'])
         rel = urllib.request.url2pathname(path.lstrip('/')) or 'index.html'
@@ -446,7 +477,8 @@ def serve(open_after):
     print(f'Claude Companion serving {URL} for {FOREVER}', flush=True)
     if not os.path.isdir(os.path.join(FOREVER, 'WTF')):
         print('Note: no WTF folder found next to Interface. Put ClaudeCompanion in _forever_/Interface/AddOns.', flush=True)
-    threading.Thread(target=background_snapshot, daemon=True).start()
+    if os.environ.get('CC_BACKGROUND') != '0':          # CC_BACKGROUND=0: only for tests (no hidden browser)
+        threading.Thread(target=background_snapshot, daemon=True).start()
     threading.Thread(target=auto_update, daemon=True).start()
     if open_after: open_app()
     try: srv.serve_forever()

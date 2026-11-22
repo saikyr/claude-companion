@@ -15,9 +15,9 @@ const { memoryBackend } = require('./sync-backend.js');
 
 // one computer: its own companion-data (state + cache files)
 function computer(fetch, name, os) {
-  const files = {};
+  const files = { state: JSON.stringify({ key: crypto.randomBytes(32).toString('hex') }) };   // the local server makes the key
   let now = Date.parse('2026-11-22T12:00:00Z');
-  return { files, tick(ms) { now += ms; }, client: S.client({ fetch, now: () => now, crypto: crypto.webcrypto,
+  return { files, tick(ms) { now += ms; }, client: S.client({ fetch, now: () => now,
     loadState: async () => (files.state ? JSON.parse(files.state) : null), saveState: async (s) => { files.state = JSON.stringify(s); },
     loadCache: async () => (files.cache ? JSON.parse(files.cache) : null), saveCache: async (c) => { files.cache = JSON.stringify(c); },
     device: { name, os } }) };

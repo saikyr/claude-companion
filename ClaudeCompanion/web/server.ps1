@@ -108,6 +108,28 @@ if (-not $Serve) {
     exit
 }
 
+# is this game client running? (the app says "in game" instead of only "saved N ago"); checked at most every 10 s
+$script:gameAt = [DateTime]::MinValue; $script:gameOn = 'null'
+function Test-Game {
+    if (((Get-Date) - $script:gameAt).TotalSeconds -lt 10) { return $script:gameOn }
+    $script:gameAt = Get-Date
+    try {
+        $hit = Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith($forever, [StringComparison]::OrdinalIgnoreCase) } | Select-Object -First 1
+        $script:gameOn = if ($hit) { 'true' } else { 'false' }
+    } catch { $script:gameOn = 'null' }
+    $script:gameOn
+}
+# this install's sync device key (js/sync.js), made once, here: one place makes it, so an app window
+# and the hidden browser starting at the same moment can't each make their own
+function Ensure-SyncKey([string]$f) {
+    $st = Read-Json $f
+    if ($st -and $st.key -and ([string]$st.key).Length -ge 32) { return }
+    $b = New-Object byte[] 32
+    [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b)
+    $key = -join ($b | ForEach-Object { $_.ToString('x2') })
+    if ($st) { $st | Add-Member -NotePropertyName key -NotePropertyValue $key -Force } else { $st = [pscustomobject]@{ key = $key } }
+    Write-Json $f $st
+}
 function Find-Save {
     Get-ChildItem -Path $accounts -Filter 'ClaudeCompanion.lua' -Recurse -File -ErrorAction SilentlyContinue |
         Where-Object { $_.Directory.Name -eq 'SavedVariables' } |
@@ -334,7 +356,7 @@ function Restart-Server {
 $restartAfter = $false
 $pending = $listener.GetContextAsync()
 while ($listener.IsListening) {
-    if ((Get-Date) -ge $bgNext) { try { Check-Background } catch { }; $bgNext = (Get-Date).AddSeconds(5) }
+    if ($env:CC_BACKGROUND -ne '0' -and (Get-Date) -ge $bgNext) { try { Check-Background } catch { }; $bgNext = (Get-Date).AddSeconds(5) }   # CC_BACKGROUND=0: tests only
     if ((Get-Date) -ge $updNext) {
         $updNext = (Get-Date).AddMinutes(30)
         try { $st = Get-UpdStatus; if ($st.available -and $st.auto) { $r = Install-Update; if ($r.ok) { Restart-Server } } } catch { }
@@ -355,7 +377,7 @@ while ($listener.IsListening) {
             $save = Get-Save
             if ($path -eq '/api/stamp') {
                 $type = 'application/json; charset=utf-8'
-                $dev = ',"host":"' + ($env:COMPUTERNAME -replace '[^A-Za-z0-9._-]', '') + '","os":"pc"}'
+                $dev = ',"host":"' + ($env:COMPUTERNAME -replace '[^A-Za-z0-9._-]', '') + '","os":"pc","game":' + (Test-Game) + '}'
                 if ($save) {
                     $json = '{"stamp":"' + $save.LastWriteTimeUtc.ToString('o') + '","size":' + $save.Length + $dev
                 } else { $json = '{"stamp":null' + $dev }
@@ -385,6 +407,7 @@ while ($listener.IsListening) {
         } elseif ($files.ContainsKey($path) -and $req.HttpMethod -eq 'GET') {
             # Claude's cards (cards.json, Claude writes it), what you did with them (state.json) and the app's settings
             $f = $files[$path]
+            if ($path -eq '/api/sync') { Ensure-SyncKey $f }
             if (Test-Path $f -PathType Leaf) { $body = Read-Shared $f; $type = 'application/json; charset=utf-8' }
             else { $res.StatusCode = 204; $body = [byte[]]@() }   # none yet
         } elseif ($writable.ContainsKey($path) -and $req.HttpMethod -eq 'POST') {

@@ -14,8 +14,8 @@
 //  - offline: nothing is lost. What wasn't sent stays "not sent" (the high-water marks only move on
 //    success) and goes with the next save; the app always works from the local save
 //
-// Identity: each install makes a random device key (companion-data/sync.json, through the local
-// server). The backend keeps only its hash. Two computers join one account with a link code (System
+// Identity: each install has a random device key, made once by the local server
+// (companion-data/sync.json). The backend keeps only its hash. Two computers join one account with a link code (System
 // tab), or Claude joins them on the backend when it can tell they're the same person's.
 // Only the publishable key is here; the tables are closed, and the cc_* functions only ever touch the
 // account of the key that calls them.
@@ -165,12 +165,8 @@
 
     async function ready() {
       if (!state) state = Object.assign({ sent: {}, live: {}, settings: {} }, (await io.loadState()) || {});
-      if (!state.key) {
-        const b = new Uint8Array(32); (io.crypto || root.crypto).getRandomValues(b);
-        state.key = [...b].map((x) => x.toString(16).padStart(2, '0')).join('');
-        await io.saveState(state);
-        state = Object.assign(state, (await io.loadState()) || {});   // another window may have won: use what's in the file
-      }
+      // the device key is made once by the local server (GET /api/sync), so two pages can't race
+      if (!state.key || String(state.key).length < 32) { state = null; throw new Error('no device key yet (the app server makes it)'); }
       if (!state.account || !state.device) {
         const r = await rpc('cc_register', { p_key: state.key, p_name: (io.device || {}).name || null, p_os: (io.device || {}).os || null });
         state.account = r.account; state.device = r.device;

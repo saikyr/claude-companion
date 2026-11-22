@@ -32,7 +32,7 @@ jobs:
           cp -r ClaudeCompanion $F/Interface/AddOns/
           cp /tmp/h/out.lua $F/WTF/Account/T/SavedVariables/ClaudeCompanion.lua
           echo '{"auto": false}' > $F/Interface/AddOns/ClaudeCompanion/companion-data/update.json
-          (cd $F/Interface/AddOns/ClaudeCompanion/web && CC_PORT=47999 nohup python3 server.py --serve > /tmp/server.log 2>&1 &)
+          (cd $F/Interface/AddOns/ClaudeCompanion/web && CC_PORT=47999 CC_BACKGROUND=0 nohup python3 server.py --serve > /tmp/server.log 2>&1 &)
           npm install --no-save --no-package-lock playwright@1.49.1
           npx playwright install --with-deps chromium
           node test/web/sync-browser.js 47999 $F/Interface/AddOns/ClaudeCompanion/companion-data
