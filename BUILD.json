@@ -1,20 +1,20 @@
 {
  "version": "1.5.0",
- "built": "2026-11-22T22:49:28+00:00",
+ "built": "2026-11-22T23:17:32+00:00",
  "channel": {
   "repo": "saikyr/claude-companion",
   "branch": "stable"
  },
  "from": {
   "branch": "main",
-  "commit": "e7b801a3e443ce2dcff7c51c3cca4b7877e705ea"
+  "commit": "1dbba91e52541a4a4af67ed68db10873896cc57b"
  },
- "build": "e7b801a3e443",
- "notes": "/reload is the one way to save; loot icons and tooltips fall back to the pack (#64)",
+ "build": "1dbba91e5254",
+ "notes": "docs/FEATURES.md: every feature, what it records, where Claude reads it; CLAUDE.md: before answering (#65)",
  "files": {
   "Bindings.xml": "99dcc8984fdbcbea746275e7a8dbbc34e16c462021640ce70232478fb843fb48",
   "ClaudeCompanion.toc": "7350d1f2265c02ac7faa5f97f91b6ceccf33b025682458e6a77e3eac9d77c2a6",
-  "Core.lua": "aa329175a0594d5c204bed0c54d05c547fa45652d64915c1422e25cc75352293",
+  "Core.lua": "96295cb51fde9b61723ce82b0fa1cbd8e5bf9bbc1100e93c0894285d43a2dee2",
   "Journal.lua": "63ef98784aa43cb41b6418af94102372bedbb8c8af3218a6efbc4c5648c4d149",
   "Market.lua": "4165160c673093f830132d9a1a252d35e4c4aed4f62365b861f6fa303b29225c",
   "Professions.lua": "2e0b23cf3ff638de846eec195e4e8b2aac57c090c41fd6a4f67cdad7f5160171",
@@ -25,7 +25,7 @@
   "web/Claude Companion.app/Contents/MacOS/launcher": "65fe025ebb1acad0f786633f5b30f6bdcfa6b49f2912eca1f87385dcec0224c4",
   "web/Claude Companion.app/Contents/Resources/AppIcon.icns": "467ef964fdaff99ca47e80e7aff3d4db96306b984293aeb98251d68d2e4a2fdd",
   "web/Claude Companion.bat": "8f5cf6c1ff6a95ad5e0ebfc10951ef451cccf5b1e9a6d1fc7574600cfd01a2fc",
-  "web/channel.json": "c49b0e695b387d8382d8d343a06b897410545b3d637540004734fb9404ce00cb",
+  "web/channel.json": "ac49e200217d240002dac0f32fe42146228a8a2ef86120a80ebcd06292784654",
   "web/css/app.css": "71517047400c16a91e08ad658a1bc393a508b58f11f88248c6e71b981d211a15",
   "web/data/gamedata.js": "3163e358427dc39e0257a543c963b0cc4909a2871ad1455bbfb73c639a6a43d5",
   "web/data/rules.js": "55ffd4f1371145779f4ee531bc8c6f5a20e78da96dd66da9e6c1ee93e5ecafcf",
