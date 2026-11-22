@@ -18,6 +18,10 @@ Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 - **Hand-kept game rules in one file** (`web/data/rules.js`): standings, reputation thresholds, AH cut and
   the disenchant tables, each with its source, instead of copies in app.js and advice.js.
 
+- **Gear page, organised by slot.** A slot list (with Compare with on it) and the chosen slot in full:
+  every upgrade at your level (best 15, then Show all), source chips with counts, and that slot's pre-BiS
+  with your target on top and "Make target" on the rest. Random greens now count as upgrades even when
+  they aren't on your AH.
 - **The Gear page, rebuilt.** Four views per spec: **Upgrades** (slot by slot, what you have and several
   options that beat it, each with its source in one word: yours, on the AH, dungeon, quest, crafted,
   vendor, world drop; AH price and how many are listed; filter by source), **Pre-BiS** (best per slot up
