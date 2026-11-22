@@ -17,7 +17,7 @@ DATA_DIR = os.path.join(os.path.dirname(WEB), 'companion-data')
 CARDS_DIR = os.path.join(DATA_DIR, 'from-claude')   # cards.json: Claude writes it; state.json: this app writes it
 PORT = int(os.environ.get('CC_PORT') or 47615)   # CC_PORT: only for testing a second copy
 # which computer this is: snapshot.json says so, because the PC and the Mac each keep their own save (#11)
-import platform, socket
+import socket
 DEVICE_HOST = (socket.gethostname() or '').split('.')[0]
 DEVICE_OS = 'mac' if sys.platform == 'darwin' else ('pc' if os.name == 'nt' else sys.platform)
 URL = f'http://localhost:{PORT}/'
@@ -62,19 +62,11 @@ class Handler(BaseHTTPRequestHandler):
         if path in ('/api/stamp', '/api/data'):
             save = find_save()
             if path == '/api/stamp':
-                # peers: the other computers' saves; the page loads them again when this changes
-                dev = {'host': DEVICE_HOST, 'os': DEVICE_OS, 'device': DEV, 'peers': '|'.join(f"{p['device']}:{p['saveModified']}" for p in peers())}
+                dev = {'host': DEVICE_HOST, 'os': DEVICE_OS}
                 if not save: return self.send(200, json.dumps({'stamp': None, **dev}), TYPES['.json'])
                 return self.send(200, json.dumps({'stamp': stamp_of(save), 'size': os.path.getsize(save), **dev}), TYPES['.json'])
             if not save: return self.send(404, 'no save yet')
             with open(save, 'rb') as f: return self.send(200, f.read(), 'application/octet-stream')
-        if path == '/api/devices':
-            return self.send(200, json.dumps(sync_status()), TYPES['.json'])
-        if path == '/api/device-data':
-            dev = (self.path.split('dev=', 1)[1] if 'dev=' in self.path else '').split('&')[0]
-            f = os.path.join(DEVICES_DIR, dev, 'save.lua')
-            if not re.fullmatch(r'[a-z0-9-]+', dev) or not os.path.isfile(f): return self.send(404, 'no such computer')
-            with open(f, 'rb') as fh: return self.send(200, fh.read(), 'application/octet-stream')
         if path == '/api/update':
             return self.send(200, json.dumps(update_status(force='force=1' in self.path)), TYPES['.json'])
         if path in ('/api/cards', '/api/cards-state', '/api/settings'):
@@ -95,24 +87,6 @@ class Handler(BaseHTTPRequestHandler):
         # Claude's cards: ../companion-data/from-claude/state.json (see SCHEMA.md there).
         # Only this app sends the X-CC header; a web page can't add it without the browser asking first.
         n = int(self.headers.get('Content-Length') or 0)
-        if self.path.split('?')[0] == '/api/sync-config':
-            # {"folder": "<a cloud drive folder>"} turns sync on (in a "Claude Companion" folder inside it), {"folder": null} off
-            if self.headers.get('X-CC') != '1' or not 0 < n < 4096: return self.send(400, 'bad request')
-            try: want = json.loads(self.rfile.read(n).decode('utf-8')).get('folder')
-            except ValueError: return self.send(400, 'bad request')
-            cfg = read_json(UPDATE_CFG, {})
-            if want:
-                if not os.path.isdir(want): return self.send(400, 'that folder does not exist')
-                target = want if os.path.basename(os.path.normpath(want)) == 'Claude Companion' else os.path.join(want, 'Claude Companion')
-                os.makedirs(target, exist_ok=True)
-                cfg['sync'] = {'folder': target}
-            else:
-                cfg.pop('sync', None)
-            write_json(UPDATE_CFG, cfg)
-            _sync['nextPull'], _sync['pushed'] = 0.0, None
-            try: os.remove(os.path.join(DEVICES_DIR, '.pushed'))   # publish again to the new place
-            except OSError: pass
-            return self.send(200, json.dumps(sync_status()), TYPES['.json'])
         if self.path.split('?')[0] in ('/api/update', '/api/update-auto'):
             if self.headers.get('X-CC') != '1': return self.send(400, 'bad request')
             if n: self.rfile.read(min(n, 4096))
@@ -329,184 +303,6 @@ def auto_update():
         time.sleep(30 * 60)
 
 
-# ---------------------------------------------------------------- one character on every computer
-# The game keeps a separate save on each computer and writes it itself, so the saves can't be one
-# file. Instead each computer's server publishes its save (and the app's settings and snapshot) to a
-# store the person's computers share, and downloads the other computers' latest into
-# companion-data/devices/<computer>/. The page merges them with this computer's save (js/merge.js)
-# before showing anything or writing snapshot.json. Nothing is ever written to a save.
-# The store is a folder inside a cloud drive the person's computers already sync (Google Drive for
-# desktop, OneDrive, Dropbox, iCloud Drive), chosen once in the app (it lists the drives it finds) and
-# kept in companion-data/update.json "sync": {"folder": "..."}; off until chosen. Each computer writes
-# only its own subfolder, <folder>/<computer>/ (save.lua.gz, settings.json, snapshot.json.gz, then
-# meta.json last, with the save's SHA-256), so two computers never write the same file and the drive
-# never has a conflict to resolve. Everyone uses the same mechanism; no account beyond the drive.
-# Stores are pluggable (put / versions / get): a hosted one could be added later.
-# Settings (gear weights and picks) follow the computer where they changed last; the replaced file is
-# kept as settings.json.bak.
-import base64, gzip, hashlib, re
-DEVICES_DIR = os.path.join(DATA_DIR, 'devices')
-DEV = os.environ.get('CC_DEVICE') or re.sub(r'[^a-z0-9-]+', '-', DEVICE_HOST.lower()).strip('-') or 'computer'   # CC_DEVICE: tests only
-SYNC_SECS = float(os.environ.get('CC_SYNC_SECS') or 15)   # tests only: how often to look
-_sync = {'pushed': None, 'lastPush': None, 'lastPull': None, 'error': None, 'nextPull': 0.0}
-
-
-def sync_cfg():
-    s = upd_cfg().get('sync')
-    return s if isinstance(s, dict) and s.get('folder') else None
-
-
-class FolderStore:
-    """<folder>/<computer>/ in a folder the computers already share."""
-    def __init__(self, folder):
-        self.root = os.path.expanduser(folder)
-        if not os.path.isdir(self.root): raise ValueError(f'the sync folder {self.root} does not exist')
-
-    def put(self, files):
-        d = os.path.join(self.root, DEV)
-        os.makedirs(d, exist_ok=True)
-        for n, data in files.items():
-            if n == 'meta.json': continue
-            with open(os.path.join(d, n + '.tmp'), 'wb') as f: f.write(data)
-            os.replace(os.path.join(d, n + '.tmp'), os.path.join(d, n))
-        with open(os.path.join(d, 'meta.json.tmp'), 'wb') as f: f.write(files['meta.json'])   # last: it says the rest is complete
-        os.replace(os.path.join(d, 'meta.json.tmp'), os.path.join(d, 'meta.json'))
-
-    def versions(self):
-        out = {}
-        for dev in os.listdir(self.root):
-            m = os.path.join(self.root, dev, 'meta.json')
-            if os.path.isfile(m):
-                with open(m, 'rb') as f: out[dev] = hashlib.sha256(f.read()).hexdigest()
-        return out
-
-    def get(self, dev, version, names):
-        out = {}
-        for n in names:
-            p = os.path.join(self.root, dev, n)
-            if os.path.isfile(p):
-                with open(p, 'rb') as f: out[n] = f.read()
-        return out
-
-
-def open_store():
-    s = sync_cfg()
-    return FolderStore(s['folder']) if s else None
-
-
-def cloud_drives():
-    """Cloud-drive folders on this computer, for the app to offer (Google Drive first)."""
-    home, out = os.path.expanduser('~'), []
-    def add(kind, path):
-        if path and os.path.isdir(path) and not any(o['path'] == path for o in out): out.append({'kind': kind, 'path': path})
-    if sys.platform == 'darwin':
-        cs = os.path.join(home, 'Library', 'CloudStorage')
-        for d in sorted(os.listdir(cs)) if os.path.isdir(cs) else []:
-            p = os.path.join(cs, d)
-            if d.startswith('GoogleDrive-'): add('Google Drive', os.path.join(p, 'My Drive'))
-            elif d.startswith('OneDrive'): add('OneDrive', p)
-            elif d.startswith('Dropbox'): add('Dropbox', p)
-        add('iCloud Drive', os.path.join(home, 'Library', 'Mobile Documents', 'com~apple~CloudDocs'))
-    elif os.name == 'nt':
-        import string
-        for L in string.ascii_uppercase:
-            add('Google Drive', f'{L}:\My Drive')
-        add('Google Drive', os.path.join(home, 'Google Drive', 'My Drive')); add('Google Drive', os.path.join(home, 'My Drive'))
-        add('OneDrive', os.environ.get('OneDrive')); add('Dropbox', os.path.join(home, 'Dropbox'))
-        add('iCloud Drive', os.path.join(home, 'iCloudDrive'))
-    else:
-        add('Dropbox', os.path.join(home, 'Dropbox'))
-    return out
-
-
-def push_save(store, save):
-    with open(save, 'rb') as f: raw = f.read()
-    meta = {'device': DEV, 'host': DEVICE_HOST, 'os': DEVICE_OS, 'saveModified': stamp_of(save), 'uploaded': datetime.now(timezone.utc).isoformat(),
-            'sha256': hashlib.sha256(raw).hexdigest(), 'size': len(raw)}
-    files = {'save.lua.gz': gzip.compress(raw, mtime=0)}
-    sfile = os.path.join(DATA_DIR, 'settings.json')
-    if os.path.isfile(sfile):
-        with open(sfile, 'rb') as f: files['settings.json'] = f.read()
-        meta['settingsModified'] = datetime.fromtimestamp(os.path.getmtime(sfile), timezone.utc).isoformat()
-    snap = os.path.join(DATA_DIR, 'snapshot.json')
-    if os.path.isfile(snap):   # the merged picture the app wrote: Claude can read it from the store
-        with open(snap, 'rb') as f: files['snapshot.json.gz'] = gzip.compress(f.read(), mtime=0)
-    files['meta.json'] = json.dumps(meta, indent=1).encode('utf-8')
-    store.put(files)
-    return meta
-
-
-def pull_peers(store):
-    for dev, version in store.versions().items():
-        if dev == DEV or not re.fullmatch(r'[a-z0-9-]+', dev): continue
-        folder = os.path.join(DEVICES_DIR, dev)
-        have = read_json(os.path.join(folder, 'meta.json'), {})
-        if have.get('version') == version: continue
-        got = store.get(dev, version, ['meta.json', 'save.lua.gz', 'settings.json'])
-        if 'meta.json' not in got or 'save.lua.gz' not in got: continue
-        meta = json.loads(got['meta.json'].decode('utf-8'))
-        raw = gzip.decompress(got['save.lua.gz'])
-        if hashlib.sha256(raw).hexdigest() != meta.get('sha256'): raise ValueError(f'{dev}: the save arrived damaged or half-written')
-        os.makedirs(folder, exist_ok=True)
-        with open(os.path.join(folder, 'save.lua.tmp'), 'wb') as f: f.write(raw)
-        os.replace(os.path.join(folder, 'save.lua.tmp'), os.path.join(folder, 'save.lua'))
-        # settings: the computer where they changed last wins; the replaced file is kept as .bak
-        if 'settings.json' in got and meta.get('settingsModified'):
-            mine = os.path.join(DATA_DIR, 'settings.json')
-            mine_t = datetime.fromtimestamp(os.path.getmtime(mine), timezone.utc).isoformat() if os.path.isfile(mine) else ''
-            if meta['settingsModified'] > mine_t:
-                json.loads(got['settings.json'].decode('utf-8'))
-                if os.path.isfile(mine): shutil.copy2(mine, mine + '.bak')
-                with open(mine + '.tmp', 'wb') as f: f.write(got['settings.json'])
-                os.replace(mine + '.tmp', mine)
-        meta['version'] = version
-        meta['downloaded'] = datetime.now(timezone.utc).isoformat()
-        write_json(os.path.join(folder, 'meta.json'), meta)
-        print(f"sync: got {dev}'s save of {meta.get('saveModified')}", flush=True)
-
-
-def peers():
-    out = []
-    if os.path.isdir(DEVICES_DIR):
-        for dev in sorted(os.listdir(DEVICES_DIR)):
-            m = read_json(os.path.join(DEVICES_DIR, dev, 'meta.json'), None)
-            if m and os.path.isfile(os.path.join(DEVICES_DIR, dev, 'save.lua')):
-                out.append({k: m.get(k) for k in ('device', 'host', 'os', 'saveModified', 'uploaded', 'downloaded')})
-    return out
-
-
-def sync_status():
-    s = sync_cfg()
-    return {'here': DEV, 'enabled': bool(s), 'folder': s['folder'] if s else None, 'drives': cloud_drives(), 'peers': peers(), 'lastPush': _sync['lastPush'], 'lastPull': _sync['lastPull'], 'error': _sync['error']}
-
-
-def sync_loop():
-    state = os.path.join(DEVICES_DIR, '.pushed')
-    while True:
-        time.sleep(SYNC_SECS)
-        if not sync_cfg(): continue
-        try:
-            store = open_store()
-            save = find_save()
-            # publish this computer's save once the game has finished writing it (10 s quiet)
-            if save and time.time() - os.path.getmtime(save) > 10:
-                stamp = stamp_of(save)
-                pushed = _sync['pushed'] or (open(state).read().strip() if os.path.isfile(state) else None)
-                if stamp != pushed:
-                    push_save(store, save)
-                    os.makedirs(DEVICES_DIR, exist_ok=True)
-                    with open(state, 'w') as f: f.write(stamp)
-                    _sync['pushed'], _sync['lastPush'] = stamp, datetime.now(timezone.utc).isoformat()
-                    print('sync: published the save of', stamp, flush=True)
-            if time.time() >= _sync['nextPull']:
-                _sync['nextPull'] = time.time() + SYNC_SECS * 4
-                pull_peers(store)
-                _sync['lastPull'] = datetime.now(timezone.utc).isoformat()
-            _sync['error'] = None
-        except Exception as e:
-            _sync['error'] = str(e)[:300]
-
-
 # ---------------------------------------------------------------- starting and opening
 # Daily use: the app is installed from the browser as its own app (Dock / Launchpad), and this
 # server starts by itself at login, hidden (a LaunchAgent), so there is no Terminal window.
@@ -648,7 +444,6 @@ def serve(open_after):
         print('Note: no WTF folder found next to Interface. Put ClaudeCompanion in _forever_/Interface/AddOns.', flush=True)
     threading.Thread(target=background_snapshot, daemon=True).start()
     threading.Thread(target=auto_update, daemon=True).start()
-    threading.Thread(target=sync_loop, daemon=True).start()
     if open_after: open_app()
     try: srv.serve_forever()
     except KeyboardInterrupt: pass
