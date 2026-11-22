@@ -1,0 +1,74 @@
+#!/bin/bash
+# Claude Companion installer for macOS (the release zip's "Install Claude Companion.app").
+# Finds World of Warcraft's _forever_ folder (or asks), copies the addon into
+# _forever_/Interface/AddOns/ClaudeCompanion, then opens the app's own launcher, which sets up the
+# server at login and opens the app. Run it again to repair: your data is never touched (the game's
+# WTF folder and the addon's companion-data).
+#   CC_GAME_DIR=<_forever_ or the World of Warcraft folder>  skip the search (tests)
+#   CC_NO_OPEN=1                                             no dialogs, don't open the app (tests)
+# The files to install are inside this app (Contents/Resources/payload), so it works even while macOS
+# runs it from a temporary copy (App Translocation, before it was approved once).
+RES="$(cd "$(dirname "$0")/../Resources" && pwd)"
+PAY="$RES/payload"
+quiet() { [ -n "$CC_NO_OPEN" ]; }
+tell() {   # a dialog, since there is no Terminal to print to
+  if quiet; then printf '%s\n' "$1"; return; fi
+  msg=$(printf '%s' "$1" | tr -d '"\\')
+  /usr/bin/osascript -e "display dialog \"$msg\" with title \"Claude Companion\" buttons {\"OK\"} default button 1" >/dev/null 2>&1
+}
+fail() { tell "$1"; exit 1; }
+[ -f "$PAY/ClaudeCompanion/ClaudeCompanion.toc" ] && [ -f "$PAY/FILES.txt" ] || fail "This installer is incomplete. Download it again."
+
+# a _forever_ folder, given either itself or the World of Warcraft folder that holds it
+resolve() {
+  d="${1%/}"
+  [ -n "$d" ] || return 1
+  if [ "$(basename "$d")" = "_forever_" ] && [ -d "$d" ]; then printf '%s' "$d"; return 0; fi
+  [ -d "$d/_forever_" ] && { printf '%s' "$d/_forever_"; return 0; }
+  return 1
+}
+FOREVER=""
+if [ -n "$CC_GAME_DIR" ]; then
+  FOREVER=$(resolve "$CC_GAME_DIR") || fail "No _forever_ folder in $CC_GAME_DIR"
+else
+  for d in "/Applications/World of Warcraft" "$HOME/Applications/World of Warcraft" "/Applications/Games/World of Warcraft" \
+           "/Applications/WoW Forever/World of Warcraft"; do
+    FOREVER=$(resolve "$d") && break
+  done
+  if [ -z "$FOREVER" ]; then   # Spotlight knows where it is, wherever it was installed
+    hit=$(/usr/bin/mdfind "kMDItemFSName == '_forever_'" 2>/dev/null | grep '/World of Warcraft/_forever_$' | head -1)
+    [ -n "$hit" ] && FOREVER="$hit"
+  fi
+  while [ -z "$FOREVER" ]; do
+    pick=$(/usr/bin/osascript -e 'POSIX path of (choose folder with prompt "Choose your World of Warcraft folder (the one that has _forever_ inside).")' 2>/dev/null) || exit 1
+    FOREVER=$(resolve "$pick") || tell "That folder has no _forever_ folder in it. Choose the World of Warcraft folder that WoW Forever is installed in."
+  done
+fi
+
+DEST="$FOREVER/Interface/AddOns/ClaudeCompanion"
+mkdir -p "$DEST/companion-data" || fail "Couldn't write to $DEST"
+# copy exactly the build's files (FILES.txt), then remove what an older install had (never companion-data)
+while IFS= read -r rel; do
+  [ -n "$rel" ] || continue
+  case "$rel" in companion-data/SCHEMA.md) ;; companion-data/*) continue ;; esac
+  mkdir -p "$DEST/$(dirname "$rel")"
+  cp -p "$PAY/ClaudeCompanion/$rel" "$DEST/$rel" || fail "Couldn't copy $rel"
+done < "$PAY/FILES.txt"
+(cd "$DEST" && find . -type f ! -path './companion-data/*' | sed 's|^\./||') | while IFS= read -r rel; do
+  grep -qxF "$rel" "$PAY/FILES.txt" || rm -f "$DEST/$rel"
+done
+find "$DEST" -mindepth 1 -type d -empty ! -path "$DEST/companion-data*" -delete 2>/dev/null
+chmod +x "$DEST/web/Claude Companion.app/Contents/MacOS/launcher"
+# downloaded files carry a "from the internet" flag; the installed copy doesn't need it
+/usr/bin/xattr -dr com.apple.quarantine "$DEST" 2>/dev/null
+# which build this is, so the updater doesn't install the same one again
+[ -f "$PAY/install-info.json" ] && cp "$PAY/install-info.json" "$DEST/companion-data/installed.json"
+
+if quiet; then echo "Installed into $DEST"; exit 0; fi
+# the app's own launcher: server at login (hidden), and open the app
+/usr/bin/open "$DEST/web/Claude Companion.app"
+tell "Claude Companion is installed in $DEST.
+
+The app opens in your browser in a moment and updates by itself from now on. To keep it in the Dock: in Safari choose File > Add to Dock, or in Chrome click Install as an app in the app's sidebar.
+
+In game: if WoW Forever is running, type /reload. Then /cc sync saves everything for the app."

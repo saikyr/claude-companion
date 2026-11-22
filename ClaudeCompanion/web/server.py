@@ -170,8 +170,10 @@ class Handler(BaseHTTPRequestHandler):
 # snapshot, settings, Claude's cards; only its SCHEMA.md is updated) and the game's saved data (WTF/).
 # Files an older build had and this one doesn't are removed (they are in the backup). Afterwards the server restarts itself on the new code;
 # the addon's own Lua takes effect at the next /reload in game.
-# The repository is private, so downloads need a GitHub token: companion-data/update.json "token",
-# else CC_GITHUB_TOKEN, else the GitHub CLI's (`gh auth token`). A public repository needs none.
+# Builds name where they keep updating from in web/channel.json: "url", the public download folder
+# (latest.json + the zip; no token, the normal case), else a GitHub repository's stable branch, which
+# for the private repository needs a token: companion-data/update.json "token", else CC_GITHUB_TOKEN,
+# else the GitHub CLI's (`gh auth token`).
 REPO = 'saikyr/claude-companion'
 ADDON = os.path.dirname(WEB)
 UPDATE_CFG = os.path.join(DATA_DIR, 'update.json')      # {repo, auto, token}: yours, never shipped or overwritten
@@ -200,7 +202,7 @@ def upd_cfg():
     # where updates come from: web/channel.json, written by the build (the private repository for
     # Gabriel's builds, the public download repository for everyone else's); update.json can override
     c = {'repo': REPO, 'auto': True, 'branch': 'stable', 'api': 'https://api.github.com'}   # api: only changed for testing
-    c.update({k: v for k, v in read_json(os.path.join(WEB, 'channel.json'), {}).items() if k in ('repo', 'branch')})
+    c.update({k: v for k, v in read_json(os.path.join(WEB, 'channel.json'), {}).items() if k in ('repo', 'branch', 'url')})
     c.update(read_json(UPDATE_CFG, {}))
     return c
 
@@ -241,6 +243,7 @@ def check_update(force=False):
     if not force and time.time() - _upd['checked'] < 15 * 60: return _upd['latest']
     cfg = upd_cfg()
     _upd['checked'] = time.time()
+    if cfg.get('url'): return check_url(cfg)
     try:
         c = gh_get(f"{cfg['api']}/repos/{cfg['repo']}/commits/{cfg['branch']}", gh_token(cfg))
         msg = (c.get('commit') or {}).get('message') or ''
@@ -275,6 +278,25 @@ def builds():
             _game_build.update(key=key, build=m.group(1).decode() if m else '')   # '': a save from before 1.5
         game = _game_build['build']
     return {'app': app, 'game': game}
+
+
+def check_url(cfg):
+    # the public download folder (web/channel.json "url"): latest.json names the newest build and its zip.
+    # Public to read, so no token is ever sent there.
+    base = cfg['url'].rstrip('/') + '/'
+    try:
+        m = gh_get(base + 'latest.json', None)
+        latest = {'tag': str(m['tag']), 'sha': m['sha'], 'name': str(m.get('name') or m['tag'])[:120], 'published': m.get('published'),
+                  'notes': str(m.get('name') or '')[:3000], 'build': m.get('build'), 'zip': base + m['zip']}
+        _upd['latest'], _upd['error'] = latest, None
+    except urllib.error.HTTPError as e:
+        if e.code in (400, 404):   # nothing published there yet: not a problem
+            _upd['latest'], _upd['error'] = None, None
+            return None
+        _upd['error'] = 'The download folder said %d.' % e.code
+    except Exception as e:
+        _upd['error'] = 'Could not reach the download folder: %s' % e
+    return _upd['latest']
 
 
 def update_status(force=False):
@@ -313,7 +335,8 @@ def install_update():
         latest = check_update(force=True)
         if not latest: return {'ok': False, 'error': _upd['error'] or 'No build found.'}
         cfg = upd_cfg()
-        data = gh_get(f"{cfg['api']}/repos/{cfg['repo']}/zipball/{latest['sha']}", gh_token(cfg), 'application/octet-stream')
+        if latest.get('zip'): data = gh_get(latest['zip'], None, 'application/octet-stream')
+        else: data = gh_get(f"{cfg['api']}/repos/{cfg['repo']}/zipball/{latest['sha']}", gh_token(cfg), 'application/octet-stream')
         work = tempfile.mkdtemp(prefix='cc-update-')
         zpath = os.path.join(work, 'release.zip')
         with open(zpath, 'wb') as f: f.write(data)
@@ -331,6 +354,7 @@ def install_update():
         import hashlib
         build = read_json(os.path.join(os.path.dirname(src), 'BUILD.json'), None)
         if not build or not isinstance(build.get('files'), dict): raise ValueError('the build has no BUILD.json')
+        if latest.get('build') and build.get('build') != latest['build']: raise ValueError('the download is a different build than announced; trying again later')
         for rel, want in build['files'].items():
             fp = os.path.join(src, *rel.split('/'))
             if not os.path.isfile(fp): raise ValueError('the build is missing ' + rel)

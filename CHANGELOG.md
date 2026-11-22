@@ -5,6 +5,19 @@ Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 ## 1.5.0 (in progress: every merge to main updates itself)
 - **Sync can be turned off per computer.** System tab, Turn sync off on this computer: nothing is sent
   or fetched there and the app shows only that computer's save; turned back on, what waited is sent.
+- **Ready to share: one download, one installer.** Every build now also goes to a public download folder
+  (the repository stays private) as **ClaudeCompanion-Windows.zip** and **ClaudeCompanion-Mac.zip**,
+  linked in the README. Installed apps update from the same folder, so no computer needs a GitHub
+  token any more. Each zip has an
+  **Install Claude Companion** that finds the WoW Forever folder (or asks), installs the addon and
+  opens the app, which then updates itself. Each install gets its own sync account; Link another
+  computer joins your own computers. Both installers are tested on real Windows and macOS in CI.
+- **README for players** (install, several computers, your data, remove); developer notes moved to
+  docs/DEVELOP.md; MIT license; roadmap refreshed. The Mac terminal installer (`tools/install.sh`) is
+  replaced by the installer app.
+- **Windows server:** serves only files inside its own folder (a sibling folder with a similar name
+  no longer passes the check).
+
 - **One contract between the parts, checked in CI.** New first CI step `test/contract.test.js`: the
   addon version is the same in the .toc, Core.lua and this changelog; every file the .toc loads exists
   and every addon file is loaded; the save and snapshot schemas agree with their docs; the Mac and Windows

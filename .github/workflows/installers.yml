@@ -1,0 +1,62 @@
+name: installers
+# The first-install downloads (tools/make-release.py + installer/) on a real Windows and a real Mac:
+# build the zips, unzip them like a person would, run each installer into a made-up game folder twice
+# (install, then reinstall over it), and check the addon is complete, an older install's files are
+# gone, and companion-data (the person's own files) is untouched.
+on:
+  pull_request:
+    paths: ['installer/**', 'tools/make-release.py', 'tools/publish-stable.py', '.github/workflows/installers.yml']
+  push:
+    branches: [main]
+    paths: ['installer/**', 'tools/make-release.py', 'tools/publish-stable.py', '.github/workflows/installers.yml']
+  workflow_dispatch:
+jobs:
+  install:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the zips
+        run: python tools/make-release.py dist
+      - name: Install twice on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $g = "$env:RUNNER_TEMP\g\World of Warcraft"
+          New-Item -ItemType Directory -Force "$g\_forever_\WTF" | Out-Null
+          Expand-Archive dist\ClaudeCompanion-Windows.zip "$env:RUNNER_TEMP\w"
+          $ps = "$env:RUNNER_TEMP\w\files\install.ps1"
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File $ps -GameDir $g -Quiet
+          if ($LASTEXITCODE) { exit 1 }
+          $d = "$g\_forever_\Interface\AddOns\ClaudeCompanion"
+          Set-Content "$d\companion-data\sync.json" '{"key":"mine"}'
+          Set-Content "$d\Inbox.lua" 'old'
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File $ps -GameDir "$g\_forever_" -Quiet
+          if ($LASTEXITCODE) { exit 1 }
+          $want = Get-Content "$env:RUNNER_TEMP\w\files\FILES.txt" | Where-Object { $_ -and $_ -notlike 'companion-data/*' } | Sort-Object
+          $have = Get-ChildItem -LiteralPath $d -Recurse -File | ForEach-Object { $_.FullName.Substring($d.Length + 1) -replace '\\', '/' } | Where-Object { $_ -notlike 'companion-data/*' } | Sort-Object
+          if (Compare-Object $want $have) { Compare-Object $want $have; throw 'installed files differ from the build' }
+          if ((Get-Content "$d\companion-data\sync.json") -ne '{"key":"mine"}') { throw 'companion-data was changed' }
+          if (-not (Test-Path "$d\companion-data\SCHEMA.md")) { throw 'SCHEMA.md missing' }
+          'Windows installer: ok'
+      - name: Install twice on a Mac
+        if: runner.os == 'macOS'
+        run: |
+          g="$RUNNER_TEMP/g/World of Warcraft"; mkdir -p "$g/_forever_/WTF"
+          ditto -x -k dist/ClaudeCompanion-Mac.zip "$RUNNER_TEMP/m"
+          app="$RUNNER_TEMP/m/Install Claude Companion.app"
+          test -x "$app/Contents/MacOS/install"
+          CC_GAME_DIR="$g" CC_NO_OPEN=1 "$app/Contents/MacOS/install"
+          d="$g/_forever_/Interface/AddOns/ClaudeCompanion"
+          echo '{"key":"mine"}' > "$d/companion-data/sync.json"; echo old > "$d/Inbox.lua"
+          CC_GAME_DIR="$g/_forever_" CC_NO_OPEN=1 "$app/Contents/MacOS/install"
+          diff <(grep -v '^companion-data/' "$app/Contents/Resources/payload/FILES.txt" | sort) \
+               <(cd "$d" && find . -type f ! -path './companion-data/*' | sed 's|^\./||' | sort)
+          [ "$(cat "$d/companion-data/sync.json")" = '{"key":"mine"}' ]
+          test -f "$d/companion-data/SCHEMA.md"
+          test -x "$d/web/Claude Companion.app/Contents/MacOS/launcher"
+          /usr/bin/python3 -c "import plistlib; plistlib.load(open('$app/Contents/Info.plist', 'rb'))"
+          echo 'Mac installer: ok'

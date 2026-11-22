@@ -8,12 +8,13 @@
                                                   end-to-end test, syntax, no personal data
  ─ a person merges the PR to main  ────────────▶  publish.yml (after checks pass on main):
                                                   tools/publish-stable.py → branch "stable"
-                                                  (+ optional public download repo for friends)
+                                                  + zips and latest.json to the public download
+                                                  folder (Supabase Storage "releases")
                                                                 │
           ┌─────────────────────────────────────────────────────┘ every 30 min, each computer
           ▼
  Each computer: AddOns/ClaudeCompanion  (the addon + the app + its local server)
-   server checks "stable" → downloads → checks every file's SHA-256 (BUILD.json) → backs up →
+   server checks latest.json → downloads → checks every file's SHA-256 (BUILD.json) → backs up →
    installs → restarts. companion-data/ and the game's saves are never written. Then /reload in game.
 ```
 
@@ -36,13 +37,12 @@
 | `.github/workflows/checks.yml` | On every push and PR: addon harness (mock game API), merge-rule tests, self-update end-to-end test (mock GitHub, both servers on Windows), syntax, no personal data |
 | `.github/workflows/publish.yml` | After the checks pass on `main`: `tools/publish-stable.py` |
 | `tools/publish-stable.py` | Copies `ClaudeCompanion/` (with the game-data pack) to the `stable` branch with `BUILD.json` (version, source commit, every file's SHA-256) and `web/channel.json` (where this build keeps updating from). One commit per build. Never packs personal data |
-| Public download repo (optional) | Set the repository variable `DIST_REPO` and secret `DIST_TOKEN`: the same build also goes to a public repo, whose builds point their updater at it. Friends need no GitHub account or token |
-| Updater (`server.py` / `server.ps1`, `/api/update`) | Every 30 min: newest commit of the channel's `stable`. Auto-install (default) or the app's Install button. Download the zipball → reject unsafe paths → check every file against `BUILD.json` → back up the addon folder (last 5) → copy exactly the build's files and remove files an older build had (never `companion-data/`) → `installed.json` → restart |
-| `tools/install.sh` | First install on a Mac (or repair). Afterwards the Mac updates itself |
-| Windows first install | Unzip into AddOns, double-click `Claude Companion.bat` once |
+| Download folder (`supabase/functions/publish-build`) | Public-read Supabase Storage bucket `releases` in the sync project: `latest/ClaudeCompanion-Windows.zip`, `latest/ClaudeCompanion-Mac.zip` and `latest.json` (stable commit, build, version, which zip). Only the `publish-build` edge function writes it, and only for a GitHub Actions OIDC token from this repository's `publish.yml` on `main` (no stored secret). Uploads replace those three files; nothing is deleted. The repository stays private and nobody needs a GitHub account or token |
+| Updater (`server.py` / `server.ps1`, `/api/update`) | Every 30 min: the download folder's `latest.json` (`web/channel.json` `url`; no token sent), or with `update.json` a GitHub repository's `stable` (token). Auto-install (default) or the app's Install button. Download the zip → reject unsafe paths → check it is the announced build and every file matches `BUILD.json` → back up the addon folder (last 5) → copy exactly the build's files and remove files an older build had (never `companion-data/`) → `installed.json` → restart |
+| First install (`tools/make-release.py`, `installer/`) | `publish.yml` also builds **ClaudeCompanion-Windows.zip** and **ClaudeCompanion-Mac.zip** and uploads them to the download folder. Each holds the same build plus an installer that finds `_forever_` (or asks), copies exactly the build's files (never `companion-data/`), records the build in `installed.json` and runs the app's own setup. Tested on real Windows and macOS runners (`installers.yml`). Afterwards the computer updates itself |
 
-The private repository needs a token to read: `gh auth token` (GitHub CLI signed in), or
-`companion-data/update.json` `"token"`. Builds from the public download repo need none.
+Updating from the private repository instead (only if `update.json` names `repo` and no `url`) needs a
+token: `gh auth token` (GitHub CLI signed in), or `companion-data/update.json` `"token"`.
 Verified for real on a Windows PC on 22 Nov: the app installed build `d7dd338` from `stable` by itself
 (36 files, checksums matched, backup made, server restarted).
 
