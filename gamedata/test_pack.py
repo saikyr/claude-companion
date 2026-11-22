@@ -42,6 +42,9 @@ check(not bad, f'drop chances are percentages in (0, 100] ({len(bad)} bad)')
 it = G['items']
 st = lambda i: dict((a, b) for a, b in it[str(i)][8])
 # endgametools 17710 (build 1.60.1.71037): +11 Int, 2 mp5, healing 116 / damage 38; game tooltip agrees
+dv = (G.get('sets') or {}).get('182') or []
+check(len(dv) == 4 and dv[0] == 'Vestments of the Devout' and len(dv[1]) == 8 and dv[3] & 16 and any(n == 6 for n, _ in dv[2]),
+      'item sets: Vestments of the Devout has 8 pieces, 6-piece bonus, and is a Priest set')
 check(st(17710).get(41) == 116 and st(17710).get(42) == 38 and st(17710).get(43) == 2 and st(17710).get(5) == 11,
       f'Charstone Dirk stats {st(17710)}')
 check(it['17710'][11] == 'e', 'Charstone Dirk tooltip comes from endgametools')
