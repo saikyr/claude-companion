@@ -28,10 +28,9 @@
     INVTYPE_LEGS: 7, INVTYPE_FEET: 8, INVTYPE_WRIST: 9, INVTYPE_HAND: 10, INVTYPE_FINGER: 11, INVTYPE_TRINKET: 12, INVTYPE_WEAPON: 13,
     INVTYPE_SHIELD: 14, INVTYPE_RANGED: 15, INVTYPE_CLOAK: 16, INVTYPE_2HWEAPON: 17, INVTYPE_TABARD: 19, INVTYPE_WEAPONMAINHAND: 21,
     INVTYPE_WEAPONOFFHAND: 22, INVTYPE_HOLDABLE: 23, INVTYPE_THROWN: 25, INVTYPE_RANGEDRIGHT: 26, INVTYPE_RELIC: 28 };
-  // Disenchanting skill needed by item level (warcraft.wiki.gg "Disenchanting", Classic numbers; not
-  // checked on Forever). Epic gear: 225 and up (Classic); the app says "ask" if you're below that.
-  const DE_SKILL = [[20, 1], [25, 25], [30, 50], [35, 75], [40, 100], [45, 125], [50, 150], [55, 175], [60, 200], [65, 225]];
-  const deSkill = (it) => (it.q === 4 ? 225 : ((DE_SKILL.find(([lv]) => it.ilvl <= lv) || [0, 300])[1]));
+  // Disenchanting skill needed by item level: data/rules.js (Classic numbers, not checked on Forever)
+  const DE_RULES = (window.GAMERULES || {}).disenchant || {};
+  const deSkill = (it) => (it.q === 4 ? DE_RULES.epicSkill : ((arr(DE_RULES.skill).find(([lv]) => it.ilvl <= lv) || [0, 300])[1]));
   // a sidegrade this close to what a spec uses is never sold off without asking
   const CLOSE = 0.95;
 

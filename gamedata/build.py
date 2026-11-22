@@ -20,6 +20,7 @@ ONE OWNER PER FIELD (see README.md for the why):
   Crafted-by and world-drop rows (QuestieDB has no crafting data) ..... ForeverDB
   Item sets: which items belong together ............................. ForeverDB (set id per item)
   Item sets: name and bonuses .......................................... endgametools (the set lines of a member's tooltip)
+  NPCs: name, levels, rank, zone, spawn points ......................... QuestieDB Forever (points already in Forever map coordinates)
 The game itself always wins in the app: your quest log rewards, your tooltips, your AH scans.
 """
 import json, os, re, sys, time
@@ -348,13 +349,35 @@ for s_ in sets.values(): s_[1].sort()
 cov['item_sets'] = len(sets)
 cov['item_sets_named'] = sum(1 for s_ in sets.values() if s_[0])
 
+# ------------------------------------------------------------------ NPCs (QuestieDB Forever)
+# npcs[id] = [name, min level, max level, rank, subname, zone, [[x, y], ...] up to 4 points in that zone, spawns there,
+#             who it is friendly to ('A', 'H', 'AH' or '')]
+# rank: 0 normal, 1 elite, 2 rare elite, 3 boss, 4 rare. Zone is the zone with the most spawns; inside a dungeon
+# the points are (-1, -1) and are left out. QuestieDB's Forever points are already in Forever map coordinates
+# (its README, "Era-to-Forever coordinate conversion"), so they are used as they are.
+npcs = {}
+for nid, row in Q['npc'].items():
+    name = f(row, 1)
+    if not name: continue
+    spawns = f(row, 7) or {}
+    if isinstance(spawns, list): spawns = {str(i + 1): v for i, v in enumerate(spawns) if v}
+    zid, pts = max(spawns.items(), key=lambda kv: len(lst(kv[1])), default=(None, []))
+    pts = [p for p in lst(pts) if isinstance(p, list) and len(p) == 2 and p[0] is not None and p[0] >= 0]
+    step = max(1, len(pts) // 4)
+    keep = [[round(p[0], 1), round(p[1], 1)] for p in pts[::step][:4]]
+    z = zid or f(row, 9)
+    npcs[int(nid)] = [name, f(row, 4) or 0, f(row, 5) or 0, f(row, 6) or 0, f(row, 14) or '', zone_name(z) if z else '',
+                      keep, len(pts), f(row, 13) or '']
+cov['npcs'] = len(npcs)
+cov['npcs_with_spawn_point'] = sum(1 for n in npcs.values() if n[6])
+
 builds = Counter(v.get('build') for v in EGT.values())
 pack = {
     'v': 2, 'built': int(time.time()),
     'from': {'quests_npcs_sources': 'QuestieDB Forever ' + QMAN['questiedb_commit'][:10],
              'item_tooltips': 'endgametools, client build ' + (builds.most_common(1)[0][0] if builds else '?'),
              'drop_rates_icons_reward_split': 'ForeverDB (foreverdb.net/data)'},
-    'items': items, 'src': src, 'quests': quests, 'vend': vend, 'stat': STAT,
+    'items': items, 'src': src, 'quests': quests, 'vend': vend, 'npcs': npcs, 'stat': STAT,
     'sets': {sid: v for sid, v in sets.items()},
     # group size of the dungeon / raid an item drops in, from endgametools ("5 players", "10 players")
     'size': {int(k): v['size'] for k, v in EGT.items() if v.get('size')},

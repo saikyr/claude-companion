@@ -78,7 +78,7 @@ Key bindings: Options > Key Bindings > AddOns > Claude Companion.
 | `ClaudeCompanion/` | The addon folder exactly as installed: Lua, `.toc`, and `web/` (the app) |
 | `ClaudeCompanion/web/` | App: `index.html`, `js/`, `css/`, `server.ps1` + `Claude Companion.bat` (Windows), `server.py` + `Claude Companion.app` (macOS) |
 | `ClaudeCompanion/companion-data/SCHEMA.md` | The `snapshot.json` contract Claude reads, and the From Claude cards format |
-| `gamedata/` | Builds `web/data/gamedata.js` from QuestieDB, endgametools and ForeverDB |
+| `gamedata/` | Builds the app's game data: `web/data/gamedata.js` (QuestieDB, endgametools, ForeverDB), `web/data/suffixes.js` (foreverchanges.pro), `web/js/icons.js` (wowdev listfile) |
 | `test/harness.lua` | Runs the addon against a mock game API (Lua 5.1) |
 | `tools/publish-stable.py` | Publishes a build to the `stable` branch (CI runs it after a merge to main) |
 | `tools/install.sh` | One-time install on a Mac from the stable branch |
@@ -97,9 +97,12 @@ Key bindings: Options > Key Bindings > AddOns > Claude Companion.
     # app logic: stat weights and item advice (node)
     node test/web/advice.test.js
 
-    # game-data pack (~10 min first time)
+    # game data: one source per domain (docs/ARCHITECTURE.md, Data sources); rebuild ~10 min first time
     pip install lupa && sh gamedata/build.sh
-    cp gamedata/work/out/gamedata.js ClaudeCompanion/web/data/
+    cp gamedata/work/out/{gamedata,suffixes}.js ClaudeCompanion/web/data/ && cp gamedata/work/out/icons.js ClaudeCompanion/web/js/
+    cp gamedata/work/out/COVERAGE.md gamedata/
+    # check the shipped data is complete (CI runs both)
+    python3 -I gamedata/test_pack.py ClaudeCompanion/web/data/gamedata.js && node test/web/data.test.js
 
     # web tests: merge rules (for the planned sync), self-update end to end (no network)
     node test/web/merge.test.js

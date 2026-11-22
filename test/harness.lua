@@ -210,7 +210,11 @@ Enum.PlayerInteractionType = { Banker = 8, TaxiNode = 5, Auctioneer = 21, Mercha
 local ns = {}
 local files = { "Inbox.lua", "Core.lua", "Snapshot.lua", "Journal.lua", "Market.lua", "Professions.lua", "UI.lua" }
 for _, f in ipairs(files) do local chunk = assert(loadfile(ADDONDIR .. "/" .. f)); chunk("ClaudeCompanion", ns) end
+-- a save from 1.4: copies of QuestieDB facts the addon used to keep (now the app's pack owns them)
+ClaudeCompanionDB = { npcs = { [1] = { name = "Old" } }, quests = { [1] = { name = "Old" } },
+  items = { ["item:1"] = { id = 1, name = "Old", src = { drops = { 1 } } } } }
 Fire("ADDON_LOADED", "ClaudeCompanion")
+OLD_ITEM_KEPT = ClaudeCompanionDB.items["item:1"] and ClaudeCompanionDB.items["item:1"].name == "Old" and not ClaudeCompanionDB.items["item:1"].src
 Fire("PLAYER_LOGIN")
 RunTimers()
 -- gameplay
@@ -652,6 +656,16 @@ do
   ns.ScanButtonRefresh = oldRefresh; C_Timer.After = oldAfter
   AHm.GetNumReplicateItems, AHm.GetReplicateItemInfo, AHm.GetReplicateItemLink = oldN, oldInfo, oldLink
   if FAILED then error("AH scan checks failed") end
+end
+do -- one source for quests, NPCs and item sources: the app's pack, never a copy in the save
+  local FAILED = false
+  local function check(ok, what) print((ok and "PASS " or "FAIL ") .. what); if not ok then FAILED = true end end
+  local db, src = ClaudeCompanionDB, 0
+  for _, it in pairs(db.items) do if it.src then src = src + 1 end end
+  check(db.npcs == nil and db.quests == nil, "no NPC or quest copies in the save (QuestieDB is loaded in this test)")
+  check(src == 0, "no item-source copies in the save (" .. src .. " items have one)")
+  check(OLD_ITEM_KEPT, "dropping old copies keeps the item itself")
+  if FAILED then error("data source checks failed") end
 end
 local f = io.open("out.lua", "w"); f:write("ClaudeCompanionDB = " .. ser(ClaudeCompanionDB)); f:close()
 print("DIAG:")
