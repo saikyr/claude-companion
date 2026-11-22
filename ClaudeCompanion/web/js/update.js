@@ -5,7 +5,7 @@
 (function () {
   if (!location.protocol.startsWith('http') || /background=1/.test(location.search)) return;
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-  // small cards in the bottom-right corner (this one and js/sync.js's) stack in one column
+  // small cards in the bottom-right corner stack in one column
   let corner = document.getElementById('cc-corner');
   if (!corner) {
     corner = document.createElement('div');
