@@ -1,15 +1,15 @@
 {
  "version": "1.4.0",
- "built": "2026-11-22T16:55:28+00:00",
+ "built": "2026-11-22T17:18:01+00:00",
  "channel": {
   "repo": "saikyr/claude-companion",
   "branch": "stable"
  },
  "from": {
   "branch": "main",
-  "commit": "8f3514bc7a6eaa655f986cd587d740b1bec5b178"
+  "commit": "6c5120271da36911c7317302454798ac94ab63ef"
  },
- "notes": "Gear page rebuilt: per-slot upgrades, AH random-suffix greens, flexible pre-BiS; clean stat-weight defaults (#50)",
+ "notes": "Gear page by slot: slot list + one slot in full; random greens count without an AH listing (#51)",
  "files": {
   "Bindings.xml": "f4ad14d769e58eb18cd49da688fb23d64dec6be99a7684b9993ea0689616bf09",
   "ClaudeCompanion.toc": "87915db63dcb911f027bc5c400284fe70fa58142f561efc0dea4134bd6625c42",
@@ -26,7 +26,7 @@
   "web/Claude Companion.app/Contents/Resources/AppIcon.icns": "467ef964fdaff99ca47e80e7aff3d4db96306b984293aeb98251d68d2e4a2fdd",
   "web/Claude Companion.bat": "8f5cf6c1ff6a95ad5e0ebfc10951ef451cccf5b1e9a6d1fc7574600cfd01a2fc",
   "web/channel.json": "6257533c1329cedd3d3f50e2d9f1aa3f996368b54c56c717e10ddcb41447c62c",
-  "web/css/app.css": "272f3a2d7e0598bd88dc4a917fdd011d5964027f623ec7da055f414f0bc1c9e5",
+  "web/css/app.css": "270691b00ac59415ed23450394dbb867f574c0f14faea879921a57695cbf6aef",
   "web/data/gamedata.js": "acff76f53055ee494dd19c7d774186d67176a4a6a5b1825299fdd0dbf1922416",
   "web/data/suffixes.js": "1feb201a1c7487f2eaa94e40348450a539edd0004c9e3cbef8ea06b9af0108f6",
   "web/icons/app.ico": "890d1ad4b13ed82791c3fa3ad175798ed2fbe7f304af6cb6af5e15e5ce01c7a3",
@@ -37,7 +37,7 @@
   "web/js/app.js": "09f6661cca25f06793742f515cec6f32f3d955bea4f7344f7cae6670af37894b",
   "web/js/cards.js": "27fbd8b2b8ee2a3de0b9d2677d642bbe471fec722c62fce8bb070ac27e78731f",
   "web/js/claude.js": "3df1e52be93aafcb3518313b7bc1889e61014a8ff5dea2d225e95f9ac6b88fa7",
-  "web/js/gear.js": "c4d82f45f55b184078a51b4b1d3f1779eded542bbb264759331220003f340dbd",
+  "web/js/gear.js": "f8a3e01d04d78d3510d63a228bbf05cdf066c7974696caa4acc2011328dd52b1",
   "web/js/icons.js": "9a589c086b0c7f02837345b8f69baad6670e86b6ebe195117b9b540094d9be46",
   "web/js/lua.js": "e14c5df02bbfa98ec07196ec363d017beb4bd6ac50e075b78a3ba32b72234f77",
   "web/js/merge.js": "85f8a6447c366be89dc676408f854fd7022d13d5610eb7e3598b641077162dd8",
