@@ -9,14 +9,15 @@ character, so Claude's answers match what the app shows. Claude sessions read it
 (Windows: `server.ps1`, set up by `Claude Companion.bat`; macOS: `server.py`, set up by `Claude Companion.app`;
 both start the server at login, hidden).
 
-`update.json` (yours, optional): `{"auto": true, "repo": "saikyr/claude-companion", "token": "..."}` for the
-self-updater; `installed.json` (the app writes it): `{tag, at, backup, files}`, the release installed. Neither is
-ever shipped or overwritten by an update.
+`update.json` (yours, optional): `{"auto": true, "token": "...", "sync": {"folder": "<drive>/Claude Companion"}}`.
+`auto`: install new builds by themselves; `token`: only to update from the private repository without the GitHub
+CLI; `sync`: set by the app when you pick a cloud drive. `installed.json` (the app writes it): the build installed.
+Neither is ever shipped or overwritten by an update.
 
-`devices/<computer>/` (the app writes it): the other computers' latest saves (`save.lua`, `meta.json`), downloaded
-through the private repository. The app merges them with this computer's save, so `snapshot.json` describes one
-character across the PC and the Mac; `mergedWith` lists which saves are in it. For raw data from another computer,
-read `devices/<computer>/save.lua` the same way as the save itself.
+`devices/<computer>/` (the app writes it): the other computers' latest saves (`save.lua`, `meta.json`), copied from
+the sync folder. The app merges them with this computer's save, so `snapshot.json` describes one character across all
+of the person's computers; `mergedWith` lists which saves are in it. The same merged snapshot is in the sync folder as
+`<computer>/snapshot.json.gz` (each computer's copy; read the one with the newest `written`).
 
 `settings.json` here holds the app's own choices (gear weights, compare-with picks, flips set aside),
 copied from the browser so every browser and the hidden one give the same advice. The app writes it; Claude can read it.
