@@ -24,6 +24,13 @@
   let st = null, busy = false;
 
   const post = (url) => fetch(url, { method: 'POST', headers: { 'X-CC': '1' }, body: '{}' }).then((r) => r.json());
+  // a build's name is "Build 1.4.0 from main 9679c9351d: <what changed>": show what changed, the build quietly
+  function whatsNew(name) {
+    const m = /^Build (\S+) from \S+ ([0-9a-f]+): ([\s\S]*)$/.exec(name || '');
+    if (!m) return name ? ': ' + esc(name) : '';
+    const notes = /^Merge (pull request|branch) /.test(m[3]) ? '' : m[3];
+    return `${notes ? ': ' + esc(notes) : ''}<div style="color:#9a9890;font-size:12px">Version ${esc(m[1])} · build ${esc(m[2].slice(0, 7))}</div>`;
+  }
   function show(html) { box.innerHTML = html; box.style.display = html ? 'block' : 'none'; }
 
   function render() {
@@ -32,7 +39,7 @@
     const inst = st.installed || {};
     const just = inst.at && Date.now() - Date.parse(inst.at) < 15 * 60 * 1000 && dismissed !== 'done:' + inst.tag;
     if (st.available && dismissed !== 'avail:' + st.latest.tag) {
-      show(`<b>Update ready:</b> ${esc(st.latest.name)}<div style="color:#9a9890;margin:4px 0 8px">${st.auto ? 'It installs by itself within 30 minutes, or now:' : 'Auto-update is off.'}</div>
+      show(`<b>Update ready</b>${whatsNew(st.latest.name)}<div style="color:#9a9890;margin:4px 0 8px">${st.auto ? 'It installs by itself within 30 minutes, or now:' : 'Auto-update is off.'}</div>
         <button data-u="install" style="${btn}">Install now</button><button data-u="later" style="${link}">Later</button>
         <div style="margin-top:8px"><button data-u="auto" style="${link}">${st.auto ? 'Turn auto-update off' : 'Turn auto-update on'}</button></div>`);
     } else if (just) {

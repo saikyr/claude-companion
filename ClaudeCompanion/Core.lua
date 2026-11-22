@@ -326,10 +326,14 @@ local handlers = {}
 ns.frame = frame
 
 -- ns.On("EVENT", fn): many modules can listen to one event.
+-- Spellcast events fire for every unit around you (party, raid, nameplates) and the addon only ever
+-- wants the player's own casts, so those are asked for the player only: no work for anyone else's.
 function ns.On(event, fn)
     if not handlers[event] then
         handlers[event] = {}
-        pcall(frame.RegisterEvent, frame, event)
+        local unitOnly = event:find("^UNIT_SPELLCAST_") and frame.RegisterUnitEvent
+            and pcall(frame.RegisterUnitEvent, frame, event, "player")
+        if not unitOnly then pcall(frame.RegisterEvent, frame, event) end
     end
     table.insert(handlers[event], fn)
 end

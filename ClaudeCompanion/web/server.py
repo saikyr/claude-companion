@@ -88,7 +88,17 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    # Only this computer's own page may talk to the server. The socket is on 127.0.0.1 already, but a web
+    # page could point its own domain at 127.0.0.1 (DNS rebinding) and then read the save and the sync key
+    # as same-origin. Its requests carry that domain as Host, so anything but localhost is turned away
+    # (Windows' HttpListener does the same for server.ps1, whose prefix is http://localhost:<port>/).
+    def foreign_host(self):
+        if (self.headers.get('Host') or '').lower() in (f'localhost:{PORT}', f'127.0.0.1:{PORT}'): return False
+        self.send(400, 'bad host')
+        return True
+
     def do_GET(self):
+        if self.foreign_host(): return
         path = self.path.split('?')[0]
         if path == '/api/ping': return self.send(200, 'claude-companion')
         if path in ('/api/stamp', '/api/data'):
@@ -118,6 +128,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send(404, 'not found')
 
     def do_POST(self):
+        if self.foreign_host(): return
         # the page's summary for Claude: ../companion-data/snapshot.json, and what you did with
         # Claude's cards: ../companion-data/from-claude/state.json (see SCHEMA.md there).
         # Only this app sends the X-CC header; a web page can't add it without the browser asking first.

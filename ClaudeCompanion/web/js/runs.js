@@ -120,7 +120,12 @@
   V.runs = function () {
     const list = all();
     if (!list.length) return '<div class="empty">No dungeon runs yet. They start by themselves when you enter a dungeon or raid.</div>';
-    return list.map(card).join('');
+    // a few minutes inside with nothing done (zoning in and out, a reset) isn't a run worth a card
+    const visit = (r) => !r.live && (r.secs || 0) < 10 * 60 && !r.kills && !r.xp && !r.quests && !r.deaths && !arr(r.bosses).length && !Object.keys(r.loot || {}).length;
+    const runs = list.filter((r) => !visit(r)), visits = list.filter(visit);
+    let h = runs.map(card).join('') || '<div class="empty">No dungeon runs with anything done yet.</div>';
+    if (visits.length) h += `<details class="how"><summary>${visits.length} short visit${visits.length > 1 ? 's' : ''} with nothing done</summary>${visits.map(card).join('')}</details>`;
+    return h;
   };
 
   // for snapshot.json (js/claude.js)
