@@ -380,6 +380,11 @@ ns.On("ADDON_LOADED", function(name)
     db.chars = db.chars or {}
     db.items = db.items or {}
     db.spells = db.spells or {}
+    -- Quest, NPC and item-source facts come from the app's game-data pack (QuestieDB Forever, built
+    -- offline: docs/ARCHITECTURE.md, Data sources). Saves from 1.4 and earlier also kept a copy read
+    -- from the QuestieDB addon in game; it was never refreshed, so it is dropped here.
+    db.npcs, db.quests = nil, nil
+    for _, it in pairs(db.items) do if type(it) == "table" then it.src = nil end end
 end)
 
 -- Callbacks modules want after the character table exists.

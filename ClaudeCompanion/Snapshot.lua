@@ -676,7 +676,6 @@ function ns.Snapshot(reason)
     if reason == "logout" then Try("snap:keep", KeepAtLogout, snap, c.snap) end
     c.snap = snap
     Try("bank:cache", ns.BankFromCache)
-    if ns.Enrich then C_Timer.After(3, function() Try("enrich", ns.Enrich) end) end
     -- one compact line per snapshot, for graphs over time
     local ch = snap.character or {}
     local last = c.history[#c.history]

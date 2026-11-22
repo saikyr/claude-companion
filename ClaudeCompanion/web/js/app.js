@@ -6,7 +6,8 @@
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const arr = (x) => (Array.isArray(x) ? x : x && typeof x === 'object' ? Object.keys(x).sort((a, b) => a - b).map((k) => x[k]) : []);
   const ICON_URL = 'https://wow.zamimg.com/images/wow/icons/large/';
-  const STANDING = ['', 'Hated', 'Hostile', 'Unfriendly', 'Neutral', 'Friendly', 'Honored', 'Revered', 'Exalted'];
+  const RULES = window.GAMERULES || {};
+  const STANDING = RULES.standing || [];
   const MAX_LEVEL = 60;
   const STANDING_COLOR = ['', '#cc2222', '#ff0000', '#ee6622', '#e6d200', '#33cc33', '#00cc88', '#00ccbb', '#00c8ff'];
 
@@ -81,7 +82,6 @@
   }
   const keyOf = (link) => { const m = /\|H(item:[^|]+)\|h/.exec(link || ''); return m ? m[1] : null; };
   const byId = (id) => ITEM_BY_ID[id] || null;
-  let NPCS = {}, QUESTS = {};
 
   // ------------------------------------------------------------ game-data pack (data/gamedata.js)
   // Every Forever item, quest, drop source and vendor from ForeverDB, so the page
@@ -169,37 +169,14 @@
     const t = GD && GD.quests[id] && GD.quests[id].t;
     if (t && !/^Quest #/.test(t)) return t;
     const logQ = CH && arr((CH.snap || {}).quests).find((q) => q.id == id);
-    return (logQ && logQ.title) || (QUESTS[id] && QUESTS[id].name) || t || '#' + id;
+    return (logQ && logQ.title) || t || '#' + id;
   };
   // where a quest ends, from the pack: 'Name, Place x, y'
   const gdWho = (w) => w ? `${w[1]}${w[2] ? ', ' + w[2] : ''}${w[3] != null ? ' ' + w[3] + ', ' + w[4] : ''}` : '';
-  const npcName = (id) => (NPCS[id] && NPCS[id].name) || '#' + id;
-  // a kill the addon couldn't name ("npc 9019": the mob was never targeted or moused over) named from QuestieDB if it knows it
-  const killName = (n) => { const m = /^npc (\d+)$/.exec(n || ''); return m && NPCS[m[1]] && NPCS[m[1]].name ? NPCS[m[1]].name : n; };
-  function npcWhere(id) {
-    const n = NPCS[id];
-    const z = n && arr(n.spawns)[0];
-    if (!z) return '';
-    const pt = arr(z.pts)[0];
-    return `${z.zoneName || ''}${pt ? ' ' + arr(pt)[0] + ', ' + arr(pt)[1] : ''}`.trim();
-  }
-  function sourceLines(it) {
-    const s = it && it.src;
-    const out = [];
-    if (!s || s.none) return out;
-    const names = (ids, max) => arr(ids).slice(0, max).map((n) => { const x = NPCS[n]; return x ? x.name + (x.min ? ` (${x.min}${x.max && x.max !== x.min ? '-' + x.max : ''})` : '') : '#' + n; }).join(', ') + (arr(ids).length > max ? ` +${arr(ids).length - max} more` : '');
-    if (arr(s.drops).length) out.push({ l: 'Dropped by: ' + names(s.drops, 3), lc: '9ad0ff' });
-    if (arr(s.objectNames).length) out.push({ l: 'Found in: ' + arr(s.objectNames).slice(0, 3).join(', '), lc: '9ad0ff' });
-    if (arr(s.vendors).length) out.push({ l: 'Sold by: ' + names(s.vendors, 2), lc: '9ad0ff' });
-    if (arr(s.quests).length) out.push({ l: 'Quest reward: ' + arr(s.quests).slice(0, 2).map((q) => questName(q)).join(', '), lc: '9ad0ff' });
-    if (s.starts) out.push({ l: 'Starts a quest: ' + questName(s.starts), lc: 'ffd100' });
-    return out;
-  }
-  // QuestieDB lines (where to find it) plus the pack's drop sightings and rates
-  function allSourceLines(it) {
-    if (it && it.id && GD && gdItem(it.id)) return gdSourceLines(it.id, 3);
-    return sourceLines(it);
-  }
+  // a kill the addon couldn't name ("npc 9019": the mob was never targeted or moused over) named from the pack (QuestieDB)
+  const killName = (n) => { const m = /^npc (\d+)$/.exec(n || ''); const g = m && GD && (GD.npcs || {})[m[1]]; return g ? g[0] : n; };
+  // where an item comes from: the pack (QuestieDB sources, ForeverDB drop sightings and rates)
+  const allSourceLines = (it) => (it && it.id && GD ? gdSourceLines(it.id, 3) : []);
 
   // ------------------------------------------------------------ tooltip
   const tip = document.createElement('div');
@@ -692,7 +669,7 @@
 
   // ------------------------------------------------------------ quests
   // a reputation value (points from the start of Neutral, as QuestieDB gives them) as a standing index
-  const REP_FLOOR = [null, -42000, -6000, -3000, 0, 3000, 9000, 21000, 42000];
+  const REP_FLOOR = RULES.repFloor || [];
   const repStanding = (v) => { let st = 1; for (let i = 1; i < REP_FLOOR.length; i++) if (v >= REP_FLOOR[i]) st = i; return st; };
   const myStanding = (faction) => { const r = arr((CH.snap || {}).reputation).find((x) => x.name === faction); return r && r.reaction ? r.reaction : null; };
   V.quests = function () {
@@ -750,7 +727,7 @@
       else if (it && it.sell) cost += it.sell * 4 * (g.need || 1); // vendor-only reagents cost about 4x their sell price
       else missing++;
     });
-    const value = Math.round(v * makes * 0.95); // AH takes 5% of the sale
+    const value = Math.round(v * makes * (1 - RULES.ahCut)); // the AH keeps its cut of the sale
     return { cost, value, profit: value - cost, missing };
   }
   // recipe sections: "Enchant Bracer - X" -> "Enchant Bracer"; otherwise the slot the result goes in
@@ -847,44 +824,8 @@
     const pts = v.map((x, i) => `${((i / (v.length - 1)) * w).toFixed(1)},${(hgt - 2 - ((x - lo) / (hi - lo || 1)) * (hgt - 4)).toFixed(1)}`).join(' ');
     return `<svg class="spark" width="${w}" height="${hgt}"><polyline points="${pts}" fill="none" stroke="#8fd3ff" stroke-width="1.5"/></svg>`;
   }
-  // Disenchant outcomes by item level. Uncommon rows: warcraft.wiki.gg
-  // "Disenchanting tables" (same materials as wow-professions.com/forever);
-  // rare/epic rows from the same page's summary. [lo, hi, [[material, chance, min, max], ...]]
-  const DE_ARMOR = [
-    [5, 15, [['Strange Dust', 0.8, 1, 2], ['Lesser Magic Essence', 0.2, 1, 2]]],
-    [16, 20, [['Strange Dust', 0.75, 2, 3], ['Greater Magic Essence', 0.2, 1, 2], ['Small Glimmering Shard', 0.05, 1, 1]]],
-    [21, 25, [['Strange Dust', 0.75, 4, 6], ['Lesser Astral Essence', 0.15, 1, 2], ['Small Glimmering Shard', 0.1, 1, 1]]],
-    [26, 30, [['Soul Dust', 0.75, 1, 2], ['Greater Astral Essence', 0.2, 1, 2], ['Large Glimmering Shard', 0.05, 1, 1]]],
-    [31, 35, [['Soul Dust', 0.75, 2, 5], ['Lesser Mystic Essence', 0.2, 1, 2], ['Small Glowing Shard', 0.05, 1, 1]]],
-    [36, 40, [['Vision Dust', 0.75, 1, 2], ['Greater Mystic Essence', 0.2, 1, 2], ['Large Glowing Shard', 0.05, 1, 1]]],
-    [41, 45, [['Vision Dust', 0.75, 2, 5], ['Lesser Nether Essence', 0.2, 1, 2], ['Small Radiant Shard', 0.05, 1, 1]]],
-    [46, 50, [['Dream Dust', 0.75, 1, 2], ['Greater Nether Essence', 0.2, 1, 2], ['Large Radiant Shard', 0.05, 1, 1]]],
-    [51, 55, [['Dream Dust', 0.75, 2, 5], ['Lesser Eternal Essence', 0.2, 1, 2], ['Small Brilliant Shard', 0.05, 1, 1]]],
-    [56, 60, [['Illusion Dust', 0.75, 1, 2], ['Greater Eternal Essence', 0.2, 1, 2], ['Large Brilliant Shard', 0.05, 1, 1]]],
-    [61, 65, [['Illusion Dust', 0.75, 2, 5], ['Greater Eternal Essence', 0.2, 2, 3], ['Large Brilliant Shard', 0.05, 1, 1]]],
-  ];
-  const DE_WEAPON = [
-    [6, 15, [['Strange Dust', 0.2, 1, 2], ['Lesser Magic Essence', 0.8, 1, 2]]],
-    [16, 20, [['Strange Dust', 0.2, 2, 3], ['Greater Magic Essence', 0.75, 1, 2], ['Small Glimmering Shard', 0.05, 1, 1]]],
-    [21, 25, [['Strange Dust', 0.15, 4, 6], ['Lesser Astral Essence', 0.75, 1, 2], ['Small Glimmering Shard', 0.1, 1, 1]]],
-    [26, 30, [['Soul Dust', 0.2, 1, 2], ['Greater Astral Essence', 0.75, 1, 2], ['Large Glimmering Shard', 0.05, 1, 1]]],
-    [31, 35, [['Soul Dust', 0.2, 2, 5], ['Lesser Mystic Essence', 0.75, 1, 2], ['Small Glowing Shard', 0.05, 1, 1]]],
-    [36, 40, [['Vision Dust', 0.2, 1, 2], ['Greater Mystic Essence', 0.75, 1, 2], ['Large Glowing Shard', 0.05, 1, 1]]],
-    [41, 45, [['Vision Dust', 0.2, 2, 5], ['Lesser Nether Essence', 0.75, 1, 2], ['Small Radiant Shard', 0.05, 1, 1]]],
-    [46, 50, [['Dream Dust', 0.2, 1, 2], ['Greater Nether Essence', 0.75, 1, 2], ['Large Radiant Shard', 0.05, 1, 1]]],
-    [51, 55, [['Dream Dust', 0.22, 2, 5], ['Lesser Eternal Essence', 0.75, 1, 2], ['Small Brilliant Shard', 0.03, 1, 1]]],
-    [56, 60, [['Illusion Dust', 0.22, 1, 2], ['Greater Eternal Essence', 0.75, 1, 2], ['Large Brilliant Shard', 0.03, 1, 1]]],
-    [61, 65, [['Illusion Dust', 0.22, 2, 5], ['Greater Eternal Essence', 0.75, 2, 3], ['Large Brilliant Shard', 0.03, 1, 1]]],
-  ];
-  const DE_RARE = [
-    [1, 25, [['Small Glimmering Shard', 1, 1, 1]]], [26, 30, [['Large Glimmering Shard', 1, 1, 1]]], [31, 35, [['Small Glowing Shard', 1, 1, 1]]],
-    [36, 40, [['Large Glowing Shard', 1, 1, 1]]], [41, 45, [['Small Radiant Shard', 1, 1, 1]]], [46, 50, [['Large Radiant Shard', 1, 1, 1]]],
-    [51, 55, [['Small Brilliant Shard', 1, 1, 1]]], [56, 65, [['Large Brilliant Shard', 0.995, 1, 1], ['Nexus Crystal', 0.005, 1, 1]]],
-  ];
-  const DE_EPIC = [
-    [40, 45, [['Small Radiant Shard', 1, 2, 4]]], [46, 50, [['Large Radiant Shard', 1, 2, 4]]], [51, 55, [['Small Brilliant Shard', 1, 2, 4]]],
-    [56, 60, [['Nexus Crystal', 1, 1, 1]]], [61, 88, [['Nexus Crystal', 1, 1, 2]]],
-  ];
+  // Disenchant outcomes by item level: data/rules.js (GAMERULES.disenchant, with its source)
+  const DE = (window.GAMERULES || {}).disenchant || {};
   let NAME_PRICE = null;
   function priceByName(name) {
     if (!NAME_PRICE) {
@@ -894,7 +835,7 @@
     return NAME_PRICE[name] || null;
   }
   function deOutcome(it) {
-    const t = it.q === 2 ? (it.class === 2 ? DE_WEAPON : DE_ARMOR) : it.q === 3 ? DE_RARE : it.q === 4 ? DE_EPIC : null;
+    const t = it.q === 2 ? (it.class === 2 ? DE.weapon : DE.armor) : it.q === 3 ? DE.rare : it.q === 4 ? DE.epic : null;
     const row = t && t.find((r) => it.ilvl >= r[0] && it.ilvl <= r[1]);
     if (!row) return null;
     let value = 0, missing = [];
@@ -1146,8 +1087,6 @@
     CH = chars[keys[0]];
     ITEMS = DB.items || {};
     SPELLS = DB.spells || {};
-    NPCS = DB.npcs || {};
-    QUESTS = DB.quests || {};
     ITEM_BY_ID = {};
     for (const [k, it] of Object.entries(ITEMS)) if (it.id && (!ITEM_BY_ID[it.id] || (it.tip && !ITEM_BY_ID[it.id].tip))) ITEM_BY_ID[it.id] = Object.assign({ key: k }, it);
     STATE.live = !!(opts && opts.live);
