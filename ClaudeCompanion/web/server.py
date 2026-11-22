@@ -201,7 +201,9 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 def gh_get(url, tok, accept='application/vnd.github+json'):
-    req = urllib.request.Request(url, headers={'Accept': accept, 'User-Agent': 'claude-companion', 'X-GitHub-Api-Version': '2022-11-28'})
+    # downloads (zipballs) answer 415 to "application/octet-stream": ask for */* and follow the redirect
+    req = urllib.request.Request(url, headers={'Accept': '*/*' if accept == 'application/octet-stream' else accept, 'User-Agent': 'claude-companion',
+                                               'X-GitHub-Api-Version': '2022-11-28'})
     if tok: req.add_header('Authorization', 'Bearer ' + tok)
     if accept == 'application/octet-stream':
         # assets redirect to a signed download link, which must be fetched without the token
