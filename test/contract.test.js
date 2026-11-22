@@ -1,5 +1,5 @@
 // node test/contract.test.js [base ref, e.g. origin/main]
-// The contract between the parts (docs/ARCHITECTURE.md, Contracts): the addon, the two local servers,
+// The contract between the parts (docs/INTERFACES.md): the addon, the two local servers,
 // the app page and the sync backend are written separately, so this checks that they still agree.
 // Each check names the one place that owns the fact.
 const fs = require('fs');
@@ -32,8 +32,8 @@ check(/db\.addonBuild = ns\.BUILD/.test(core), 'the addon saves its build (Claud
 // 3. Save schema (ClaudeCompanionDB): Core.lua owns it, its header and the architecture doc agree.
 const saveSchema = one(/^ns\.SCHEMA = (\d+)/m, core, 'Core.lua ns.SCHEMA');
 check(one(/Layout \(schema (\d+)\)/, core, 'Core.lua layout comment') === saveSchema, `Core.lua's layout comment says schema ${saveSchema}`);
-check(one(/`ClaudeCompanionDB`\*\* \(SavedVariables, `schema = (\d+)`\)/, read(ROOT, 'docs', 'ARCHITECTURE.md'), 'ARCHITECTURE save schema') === saveSchema,
-  'docs/ARCHITECTURE.md names the same save schema');
+check(one(/`ClaudeCompanionDB`\*\* \(SavedVariables, `schema = (\d+)`\)/, read(ROOT, 'docs', 'INTERFACES.md'), 'INTERFACES save schema') === saveSchema,
+  'docs/INTERFACES.md names the same save schema');
 
 // 4. snapshot.json schema: js/claude.js writes it, companion-data/SCHEMA.md documents it.
 const snap = one(/const SCHEMA = (\d+);/, read(A, 'web', 'js', 'claude.js'), 'claude.js SCHEMA');
@@ -82,6 +82,20 @@ const html = read(A, 'web', 'index.html');
 const assets = [...html.matchAll(/(?:src|href)="([^"#:]+)"/g)].map((m) => m[1]).filter((p) => !p.startsWith('http'));
 const gone = assets.filter((p) => !fs.existsSync(path.join(A, 'web', p)));
 check(assets.length > 3 && !gone.length, 'every file index.html loads exists' + (gone.length ? `: missing ${gone.join(' ')}` : ''));
+
+// 8. Claude's interface (CLAUDE.md, INTERFACES.md #6): the card fields SCHEMA.md documents are the ones
+// tools/check-cards.py accepts, and the function CLAUDE.md tells Claude to call exists in a migration.
+const schemaMd = read(A, 'companion-data', 'SCHEMA.md');
+const cardTable = (/### cards\.json, schema 1([\s\S]*?)\n### /.exec(schemaMd) || [, ''])[1];
+const docFields = new Set([...cardTable.matchAll(/^\| `([a-z]+)(?:\[\])?`(?:, `([a-z]+)`)?/gm)].flatMap((m) => [m[1], m[2]]).filter(Boolean));
+const checker = read(ROOT, 'tools', 'check-cards.py');
+const keyFields = new Set(((/KEYS = \{([\s\S]*?)\}/.exec(checker) || [, ''])[1].match(/'([a-z]+)'/g) || []).map((k) => k.slice(1, -1)));
+const diff = [...docFields].filter((k) => !keyFields.has(k)).concat([...keyFields].filter((k) => !docFields.has(k)));
+check(docFields.size > 5 && !diff.length, `card fields agree in SCHEMA.md and tools/check-cards.py` + (diff.length ? `: ${diff.join(' ')}` : ''));
+const guide = read(ROOT, 'CLAUDE.md');
+const fns = new Set([...guide.matchAll(/private\.([a-z_]+)\(/g)].map((m) => m[1]));
+const missingFn = [...fns].filter((f) => !new RegExp(`function\\s+private\\.${f}\\s*\\(`, 'i').test(sql));
+check(fns.has('claude_put_setting') && !missingFn.length, `every private.* function CLAUDE.md names exists in a migration (${[...fns].join(' ')})` + (missingFn.length ? `: missing ${missingFn.join(' ')}` : ''));
 
 console.log(failed ? `${failed} contract check(s) failed` : 'contract holds');
 process.exit(failed ? 1 : 0);

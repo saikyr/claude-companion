@@ -26,7 +26,7 @@
 3. **The game owns its saves.** Each computer's `SavedVariables` is written by the game and only read
    by the app.
 4. **One writer per file.** The updater writes the addon folder (never `companion-data/`); the page
-   writes `snapshot.json`, `settings.json`, `sync.json` and `sync-cache.json`; Claude writes `from-claude/cards.json`.
+   writes `snapshot.json`, `settings.json`, `sync.json` and `sync-cache.json`; Claude writes only its cards.
 5. **Verify before you touch.** Builds are checked file by file against `BUILD.json`; a backup is made
    before every install.
 
@@ -129,11 +129,9 @@ itself, so until a window loads the page after the server's restart, the hidden 
 every save (even though a window wrote `snapshot.json`), and the current page's work (sync, the snapshot
 online) still happens.
 
-**Claude's access.** With the Supabase connector, project `jucbngafdnyaizfxgplk`:
-`select * from private.history where account = '<id>' and kind = 'journal' order by t desc`. The account
-id is in each `snapshot.json` (`sync.account`). Kinds: journal, session, grind, run, note, history, de,
-ah_obs, ah_sale, ah_buy, ah_post, live, setting, snapshot. The newest "now":
-`select computer, at, data from private.history where account = '<id>' and kind = 'snapshot' order by t desc limit 1`.
+**Claude's access** (optional; the app doesn't need it): reading the snapshot and history, writing
+cards, all in [../CLAUDE.md](../CLAUDE.md). Kinds in `private.history`: journal, session, grind, run,
+note, history, de, ah_obs, ah_sale, ah_buy, ah_post, live, setting, snapshot.
 
 **Schema:** `supabase/migrations/` (`supabase/README.md`). Client: `js/sync.js`.
 Tests run the real migration files on a plain Postgres (`test/sql/backend.js`; CI has a Postgres
@@ -188,12 +186,11 @@ observations), a few MB, so one player uses well under 1% of the database a mont
  ClaudeCompanion/companion-data/snapshot.json   ◀── what Claude reads first
 ```
 
-Claude → player channel: **From Claude cards** (`js/cards.js`). Claude writes
-`companion-data/from-claude/cards.json` (one format for farms, flips, quests, gear...; checked with
-`tools/check-cards.py`); the app polls it through the server every 5 s and saves the player's
-done / dismissed / ticked steps to `from-claude/state.json`, which Claude reads back. One writer per
-file. Format: `companion-data/SCHEMA.md`. (The old in-game message file, `Inbox.lua`, is gone: the
-updater replaces the addon's files, so nothing Claude wrote there would last.)
+Claude → player channel: **From Claude cards** (`js/cards.js`). Claude writes cards online (the account
+setting `cc.claude.cards`, through `private.claude_put_setting`; every computer gets them at its next
+sync) or on one computer (`companion-data/from-claude/cards.json`); the app shows both as one list and
+saves the player's done / dismissed / ticked steps to `from-claude/state.json` and the synced setting
+`cc.claude.cardsState`, which Claude reads back. One writer per place. Format: `companion-data/SCHEMA.md`.
 
 ## Addon modules
 
@@ -267,21 +264,9 @@ disenchant tables have no gaps) and warns when the pack is more than 30 days old
 
 ## Contracts
 
-The parts are written and updated separately (the addon's Lua loads at a `/reload`, the app's page when
-the window reloads, the backend once for everyone), so each place they meet has one owner, one version,
-and a CI check (`test/contract.test.js`, first step of `checks.yml`) that fails when two sides disagree.
-
-| Contract | Owner | Version | Rules | Checked |
-| --- | --- | --- | --- | --- |
-| Addon version | `ClaudeCompanion.toc` `## Version` | semver | `Core.lua` `ns.VERSION` and the newest `CHANGELOG.md` section say the same | versions agree |
-| Build | `tools/publish-stable.py` | source commit | stamps `Core.lua` `ns.BUILD` and writes `web/channel.json` `build`; the addon saves `addonBuild`, the servers report both (`/api/update` `builds`), and the app says "type /reload" while they differ | one `ns.BUILD = "dev"` line, update test |
-| **`ClaudeCompanionDB`** (SavedVariables, `schema = 1`) | `Core.lua` (layout at the top) | `ns.SCHEMA` | new fields any time, readers tolerate missing ones; bump only when a field changes meaning | schema agrees here and in `Core.lua` |
-| Lua tables in the page | `js/lua.js` | | a Lua table keyed 1..n arrives as a JS array (index 0..n-1). Anything the game numbers (specs 1 and 2, bag ids, action slots) is re-keyed to the game's numbers once, where the save is read (`specsByGroup`, `js/merge.js`), never offset by hand elsewhere | `merge.test.js` (specs keep 1 and 2) |
-| **`snapshot.json`** | `js/claude.js` writes, `companion-data/SCHEMA.md` documents | `schema = 1` | bump only when a field changes meaning or is removed; Claude reads this before the raw save | schema agrees |
-| `gamedata.js` | `gamedata/build.py` (schema at its top) | pack date | one source per domain (Data sources) | "Game data complete" |
-| Local HTTP API | `server.py` and `server.ps1`, identical | | the endpoints above, plus the files the page keeps in `companion-data/` | both servers serve the same paths, the page calls only those, the same files are writable; `server-api.test.js` on both |
-| Sync backend | `supabase/migrations/` (`cc_*` functions) | migration file name | additive only; a migration on `main` is never edited (the live database already ran it): changes go in a new file. Every record's `id` is its content's identity (`js/sync.js`), so the same event from two computers is one record | every call in `js/sync.js` is defined; no merged migration edited |
-| Installed files | `BUILD.json` | build | the updater copies exactly the build's files and removes what an older build had (outside `companion-data/`) | `update_test.py` on both servers |
+Every interface between the parts (addon, save, local server, page, snapshot, sync, Claude, updates),
+with its owner, version and CI check, is in [INTERFACES.md](INTERFACES.md). `test/contract.test.js`
+(first step of `checks.yml`) fails when two sides disagree.
 
 ## Where things live on a computer
 

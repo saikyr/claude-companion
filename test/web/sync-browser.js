@@ -61,6 +61,21 @@ const check = (ok, what) => { console.log((ok ? 'ok   ' : 'FAIL ') + what); if (
   check(inst ? snap.app && snap.app.build === inst.tag : snap.app === null, `the snapshot names the app build (${JSON.stringify(snap.app)})`);
   const online = B.query(`select data->'character'->>'name' from public.records where kind = 'snapshot'`);
   check(online && online === (snap.character || {}).name, `the snapshot is online for Claude too (${online})`);
+  check(Array.isArray(snap.quests) && snap.quests.every((q) => Array.isArray(q.rewards) && 'next' in q), 'every quest in the snapshot carries its scored rewards and the chain\'s next quest');
+  // Claude writes a card online; the app shows it, and what the player does goes back online
+  const cards = JSON.stringify({ schema: 1, cards: [{ id: 'browser-card', kind: 'quest', title: 'Card from Claude online', step: 'quest:1' }] });
+  B.query(`select private.claude_put_setting('${st.account}', 'cc.claude.cards', '${cards.replace(/'/g, "''")}')`);
+  // (a sync already running when this asks for one doesn't fetch again: ask until it has come)
+  await page.waitForFunction(() => { window.CC.syncNow(); return window.CC.cards.open().some((c) => c.id === 'browser-card'); }, null, { timeout: 20000, polling: 1000 });
+  await page.click('button[data-tab="claude"]');
+  check(/Card from Claude online/.test(await page.textContent('main')), 'a card Claude wrote online shows in From Claude');
+  await page.click('[data-card="browser-card"][data-cact="done"]');
+  for (let i = 0; i < 20 && !/browser-card/.test(B.query(`select coalesce(data->>'v', '') from public.records where id = 'setting|cc.claude.cardsState'`) || ''); i++) {
+    await page.evaluate(() => window.CC.syncNow()); await page.waitForTimeout(1000);
+  }
+  const back = B.query(`select data->>'v' from public.records where id = 'setting|cc.claude.cardsState'`);
+  check(back && JSON.parse(back).cards['browser-card'].state === 'done', 'marking it done reaches the account, where Claude reads it');
+  await page.click('button[data-tab="system"]');
   if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT, fullPage: false });
   // the server's hidden browser (?background=1, what runs after a save with the app closed) syncs too
   const bg = await browser.newPage();

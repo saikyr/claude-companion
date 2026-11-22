@@ -1,7 +1,7 @@
 # Developing Claude Companion
 
-How the parts fit, and the rules between them: [ARCHITECTURE.md](ARCHITECTURE.md) (start with
-Contracts). Work on a branch, open a pull request; CI (`checks.yml`) must pass, and merging to `main`
+Agents: start with [../CLAUDE.md](../CLAUDE.md). Every interface and its check: [INTERFACES.md](INTERFACES.md);
+how the parts work: [ARCHITECTURE.md](ARCHITECTURE.md). Work on a branch, open a pull request; CI (`checks.yml`) must pass, and merging to `main`
 publishes the build (`publish.yml`) to the `stable` branch and to the public download folder, which
 every installed app updates from and friends download from.
 
@@ -31,7 +31,10 @@ every installed app updates from and friends download from.
 | `installer/` | The installers in those zips: `windows/install.ps1` (+ `.bat`), `mac/Install Claude Companion.app` |
 | `tools/make-icons.py` | Draws the app icon (PNG for the installed app, `.icns` for the Mac launcher) |
 | `tools/check-cards.py` | Checks a From Claude `cards.json` before Claude writes it |
-| `docs/ARCHITECTURE.md` | How it fits together, data sources, contracts |
+| `CLAUDE.md` | The agent guide: where the truth lives, reading the app's scores, writing cards, rules for changes |
+| `docs/INTERFACES.md` | Every interface between the parts: owner, format, version, CI check |
+| `docs/CLAUDE-PROJECT.md` | Setting up an optional Claude project (owner or friend), with instructions to paste |
+| `docs/ARCHITECTURE.md` | How it fits together, data sources |
 | `docs/ROADMAP.md` | What's next |
 | `docs/STAT-WEIGHTS.md` | Default stat weights for every spec, and where the numbers come from |
 | `docs/ui-language.md` | The words, marks and colours the app uses for item advice |
@@ -51,11 +54,13 @@ every installed app updates from and friends download from.
     # check the shipped data is complete (CI runs both)
     python3 -I gamedata/test_pack.py ClaudeCompanion/web/data/gamedata.js && node test/web/data.test.js
 
-    # the contract between addon, servers, page and sync backend (docs/ARCHITECTURE.md, Contracts)
+    # the contract between addon, servers, page and sync backend (docs/INTERFACES.md)
     node test/contract.test.js origin/main
 
     # web tests: merge rules, self-update end to end (no network)
     node test/web/merge.test.js
+    # Claude's cards through the real backend SQL (needs a local Postgres: PGHOST/PGPORT/PGUSER)
+    node test/web/claude.test.js
     python3 test/update_test.py
 
     # the first-install zips (CI runs the installers on Windows and macOS: installers.yml)

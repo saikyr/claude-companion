@@ -4,8 +4,8 @@ An addon for **World of Warcraft Forever** plus a small app on your own computer
 your character: gear, bags and bank, both specs' talents and action bars, quests, professions,
 reputation, gold, loot, grinds and dungeon runs, and auction house prices and sales. The app shows all
 of it in one window, scores gear for your spec, tracks farms and flips, and writes a compact summary
-that Claude reads when it coaches you. Claude's suggestions come back as cards in the app's
-**From Claude** tab.
+that Claude can read if you use it as a coach (optional: the app is complete without it). Claude's
+suggestions come back as cards in the app's **From Claude** tab.
 
 Works for any class and spec. English game client only, for now.
 
@@ -79,6 +79,7 @@ Your saved data stays in the game's `WTF` folder until you delete it.
 ## More
 
 - What changed: [CHANGELOG.md](CHANGELOG.md)
+- Claude as your coach (optional): [docs/CLAUDE-PROJECT.md](docs/CLAUDE-PROJECT.md)
 - How it works: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (the source code itself is private)
 - Developing, tests and releases: [docs/DEVELOP.md](docs/DEVELOP.md)
 - License: [MIT](LICENSE). Not affiliated with Blizzard Entertainment.

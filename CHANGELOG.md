@@ -3,6 +3,19 @@
 Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 
 ## 1.5.0 (in progress: every merge to main updates itself)
+- **Quest rewards are scored for every spec.** The Quest log shows, under each quest's rewards, which
+  specs each item upgrades and by how much (the same engine as Bags and Gear), also for quests whose
+  rewards come from the game-data pack. The snapshot carries the same scores per reward and for the
+  chain's next quest, so Claude quotes the app instead of scoring items itself.
+- **From Claude cards reach every computer.** Claude can now post cards to your account online; every
+  computer shows them at its next sync, and what you do with them (done, dismissed, ticked steps) syncs
+  too. Cards written to a computer's `from-claude/cards.json` still work, and both show as one list.
+  Cards can name what they are about (`step`: a quest, dungeon, item, zone or NPC).
+- **Docs for agents and friends:** `CLAUDE.md` (the agent guide: where the truth lives, reading the
+  app's scores for all specs, writing cards), `docs/INTERFACES.md` (every interface, its owner and its
+  check; the app is complete without Claude) and `docs/CLAUDE-PROJECT.md` (an optional Claude project,
+  with instructions to paste). CI also checks that the card fields and Claude's backend function agree
+  with their docs.
 - **Sync can be turned off per computer.** System tab, Turn sync off on this computer: nothing is sent
   or fetched there and the app shows only that computer's save; turned back on, what waited is sent.
 - **Ready to share: one download, one installer.** Every build now also goes to a public download folder
@@ -22,7 +35,7 @@ Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
   addon version is the same in the .toc, Core.lua and this changelog; every file the .toc loads exists
   and every addon file is loaded; the save and snapshot schemas agree with their docs; the Mac and Windows
   servers serve the same API and the page calls only that; every sync call has its backend function; a
-  migration already on main is never edited. The table is in docs/ARCHITECTURE.md (Contracts).
+  migration already on main is never edited. The table is in docs/INTERFACES.md.
 - **The app knows when the game needs a /reload.** Each build stamps its commit into the addon
   (`addonBuild` in the save) and the app (`web/channel.json`). While the game still runs an older addon
   than the app, the app says so until you /reload, instead of only for 15 minutes after an update.
