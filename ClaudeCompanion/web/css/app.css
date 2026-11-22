@@ -201,6 +201,15 @@ span[data-item], .nm [data-tip] { font-weight: 500; }
 .linkbtn:hover { color: var(--t1); }
 .flips .tsum { font-weight: 600; border-top: 1px solid var(--line2); }
 .badge.on { color: var(--pos); background: rgba(79, 195, 138, .09); }
+/* the Now page's next steps (js/next.js): step, kind, gain; a step opens in place to what it holds */
+.nextsteps .thead, .nextsteps > .tr { grid-template-columns: minmax(0, 1fr) 6.5rem minmax(7rem, 14rem); }
+.nextsteps > .tr .c-main .sub, .nextsteps .c-num { white-space: normal; }
+.nextsteps > .tr.on { background: var(--hover); }
+.nx-det { padding: 0 var(--sp3) var(--sp2) calc(var(--ic-sm) + var(--sp3) * 2); border-top: 1px solid var(--line); background: var(--rail); }
+.nx-det .tr { grid-template-columns: minmax(0, 1fr) minmax(7rem, 14rem); border-top: 1px solid var(--line); padding-left: 0; padding-right: 0; }
+.nx-det .tr:first-child { border-top: 0; }
+.nx-det .tsec { padding-left: 0; }
+.nx-det p.meta { margin: var(--sp2) 0 0; }
 .setp .thead, .setp .tr { grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) 7.5rem; }
 .setlist { display: flex; flex-direction: column; gap: var(--sp2); margin-bottom: var(--sp4); }
 .setcard { background: var(--s1); border: 1px solid var(--line); border-radius: var(--r); }
@@ -397,6 +406,9 @@ select:focus { border-color: var(--acc-line); }
   .ph-tools { justify-content: flex-start; }
   section.page main { padding: var(--sp4); }
   .recipes .thead, .recipes .tr { grid-template-columns: minmax(0, 1fr) 5.5rem 6rem; }
+  .nextsteps .thead, .nextsteps > .tr { grid-template-columns: minmax(0, 1fr) minmax(6rem, 10rem); }
+  .nextsteps .thead > :nth-child(2), .nextsteps > .tr > :nth-child(2) { display: none; }
+  .nx-det { padding-left: var(--sp3); }
   .recipes .c-reag, .recipes .thead > :nth-child(2), .recipes .thead > :nth-child(3), .recipes .tr > :nth-child(3) { display: none; }
   .prices .thead, .prices .tr { grid-template-columns: minmax(0, 1fr) 7rem 7rem; }
   .prices .thead > :nth-child(-n+4):not(:first-child), .prices .tr > :nth-child(-n+4):not(:first-child) { display: none; }

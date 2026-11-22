@@ -11,7 +11,11 @@
   const REP_FLOOR = ((window.GAMERULES || {}).repFloor) || [];
   const STANDING = ((window.GAMERULES || {}).standing) || [];
 
+  // the game's SkillLine ids for professions (QuestieDB's requiredSkill uses them)
+  const SKILL_LINE = { 129: 'First Aid', 164: 'Blacksmithing', 165: 'Leatherworking', 171: 'Alchemy', 182: 'Herbalism', 185: 'Cooking',
+    186: 'Mining', 197: 'Tailoring', 202: 'Engineering', 333: 'Enchanting', 356: 'Fishing', 393: 'Skinning' };
   const snap = () => (A.CH && A.CH.snap) || {};
+  const skillRank = (name) => { const r = arr(snap().skills).find((x) => x && x.name === name); return r ? (r.rank != null ? r.rank : 0) : null; };
   const pack = (id) => ((A.GD && A.GD.quests) || {})[id] || null;
   let memo = null;
   function state() {
@@ -85,7 +89,17 @@
     const steps = chain(id), why = [];
     const first = steps[0] != null ? steps[0] : id;
     const fq = pack(first) || q;
-    if ((fq.min || 0) > st.level) why.push({ kind: 'level', level: fq.min });
+    // the highest level any step still to do needs (a chain can start low and need more later)
+    const need = Math.max(fq.min || 0, ...steps.map((x) => (pack(x) || {}).min || 0), q.min || 0);
+    if (need > st.level) why.push({ kind: 'level', level: need });
+    // a profession skill a step needs: no profession at all = not for you
+    for (const x of steps) {
+      const sk = (pack(x) || {}).skill;
+      if (!Array.isArray(sk) || !sk[0]) continue;
+      const prof = SKILL_LINE[sk[0]], have = prof ? skillRank(prof) : null;
+      if (prof && have == null) return { id, state: 'no', why: [] };
+      if (prof && have < (sk[1] || 0) && !why.some((w) => w.kind === 'skill')) why.push({ kind: 'skill', prof, skill: sk[1], have });
+    }
     if (steps.length > 1) why.push({ kind: 'steps', first, count: steps.length - 1 });
     steps.forEach((s) => { const g = repGap(s); if (g && !why.some((w) => w.kind === 'rep' && w.faction === g.faction)) why.push(Object.assign({ kind: 'rep' }, g)); });
     return { id, state: why.length ? 'later' : 'open', why, steps, first };
