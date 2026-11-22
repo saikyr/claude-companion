@@ -96,6 +96,16 @@ input.search { background: var(--s1); border: 1px solid var(--line2); color: var
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='13' height='13' fill='none' stroke='%236c6d77' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='5.5' cy='5.5' r='4.2'/%3E%3Cpath d='M8.8 8.8 12 12'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: 0.625rem 50%; }
 input.search::placeholder { color: var(--t3); }
 input.search:focus { border-color: var(--acc-line); }
+/* a plain text field (no search icon), the same height as .btn beside it */
+input.field { background: var(--s1); border: 1px solid var(--line2); color: var(--t1); height: 1.75rem; padding: 0 var(--sp2); border-radius: var(--r-sm); font: var(--f-sm) var(--ui); outline: none; transition: border-color .12s; width: min(16rem, 100%); }
+input.field::placeholder { color: var(--t3); }
+input.field:focus { border-color: var(--acc-line); }
+input.field.code { font-family: var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+input.field.code::placeholder { font-family: var(--ui); letter-spacing: 0; text-transform: none; }
+/* a code to read off or type in (a link code): monospace, spaced, on the page background */
+.code { font: 600 var(--f-sm) var(--mono); letter-spacing: .12em; color: var(--t1); }
+span.code { background: var(--bg); border: 1px solid var(--line2); border-radius: var(--r-sm); padding: 1px var(--sp2); white-space: nowrap; }
+.linkbar { justify-content: space-between; margin-top: var(--sp3); }
 .empty { color: var(--t3); padding: var(--sp4); border: 1px dashed var(--line2); border-radius: var(--r); font-size: var(--f-sm); }
 .empty b { color: var(--t2); }
 .tag, .pill, .badge { display: inline-block; padding: 0 var(--sp2); border-radius: 0.625rem; font: 500 var(--f-lbl)/1.125rem var(--ui); background: var(--s2); color: var(--t2); vertical-align: middle; white-space: nowrap; }

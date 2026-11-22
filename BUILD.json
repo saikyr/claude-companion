@@ -1,15 +1,15 @@
 {
  "version": "1.4.0",
- "built": "2026-11-22T16:37:20+00:00",
+ "built": "2026-11-22T16:43:48+00:00",
  "channel": {
   "repo": "saikyr/claude-companion",
   "branch": "stable"
  },
  "from": {
   "branch": "main",
-  "commit": "e71927ef49156ad7878fb26816aaef0b17783fa8"
+  "commit": "9c11cace919d5409851195965c8e3b40315c5089"
  },
- "notes": "App review: fix raw code and wrong signs, clearer Journal, Bank, level 60, short dungeon visits, update card; spellcasts for the player only",
+ "notes": "System tab: link controls in the app's style",
  "files": {
   "Bindings.xml": "f4ad14d769e58eb18cd49da688fb23d64dec6be99a7684b9993ea0689616bf09",
   "ClaudeCompanion.toc": "87915db63dcb911f027bc5c400284fe70fa58142f561efc0dea4134bd6625c42",
@@ -26,7 +26,7 @@
   "web/Claude Companion.app/Contents/Resources/AppIcon.icns": "467ef964fdaff99ca47e80e7aff3d4db96306b984293aeb98251d68d2e4a2fdd",
   "web/Claude Companion.bat": "8f5cf6c1ff6a95ad5e0ebfc10951ef451cccf5b1e9a6d1fc7574600cfd01a2fc",
   "web/channel.json": "6257533c1329cedd3d3f50e2d9f1aa3f996368b54c56c717e10ddcb41447c62c",
-  "web/css/app.css": "5a3941345f1f5bbd8836799695b4aeaa7f2d0c5ff0e0b1459c27c2b6e9f9f0c2",
+  "web/css/app.css": "6273e88d882ca84a900b6a8e38e98d6780927d8bbdc42f35ce003739ef0c407a",
   "web/data/gamedata.js": "acff76f53055ee494dd19c7d774186d67176a4a6a5b1825299fdd0dbf1922416",
   "web/icons/app.ico": "890d1ad4b13ed82791c3fa3ad175798ed2fbe7f304af6cb6af5e15e5ce01c7a3",
   "web/icons/icon-192.png": "7ba20877d554551a5378b001f9fe2a60caa7e2224e2d84c42359c069dfc33ca3",
@@ -41,7 +41,7 @@
   "web/js/lua.js": "e14c5df02bbfa98ec07196ec363d017beb4bd6ac50e075b78a3ba32b72234f77",
   "web/js/merge.js": "85f8a6447c366be89dc676408f854fd7022d13d5610eb7e3598b641077162dd8",
   "web/js/runs.js": "b97d44cd3387a5f79e359a257f3ea69757b98524bb7f0e67166110f84d9250d5",
-  "web/js/sync.js": "fb04bc1c8fea514df4688b4993e2d620570a75b59c85bb0e7d20501888a1b420",
+  "web/js/sync.js": "aaa235423c105a0d533a998a625fc6802c28ea2ad90790e95d308b51dbd280f6",
   "web/js/update.js": "06128695622d2cb5f11fba046031109eb73b89a70d05b587ef2768c6ac83245e",
   "web/js/weights.js": "05819acc26e8b2f6e9d44402b9dfa915f959bce045c79f00d487d182f0a76b64",
   "web/manifest.json": "c2351657716a2425d052efcad63b0ee2f33a217caef17dd844d24c558a004613",

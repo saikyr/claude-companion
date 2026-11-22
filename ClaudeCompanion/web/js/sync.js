@@ -383,7 +383,7 @@
   });
   // System tab: where sync stands, the computers on this account, and linking another computer
   const V = CC.V, baseSystem = V.system;
-  let linkMsg = '';
+  let linkMsg = '', codeTyped = '';   // what's typed in the code field survives a re-render
   V.system = function () {
     const st = C.status, s = C.state || {};
     const esc = A.esc, when = (x) => (x ? A.ago(Date.parse(x) / 1000) : 'not yet');
@@ -393,23 +393,26 @@
     let h = `<h2>Sync between computers</h2><p class="meta">Your history (journal, grinds, runs, AH prices and sales, settings) is kept online and shared by your computers. What you wear and carry always comes from this computer's save.</p>
       <p>${state}${st.queued ? ` · ${st.queued} waiting to send` : ''}</p>
       ${devs ? `<div class="list">${devs}</div>` : ''}
-      <div class="row wrap" style="gap:.5rem;margin-top:.75rem"><button class="btn" data-sync="code">Link another computer</button>
-      <input id="cc-link-code" placeholder="Code from your other computer" maxlength="12" style="width:14rem"><button class="btn" data-sync="join">Join</button></div>
-      ${linkMsg ? `<p class="small">${linkMsg}</p>` : ''}`;
+      <div class="toolbar linkbar"><button class="btn ghost" data-sync="code">Link another computer</button>
+      <span class="row"><input class="field code" id="cc-link-code" placeholder="Code from the other computer" maxlength="12" autocomplete="off" spellcheck="false" value="${esc(codeTyped)}"><button class="btn" data-sync="join">Join</button></span></div>
+      ${linkMsg ? `<p class="meta">${linkMsg}</p>` : ''}`;
     return h + baseSystem();
   };
+  document.addEventListener('input', (e) => { if (e.target && e.target.id === 'cc-link-code') codeTyped = e.target.value; });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target && e.target.id === 'cc-link-code') { const j = document.querySelector('[data-sync="join"]'); if (j) j.click(); } });
   document.addEventListener('click', async (e) => {
     const b = e.target.closest('[data-sync]');
     if (!b) return;
     try {
       if (b.dataset.sync === 'code') {
         const r = await C.linkCode();
-        linkMsg = `On your other computer, open System and enter <b>${A.esc(r.code)}</b> (works for 30 minutes).`;
+        const shown = String(r.code).replace(/^(.{4})(.{4})$/, '$1 $2');
+        linkMsg = `On your other computer, open System and enter <span class="code">${A.esc(shown)}</span> (works once, for 30 minutes).`;
       } else {
         const code = (document.getElementById('cc-link-code') || {}).value || '';
         if (!code.trim()) return;
         await C.link(code);
-        linkMsg = 'Linked. This computer now shares history with the other one.';
+        linkMsg = 'Linked. This computer now shares history with the other one.'; codeTyped = '';
         viewed = false; cycle();
       }
     } catch (err) { linkMsg = `<span class="neg">${A.esc(err.message || err)}</span>`; }
