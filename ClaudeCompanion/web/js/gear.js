@@ -289,8 +289,9 @@
       const bestRoll = {};
       cand.rolls.forEach((c) => {
         if (!fits(c) || c.req > lvl) return;
-        const s = score(c.st, w);
-        if (!bestRoll[c.roll] || s > bestRoll[c.roll].s) bestRoll[c.roll] = { c, s, n: 0 };
+        // ranked by gain: in the main hand a two-hander also replaces the off hand
+        const s = score(c.st, w), d = gain(c, s);
+        if (!bestRoll[c.roll] || d > bestRoll[c.roll].d) bestRoll[c.roll] = { c, s, d, n: 0 };
       });
       cand.rolls.forEach((c) => { if (bestRoll[c.roll] && fits(c) && c.req <= lvl) bestRoll[c.roll].n++; });
       const pool = mine.filter((c) => fits(c) && c.req <= lvl && !wornIds.has(c.id)).map((c) => x(c))
@@ -342,13 +343,14 @@
   // ---------------------------------------------------------------- pre-BiS picks (per character, spec and slot)
   const pickKey = (spec) => store(spec, 'prebis');
   const getPicks = (spec) => { try { return JSON.parse(localStorage.getItem(pickKey(spec)) || '{}') || {}; } catch (e) { return {}; } };
-  function setPick(spec, slot, key) {
+  function setPick(spec, slot, key, unpick) {
     const p = getPicks(spec);
     if (key) {
       const isPair = slot === 'Ring' || slot === 'Trinket';
       const cur = arr(p[slot]).filter((k) => k !== key);
       p[slot] = isPair ? [key].concat(cur).slice(0, 2) : [key];
-    } else delete p[slot];
+    } else if (unpick && arr(p[slot]).length > 1) p[slot] = arr(p[slot]).filter((k) => k !== unpick);   // one of two ring / trinket picks
+    else delete p[slot];
     localStorage.setItem(pickKey(spec), JSON.stringify(p));
   }
 
@@ -456,7 +458,7 @@
     h += `<div class="table prelist"><div class="thead"><div>Item</div><div>Status</div><div class="c-num">Score</div><div></div></div>`;
     shown.forEach((y, i) => {
       const isT = i < n, [st, word] = statusOf(P, baseIds, y.c);
-      const act = isT ? (y.picked ? `<span class="badge on">your pick</span> <button class="linkbtn" data-gearpick="${esc(sl.name)}" data-key="">use the best</button>` : '<span class="badge on">target</span>')
+      const act = isT ? (y.picked ? `<span class="badge on">your pick</span> <button class="linkbtn" data-gearpick="${esc(sl.name)}" data-key="" data-unpick="${esc(y.c.key)}">use the best</button>` : '<span class="badge on">target</span>')
         : `<button class="btn ghost" data-gearpick="${esc(sl.name)}" data-key="${esc(y.c.key)}">Make target</button>`;
       h += `<div class="tr${isT ? ' target' : ''}">${itemCell(y.c)}<div><span class="st st-${st}">${esc(word)}</span></div><div class="c-num">${fmt1(y.s)}</div><div class="act">${act}</div></div>`;
     });
@@ -613,7 +615,7 @@
     const r = e.target.closest('[data-gearreach]');
     if (r) { A.STATE.gearReach = !!r.dataset.gearreach; A.render(); return; }
     const p = e.target.closest('[data-gearpick]');
-    if (p) { const sp = curSpec(); if (sp) setPick(sp, p.dataset.gearpick, p.dataset.key || null); A.render(); }
+    if (p) { const sp = curSpec(); if (sp) setPick(sp, p.dataset.gearpick, p.dataset.key || null, p.dataset.unpick || null); A.render(); }
   });
   document.addEventListener('change', (e) => {
     const gs = e.target.closest('select[data-gearset]');

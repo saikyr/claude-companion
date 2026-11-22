@@ -470,7 +470,7 @@ button.card { font: inherit; color: inherit; text-align: left; cursor: pointer; 
 .src-owned::before { background: var(--pos); } .src-ah::before { background: var(--adv-ah); }
 /* the slot list (left) and one slot in full (right) */
 .gearlay { display: grid; grid-template-columns: minmax(18rem, 24rem) minmax(0, 1fr); gap: var(--sp4); align-items: start; }
-.slotlist { position: sticky; top: 4.75rem; background: var(--s1); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+.slotlist { position: sticky; top: 4.75rem; max-height: calc(100vh - 5.5rem); overflow-y: auto; background: var(--s1); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
 .sl-h { display: flex; align-items: center; padding: var(--sp2) var(--sp3); border-bottom: 1px solid var(--line); background: var(--rail); }
 label.sel { display: inline-flex; align-items: center; gap: var(--sp2); min-width: 0; font-size: var(--f-sm); color: var(--t2); }
 label.sel .k { font: 600 var(--f-lbl) var(--ui); text-transform: uppercase; letter-spacing: .07em; color: var(--t3); white-space: nowrap; }
@@ -502,7 +502,7 @@ label.sel .k { font: 600 var(--f-lbl) var(--ui); text-transform: uppercase; lett
   .gearlay .gopt .thead, .gearlay .gopt .tr { grid-template-columns: minmax(0, 1fr) 7rem 6.5rem 4.5rem; }
   .gearlay .gopt .thead > :nth-child(4), .gearlay .gopt .tr > :nth-child(4) { display: none; }
 }
-@media (max-width: 64rem) { .gearlay { grid-template-columns: minmax(0, 1fr); } .slotlist { position: static; } }
+@media (max-width: 64rem) { .gearlay { grid-template-columns: minmax(0, 1fr); } .slotlist { position: static; max-height: none; } }
 .ahup .thead, .ahup .tr { grid-template-columns: minmax(0, 1fr) 6rem 7.5rem 4.5rem 6rem; }
 .rollsrch .thead, .rollsrch .tr { grid-template-columns: 6rem minmax(0, 0.8fr) minmax(0, 1fr) 4.5rem; }
 .rollsrch .sub { color: var(--t3); font-size: var(--f-sm); }

@@ -76,6 +76,21 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   await page.click('.slotdet .prelist .linkbtn[data-gearpick]');
   check(!(await text('.slotdet .prelist')).includes('your pick'), 'pre-BiS: "use the best" undoes it');
 
+  // ---- random greens in the main hand are ranked by gain (a two-hander also replaces the off hand)
+  await page.click('.slotrow[data-gearslot="Main hand"]');
+  await page.click('.slotdet [data-gearsrc="roll"]');
+  const mhRolls = await page.$$eval('.slotdet .gopt .tr', (els) => els.map((e) => e.innerText));
+  check(mhRolls.some((r) => /Dagger of Healing/.test(r)), 'Main hand: the best "of Healing" roll is the one-hander that gains most, not the biggest staff');
+  // ---- rings: two picks; undoing one keeps the other
+  await page.click('.slotrow[data-gearslot="Ring"]');
+  for (let k = 0; k < 2; k++) await page.click('.slotdet .prelist .tr:not(.target) button[data-gearpick]');
+  const picks = () => text('.slotdet .prelist').then((t) => (t.match(/your pick/g) || []).length);
+  check((await picks()) === 2, 'Ring: two picks');
+  await page.click('.slotdet .prelist .tr.target button[data-unpick]');
+  check((await picks()) === 1, 'Ring: "use the best" on one pick keeps the other');
+  await page.click('.slotdet .prelist .tr.target button[data-unpick]');
+  check((await picks()) === 0, 'Ring: and the other undoes too');
+
   // ---- Auction House
   await page.click('[data-gearview="ah"]');
   const ah = await text('main');
