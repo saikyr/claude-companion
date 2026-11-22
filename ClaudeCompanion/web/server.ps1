@@ -21,7 +21,12 @@ $accounts = Join-Path $forever 'WTF\Account'
 $dataDir = Join-Path (Split-Path -Parent $web) 'companion-data'
 $cardsDir = Join-Path $dataDir 'from-claude'
 $port = if ($env:CC_PORT) { [int]$env:CC_PORT } else { 47615 }   # CC_PORT: only for testing a second copy
-$files = @{ '/api/cards' = (Join-Path $cardsDir 'cards.json'); '/api/cards-state' = (Join-Path $cardsDir 'state.json'); '/api/settings' = (Join-Path $dataDir 'settings.json') }
+$files = @{ '/api/cards' = (Join-Path $cardsDir 'cards.json'); '/api/cards-state' = (Join-Path $cardsDir 'state.json'); '/api/settings' = (Join-Path $dataDir 'settings.json')
+            # js/sync.js: this computer's sync key and its copy of the other computers' history
+            '/api/sync' = (Join-Path $dataDir 'sync.json'); '/api/sync-cache' = (Join-Path $dataDir 'sync-cache.json') }
+# what the page may write (POST): the snapshot for Claude, plus the files above except Claude's cards
+$writable = @{ '/api/snapshot' = (Join-Path $dataDir 'snapshot.json') }
+foreach ($k in $files.Keys) { if ($k -ne '/api/cards') { $writable[$k] = $files[$k] } }
 $prefix = "http://localhost:$port/"
 $self = $MyInvocation.MyCommand.Path
 $startup = [Environment]::GetFolderPath('Startup')
@@ -382,7 +387,7 @@ while ($listener.IsListening) {
             $f = $files[$path]
             if (Test-Path $f -PathType Leaf) { $body = Read-Shared $f; $type = 'application/json; charset=utf-8' }
             else { $res.StatusCode = 204; $body = [byte[]]@() }   # none yet
-        } elseif (($path -eq '/api/snapshot' -or $path -eq '/api/cards-state' -or $path -eq '/api/settings') -and $req.HttpMethod -eq 'POST') {
+        } elseif ($writable.ContainsKey($path) -and $req.HttpMethod -eq 'POST') {
             # the page's summary for Claude (..\companion-data\snapshot.json) and what you did with
             # Claude's cards (..\companion-data\from-claude\state.json); see SCHEMA.md there.
             # Only this app sends the X-CC header; a web page can't add it without the browser asking first.
@@ -391,9 +396,7 @@ while ($listener.IsListening) {
             } else {
                 $reader = New-Object System.IO.StreamReader($req.InputStream, [System.Text.Encoding]::UTF8)
                 $text = $reader.ReadToEnd(); $reader.Close()
-                if ($path -eq '/api/snapshot') { $dir = $dataDir; $name = 'snapshot.json' }
-                elseif ($path -eq '/api/settings') { $dir = $dataDir; $name = 'settings.json' }
-                else { $dir = $cardsDir; $name = 'state.json' }
+                $dir = Split-Path -Parent $writable[$path]; $name = Split-Path -Leaf $writable[$path]
                 if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
                 $tmp = Join-Path $dir ($name + '.tmp')
                 [System.IO.File]::WriteAllText($tmp, $text, (New-Object System.Text.UTF8Encoding($false)))

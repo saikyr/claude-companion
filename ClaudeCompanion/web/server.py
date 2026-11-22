@@ -5,8 +5,10 @@
 #   http://localhost:47615   /api/ping  /api/stamp  /api/data  POST /api/snapshot
 #                            /api/cards  /api/cards-state  POST /api/cards-state
 #                            /api/settings  POST /api/settings
+#                            /api/sync  /api/sync-cache  (+ POST): js/sync.js's device key and its copy of the
+#                            other computers' history, in companion-data/ (sync.json, sync-cache.json)
 # It serves the app and reads the game's saved file (ClaudeCompanion.lua) directly.
-# Nothing is sent anywhere: it only answers this computer.
+# The server itself only answers this computer. The page syncs history with the backend (js/sync.js).
 import glob, json, os, shutil, subprocess, sys, tempfile, threading, time, urllib.error, urllib.request, webbrowser
 from datetime import datetime, timezone
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
@@ -69,9 +71,10 @@ class Handler(BaseHTTPRequestHandler):
             with open(save, 'rb') as f: return self.send(200, f.read(), 'application/octet-stream')
         if path == '/api/update':
             return self.send(200, json.dumps(update_status(force='force=1' in self.path)), TYPES['.json'])
-        if path in ('/api/cards', '/api/cards-state', '/api/settings'):
+        if path in ('/api/cards', '/api/cards-state', '/api/settings', '/api/sync', '/api/sync-cache'):
             f = {'/api/cards': os.path.join(CARDS_DIR, 'cards.json'), '/api/cards-state': os.path.join(CARDS_DIR, 'state.json'),
-                 '/api/settings': os.path.join(DATA_DIR, 'settings.json')}[path]
+                 '/api/settings': os.path.join(DATA_DIR, 'settings.json'), '/api/sync': os.path.join(DATA_DIR, 'sync.json'),
+                 '/api/sync-cache': os.path.join(DATA_DIR, 'sync-cache.json')}[path]
             if not os.path.isfile(f): return self.send(204, b'')   # none yet
             with open(f, 'rb') as fh: return self.send(200, fh.read(), TYPES['.json'])
         rel = urllib.request.url2pathname(path.lstrip('/')) or 'index.html'
@@ -100,7 +103,8 @@ class Handler(BaseHTTPRequestHandler):
             if r.get('ok'): restart_soon()
             return
         target = {'/api/snapshot': (DATA_DIR, 'snapshot.json'), '/api/cards-state': (CARDS_DIR, 'state.json'),
-                  '/api/settings': (DATA_DIR, 'settings.json')}.get(self.path.split('?')[0])
+                  '/api/settings': (DATA_DIR, 'settings.json'), '/api/sync': (DATA_DIR, 'sync.json'),
+                  '/api/sync-cache': (DATA_DIR, 'sync-cache.json')}.get(self.path.split('?')[0])
         if not target or self.headers.get('X-CC') != '1' or n <= 0 or n > 20 * 1024 * 1024:
             return self.send(400, 'bad request')
         body = self.rfile.read(n)

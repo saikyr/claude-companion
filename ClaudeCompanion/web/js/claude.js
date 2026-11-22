@@ -44,6 +44,12 @@
       saveModified: A.STATE.saveStamp || null,
       // which computer wrote this: the PC and the Mac each keep their own save and their own snapshot.json
       device: Object.assign({ host: null, os: CH.device || null }, A.STATE.device || {}),
+      // the sync account (js/sync.js): Claude reads every computer's history on the backend with it
+      // (docs/ARCHITECTURE.md, "Sync between computers"). syncedFrom: other computers merged into this view
+      sync: CC.sync && CC.sync.state ? { account: CC.sync.state.account || null, device: CC.sync.state.device || null,
+        ok: CC.sync.status.ok, error: CC.sync.status.error, pushed: CC.sync.status.pushed, pulled: CC.sync.status.pulled,
+        computers: (CC.sync.status.devices || []).map((d) => ({ name: d.name, os: d.os, seen: d.seen })),
+        syncedFrom: (A.DB && A.DB.syncedFrom) || [] } : null,
       // the grind running now (if any) and the last few finished ones; ended: logout / away / idle when the addon ended it
       grind: (() => {
         const g = CH.grind;

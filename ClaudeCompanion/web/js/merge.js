@@ -1,10 +1,9 @@
-// Claude Companion: one character across computers. NOT loaded by the app yet: this is the merge
-// engine for the planned sync (docs/ARCHITECTURE.md, "Planned: sync through a hosted backend"),
-// kept because it is complete and tested (test/web/merge.test.js on a real save).
+// Claude Companion: one character across computers. js/sync.js uses this to show this computer's
+// save together with the history the other computers sent (docs/ARCHITECTURE.md, "Sync between
+// computers"); test/web/merge.test.js checks the rules on a real save.
 // The PC and the Mac each keep their own SavedVariables (the game writes them, so they can't be
-// shared directly). Each computer's server publishes its save to the others (server.py / server.ps1,
-// "sync"); the page merges them here into one ClaudeCompanionDB before showing anything or writing
-// snapshot.json, so every computer shows the same character and Claude reads one picture.
+// shared directly). The page merges them here into one ClaudeCompanionDB before showing anything or
+// writing snapshot.json, so every computer shows the same character and Claude reads one picture.
 //
 // Rules, per character (same "Name-Realm" key):
 //  - history that only grows (journal, finished sessions / grinds / runs, notes, AH sales, buys,

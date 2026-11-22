@@ -23,10 +23,23 @@ jobs:
         run: python3 -m py_compile ClaudeCompanion/web/server.py gamedata/*.py tools/*.py
       - name: One character across computers (merge rules)
         run: node test/web/merge.test.js
+      - name: History sync between computers (in-memory backend)
+        run: node test/web/sync.test.js
+      - name: History sync in the real app page (Chromium, in-memory backend, the harness's save)
+        run: |
+          F=/tmp/f/_forever_
+          mkdir -p $F/Interface/AddOns $F/WTF/Account/T/SavedVariables
+          cp -r ClaudeCompanion $F/Interface/AddOns/
+          cp /tmp/h/out.lua $F/WTF/Account/T/SavedVariables/ClaudeCompanion.lua
+          echo '{"auto": false}' > $F/Interface/AddOns/ClaudeCompanion/companion-data/update.json
+          (cd $F/Interface/AddOns/ClaudeCompanion/web && CC_PORT=47999 nohup python3 server.py --serve > /tmp/server.log 2>&1 &)
+          npm install --no-save --no-package-lock playwright@1.49.1
+          npx playwright install --with-deps chromium
+          node test/web/sync-browser.js 47999 $F/Interface/AddOns/ClaudeCompanion/companion-data
       - name: Self-update, end to end (mock GitHub)
         run: python3 test/update_test.py
       - name: From Claude cards format
         run: python3 tools/check-cards.py test/fixtures/cards.json
       - name: No personal data
         run: |
-          ! git ls-files | grep -E 'SavedVariables|snapshot\.json$|settings\.json$|web/data\.js$'
+          ! git ls-files | grep -E 'SavedVariables|snapshot\.json$|settings\.json$|sync(-cache)?\.json$|web/data\.js$'

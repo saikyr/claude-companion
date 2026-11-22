@@ -21,6 +21,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ADDON = os.path.join(ROOT, 'ClaudeCompanion')
 BRANCH = 'stable'
 NEVER = {'companion-data/snapshot.json', 'companion-data/settings.json', 'companion-data/update.json',
+         'companion-data/sync.json', 'companion-data/sync-cache.json',
          'companion-data/installed.json', 'web/data.js', 'web/channel.json'}
 
 

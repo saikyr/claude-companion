@@ -4,6 +4,14 @@ Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 
 ## Unreleased (updates itself)
 
+- **History syncs between computers.** The journal, sessions, grinds, dungeon runs, notes, level and
+  money history, disenchant results, AH prices, sales, buys and posts, and the app's settings go to
+  a small Supabase backend after every save, and each computer shows its own save plus every other
+  computer's history (js/sync.js, merged with the tested rules in js/merge.js). Records are keyed by
+  their content, so nothing doubles and nothing conflicts; offline, the save itself is the queue. No
+  sign-up: each install has its own device key, and System > Link another computer joins a second
+  computer with a code. History the addon trims locally stays online. `snapshot.json` gains `sync`
+  (the account id Claude reads the history with). Schema: `supabase/`; design: docs/ARCHITECTURE.md.
 - **Builds publish themselves.** When a PR merges to `main` and the checks pass, CI
   (`.github/workflows/publish.yml`) publishes it to the `stable` branch; nobody publishes by hand.
   The game-data pack is now in the repository so CI can build. With the repository variable

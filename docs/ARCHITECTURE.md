@@ -25,7 +25,7 @@
 3. **The game owns its saves.** Each computer's `SavedVariables` is written by the game and only read
    by the app.
 4. **One writer per file.** The updater writes the addon folder (never `companion-data/`); the page
-   writes `snapshot.json` and `settings.json`; Claude writes `from-claude/cards.json`.
+   writes `snapshot.json`, `settings.json`, `sync.json` and `sync-cache.json`; Claude writes `from-claude/cards.json`.
 5. **Verify before you touch.** Builds are checked file by file against `BUILD.json`; a backup is made
    before every install.
 
@@ -46,63 +46,71 @@ The private repository needs a token to read: `gh auth token` (GitHub CLI signed
 Verified for real on Gabriel's PC on 22 Nov: the app installed build `d7dd338` from `stable` by itself
 (36 files, checksums matched, backup made, server restarted).
 
-### Today: one save per computer
+## Sync between computers (Supabase)
 
-Each computer has its own save and its own `snapshot.json`; the snapshot says which computer wrote it
-(`device`). The addon ends a grind or dungeon run that was left running when you come back after
-playing elsewhere (`ended: "away"`), so a stale tracker from the other computer never runs on.
-There is no sync between computers yet.
+The game server is the truth for how the character is **now** (gear, bags, quests, rep, skills, specs):
+every computer reads that from its own save, so it is never synced. What only the addon remembers is
+**history**, and that syncs: journal events, sessions, grinds, dungeon runs, notes, level/money
+history, disenchant results, AH price observations, sales, buys and posts, plus the app's settings
+(gear weights and picks).
 
-## Planned: sync through a hosted backend (not built)
+```
+ PC: save ─▶ page (js/sync.js) ──push new records──▶  Supabase "claude-companion"  ◀──push── page ◀─ save :Mac
+                         ◀──pull the account's records──  records (append-only)  ──pull──▶
+             view = this save + every other computer's history (js/merge.js rules)
+```
 
-A real account-based backend, so any person with any number of computers sees one character, and
-Claude can read it without a session on anyone's computer. Proposed: **Supabase** (Auth + Postgres
-with row-level security + an API), because it is hosted, free at this size, and already connected to
-this project. Not created yet: it starts when Gabriel says go.
+**Records.** One row per history entry, `id` made from its content (character, kind, time, what it was:
+the same identities `js/merge.js` uses), so the same event saved by two computers is one record, a
+re-send changes nothing, and there are no conflicts. Two kinds of row are replaced instead of added:
+`live` (per computer and character: what's running there now and when it last saw the character, so
+another computer can end a stale grind "away") and `setting` (per key, the last writer wins).
 
-**Accounts and security**
-- Sign-in from the app: email magic link or Discord (Supabase Auth). The app keeps the user's
-  session token locally (`companion-data/`), never a service key: the client only has the public
-  anon key, and every table has row-level security `user_id = auth.uid()`.
-- Claude reads Gabriel's data through the Supabase connector (his project), read-only by default.
+**When.** The page pushes after every save it reads (each `/reload`, `/cc sync`, logout and the addon's
+own saves), from the app window or the server's hidden browser when the window is closed, and pulls
+right after, plus every 2 minutes while the window is open. Only what's new is sent: per character and
+kind the page keeps the newest time it has sent (`companion-data/sync.json`), and only moves it once
+the backend has the batch.
 
-**Schema (Postgres)**
+**Offline.** Nothing waits in memory: the save itself is the queue. If a push fails, the marks don't
+move and the next save sends everything since. The app always works from the local save; the other
+computers' history is cached in `companion-data/sync-cache.json`, so it shows offline too.
 
-| Table | Key | What |
-| --- | --- | --- |
-| `characters` | id, user_id, name, realm | One row per character |
-| `devices` | id, user_id, name, os, last_seen | Each computer that syncs |
-| `snapshots` | character_id, device_id, taken | The latest "now" state per part (bags, gear, bank, professions, specs, flight paths) with its own time; newest wins |
-| `events` | character_id, device_id, t, kind, n | The journal: append only; unique on (character, device, t, kind, n) where n numbers identical events in one second, so re-sending is harmless |
-| `trackers` | character_id, kind (session/grind/run), start, device_id | Sessions, grinds, dungeon runs; upsert by (character, kind, start, device) |
-| `ah_observations` | character_id, item_key, t, src | Price history; append only |
-| `ah_records` | character_id, kind (sale/buy/post), t, item | AH ledger; append only |
-| `settings` | user_id, key | App settings; per key, last writer wins with its time |
+**Accounts, with no sign-up.** Each install makes a random 256-bit device key (in `sync.json`) and
+registers it (`cc_register`); the backend keeps only its SHA-256. Every call carries the key, and the
+functions only touch that key's account. Linking a second computer: System tab, **Link another
+computer** shows an 8-letter code (30 minutes, works once) that the other computer enters. Joining
+moves nothing: the joining account points at the one it joined (`accounts.merged_into`), its computers
+move over, and reads cover the whole group. Claude can also join two accounts it knows are one
+person's (`private.merge_accounts`), so Gabriel's PC and Mac need no code.
 
-**Sync protocol**
-- After each save in game, the local server parses the save (it already ships the same parser the
-  page uses) and sends only what is new since its last acknowledged position per table (deltas),
-  batched, to a Postgres function (`sync_push`) that upserts idempotently. Ids are the natural keys
-  above, so a retry or an offline backlog never duplicates.
-- To show the character, the app asks for the merged view (`sync_pull` since a time): the union of
-  history, the newest "now" parts, trackers ended "away" by the same rule as `js/merge.js` (the merge
-  rules are already written and tested there, on a real save).
-- **Offline:** the app always works from the local save; unsent deltas wait in `companion-data/` and
-  go when the network is back. Nothing in the game depends on the backend.
-- **Conflicts:** history is append-only (no conflicts); "now" parts and settings carry their own
-  times (newest wins); trackers are keyed by start time and device.
+**Security.** All tables have row-level security on and no policies: the API can't read or write them
+(checked with the anon role: 0 rows). The only way in is the `cc_*` functions (security definer, fixed
+`search_path`), which check the device key. The app ships only the publishable key. The Supabase
+advisor lists those functions as "callable without signing in" (by design: the device key is the
+credential) and "RLS enabled, no policy" (by design: no direct table access). Limits per call: 1000
+records, 64 KB per record; 2 million records per account; new computers: 20 an hour per IP, 1000 an
+hour in all.
 
-**Cost (Supabase pricing page, read 22 Nov 2026)**
-- Free plan: 500 MB database per project, 50,000 monthly active users, 5 GB egress, 1 GB file
-  storage, 500,000 edge function invocations, 2 active projects. Free projects **pause after one week
-  without activity** (they resume when opened; a scheduled ping or regular play avoids it).
-- Gabriel's save is about 5 MB raw; as rows (journal events, price history) a character is well
-  under 50 MB, so a handful of players fit the free plan. Daily backups are not in the free plan.
-- Next step up: Pro, from $25 a month (no pausing, backups).
+**Claude's access.** With the Supabase connector, project `jucbngafdnyaizfxgplk`:
+`select * from private.history where account = '<id>' and kind = 'journal' order by t desc`. The account
+id is in each `snapshot.json` (`sync.account`). Kinds: journal, session, grind, run, note, history, de,
+ah_obs, ah_sale, ah_buy, ah_post, live, setting.
 
-**What it would take:** the schema and RLS policies (one migration), sign-in in the app, the delta
-push/pull in both servers, and the merge on the server side (from `js/merge.js`). Until then each
-computer keeps working on its own save, as today.
+**Schema:** `supabase/migrations/20261122140000_sync.sql` (`supabase/README.md`). Client: `js/sync.js`.
+Tests: `test/web/sync.test.js` (an in-memory copy of the backend's rules, on a fixture and on a real
+save: stable ids, no duplicates, offline, linking, settings, the merged view, batching). Checked on the
+real project on 22 Nov 2026 with SQL as the anon role: register, push (history written once, a changed
+re-send ignored), own live rows left out of a pull, link code, joining, each computer's history visible
+to the other, and no table readable directly. The account "roundtrip test" (devices with os `test`) is
+kept for these checks.
+
+**Free plan limits** (supabase.com/pricing, read 22 Nov 2026): 500 MB database per project; 5 GB egress
+and 5 GB cached egress a month; 1 GB file storage; 50,000 monthly active users; unlimited API requests;
+500,000 edge function invocations; 2 active projects per organization; **paused after 1 week of
+inactivity** (any play syncs, which counts as activity); no automatic backups; 1 day of logs. Pro is
+from $25 a month. Size: Gabriel's Mac save of 22 Nov is about 7,900 records (7,400 of them AH price
+observations), a few MB, so one player uses well under 1% of the database a month.
 
 ## On one computer: addon, save, local app
 
@@ -180,7 +188,8 @@ Wowhead is not pulled in bulk (bot wall / ToS). Pack build: `gamedata/build.sh`;
 2. **`snapshot.json`** (`schema = 1`): `ClaudeCompanion/companion-data/SCHEMA.md`. Bump `schema`
    only when a field changes meaning or is removed. Claude reads this before the raw save.
 3. **`gamedata.js`**: positional arrays per item; schema documented at the top of `gamedata/build.py`.
-4. **Local HTTP API**: the four endpoints above. Same on both servers; keep them identical.
+4. **Local HTTP API**: the endpoints above, plus the files the page keeps in `companion-data/` (`/api/settings`, `/api/sync`, `/api/sync-cache`, `/api/cards`, `/api/cards-state`). Same on both servers; keep them identical.
+5. **Sync backend**: the `cc_*` functions in `supabase/migrations/`. Additive changes only; the app of every computer calls them.
 
 ## Where things live on a computer
 
