@@ -318,6 +318,12 @@
     if (rs) { STATE.recSort = rs.dataset.recsort; render(); return; }
     const as = e.target.closest('[data-ahsec]');
     if (as) { STATE.ahSec = as.dataset.ahsec; render(); return; }
+    const fu = e.target.closest('[data-flipused]');
+    if (fu) {
+      const set = usedSet();
+      if (fu.dataset.flipused) set.add(fu.dataset.flipused); else set.clear();
+      localStorage.setItem(usedKey(), JSON.stringify([...set])); render(); return;
+    }
     const sp = e.target.closest('[data-spec]');
     if (sp) { STATE.spec = Number(sp.dataset.spec); render(); }
   });
@@ -908,42 +914,60 @@
   // older versions saved a sale twice (again after the gold was taken)
   const salesOf = (ah) => arr(ah.sales).filter((x, i, all) => !(x.net === 0 && all.some((y) => y !== x && y.item === x.item && y.price === x.price && Math.abs(y.t - x.t) < 7200)));
 
-  // Flips: each AH purchase matched to the first later sale of the same item (oldest buy first).
-  // A buy record is one auction (price = what you paid for it). Deposit comes back when it sells,
-  // so profit = sale price - AH cut - what you paid.
+  // Flips: AH purchases matched to later sales of the same item, unit by unit, oldest purchase first.
+  // Buys and sales carry the stack size (count) from the AH letter; older records without one count as a
+  // single unit. Deposit comes back when an auction sells, so profit = sale price - AH cut - what you paid.
+  // A purchase you used yourself can be set aside ("Used, not a flip"), kept in this browser.
+  const usedKey = () => 'cc.flips.used.' + (((CH.snap || {}).character || {}).name || '');
+  const buyId = (b) => `${b.t}|${b.item}|${b.price}`;
+  const usedSet = () => { try { return new Set(JSON.parse(localStorage.getItem(usedKey()) || '[]')); } catch (e) { return new Set(); } };
   function flipsOf(ah) {
-    const sales = salesOf(ah).slice().sort((a, b) => a.t - b.t), used = new Set();
-    const listed = {};
-    arr(ah.owned && ah.owned.list).forEach((a) => { const n = anyItemName(a.id); (listed[n] = listed[n] || []).push(a); });
-    const done = [], open = [];
-    arr(ah.buys).filter((b) => b && b.item).slice().sort((a, b) => a.t - b.t).forEach((b) => {
-      const i = sales.findIndex((x, k) => !used.has(k) && x.item === b.item && x.t >= b.t);
-      if (i < 0) { const l = arr(listed[b.item]).shift(); open.push({ item: b.item, t: b.t, paid: b.price, listedAt: l ? l.buyout : null }); return; }
-      used.add(i);
-      const x = sales[i], cut = x.cut || 0, dep = x.deposit || 0;
-      done.push({ item: b.item, bought: b.t, sold: x.t, paid: b.price, price: x.price, cut, deposit: dep, profit: x.price - cut - b.price });
+    const used = usedSet();
+    const buys = arr(ah.buys).filter((b) => b && b.item && !used.has(buyId(b))).slice().sort((a, b) => a.t - b.t)
+      .map((b) => ({ b, left: b.count || 1, unit: (b.price || 0) / (b.count || 1) }));
+    const done = [];
+    salesOf(ah).slice().sort((a, b) => a.t - b.t).forEach((x) => {
+      const n = x.count || 1, unit = (x.price || 0) / n, cutU = (x.cut || 0) / n, depU = (x.deposit || 0) / n;
+      let need = n;
+      for (const lot of buys) {
+        if (!need) break;
+        if (lot.b.item !== x.item || lot.b.t > x.t || !lot.left) continue;
+        const k = Math.min(need, lot.left);
+        lot.left -= k; need -= k;
+        const paid = Math.round(lot.unit * k), price = Math.round(unit * k), cut = Math.round(cutU * k);
+        done.push({ item: x.item, units: k, bought: lot.b.t, sold: x.t, paid, price, cut, deposit: Math.round(depU * k), profit: price - cut - paid });
+      }
     });
-    const sum = (a, k) => a.reduce((n, x) => n + (x[k] || 0), 0);
+    // what is left of each purchase; listed if one of your auctions has that item (price per unit)
+    const listed = {};
+    arr(ah.owned && ah.owned.list).forEach((a) => { const nm = anyItemName(a.id); listed[nm] = (a.buyout || 0) / (a.qty || 1); });
+    const open = buys.filter((l) => l.left > 0).map((l) => {
+      const u = listed[l.b.item];
+      return { id: buyId(l.b), item: l.b.item, t: l.b.t, units: l.left, paid: Math.round(l.unit * l.left), listedAt: u != null ? Math.round(u * l.left) : null };
+    });
+    const sum = (a, k) => a.reduce((t, x) => t + (x[k] || 0), 0);
     const tied = open.filter((o) => o.listedAt != null);
-    return { done: done.reverse(), open: open.reverse(), totals: { flips: done.length, paid: sum(done, 'paid'), sold: sum(done, 'price'), cut: sum(done, 'cut'), profit: sum(done, 'profit'),
-      unsold: open.length, listed: tied.length, tiedUp: sum(tied, 'paid'), notListed: open.length - tied.length } };
+    return { done: done.reverse(), open: open.reverse(), set: used.size, totals: { flips: done.length, units: sum(done, 'units'), paid: sum(done, 'paid'), sold: sum(done, 'price'), cut: sum(done, 'cut'), profit: sum(done, 'profit'),
+      unsold: open.length, listed: tied.length, tiedUp: sum(tied, 'paid'), notListed: open.length - tied.length, setAside: used.size } };
   }
 
   function flipsView(ah) {
     const F = flipsOf(ah), T = F.totals;
     if (!arr(ah.buys).length) return '<div class="empty">No AH purchases recorded yet. Buys are saved when the item arrives in your mailbox and you take it.</div>';
     const sign = (v) => `<span class="${v >= 0 ? 'pos' : 'neg'}">${v < 0 ? '−' : ''}${money(Math.abs(v))}</span>`;
-    let h = `<p class="meta">${T.flips} sold · ${sign(T.profit)} profit after the AH cut · ${T.listed} still listed (${money(T.tiedUp)} tied up) · ${T.notListed} bought, not listed</p>`;
+    const qty = (n) => (n > 1 ? ` <span class="dim">×${n}</span>` : '');
+    let h = `<p class="meta">${T.flips} sold · ${sign(T.profit)} profit after the AH cut · ${T.listed} still listed (${money(T.tiedUp)} tied up) · ${T.notListed} bought, not listed${T.setAside ? ` · ${T.setAside} set aside as used` : ''}</p>`;
     if (F.done.length) {
       h += `<div class="table flips"><div class="thead"><div>Item</div><div class="c-num">Paid</div><div class="c-num">Sold for</div><div class="c-num">AH cut</div><div class="c-num">Deposit</div><div class="c-num">Profit</div></div>`;
-      F.done.forEach((r) => (h += `<div class="tr"><div class="c-main"><div class="nm">${esc(r.item)}</div><div class="sub">bought ${fmtTime(r.bought)} · sold ${fmtTime(r.sold)}</div></div><div class="c-num">${money(r.paid)}</div><div class="c-num">${money(r.price)}</div><div class="c-num dim">${money(r.cut)}</div><div class="c-num dim">${r.deposit ? money(r.deposit) + ' back' : '–'}</div><div class="c-num best">${sign(r.profit)}</div></div>`));
+      F.done.forEach((r) => (h += `<div class="tr"><div class="c-main"><div class="nm">${esc(r.item)}${qty(r.units)}</div><div class="sub">bought ${fmtTime(r.bought)} · sold ${fmtTime(r.sold)}</div></div><div class="c-num">${money(r.paid)}</div><div class="c-num">${money(r.price)}</div><div class="c-num dim">${money(r.cut)}</div><div class="c-num dim">${r.deposit ? money(r.deposit) + ' back' : '–'}</div><div class="c-num best">${sign(r.profit)}</div></div>`));
       h += `<div class="tr tsum"><div class="c-main"><div class="nm">Total</div></div><div class="c-num">${money(T.paid)}</div><div class="c-num">${money(T.sold)}</div><div class="c-num dim">${money(T.cut)}</div><div></div><div class="c-num best">${sign(T.profit)}</div></div></div>`;
     }
     if (F.open.length) {
       h += `<div class="table flips open"><div class="tsec">Bought, not sold yet</div><div class="thead"><div>Item</div><div class="c-num">Paid</div><div class="c-num">Listed at</div><div class="c-num">If it sells</div></div>`;
-      F.open.forEach((o) => (h += `<div class="tr"><div class="c-main"><div class="nm">${esc(o.item)}</div><div class="sub">bought ${fmtTime(o.t)}</div></div><div class="c-num">${money(o.paid)}</div><div class="c-num">${o.listedAt != null ? money(o.listedAt) : '<span class="dim">not listed</span>'}</div><div class="c-num">${o.listedAt != null ? sign(Math.round(o.listedAt * 0.95) - o.paid) : '<span class="dim">–</span>'}</div></div>`));
+      F.open.forEach((o) => (h += `<div class="tr"><div class="c-main"><div class="nm">${esc(o.item)}${qty(o.units)}</div><div class="sub">bought ${fmtTime(o.t)} · <button class="linkbtn" data-flipused="${esc(o.id)}">Used, not a flip</button></div></div><div class="c-num">${money(o.paid)}</div><div class="c-num">${o.listedAt != null ? money(o.listedAt) : '<span class="dim">not listed</span>'}</div><div class="c-num">${o.listedAt != null ? sign(Math.round(o.listedAt * 0.95) - o.paid) : '<span class="dim">–</span>'}</div></div>`));
       h += '</div>';
     }
+    if (T.setAside) h += `<p class="meta"><button class="linkbtn" data-flipused="">Count the ${T.setAside} set-aside purchase${T.setAside === 1 ? '' : 's'} as flips again</button></p>`;
     return h;
   }
 
@@ -1135,6 +1159,7 @@
         if (st.stamp && st.stamp !== lastStamp) {
           const buf = await (await fetch('api/data', { cache: 'no-store' })).arrayBuffer();
           lastStamp = st.stamp;
+          STATE.saveStamp = st.stamp;   // the save file's modified time this data came from (snapshot.saveModified)
           STATE.loading = false;
           loadText(binary(buf), { live: true });
         } else if (!st.stamp) { STATE.loading = false; if (!CH) render(); }

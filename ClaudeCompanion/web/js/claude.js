@@ -17,6 +17,19 @@
       schema: SCHEMA,
       written: new Date().toISOString(),
       savedInGame: s.taken ? new Date(s.taken * 1000).toISOString() : null,
+      // the save file's modified time (UTC) this snapshot was built from: if the file is newer now, the snapshot is stale
+      saveModified: A.STATE.saveStamp || null,
+      // when each part was last read in game; some parts only update while that window is open in game
+      taken: (() => {
+        const t = (x) => (x ? new Date(x * 1000).toISOString() : null);
+        const taxi = Object.values(CH.taxi || {}).map((x) => x.last || 0);
+        const specs = {};
+        Object.entries(CH.specs || {}).forEach(([k, sp]) => { specs[k] = t(sp && (sp.talentsTaken || sp.barsTaken)); });
+        const profs = {};
+        Object.values(CH.professions || {}).forEach((p) => { if (p && p.name) profs[p.name] = t(p.taken); });
+        return { character: t(s.taken), bank: t((CH.bank || {}).taken), mail: t((CH.mail || {}).taken), flightPaths: t(taxi.length ? Math.max(...taxi) : null),
+          ahScan: t((ah.lastScan || {}).t), ahOwned: t((ah.owned || {}).taken), professions: profs, specs };
+      })(),
       pack: A.GD ? { built: A.GD.built ? new Date(A.GD.built * 1000).toISOString() : null, from: A.GD.from } : null,
       character: { name: c.name, level: c.level, xp: c.xp, xpMax: c.xpMax, rested: c.rested, class: c.class, race: c.race,
         faction: c.faction, money: c.money, where: c.where, hearth: c.hearth },
@@ -37,7 +50,7 @@
         lastScan: ah.lastScan ? { t: ah.lastScan.t, auctions: ah.lastScan.auctions } : null,
         itemsPriced: Object.keys(ah.prices || {}).length,
         sold: arr(ah.sales).slice(-25).map((x) => ({ t: x.t, item: x.item, net: x.net })),
-        bought: arr(ah.buys).slice(-25).map((x) => ({ t: x.t, item: x.item, price: x.price })),
+        bought: arr(ah.buys).slice(-25).map((x) => ({ t: x.t, item: x.item, price: x.price, count: x.count || null })),
         flips: A.flipsOf ? (({ totals, done, open }) => ({ totals, done: done.slice(0, 25), open })) (A.flipsOf(ah)) : null,
         mine: ah.owned ? arr(ah.owned.list).map((a) => ({ id: a.id, name: name(a.id), qty: a.qty, buyout: a.buyout })) : [],
       },

@@ -310,7 +310,28 @@ do
   check(deSrc, "disenchant source found without lock flag")
   check(mailOrigin, "mailed item knows it was an AH win + price")
   check(buys, "AH purchase recorded in ah.buys")
+  check(c.ah.buys[1].count == 1, "AH purchase has its stack size from the letter (#2)")
   if FAILED then error("v1.4 checks failed") end
+end
+-- #1 item cache: full cache makes room (oldest first) and keeps items in use
+do
+  local function check(ok, what) print((ok and "PASS " or "FAIL ") .. what); if not ok then FAILED = true end end
+  local c; for _, v in pairs(ClaudeCompanionDB.chars) do c = v end
+  local worn = "item:777001::::::::58"
+  c.snap.equipped = c.snap.equipped or {}
+  c.snap.equipped[99] = { slot = 99, item = worn }
+  ClaudeCompanionDB.items[worn] = { id = 777001, seen = 1 }           -- oldest of all, but worn
+  local cap = ns.LIMITS.items
+  for i = 1, cap + 50 do Advance(1); ns.NoteItem("|cffffffff|Hitem:" .. (800000 + i) .. "::|h[Filler]|h|r") end
+  local n = 0; for _ in pairs(ClaudeCompanionDB.items) do n = n + 1 end
+  local last = ClaudeCompanionDB.items["item:" .. (800000 + cap + 50) .. "::"]
+  check(n <= cap, "item cache stays within its cap (" .. n .. " of " .. cap .. ")")
+  check(last and last.name ~= nil, "newest item still saved with its name after the cache filled")
+  check(ClaudeCompanionDB.items[worn] ~= nil, "worn item kept when the cache made room")
+  check(ClaudeCompanionDB.items["item:800001::"] == nil, "oldest unused item made room")
+  check((ClaudeCompanionDB.cacheStats or {}).evicted and ClaudeCompanionDB.cacheStats.evicted > 0, "evictions counted in cacheStats")
+  c.snap.equipped[99] = nil; ClaudeCompanionDB.items[worn] = nil
+  if FAILED then error("#1 checks failed") end
 end
 local f = io.open("out.lua", "w"); f:write("ClaudeCompanionDB = " .. ser(ClaudeCompanionDB)); f:close()
 print("DIAG:")

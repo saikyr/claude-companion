@@ -190,6 +190,8 @@ span[data-item], .nm [data-tip] { font-weight: 500; }
 .flips .thead, .flips .tr { grid-template-columns: minmax(0, 1fr) 7rem 7rem 6rem 7rem 7rem; }
 .flips.open .thead, .flips.open .tr { grid-template-columns: minmax(0, 1fr) 7rem 7rem 7rem; }
 .flips.open { margin-top: var(--sp4); }
+.linkbtn { background: none; border: 0; padding: 0; color: var(--t2); font: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.linkbtn:hover { color: var(--t1); }
 .flips .tsum { font-weight: 600; border-top: 1px solid var(--line2); }
 .geart .thead, .geart .tr { grid-template-columns: minmax(0, 1fr) 4rem 4.5rem; }
 .wedit { display: grid; grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr)); gap: var(--sp2) var(--sp3); margin-bottom: var(--sp3); }

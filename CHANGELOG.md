@@ -2,6 +2,18 @@
 
 Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 
+## Unreleased (data fixes)
+
+- **Item cache no longer stops at 6,000 (#1):** when full, the items seen longest ago make room (a
+  tenth of the cap at a time), never one that any character wears, carries, banks, has in the mail
+  or keeps in a gear set. `cacheStats` counts evictions. Harness test fills the cache past the cap.
+- **Flips count stacks (#2):** buys and sales keep the stack size from the AH letter (invoice count,
+  or the won item's stack); flips match unit by unit, oldest purchase first. A purchase can be set
+  aside as "Used, not a flip".
+- **Stale snapshot is detectable (#3):** `snapshot.json` gains `saveModified` (the save file time
+  it was built from) and `taken` per part (bank, mail, flight paths, AH, professions, specs).
+  SCHEMA.md tells Claude to compare `saveModified` with the save file before trusting it.
+
 ## 1.4.0 (22 Nov), first release from this repository
 
 Addon 1.4.0 plus the app as of 22 Nov 08:30 UTC.

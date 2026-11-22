@@ -202,10 +202,17 @@ local function ReadMail()
                 end
             end
         end
-        local invType, itemName, player, bid, buyout, deposit, consignment = Call(GetInboxInvoiceInfo, i)
+        -- returns per warcraft.wiki.gg API_GetInboxInvoiceInfo (Forever 1.60.1 listed): the 11th is the count
+        local invType, itemName, player, bid, buyout, deposit, consignment, _, _, _, count = Call(GetInboxInvoiceInfo, i)
         if Clean(invType) then
             m.invoice = { type = Clean(invType), item = Clean(itemName), player = Clean(player), bid = Clean(bid),
-                buyout = Clean(buyout), deposit = Clean(deposit), cut = Clean(consignment) }
+                buyout = Clean(buyout), deposit = Clean(deposit), cut = Clean(consignment), count = Clean(count) }
+            -- a won item's letter carries the item itself: its stack size is the count when the invoice has none
+            if not m.invoice.count and #m.items > 0 then
+                local n = 0
+                for _, x in ipairs(m.items) do n = n + (x.count or 1) end
+                m.invoice.count = n
+            end
             -- record each sale once (same item + price + days left = same letter)
             -- what you paid for things you won (for flip profit)
             if m.invoice.type == "buyer" then
@@ -217,7 +224,7 @@ local function ReadMail()
                     c.ah.salesSeen[id] = true
                     local boughtAt = m.daysLeft and (ns.Now() - math.floor((30 - m.daysLeft) * 86400)) or ns.Now()
                     ns.Push(c.ah.buys, { t = boughtAt, seenAt = ns.Now(), item = m.invoice.item, price = m.invoice.bid,
-                        seller = m.invoice.player }, ns.LIMITS.sales)
+                        count = m.invoice.count, seller = m.invoice.player }, ns.LIMITS.sales)
                 end
             end
             if m.invoice.type == "seller" then
@@ -230,7 +237,7 @@ local function ReadMail()
                     -- mail lasts 30 days: estimate when the sale happened
                     local soldAt = m.daysLeft and (ns.Now() - math.floor((30 - m.daysLeft) * 86400)) or ns.Now()
                     ns.Push(c.ah.sales, { t = soldAt, seenAt = ns.Now(), item = m.invoice.item, price = m.invoice.bid,
-                        buyer = m.invoice.player, net = (m.invoice.bid or 0) + (m.invoice.deposit or 0) - (m.invoice.cut or 0), cut = m.invoice.cut, deposit = m.invoice.deposit }, ns.LIMITS.sales)
+                        count = m.invoice.count, buyer = m.invoice.player, net = (m.invoice.bid or 0) + (m.invoice.deposit or 0) - (m.invoice.cut or 0), cut = m.invoice.cut, deposit = m.invoice.deposit }, ns.LIMITS.sales)
                 end
             end
         end
