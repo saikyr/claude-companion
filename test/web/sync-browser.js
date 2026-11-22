@@ -46,6 +46,8 @@ const check = (ok, what) => { console.log((ok ? 'ok   ' : 'FAIL ') + what); if (
   check(seen.grind, 'the other computer\'s grind shows in the app');
   check(seen.setting === 'yes', 'its settings reached this browser');
   check(!seen.raw, 'the save as read is untouched (the merge is only in the view)');
+  const side = await page.textContent('aside .sync');
+  check(/^Saved in game .+ago$|^Saved in game just now$/.test(side.trim()), `the sidebar says when the game last saved ("${side.trim()}")`);
   await page.click('button[data-tab="system"]');
   const sys = await page.textContent('main');
   check(/Sync between computers/.test(sys) && /MacBook/.test(sys), 'the System tab shows sync and both computers');

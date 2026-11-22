@@ -303,6 +303,19 @@
     add('mail', 'Mailbox', (CH.mail || {}).taken, 'Open a mailbox, then Sync', 'bags', 3 * 24 * HOUR);
     return out;
   }
+  // Sidebar: how fresh this is. WoW writes the addon's data to disk only on /reload (/cc sync) and
+  // logout, so while you play the app shows your last save; the addon keeps every change meanwhile
+  // (a spec swap, new gear, kills) and it all appears at the next save.
+  function saveStatus(s) {
+    const saved = s.taken ? ago(s.taken) : 'never';
+    const why = 'WoW writes addon data only when you /reload (or /cc sync, or the Sync key) and when you log out. '
+      + 'Nothing is lost meanwhile: the addon keeps every change and it all shows at the next save.';
+    let dot, text, tip;
+    if (!STATE.live) { dot = 'never'; text = `App offline · saved ${saved}`; tip = 'The app can\'t reach its local server; this is the last copy it read.'; }
+    else if (STATE.game) { dot = 'old'; text = `In game · last saved ${saved}`; tip = why; }
+    else { dot = 'ok'; text = `Saved in game ${saved}`; tip = (STATE.game === false ? 'The game is closed, so this is everything. ' : '') + why; }
+    return `<div class="sync on" title="${esc(tip + ' (' + fmtTime(s.taken) + ')')}"><span class="dot ${dot}"></span>${text}</div>`;
+  }
   const FRESH_LABEL = { ok: 'up to date', old: 'out of date', never: 'never synced' };
   // small "saved 3 h ago" pill for a section heading
   function savedPill(t, staleAfter) {
@@ -1094,7 +1107,7 @@
         <nav>${NAV_GROUPS.map(([gl, keys]) => `<div class="navg">${gl ? `<div class="navh">${gl}</div>` : ''}${keys.filter((k) => V[k]).map(navBtn).join('')}</div>`).join('')}</nav>
         ${g ? `<div class="live-grind" data-tab="grinds"><span class="tag">${g.paused ? 'paused' : 'grinding'}</span> ${esc(g.name)}</div>` : ''}
         <div class="foot">${installHint()}<button data-tab="system" class="sys${STATE.tab === 'system' ? ' on' : ''}" title="What the addon can read"><img src="${ICON_URL}trade_engineering.jpg" alt="">System</button>
-        <div class="sync ${STATE.live ? 'on' : ''}" title="${esc(fmtTime(s.taken))}"><span class="dot ${STATE.live ? 'ok' : 'never'}"></span>${STATE.live ? 'Live' : 'Offline copy'} · synced ${ago(s.taken)}</div></div>
+        ${saveStatus(s)}</div>
       </aside>
       <section class="page"><header class="ph"><h1>${esc(tabLabel)}</h1><div class="ph-tools"></div></header><main>${body}</main></section>`;
     // a page's leading tab switcher (and any toolbar marked .lift) sits in the header bar
@@ -1158,6 +1171,7 @@
       try {
         const st = await (await fetch('api/stamp', { cache: 'no-store' })).json();
         if (st.host || st.os) STATE.device = { host: st.host || null, os: st.os || null };   // which computer (snapshot.device)
+        if (STATE.game !== st.game) { STATE.game = st.game; if (CH) render(); }   // is the game running on this computer (true / false / null = can't tell)
         if (st.stamp && st.stamp !== lastStamp) {
           const buf = await (await fetch('api/data', { cache: 'no-store' })).arrayBuffer();
           lastStamp = st.stamp;
