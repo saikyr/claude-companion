@@ -39,25 +39,27 @@ when the set already uses the best you have.
 
 ## The Gear page
 
-One page per spec (the switcher in the header; each spec is named by its biggest tree), four views:
+One page per spec (the switcher in the header; each spec is named by its biggest tree), three views:
 
-- **Upgrades** (default): one block per slot with what the compared set has there and its score, then
-  the options that beat it, best gain first: the best few plus the best of each other source, so a slot
-  never shows six versions of one dungeon. Each option says its **source** in one word (Yours, On the AH,
-  Dungeon, Quest, Crafted, Vendor, World drop; the AH and your own items get a coloured dot), the AH price
-  with how many are listed and when they were seen, its score and its gain. Missing reputation or
-  profession skill is its own amber "Needs ..." line, never hidden. Slots with nothing better are one
-  line at the bottom. Source chips filter the page to one source.
-- **Pre-BiS**: per slot the best item up to level 60 (raids left out), with up to four alternatives as
-  buttons. Clicking one makes it your target (kept per character and spec); "use the best instead" undoes
-  it. "Only what I can get now" leaves out items behind reputation or profession skill you don't have.
+- **By slot** (default): on the left, the slot list: every slot with what the compared gear has there, its
+  score and the biggest gain you can get now. **Compare with** (what you wear, or one of your gear sets) sits
+  at the top of that list, because it is what the list shows. Click a slot to see it in full on the right:
+  - **Upgrades at your level**: every item that beats it, best gain first; the best 15 show, "Show all"
+    shows the rest. Source chips with counts filter the list (Yours, On the AH, Dungeon, Quest, Crafted,
+    Random green, Vendor, World drop). Each row says its source in one word, the AH price with how many are
+    listed and when, its score and its gain. Missing reputation or profession skill is its own amber
+    "Needs ..." line, never hidden.
+  - **Pre-BiS**: the best up to level 60 (raids left out), with your target on top (two for rings and
+    trinkets). "Make target" on any other row makes it your target (kept per character and spec); "use the
+    best" undoes it. "Only what I can get now" leaves out items behind reputation or profession skill you
+    don't have.
 - **Auction House**: upgrades listed on your AH now (from the newest scan, at most 3 days old), sorted by
   gain, with gain per gold; then the random-suffix rolls worth searching for, per slot.
 - **Class sets**: every item set for your class on Forever, pieces owned, bonuses active.
 
-The four cards at the top link to the views; the last one names the weights in use and why ("default for
-Holy" or "your pick"). Random-suffix items ("of Healing") are scored from their roll's exact stats
-(data/suffixes.js), never from the base item.
+Random greens ("of Healing") are scored from their roll's exact stats (data/suffixes.js), never from the
+base item. They count as upgrades whether or not they are on your AH: any creature of their level can drop
+them. For each roll, the best base you can wear at your level is shown.
 
 ## The Stat weights page
 
