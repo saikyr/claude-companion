@@ -2,6 +2,15 @@
 
 Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 
+## Unreleased (background snapshot)
+
+- `snapshot.json` now updates after every save in game even with the app closed (#3): the server
+  notices the save and has a hidden (headless) Chrome or Edge load the page once, so there is still
+  one snapshot implementation (`js/claude.js`). `by` says which wrote it.
+- The app's own settings (gear weights and picks, flips set aside) are kept in
+  `companion-data/settings.json` too (`GET`/`POST /api/settings`): they survive a cleared browser,
+  carry over between browsers, and the hidden browser uses them. Part of #15.
+
 ## Unreleased (app launch)
 
 - The app is a normal app now. **Claude Companion.app** (macOS, replaces the `.command`) and

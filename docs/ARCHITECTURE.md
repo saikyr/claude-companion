@@ -20,7 +20,8 @@
                  ▼
  App (web/index.html + js/)  ── lua.js parses the save ── app.js / gear.js render tabs
    + web/data/gamedata.js (game-data pack: everything you haven't seen in game)
-                 │ after each load, js/claude.js POSTs a summary
+                 │ after each load, js/claude.js POSTs a summary (an open window, or the
+                 │ server's hidden headless Chrome/Edge after a save while the app is closed)
                  ▼
  ClaudeCompanion/companion-data/snapshot.json   ◀── what Claude reads first
 ```

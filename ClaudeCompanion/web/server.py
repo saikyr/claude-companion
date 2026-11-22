@@ -4,9 +4,10 @@
 # Same small local server as server.ps1, same addresses, so the page is identical:
 #   http://localhost:47615   /api/ping  /api/stamp  /api/data  POST /api/snapshot
 #                            /api/cards  /api/cards-state  POST /api/cards-state
+#                            /api/settings  POST /api/settings
 # It serves the app and reads the game's saved file (ClaudeCompanion.lua) directly.
 # Nothing is sent anywhere: it only answers this computer.
-import glob, json, os, subprocess, sys, threading, time, urllib.request, webbrowser
+import glob, json, os, shutil, subprocess, sys, tempfile, threading, time, urllib.request, webbrowser
 from datetime import datetime, timezone
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 
@@ -34,6 +35,11 @@ def find_save():
         return _save['path']
 
 
+def stamp_of(path):
+    # the save file's modified time; the page copies it into snapshot.json as saveModified
+    return datetime.fromtimestamp(os.path.getmtime(path), timezone.utc).isoformat()
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a): pass
 
@@ -53,13 +59,12 @@ class Handler(BaseHTTPRequestHandler):
             save = find_save()
             if path == '/api/stamp':
                 if not save: return self.send(200, '{"stamp":null}', TYPES['.json'])
-                st = os.stat(save)
-                stamp = datetime.fromtimestamp(st.st_mtime, timezone.utc).isoformat()
-                return self.send(200, json.dumps({'stamp': stamp, 'size': st.st_size}), TYPES['.json'])
+                return self.send(200, json.dumps({'stamp': stamp_of(save), 'size': os.path.getsize(save)}), TYPES['.json'])
             if not save: return self.send(404, 'no save yet')
             with open(save, 'rb') as f: return self.send(200, f.read(), 'application/octet-stream')
-        if path in ('/api/cards', '/api/cards-state'):
-            f = os.path.join(CARDS_DIR, 'cards.json' if path == '/api/cards' else 'state.json')
+        if path in ('/api/cards', '/api/cards-state', '/api/settings'):
+            f = {'/api/cards': os.path.join(CARDS_DIR, 'cards.json'), '/api/cards-state': os.path.join(CARDS_DIR, 'state.json'),
+                 '/api/settings': os.path.join(DATA_DIR, 'settings.json')}[path]
             if not os.path.isfile(f): return self.send(204, b'')   # none yet
             with open(f, 'rb') as fh: return self.send(200, fh.read(), TYPES['.json'])
         rel = urllib.request.url2pathname(path.lstrip('/')) or 'index.html'
@@ -75,7 +80,8 @@ class Handler(BaseHTTPRequestHandler):
         # Claude's cards: ../companion-data/from-claude/state.json (see SCHEMA.md there).
         # Only this app sends the X-CC header; a web page can't add it without the browser asking first.
         n = int(self.headers.get('Content-Length') or 0)
-        target = {'/api/snapshot': (DATA_DIR, 'snapshot.json'), '/api/cards-state': (CARDS_DIR, 'state.json')}.get(self.path.split('?')[0])
+        target = {'/api/snapshot': (DATA_DIR, 'snapshot.json'), '/api/cards-state': (CARDS_DIR, 'state.json'),
+                  '/api/settings': (DATA_DIR, 'settings.json')}.get(self.path.split('?')[0])
         if not target or self.headers.get('X-CC') != '1' or n <= 0 or n > 20 * 1024 * 1024:
             return self.send(400, 'bad request')
         body = self.rfile.read(n)
@@ -171,11 +177,62 @@ def uninstall():
     print('Claude Companion will no longer start at login, and its server is stopped.')
 
 
+# ---------------------------------------------------------------- snapshot in the background (#3)
+# snapshot.json is built by the app page (one implementation, js/claude.js). When the game saves and
+# no app window wrote a snapshot for that save, the server has a hidden (headless) Chrome or Edge
+# load the page once, which writes it. The page also keeps its settings (gear weights and picks) in
+# companion-data/settings.json, so the hidden one gives the same advice. No such browser: the snapshot
+# waits for the app window, and Claude sees that from saveModified.
+BROWSERS = {
+    'darwin': ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
+               '/Applications/Chromium.app/Contents/MacOS/Chromium', '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser'],
+}
+PROFILE = os.path.join(tempfile.gettempdir(), 'claude-companion-background')
+
+
+def headless_browser():
+    for p in BROWSERS.get(sys.platform, []):
+        if os.path.isfile(p): return p
+    for name in ('google-chrome', 'chromium', 'chromium-browser', 'microsoft-edge', 'brave-browser'):
+        p = shutil.which(name)
+        if p: return p
+    return None
+
+
+def snapshot_stamp():
+    try:
+        with open(os.path.join(DATA_DIR, 'snapshot.json'), encoding='utf-8') as f: return json.load(f).get('saveModified')
+    except (OSError, ValueError): return None
+
+
+def background_snapshot():
+    tried = None
+    while True:
+        time.sleep(5)
+        try:
+            save = find_save()
+            if not save: continue
+            stamp = stamp_of(save)
+            # up to date, already tried, or saved under 10 s ago (an open app window writes it within seconds)
+            if stamp in (tried, snapshot_stamp()) or time.time() - os.path.getmtime(save) < 10: continue
+            tried = stamp
+            exe = headless_browser()
+            if not exe: continue
+            args = [exe, '--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check', '--mute-audio',
+                    f'--user-data-dir={PROFILE}', '--virtual-time-budget=20000', '--dump-dom', URL + '?background=1']
+            if sys.platform.startswith('linux') and os.geteuid() == 0: args.insert(1, '--no-sandbox')
+            subprocess.run(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=90)
+            print(f'background snapshot for the save of {stamp}: ' + ('written' if snapshot_stamp() == stamp else 'not written'), flush=True)
+        except Exception as e:
+            print('background snapshot:', e, flush=True)
+
+
 def serve(open_after):
     srv = ThreadingHTTPServer(('127.0.0.1', PORT), Handler)
     print(f'Claude Companion serving {URL} for {FOREVER}', flush=True)
     if not os.path.isdir(os.path.join(FOREVER, 'WTF')):
         print('Note: no WTF folder found next to Interface. Put ClaudeCompanion in _forever_/Interface/AddOns.', flush=True)
+    threading.Thread(target=background_snapshot, daemon=True).start()
     if open_after: open_app()
     try: srv.serve_forever()
     except KeyboardInterrupt: pass

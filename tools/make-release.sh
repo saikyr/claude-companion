@@ -8,7 +8,7 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd); cd "$ROOT"
 VER=$(sed -n 's/^## Version: *//p' ClaudeCompanion/ClaudeCompanion.toc | tr -d '\r')
 [ -f ClaudeCompanion/web/data/gamedata.js ] || { echo "missing ClaudeCompanion/web/data/gamedata.js (see gamedata/README.md)"; exit 1; }
 # refuse to ship personal data
-for f in ClaudeCompanion/companion-data/snapshot.json ClaudeCompanion/web/data.js; do
+for f in ClaudeCompanion/companion-data/snapshot.json ClaudeCompanion/companion-data/settings.json ClaudeCompanion/web/data.js; do
   [ -e "$f" ] && { echo "refusing to package personal data: $f"; exit 1; }
 done
 mkdir -p dist

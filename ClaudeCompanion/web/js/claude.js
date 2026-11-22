@@ -6,6 +6,28 @@
   if (!CC || !CC.api) return;
   const A = CC.api, arr = A.arr;
   const SCHEMA = 1;
+  // ?background=1: the server's hidden browser, loading the page only to write the snapshot (server.py / server.ps1)
+  const BACKGROUND = new URLSearchParams(location.search).has('background');
+  const post = (url, body) => fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CC': '1' }, body });
+  // The app's own settings (gear weights and picks, flips set aside: everything saved under "cc.") are
+  // kept in companion-data/settings.json too, so they survive a cleared browser, carry over between
+  // browsers, and the hidden browser (which has none) gives the same gear advice. The file wins on load.
+  const SETTINGS = 'cc.';
+  const settingsReady = location.protocol === 'file:' ? Promise.resolve()
+    : fetch('api/settings', { cache: 'no-store' }).then((r) => (r.status === 200 ? r.json() : {})).then((d) => {
+      let changed = false;
+      Object.entries(d || {}).forEach(([k, v]) => {
+        if (k.startsWith(SETTINGS) && typeof v === 'string' && localStorage.getItem(k) !== v) { localStorage.setItem(k, v); changed = true; }
+      });
+      if (changed && A.CH) A.render();
+    }).catch(() => {});
+  function saveSettings() {
+    const d = {};
+    for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k.startsWith(SETTINGS)) d[k] = localStorage.getItem(k); }
+    const body = JSON.stringify(d);
+    if (body === '{}') return;                          // nothing chosen in this browser: never blank the file
+    if (body !== saveSettings.last) { saveSettings.last = body; post('api/settings', body).catch(() => {}); }
+  }
 
   function build() {
     const CH = A.CH;
@@ -16,6 +38,7 @@
     return {
       schema: SCHEMA,
       written: new Date().toISOString(),
+      by: BACKGROUND ? 'background' : 'app',
       savedInGame: s.taken ? new Date(s.taken * 1000).toISOString() : null,
       // the save file's modified time (UTC) this snapshot was built from: if the file is newer now, the snapshot is stale
       saveModified: A.STATE.saveStamp || null,
@@ -60,17 +83,21 @@
   let last = '';
   document.addEventListener('cc:loaded', () => {
     if (location.protocol === 'file:') return;          // file mode has no server to write it
-    setTimeout(() => {
+    setTimeout(async () => {
+      await settingsReady;
+      if (!BACKGROUND) saveSettings();
       let snap;
       try { snap = build(); } catch (e) { console.warn('snapshot', e); return; }
       if (!snap) return;
       const body = JSON.stringify(snap, null, 1);
-      const key = body.replace(/"written":"[^"]*"/, '');
+      const key = body.replace(/"written":"[^"]*"/, '').replace(/"by":"[^"]*"/, '');
       if (key === last) return;
       last = key;
       // the custom header keeps other web pages from writing here (they can't send it without permission)
-      fetch('api/snapshot', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CC': '1' }, body }).catch(() => {});
+      post('api/snapshot', body).catch(() => {});
     }, 500);
   });
+  // settings changed in the app (a gear pick, own weights) reach the hidden browser too
+  if (!BACKGROUND && location.protocol.startsWith('http')) settingsReady.then(() => setInterval(saveSettings, 10000));
   CC.snapshot = build;
 })();

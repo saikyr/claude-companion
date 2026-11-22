@@ -19,6 +19,7 @@ $accounts = Join-Path $forever 'WTF\Account'
 $dataDir = Join-Path (Split-Path -Parent $web) 'companion-data'
 $cardsDir = Join-Path $dataDir 'from-claude'
 $port = 47615
+$files = @{ '/api/cards' = (Join-Path $cardsDir 'cards.json'); '/api/cards-state' = (Join-Path $cardsDir 'state.json'); '/api/settings' = (Join-Path $dataDir 'settings.json') }
 $prefix = "http://localhost:$port/"
 $self = $MyInvocation.MyCommand.Path
 $startup = [Environment]::GetFolderPath('Startup')
@@ -107,9 +108,61 @@ $types = @{
 $webFull = [System.IO.Path]::GetFullPath($web)
 $save = $null
 $lastFind = [DateTime]::MinValue
+function Get-Save {
+    # look for the save again at most every 30 seconds (or if it vanished)
+    if (-not $script:save -or -not (Test-Path $script:save.FullName) -or ((Get-Date) - $script:lastFind).TotalSeconds -gt 30) {
+        $script:save = Find-Save
+        $script:lastFind = Get-Date
+    }
+    if ($script:save) { $script:save.Refresh() }
+    return $script:save
+}
 
+# ---------------------------------------------------------------- snapshot in the background (#3)
+# snapshot.json is built by the app page (one implementation, js\claude.js). When the game saves and
+# no app window wrote a snapshot for that save, a hidden (headless) Edge or Chrome loads the page
+# once, which writes it. The page keeps its settings in companion-data\settings.json, so the hidden
+# one gives the same gear advice. Same as server.py.
+$bgProfile = Join-Path $env:TEMP 'claude-companion-background'
+$bgTried = $null; $bgProc = $null; $bgStart = $null; $bgNext = [DateTime]::MinValue
+function Find-Browser {
+    @(
+        (Join-Path ${env:ProgramFiles(x86)} 'Microsoft\Edge\Application\msedge.exe'),
+        (Join-Path $env:ProgramFiles 'Microsoft\Edge\Application\msedge.exe'),
+        (Join-Path $env:ProgramFiles 'Google\Chrome\Application\chrome.exe'),
+        (Join-Path ${env:ProgramFiles(x86)} 'Google\Chrome\Application\chrome.exe'),
+        (Join-Path $env:LOCALAPPDATA 'Google\Chrome\Application\chrome.exe')
+    ) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+}
+function Check-Background {
+    if ($script:bgProc) {
+        if (-not $script:bgProc.HasExited -and ((Get-Date) - $script:bgStart).TotalSeconds -lt 90) { return }
+        if (-not $script:bgProc.HasExited) { try { $script:bgProc.Kill() } catch { } }
+        $script:bgProc = $null
+    }
+    $s = Get-Save
+    if (-not $s) { return }
+    $stamp = $s.LastWriteTimeUtc.ToString('o')
+    # already tried, or saved under 10 s ago (an open app window writes it within seconds)
+    if ($stamp -eq $script:bgTried -or ([DateTime]::UtcNow - $s.LastWriteTimeUtc).TotalSeconds -lt 10) { return }
+    $snapFile = Join-Path $dataDir 'snapshot.json'
+    $have = if (Test-Path $snapFile) { [regex]::Match([System.IO.File]::ReadAllText($snapFile), '"saveModified":\s*"([^"]*)"').Groups[1].Value } else { '' }
+    if ($stamp -eq $have) { return }
+    $script:bgTried = $stamp
+    $exe = Find-Browser
+    if (-not $exe) { return }
+    $script:bgProc = Start-Process -FilePath $exe -WindowStyle Hidden -PassThru -ArgumentList @('--headless=new', '--disable-gpu',
+        '--no-first-run', '--no-default-browser-check', '--mute-audio', "--user-data-dir=`"$bgProfile`"", '--virtual-time-budget=20000',
+        '--dump-dom', ($prefix + '?background=1'))
+    $script:bgStart = Get-Date
+}
+
+$pending = $listener.GetContextAsync()
 while ($listener.IsListening) {
-    try { $ctx = $listener.GetContext() } catch { break }
+    if ((Get-Date) -ge $bgNext) { try { Check-Background } catch { }; $bgNext = (Get-Date).AddSeconds(5) }
+    if (-not $pending.AsyncWaitHandle.WaitOne(5000)) { continue }
+    try { $ctx = $pending.GetAwaiter().GetResult() } catch { break }
+    $pending = $listener.GetContextAsync()
     $req = $ctx.Request
     $res = $ctx.Response
     try {
@@ -120,12 +173,7 @@ while ($listener.IsListening) {
         if ($path -eq '/api/ping') {
             $body = [System.Text.Encoding]::UTF8.GetBytes('claude-companion')
         } elseif ($path -eq '/api/stamp' -or $path -eq '/api/data') {
-            # look for the save again at most every 30 seconds (or if it vanished)
-            if (-not $save -or -not (Test-Path $save.FullName) -or ((Get-Date) - $lastFind).TotalSeconds -gt 30) {
-                $save = Find-Save
-                $lastFind = Get-Date
-            }
-            if ($save) { $save.Refresh() }
+            $save = Get-Save
             if ($path -eq '/api/stamp') {
                 $type = 'application/json; charset=utf-8'
                 if ($save) {
@@ -136,12 +184,12 @@ while ($listener.IsListening) {
                 $body = Read-Shared $save.FullName
                 $type = 'application/octet-stream'
             } else { $res.StatusCode = 404; $body = [System.Text.Encoding]::UTF8.GetBytes('no save yet') }
-        } elseif (($path -eq '/api/cards' -or $path -eq '/api/cards-state') -and $req.HttpMethod -eq 'GET') {
-            # Claude's cards (cards.json, Claude writes it) and what you did with them (state.json, this app writes it)
-            $f = Join-Path $cardsDir $(if ($path -eq '/api/cards') { 'cards.json' } else { 'state.json' })
+        } elseif ($files.ContainsKey($path) -and $req.HttpMethod -eq 'GET') {
+            # Claude's cards (cards.json, Claude writes it), what you did with them (state.json) and the app's settings
+            $f = $files[$path]
             if (Test-Path $f -PathType Leaf) { $body = Read-Shared $f; $type = 'application/json; charset=utf-8' }
             else { $res.StatusCode = 204; $body = [byte[]]@() }   # none yet
-        } elseif (($path -eq '/api/snapshot' -or $path -eq '/api/cards-state') -and $req.HttpMethod -eq 'POST') {
+        } elseif (($path -eq '/api/snapshot' -or $path -eq '/api/cards-state' -or $path -eq '/api/settings') -and $req.HttpMethod -eq 'POST') {
             # the page's summary for Claude (..\companion-data\snapshot.json) and what you did with
             # Claude's cards (..\companion-data\from-claude\state.json); see SCHEMA.md there.
             # Only this app sends the X-CC header; a web page can't add it without the browser asking first.
@@ -150,7 +198,9 @@ while ($listener.IsListening) {
             } else {
                 $reader = New-Object System.IO.StreamReader($req.InputStream, [System.Text.Encoding]::UTF8)
                 $text = $reader.ReadToEnd(); $reader.Close()
-                if ($path -eq '/api/snapshot') { $dir = $dataDir; $name = 'snapshot.json' } else { $dir = $cardsDir; $name = 'state.json' }
+                if ($path -eq '/api/snapshot') { $dir = $dataDir; $name = 'snapshot.json' }
+                elseif ($path -eq '/api/settings') { $dir = $dataDir; $name = 'settings.json' }
+                else { $dir = $cardsDir; $name = 'state.json' }
                 if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
                 $tmp = Join-Path $dir ($name + '.tmp')
                 [System.IO.File]::WriteAllText($tmp, $text, (New-Object System.Text.UTF8Encoding($false)))
