@@ -2,7 +2,10 @@
 local SECRET = setmetatable({}, {__tostring=function() return "SECRET" end})
 function issecretvalue(v) return v == SECRET end
 local timers = {}
-C_Timer = { After = function(d, fn) table.insert(timers, fn) end, NewTicker = function() return { Cancel = function() end } end }
+local tickers = {}
+C_Timer = { After = function(d, fn) table.insert(timers, fn) end,
+  NewTicker = function(d, fn) local t = { fn = fn }; t.Cancel = function() t.fn = nil end; tickers[#tickers + 1] = t; return t end }
+function RunTickers() for _, t in ipairs(tickers) do if t.fn then t.fn() end end end
 function IsShiftKeyDown() return false end
 local function obj()
   local o = {}
@@ -35,7 +38,7 @@ function Advance(s) clock = clock + s end
 function GetTime() return clock - 1795000000 end
 function strtrim(s) return (s:gsub("^%s+", ""):gsub("%s+$", "")) end
 function strsplit(sep, s) local out = {} for p in (s..sep):gmatch("(.-)%"..sep) do out[#out+1]=p end return unpack(out) end
-function hooksecurefunc(t, name, fn) if type(t) == "string" then local orig=_G[t]; _G[t]=function(...) local r={orig(...)} fn(...) return unpack(r) end else local orig=t[name]; t[name]=function(...) local r={orig(...)} fn(...) return unpack(r) end end end
+function hooksecurefunc(t, name, fn) if type(t) == "string" then fn = name; local orig=_G[t]; _G[t]=function(...) local r={orig(...)} fn(...) return unpack(r) end else local orig=t[name]; t[name]=function(...) local r={orig(...)} fn(...) return unpack(r) end end end
 function InCombatLockdown() return false end
 function ReloadUI() print("RELOAD") end
 function UnitName(u) if u=="player" then return "Gabriel" elseif u=="target" then return "Son of Arkkoroc" end return nil end
@@ -332,6 +335,66 @@ do
   check((ClaudeCompanionDB.cacheStats or {}).evicted and ClaudeCompanionDB.cacheStats.evicted > 0, "evictions counted in cacheStats")
   c.snap.equipped[99] = nil; ClaudeCompanionDB.items[worn] = nil
   if FAILED then error("#1 checks failed") end
+end
+-- grinds end on logout, after time away (other computer, crash) and when idle; /reload keeps them
+do
+  local function check(ok, what) print((ok and "PASS " or "FAIL ") .. what); if not ok then FAILED = true end end
+  local c; for _, v in pairs(ClaudeCompanionDB.chars) do c = v end
+  local function relog(away, reload)
+    if reload then ns.MarkReload() end
+    Fire("PLAYER_LOGOUT"); Advance(away); Fire("PLAYER_LOGIN")
+  end
+  local n0 = #c.grinds
+  -- 1. /reload (Sync) keeps the grind, and the 5 s reload doesn't count
+  ns.GrindStart("reloadtest"); Advance(100); c.grind.last = ns.Now()
+  relog(5, true)
+  check(c.grind and c.grind.name == "reloadtest", "a /reload keeps the grind running")
+  check(c.grind and ns.ActiveSecs(c.grind) == 100, "the reload's 5 s don't count (" .. tostring(c.grind and ns.ActiveSecs(c.grind)) .. ")")
+  -- 2. a real logout ends it, at logout time
+  Advance(50); c.grind.last = ns.Now(); local out = ns.Now()
+  relog(3600, false)
+  local g = c.grinds[#c.grinds]
+  check(c.grind == nil and g.name == "reloadtest" and g.ended == "logout" and g.finish == out, "a logout ends the grind at the logout")
+  check(g.secs == 150, "its time stops at the logout (" .. tostring(g.secs) .. ")")
+  -- 3. a /reload missed by the hooks: logout seconds before login brings the grind back
+  ns.GrindStart("missedreload"); Advance(30); c.grind.last = ns.Now()
+  relog(4, false)
+  check(c.grind and c.grind.name == "missedreload" and c.grind.finish == nil and c.grind.ended == nil, "an unflagged 4 s reload brings the grind back")
+  ns.GrindStop(true)
+  -- 4. the save on this computer last saw the grind hours ago (played on the Mac, or crashed):
+  --    the grind ends at its last counted event, not hours later
+  ns.GrindStart("jinthaalor"); Advance(600); c.grind.last = ns.Now(); local lastKill = ns.Now()
+  ns.MarkReload(); Fire("PLAYER_LOGOUT")      -- last save was a Sync
+  Advance(3 * 3600); Fire("PLAYER_LOGIN")      -- 3 h later, after playing elsewhere
+  g = c.grinds[#c.grinds]
+  check(c.grind == nil and g.name == "jinthaalor" and g.ended == "away" and g.finish == lastKill and g.secs == 600,
+    "a grind last seen 3 h ago ends at its last event (" .. tostring(g.ended) .. ", " .. tostring(g.secs) .. " s)")
+  -- 5. idle: nothing counted for 30 min ends it at the last event
+  ns.GrindStart("idle"); Advance(120); c.grind.last = ns.Now(); local idleLast = ns.Now()
+  Advance(29 * 60); RunTickers()
+  check(c.grind ~= nil, "29 min idle: still running")
+  Advance(2 * 60); RunTickers()
+  g = c.grinds[#c.grinds]
+  check(c.grind == nil and g.name == "idle" and g.ended == "idle" and g.finish == idleLast and g.secs == 120, "31 min idle ends it at the last event")
+  -- 6. pause / resume are in the journal; a plain click doesn't pause (#31)
+  ns.GrindStart("pausetest")
+  local panel = ClaudeCompanionGrind
+  panel._scripts.OnClick(panel, "LeftButton")
+  check(not c.grind.paused, "a plain left-click on the panel doesn't pause")
+  local shift = IsShiftKeyDown; IsShiftKeyDown = function() return true end
+  panel._scripts.OnClick(panel, "LeftButton"); IsShiftKeyDown = shift
+  check(c.grind.paused, "shift-click pauses")
+  ns.GrindPause()
+  local kinds = {}; for i = #c.journal - 3, #c.journal do kinds[#kinds + 1] = c.journal[i].e end
+  local ks = table.concat(kinds, ",")
+  check(ks:find("grindPause") and ks:find("grindResume"), "pause and resume are logged (" .. ks .. ")")
+  -- 7. device
+  check(c.grind.device == "pc" and c.device == "pc", "the grind and character know which computer (pc)")
+  IsMacClient = function() return true end
+  check(ns.Device() == "mac", "IsMacClient gives mac"); IsMacClient = nil
+  ns.GrindStop(true)
+  check(#c.grinds == n0 + 4 + 1, "finished grinds kept (" .. (#c.grinds - n0) .. ")")
+  if FAILED then error("grind lifecycle checks failed") end
 end
 local f = io.open("out.lua", "w"); f:write("ClaudeCompanionDB = " .. ser(ClaudeCompanionDB)); f:close()
 print("DIAG:")

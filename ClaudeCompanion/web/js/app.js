@@ -1176,6 +1176,7 @@
       busy = true;
       try {
         const st = await (await fetch('api/stamp', { cache: 'no-store' })).json();
+        if (st.host || st.os) STATE.device = { host: st.host || null, os: st.os || null };   // which computer (snapshot.device)
         if (st.stamp && st.stamp !== lastStamp) {
           const buf = await (await fetch('api/data', { cache: 'no-store' })).arrayBuffer();
           lastStamp = st.stamp;

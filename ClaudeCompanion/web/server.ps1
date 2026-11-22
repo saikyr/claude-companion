@@ -176,9 +176,10 @@ while ($listener.IsListening) {
             $save = Get-Save
             if ($path -eq '/api/stamp') {
                 $type = 'application/json; charset=utf-8'
+                $dev = ',"host":"' + ($env:COMPUTERNAME -replace '[^A-Za-z0-9._-]', '') + '","os":"pc"}'
                 if ($save) {
-                    $json = '{"stamp":"' + $save.LastWriteTimeUtc.ToString('o') + '","size":' + $save.Length + '}'
-                } else { $json = '{"stamp":null}' }
+                    $json = '{"stamp":"' + $save.LastWriteTimeUtc.ToString('o') + '","size":' + $save.Length + $dev
+                } else { $json = '{"stamp":null' + $dev }
                 $body = [System.Text.Encoding]::UTF8.GetBytes($json)
             } elseif ($save) {
                 $body = Read-Shared $save.FullName

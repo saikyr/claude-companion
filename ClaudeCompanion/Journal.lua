@@ -4,6 +4,21 @@ local _, ns = ...
 local Clean, Call = ns.Clean, ns.Call
 
 local RESUME_SECONDS = 600 -- logged out for less than this = same session
+-- A grind only carries over a /reload (Sync) or a quick relog after a disconnect. A real logout
+-- ends it, and so does being away longer than GRIND_RESUME (a crash, or playing on the other
+-- computer, whose saves this one never sees) or GRIND_IDLE with nothing counted.
+local GRIND_RESUME = 120
+local GRIND_IDLE = 30 * 60
+local reloading = false -- set just before a /reload or Sync, so PLAYER_LOGOUT knows it isn't a logout
+function ns.MarkReload() reloading = true end
+pcall(hooksecurefunc, "ReloadUI", ns.MarkReload)
+if C_UI and C_UI.Reload then pcall(hooksecurefunc, C_UI, "Reload", ns.MarkReload) end
+
+-- "mac" or "pc": which computer this save belongs to (each keeps its own SavedVariables)
+function ns.Device()
+    local ok, mac = pcall(IsMacClient)
+    return (ok and mac) and "mac" or "pc"
+end
 
 ---------------------------------------------------------------- trackers
 -- Two kinds of tracker share the same counters:
@@ -102,37 +117,54 @@ function ns.GrindStart(name)
     if c.grind then ns.GrindStop(true) end
     local w = ns.Where()
     c.grind = NewTracker(name and name ~= "" and name or w.sub or w.zone or "Grind")
-    ns.Log("grindStart", { name = c.grind.name })
+    c.grind.device = ns.Device()
+    ns.Log("grindStart", { name = c.grind.name, device = c.grind.device })
     if ns.GrindPanel then ns.GrindPanel() end
     return c.grind
+end
+
+-- at: when it resumed (default now); quiet: no journal entry
+local function Unpause(g, at)
+    at = at or ns.Now()
+    g.pausedSecs = (g.pausedSecs or 0) + math.max(0, at - (g.pausedAt or at))
+    g.paused, g.pausedAt = nil, nil
 end
 
 function ns.GrindPause()
     local g = ns.char and ns.char.grind
     if not g then return end
     if g.paused then
-        g.pausedSecs = (g.pausedSecs or 0) + (ns.Now() - (g.pausedAt or ns.Now()))
-        g.paused, g.pausedAt = nil, nil
+        local secs = ns.Now() - (g.pausedAt or ns.Now())
+        Unpause(g)
+        ns.Log("grindResume", { name = g.name, secs = secs })
+        ns.Print("grind resumed: |cffffd100" .. (g.name or "Grind") .. "|r.")
     else
         g.paused, g.pausedAt = true, ns.Now()
+        ns.Log("grindPause", { name = g.name })
+        ns.Print("grind |cffff6060paused|r: kills and loot aren't counted. Shift-click the panel or /cc pause to resume.")
     end
     if ns.GrindPanel then ns.GrindPanel() end
     return g.paused == true
 end
 
-function ns.GrindStop(quiet)
+-- quiet: no chat summary. at: when it really ended (default now; an idle or stale grind ends at
+-- its last counted event, so the time away doesn't count). why: "logout", "away", "idle" when
+-- the addon ended it, nil when you did.
+function ns.GrindStop(quiet, at, why)
     local c = ns.char
     local g = c and c.grind
     if not g then return nil end
-    if g.paused then ns.GrindPause() end
-    g.finish = ns.Now()
+    at = at or ns.Now()
+    if g.paused then Unpause(g, math.max(at, g.pausedAt or at)) end
+    g.finish = at
+    g.ended = why
     g.secs = ActiveSecs(g)
     g.vendorValue, g.ahValue = ns.LootValue(g)
     g.coin = (g.bySource and g.bySource.loot) or 0
     c.grinds = c.grinds or {}
     ns.Push(c.grinds, g, ns.LIMITS.sessions)
     c.grind = nil
-    ns.Log("grindStop", { name = g.name, secs = g.secs, kills = g.kills, coin = g.coin, ah = g.ahValue })
+    ns.Log("grindStop", { name = g.name, secs = g.secs, kills = g.kills, coin = g.coin, ah = g.ahValue, ended = why, at = at })
     if ns.GrindPanel then ns.GrindPanel() end
     if not quiet then ns.GrindReport(g) end
     return g
@@ -595,16 +627,49 @@ ns.OnLogin(function()
     if not c.session then c.session = NewTracker() end
     -- 1.0 saved a fake bank (keyring + reagent bag) at login: drop it
     if c.bank and c.bank.bags and c.bank.bags[1] and type(c.bank.bags[1].name) == "string" and c.bank.bags[1].name:lower():find("keyring") then c.bank = nil end
-    -- a running grind doesn't count the time you were logged out
-    local g = c.grind
-    if g and not g.paused and c.lastSeen and c.lastSeen > g.start then
-        g.pausedSecs = (g.pausedSecs or 0) + math.max(0, ns.Now() - c.lastSeen)
-    end
+    reloading = false
     lastZone = Clean(GetRealZoneText())
-    ns.Log("login", { level = Clean(UnitLevel("player")), money = Clean(GetMoney()) })
+    ns.Log("login", { level = Clean(UnitLevel("player")), money = Clean(GetMoney()), device = ns.Device() })
+    c.device = ns.Device()
+    -- a grind carried over a /reload or a quick relog goes on, without the time logged out.
+    -- Anything longer (a crash, a long disconnect, playing on the other computer) ends it at its
+    -- last counted event, so it can't run on for hours by itself.
+    local g = c.grind
+    -- a /reload that wasn't recognised as one ended the grind at "logout": seconds later, bring it back
+    local last = c.grinds and c.grinds[#c.grinds]
+    if not g and last and last.ended == "logout" and c.lastSeen and last.finish == c.lastSeen and ns.Now() - c.lastSeen <= 15 then
+        c.grinds[#c.grinds] = nil
+        last.finish, last.ended, last.secs, last.coin, last.vendorValue, last.ahValue = nil, nil, nil, nil, nil, nil
+        c.grind = last; g = last
+    end
+    if g then
+        local away = ns.Now() - math.max(c.lastSeen or 0, g.last or g.start or 0)
+        if away > GRIND_RESUME then
+            ns.GrindStop(true, math.max(g.last or g.start, g.pausedAt or 0), "away")
+            ns.Print(string.format("grind |cffffd100%s|r ended: you were away %d min. /cc start for a new one.",
+                g.name or "Grind", math.floor(away / 60)))
+        elseif not g.paused and c.lastSeen and c.lastSeen > g.start then
+            g.pausedSecs = (g.pausedSecs or 0) + math.max(0, ns.Now() - c.lastSeen)
+        end
+    end
 end)
 ns.OnLogout(function()
-    ns.char.lastSeen = ns.Now()
-    if ns.char.session then ns.char.session.last = ns.Now() end
-    ns.Log("logout", { money = Clean(GetMoney()) })
+    local c = ns.char
+    c.lastSeen = ns.Now()
+    if c.session then c.session.last = ns.Now() end
+    c.lastLogout = reloading and "reload" or "logout"
+    -- a real logout ends the grind; a /reload (Sync) keeps it running
+    if c.grind and not reloading then ns.GrindStop(true, nil, "logout") end
+    ns.Log("logout", { money = Clean(GetMoney()), reload = reloading or nil })
+end)
+
+-- a grind with nothing counted for GRIND_IDLE (or paused that long) ends by itself
+C_Timer.NewTicker(60, function()
+    local g = ns.char and ns.char.grind
+    if not g then return end
+    local since = g.paused and (g.pausedAt or g.last) or g.last or g.start
+    if ns.Now() - since > GRIND_IDLE then
+        ns.GrindStop(true, since, "idle")
+        ns.Print(string.format("grind |cffffd100%s|r ended: nothing happened for %d min.", g.name or "Grind", math.floor(GRIND_IDLE / 60)))
+    end
 end)

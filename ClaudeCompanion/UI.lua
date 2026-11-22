@@ -109,6 +109,7 @@ function ClaudeCompanion_Sync()
     if InCombatLockdown() then ns.Print("can't sync in combat, try again after.") return end
     ns.Print("syncing...")
     if ns.char then ns.char.syncRequested = ns.Now() end
+    if ns.MarkReload then ns.MarkReload() end
     ReloadUI() -- the game writes saved data during the reload
 end
 
@@ -126,8 +127,8 @@ end
 status:SetPoint("RIGHT", grindBtn, "LEFT", -8, 0)
 
 ---------------------------------------------------------------- grind panel
--- Shown only while a grind runs. Left-click: pause / resume.
--- Shift-click: stop. Drag to move.
+-- Shown only while a grind runs. Shift-click: pause / resume (a plain click does nothing, so a
+-- stray click in combat can't pause it, #31). Right-click: stop. Drag to move.
 local gp = CreateFrame("Button", "ClaudeCompanionGrind", UIParent, "BackdropTemplate")
 gp:SetSize(236, 62)
 gp:SetPoint("TOP", UIParent, "TOP", 0, -140)
@@ -176,8 +177,9 @@ local function UpdatePanel()
     local hrs = math.max(secs, 60) / 3600
     local coin = (g.bySource and g.bySource.loot) or 0
     local _, items = ns.LootValue(g)
-    gTitle:SetText(g.name or "Grind")
-    gTime:SetText(g.paused and "|cff9a9890paused|r" or Clock(secs))
+    gTitle:SetText(g.paused and ("|cffff6060PAUSED|r  " .. (g.name or "Grind")) or (g.name or "Grind"))
+    gTime:SetText(g.paused and "|cffff6060paused|r" or Clock(secs))
+    if g.paused then pcall(gp.SetBackdropBorderColor, gp, 0.9, 0.2, 0.2, 1) else pcall(gp.SetBackdropBorderColor, gp, 0.45, 0.45, 0.45, 1) end
     gGold:SetText(string.format("|cffffd100%s|r/hr   %s looted   %d kills", Short((coin + items) / hrs), Short(coin + items), g.kills))
     local best
     for _, l in pairs(g.loot) do
@@ -201,8 +203,8 @@ function ns.GrindPanel()
 end
 
 gp:SetScript("OnClick", function(_, button)
-    if IsShiftKeyDown() or button == "RightButton" then ns.GrindStop()
-    else ns.GrindPause() end
+    if button == "RightButton" then ns.GrindStop()
+    elseif IsShiftKeyDown() then ns.GrindPause() end
     UpdatePanel()
 end)
 gp:SetScript("OnEnter", function(self)
@@ -216,7 +218,7 @@ gp:SetScript("OnEnter", function(self)
     table.sort(list, function(a, b) return (a.q or 0) > (b.q or 0) or ((a.q or 0) == (b.q or 0) and a.count > b.count) end)
     for i = 1, math.min(12, #list) do GameTooltip:AddDoubleLine(list[i].link or list[i].name or "?", "x" .. list[i].count, 1, 1, 1, 1, 1, 1) end
     GameTooltip:AddLine(" ")
-    GameTooltip:AddLine("Click: pause or resume.  Right-click: stop.  Drag: move.", 0.6, 0.6, 0.6, true)
+    GameTooltip:AddLine("Shift-click: pause or resume.  Right-click: stop.  Drag: move.  Ends by itself when you log out or after 30 min with nothing to count.", 0.6, 0.6, 0.6, true)
     GameTooltip:Show()
 end)
 gp:SetScript("OnLeave", function() GameTooltip:Hide() end)

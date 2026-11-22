@@ -42,6 +42,16 @@
       savedInGame: s.taken ? new Date(s.taken * 1000).toISOString() : null,
       // the save file's modified time (UTC) this snapshot was built from: if the file is newer now, the snapshot is stale
       saveModified: A.STATE.saveStamp || null,
+      // which computer wrote this: the PC and the Mac each keep their own save and their own snapshot.json
+      device: Object.assign({ host: null, os: CH.device || null }, A.STATE.device || {}),
+      // the grind running now (if any) and the last few finished ones; ended: logout / away / idle when the addon ended it
+      grind: (() => {
+        const g = CH.grind;
+        const t = (x) => (x ? new Date(x * 1000).toISOString() : null);
+        const one = (x) => ({ name: x.name, device: x.device || null, start: t(x.start), last: t(x.last), finish: t(x.finish),
+          secs: x.secs != null ? x.secs : null, kills: x.kills || 0, paused: !!x.paused, ended: x.ended || null });
+        return { running: g ? one(g) : null, recent: arr(CH.grinds).slice(-5).reverse().map(one) };
+      })(),
       // when each part was last read in game; some parts only update while that window is open in game
       taken: (() => {
         const t = (x) => (x ? new Date(x * 1000).toISOString() : null);

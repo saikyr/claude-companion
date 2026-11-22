@@ -16,6 +16,10 @@ FOREVER = os.path.normpath(os.path.join(WEB, '..', '..', '..', '..'))   # .../_f
 DATA_DIR = os.path.join(os.path.dirname(WEB), 'companion-data')
 CARDS_DIR = os.path.join(DATA_DIR, 'from-claude')   # cards.json: Claude writes it; state.json: this app writes it
 PORT = 47615
+# which computer this is: snapshot.json says so, because the PC and the Mac each keep their own save (#11)
+import platform, socket
+DEVICE_HOST = (socket.gethostname() or '').split('.')[0]
+DEVICE_OS = 'mac' if sys.platform == 'darwin' else ('pc' if os.name == 'nt' else sys.platform)
 URL = f'http://localhost:{PORT}/'
 TYPES = {'.html': 'text/html; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
          '.json': 'application/json; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.ico': 'image/x-icon'}
@@ -58,8 +62,9 @@ class Handler(BaseHTTPRequestHandler):
         if path in ('/api/stamp', '/api/data'):
             save = find_save()
             if path == '/api/stamp':
-                if not save: return self.send(200, '{"stamp":null}', TYPES['.json'])
-                return self.send(200, json.dumps({'stamp': stamp_of(save), 'size': os.path.getsize(save)}), TYPES['.json'])
+                dev = {'host': DEVICE_HOST, 'os': DEVICE_OS}
+                if not save: return self.send(200, json.dumps({'stamp': None, **dev}), TYPES['.json'])
+                return self.send(200, json.dumps({'stamp': stamp_of(save), 'size': os.path.getsize(save), **dev}), TYPES['.json'])
             if not save: return self.send(404, 'no save yet')
             with open(save, 'rb') as f: return self.send(200, f.read(), 'application/octet-stream')
         if path in ('/api/cards', '/api/cards-state', '/api/settings'):
