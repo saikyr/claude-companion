@@ -68,6 +68,8 @@ jobs:
           node test/web/sync-browser.js 47999 $F/Interface/AddOns/ClaudeCompanion/companion-data
       - name: Gear and Stat weights pages (Chromium, a made-up level 59 Priest)
         run: node test/web/gear-browser.js
+      - name: Now page in a browser (next steps, filters, unlocks, snapshot)
+        run: node test/web/next-browser.js
       - name: Local server API (server.py)
         run: node test/web/server-api.test.js 47999 /tmp/f/_forever_/Interface/AddOns/ClaudeCompanion/companion-data
       - name: Server rules (hidden browser)

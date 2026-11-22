@@ -9,6 +9,13 @@ window.GAMERULES = {
   repFloor: [null, -42000, -6000, -3000, 0, 3000, 9000, 21000, 42000],
   // the Auction House keeps 5% of a sale (checked on Gabriel's own sales, 22 Nov 2026); the deposit comes back on a sale
   ahCut: 0.05,
+  // Instances that are raids or battlegrounds (zone names as the pack writes them). Raids: warcraft.wiki.gg "Raid"
+  // (Classic) plus Forever's own, warcraft.wiki.gg/wiki/WoW_Forever (Barrow Deeps, Hyjal Summit). Item group sizes
+  // in the pack can't tell them apart (most raid trash drops say nothing).
+  instances: {
+    raids: ['Molten Core', "Onyxia's Lair", 'Blackwing Lair', "Zul'Gurub", "Ruins of Ahn'Qiraj", "Temple of Ahn'Qiraj", 'Naxxramas', 'Barrow Deeps', 'Hyjal Summit'],
+    battlegrounds: ['Alterac Valley', 'Warsong Gulch', 'Arathi Basin'],
+  },
   // Attunements and keys: what opens an instance or a part of one, and the quests or items that give it.
   // Quest and item ids are the game-data pack's (QuestieDB Forever / ForeverDB); the app checks them against your
   // completed quests and what you own. Only the final quest is listed: the chain before it comes from the pack.

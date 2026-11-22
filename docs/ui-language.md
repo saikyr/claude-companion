@@ -61,6 +61,31 @@ Random greens ("of Healing") are scored from their roll's exact stats (data/suff
 base item. They count as upgrades whether or not they are on your AH: any creature of their level can drop
 them. For each roll, the best base you can wear at your level is shown.
 
+## The Now page
+
+The Overview's main list: **what moves the character forward next**, ranked, computed by the app from the
+save and the game data (`js/next.js`). Claude is not needed for it; Claude's cards sit beside it.
+
+- **Ready now** (only when there is something): quests ready to turn in, with who takes them; cooldowns
+  that are ready; upgrades already in your bags or bank.
+- **From Claude**: open cards, at most four. A card whose `step` names a row shows on that row instead.
+- **Next steps**: one row per step, best first. Filters: All, Gear, Quests, Dungeons, Professions, Unlocks.
+  **Hybrid** (default) adds every spec's gain; a spec button ranks by that spec alone. A row opens in place.
+  - *Dungeon*: bosses' levels, how many upgrades and quests; opened: each upgrade with its boss and drop
+    chance ("Classic rate" unless ForeverDB measured it on Forever), then the dungeon's quests.
+  - *Quest*: its zone, level, earlier chain steps still to do and where the first starts; opened: the
+    chain and the reward. Under 60, quests that only give XP are grouped per zone ("Mount Hyjal · 40 quests").
+  - *Item*: an upgrade no quest or dungeon above covers (Auction House, crafted, vendor, world drop).
+  - *Profession*: "Tailoring 268 → 285" when that skill opens a crafted upgrade; opened: what it opens
+    and the cheapest skill-up recipes now (orange and yellow, reagents at your AH prices).
+  - *Unlock*: attunements and keys (`data/rules.js`), done, in progress or how it starts; raids say when they open.
+- **Value**, the right column: gains in green per spec ("Holy +12.4 · Shadow +3.1"), and under 60 the XP as
+  "% of a level". A dungeon's gain is one run's expected best upgrade per slot (drop chances), plus its quests.
+  A quest's is its best reward; a profession step's and an unlock's, what they open.
+- **Needs** lines are amber, as everywhere: a level, reputation, earlier steps, a key, a group member too low.
+- What's out of date and changes the advice (character, bank, AH scan) shows above the list; the full
+  list of saved data is on the System tab.
+
 ## The Stat weights page
 
 "Your specs" says which weights each spec uses and why ("Default: most of your talent points are in Holy"

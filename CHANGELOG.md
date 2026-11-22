@@ -3,6 +3,12 @@
 Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 
 ## 1.5.0 (in progress: every merge to main updates itself)
+- **The Now page shows your next steps**, ranked: dungeons (one run's expected upgrades, by drop chance,
+  plus their quests), quests worth doing for their rewards (with the chain still to do), items to chase on
+  the AH or to craft, profession skill that opens an upgrade (with the cheapest skill-ups), and attunements
+  and keys. Under 60, quest XP counts too, grouped by zone. Hybrid by default, or one spec. Ready now
+  (turn-ins, cooldowns, upgrades in your bags) sits on top, Claude's cards beside it; the full saved-data
+  list moved to the System tab. Claude's snapshot carries the same list (`nextSteps`).
 - **Gear no longer counts quest rewards you already took** (or quests for another class or faction) as
   a place to get an item. One shared check (`js/quests.js`) knows which quests you can do: faction,
   class, level, earlier steps of the chain and reputation, from QuestieDB Forever and your save.
