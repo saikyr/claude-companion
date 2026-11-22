@@ -51,6 +51,8 @@ class GitHub(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path.startswith('/repos/me/cc/zipball/'):
+            if self.headers.get('Accept') == 'application/octet-stream':   # what GitHub really does
+                self.send_response(415); self.end_headers(); return
             seen['api_auth'] = self.headers.get('Authorization')
             self.send_response(302); self.send_header('Location', f'http://127.0.0.1:{API_PORT}/dl/release.zip'); self.end_headers(); return
         if self.path.startswith('/dl/'):
