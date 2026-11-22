@@ -48,16 +48,19 @@ Verified for real on Gabriel's PC on 22 Nov: the app installed build `d7dd338` f
 
 ## Sync between computers (Supabase)
 
-The game server is the truth for how the character is **now** (gear, bags, quests, rep, skills, specs):
-every computer reads that from its own save, so it is never synced. What only the addon remembers is
-**history**, and that syncs: journal events, sessions, grinds, dungeon runs, notes, level/money
-history, disenchant results, AH price observations, sales, buys and posts, plus the app's settings
-(gear weights and picks).
+Two kinds of data sync. What only the addon remembers is **history**: journal events, sessions,
+grinds, dungeon runs, notes, level/money history, disenchant results, AH price observations, sales,
+buys and posts, plus the app's settings (gear weights and picks). The union of every computer's
+history is shown everywhere. How the character is **now** (bags, gear, quests, talents, rep, skills;
+bank, mail, professions, specs, flight paths, own auctions) is each save's copy of what the game
+server said at that save: each computer sends its copy as one replaced `now` row per character, and
+the view shows each part from whichever computer saw it last (`js/merge.js`), so opening the app on a
+computer you haven't played on lately shows what you have now, not what you had there.
 
 ```
  PC: save ─▶ page (js/sync.js) ──push new records──▶  Supabase "claude-companion"  ◀──push── page ◀─ save :Mac
                          ◀──pull the account's records──  records (append-only)  ──pull──▶
-             view = this save + every other computer's history (js/merge.js rules)
+             view = this save + every other computer's history + the newest "now" (js/merge.js rules)
 ```
 
 **Records.** One row per history entry, `id` made from its content (character, kind, time, what it was:

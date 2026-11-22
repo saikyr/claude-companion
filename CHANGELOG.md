@@ -23,6 +23,10 @@ Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
   numbers; the guide's order shows next to them for comparison instead of as separate picks.
 - Snapshot `gear[]`: `ahUpgrades`, `rollsToSearch`, pre-BiS `picked` and `alternatives`, `weightsChosen`,
   `source` and `ah` on each item (SCHEMA.md); `watch` stays as the older name for `ahUpgrades`.
+- **Every computer shows what you have now.** Bags, gear, quests, talents, rep, bank, mail,
+  professions and flight paths sync too: each part shows from whichever computer saved last, so
+  opening the app on the Mac after playing on the PC shows the PC's bags and gear, not the Mac's
+  older copy. Your own save file is never changed.
 - **App review fixes.** Professions: the footer showed raw code (`${esc(p.name)} recipes ...`), and the skill
   bar could read "undefined / undefined". Quests: a reputation loss read "+-750" in green, and a reputation
   requirement showed raw data; it now says "Needs Friendly with Magram Clan Centaur" (red only if you don't
