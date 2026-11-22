@@ -4,12 +4,15 @@ Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 
 ## Unreleased (one character on every computer)
 
-- **The PC and the Mac show the same character.** The game keeps a separate save on each computer
-  (and writes it itself), so each computer's server now publishes its save to the others through the
-  private repository: one branch per computer (`sync/<computer>`), one commit without a parent
-  (save.lua.gz, meta.json with the save's SHA-256, settings.json), so the repository doesn't grow.
-  Each server downloads the others into `companion-data/devices/<computer>/` (checked against the
-  SHA-256) and the page merges them (`js/merge.js`) before it shows anything or writes snapshot.json:
+- **The PC and the Mac (and a friend's computers) show the same character.** The game keeps a
+  separate save on each computer and writes it itself, so the saves can't be one file. Instead you
+  pick, once, the cloud drive your computers already share (Google Drive for desktop, OneDrive,
+  Dropbox, iCloud Drive: the app lists the ones it finds). The server keeps a `Claude Companion`
+  folder there with one subfolder per computer (save.lua.gz, settings.json, snapshot.json.gz, and
+  meta.json written last with the save's SHA-256), so two computers never write the same file and the
+  drive never has a conflict. It copies the other computers' saves into `companion-data/devices/`
+  (only when complete and matching their SHA-256), and the page merges them (`js/merge.js`) before it
+  shows anything or writes snapshot.json:
   - history (journal, sessions, grinds, runs, notes, AH sales/buys/posts, price history, disenchants)
     is the union of both, without duplicates and without dropping identical events, in time order;
     entries from the other computer carry `dev`
@@ -17,15 +20,19 @@ Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
     computer that saw it last
   - a grind or run left running on one computer while you played on the other is shown as ended
     "away", like the addon does at login
-  - settings (gear weights and picks) follow the computer where they changed last; the replaced file
-    is kept as settings.json.bak
-- No save file is ever written. `snapshot.json` has `mergedWith` (the other computers in it).
-  `GET /api/devices` says what's synced; `"sync": false` in update.json turns it off.
+  - settings follow the computer where they changed last (the replaced file is kept as settings.json.bak)
+- No save file is ever written. Same mechanism for everyone; no account beyond the drive.
+  `GET /api/devices`, `POST /api/sync-config {"folder": ...}`. snapshot.json has `mergedWith`.
 
 ## Unreleased (updates itself)
 
-- **The app updates itself.** Each tested build is pushed to the `stable` branch
-  (`python tools/publish-stable.py "what changed"`): the ClaudeCompanion folder as it goes in AddOns,
+- **Builds publish themselves.** When a PR merges to `main` and the checks pass, CI
+  (`.github/workflows/publish.yml`) publishes it to the `stable` branch; nobody publishes by hand.
+  The game-data pack is now in the repository so CI can build. With the repository variable
+  `DIST_REPO` and secret `DIST_TOKEN` it also publishes to a public download repository for friends;
+  each build carries `web/channel.json`, so an app keeps updating from where it came from.
+- **The app updates itself.** Each tested build is on the `stable` branch
+  (`tools/publish-stable.py`): the ClaudeCompanion folder as it goes in AddOns,
   with the game-data pack, plus `BUILD.json` with every file's SHA-256. The local server checks the
   branch every 30 minutes and installs a new build by itself (auto-update, on by default), or when you
   click **Install now** on the card the app shows. It downloads the build, checks every file against

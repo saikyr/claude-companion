@@ -208,13 +208,15 @@ function Write-Json([string]$f, $o) {
     Move-Item -LiteralPath $tmp -Destination $f -Force
 }
 function Get-UpdCfg {
+    # where updates come from: web\channel.json, written by the build; update.json can override
     $c = Read-Json $updCfgFile
-    $repo = if ($c -and $c.repo) { $c.repo } else { 'saikyr/claude-companion' }
+    $ch = Read-Json (Join-Path $web 'channel.json')
+    $repo = if ($c -and $c.repo) { $c.repo } elseif ($ch -and $ch.repo) { $ch.repo } else { 'saikyr/claude-companion' }
     $auto = if ($c -and $null -ne $c.auto) { [bool]$c.auto } else { $true }
     $tok = if ($c -and $c.token) { $c.token } elseif ($env:CC_GITHUB_TOKEN) { $env:CC_GITHUB_TOKEN } else { $null }
     if (-not $tok) { $gh = Get-Command gh -ErrorAction SilentlyContinue; if ($gh) { try { $t = (& $gh.Source auth token 2>$null); if ($LASTEXITCODE -eq 0 -and $t) { $tok = ([string]$t).Trim() } } catch { } } }
     $api = if ($c -and $c.api) { $c.api } else { 'https://api.github.com' }   # api: only changed for testing
-    $branch = if ($c -and $c.branch) { $c.branch } else { 'stable' }
+    $branch = if ($c -and $c.branch) { $c.branch } elseif ($ch -and $ch.branch) { $ch.branch } else { 'stable' }
     @{ repo = $repo; auto = $auto; token = $tok; api = $api; branch = $branch }
 }
 function Invoke-GitHub([string]$url, $cfg, [switch]$Raw) {
@@ -318,94 +320,80 @@ function Install-Update {
     }
 }
 # ---------------------------------------------------------------- one character on every computer (same as server.py)
-# Each computer publishes its save to a branch of the private repository (sync/<computer>: one commit,
-# no parent, with save.lua.gz, meta.json and settings.json), and downloads the others' into
-# companion-data\devices\<computer>\. The page merges them (js\merge.js). Saves are never written.
+# Each computer writes its save (save.lua.gz), settings.json, snapshot.json.gz and, last, meta.json
+# (with the save's SHA-256) to its own subfolder of a folder in a cloud drive the computers already
+# sync (Google Drive for desktop, OneDrive, Dropbox, iCloud Drive): <folder>\<computer>\. It reads the
+# other computers' subfolders into companion-data\devices\<computer>\, and the page merges them
+# (js\merge.js). Two computers never write the same file; saves are never written. Chosen once in the
+# app (it lists the drives it finds); kept in companion-data\update.json "sync": {"folder": "..."}.
 # Settings follow the computer where they changed last (the replaced file is kept as settings.json.bak).
-# Off: "sync": false in companion-data\update.json.
 $devicesDir = Join-Path $dataDir 'devices'
 $devId = (($env:COMPUTERNAME.ToLower() -replace '[^a-z0-9-]+', '-').Trim('-')); if (-not $devId) { $devId = 'computer' }
 if ($env:CC_DEVICE) { $devId = $env:CC_DEVICE }   # tests only
 $syncSecs = if ($env:CC_SYNC_SECS) { [double]$env:CC_SYNC_SECS } else { 15 }   # tests only: how often to look
 $sync = @{ pushed = $null; lastPush = $null; lastPull = $null; error = $null; nextPull = [DateTime]::MinValue; next = (Get-Date).AddSeconds(5) }
-function Send-GitHub([string]$method, [string]$url, $cfg, $body) {
-    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-    $rq = [System.Net.HttpWebRequest]::Create($url)
-    $rq.Method = $method; $rq.UserAgent = 'claude-companion'; $rq.Accept = 'application/vnd.github+json'; $rq.ContentType = 'application/json'; $rq.Timeout = 60000
-    if ($cfg.token) { $rq.Headers.Add('Authorization', 'Bearer ' + $cfg.token) }
-    $bytes = [System.Text.Encoding]::UTF8.GetBytes(($body | ConvertTo-Json -Depth 6 -Compress))
-    $rq.ContentLength = $bytes.Length
-    $st = $rq.GetRequestStream(); $st.Write($bytes, 0, $bytes.Length); $st.Close()
-    $rs = $rq.GetResponse()
-    try { $sr = New-Object System.IO.StreamReader($rs.GetResponseStream()); return ($sr.ReadToEnd() | ConvertFrom-Json) } finally { $rs.Close() }
-}
-function Get-GitHubRaw([string]$url, $cfg) {
-    $rq = [System.Net.HttpWebRequest]::Create($url)
-    $rq.UserAgent = 'claude-companion'; $rq.Accept = 'application/vnd.github.raw'; $rq.Timeout = 120000
-    if ($cfg.token) { $rq.Headers.Add('Authorization', 'Bearer ' + $cfg.token) }
-    $rs = $rq.GetResponse()
-    try { $ms = New-Object System.IO.MemoryStream; $rs.GetResponseStream().CopyTo($ms); return ,$ms.ToArray() } finally { $rs.Close() }
-}
+function Get-SyncFolder { $c = Read-Json $updCfgFile; if ($c -and $c.sync -and $c.sync.folder) { return [string]$c.sync.folder }; $null }
 function Get-Sha256([byte[]]$b) { -join ([System.Security.Cryptography.SHA256]::Create().ComputeHash($b) | ForEach-Object { $_.ToString('x2') }) }
-function Push-Save($save, $cfg) {
-    $base = "$($cfg.api)/repos/$($cfg.repo)/git"
-    $raw = Read-Shared $save.FullName
+function Write-Atomic([string]$path, [byte[]]$bytes) { [System.IO.File]::WriteAllBytes("$path.tmp", $bytes); Move-Item -LiteralPath "$path.tmp" -Destination $path -Force }
+function Compress-Bytes([byte[]]$b) {
     $ms = New-Object System.IO.MemoryStream
     $gz = New-Object System.IO.Compression.GZipStream($ms, [System.IO.Compression.CompressionMode]::Compress)
-    $gz.Write($raw, 0, $raw.Length); $gz.Close()
-    $meta = [ordered]@{ device = $devId; host = $env:COMPUTERNAME; os = 'pc'; saveModified = $save.LastWriteTimeUtc.ToString('o'); uploaded = (Get-Date).ToUniversalTime().ToString('o'); sha256 = (Get-Sha256 $raw); size = $raw.Length }
-    $entries = @(@{ path = 'save.lua.gz'; content = [Convert]::ToBase64String($ms.ToArray()); encoding = 'base64' })
-    $sfile = Join-Path $dataDir 'settings.json'
-    if (Test-Path $sfile) {
-        $meta.settingsModified = (Get-Item $sfile).LastWriteTimeUtc.ToString('o')
-        $entries += @{ path = 'settings.json'; content = [System.IO.File]::ReadAllText($sfile); encoding = 'utf-8' }
-    }
-    $entries += @{ path = 'meta.json'; content = ($meta | ConvertTo-Json); encoding = 'utf-8' }
-    $tree = @()
-    foreach ($e in $entries) {
-        $b = Send-GitHub 'POST' "$base/blobs" $cfg @{ content = $e.content; encoding = $e.encoding }
-        $tree += @{ path = $e.path; mode = '100644'; type = 'blob'; sha = $b.sha }
-    }
-    $t = Send-GitHub 'POST' "$base/trees" $cfg @{ tree = $tree }
-    $c = Send-GitHub 'POST' "$base/commits" $cfg @{ message = "$($devId): save of $($meta.saveModified)"; tree = $t.sha; parents = @() }
-    try { [void](Send-GitHub 'PATCH' "$base/refs/heads/sync/$devId" $cfg @{ sha = $c.sha; force = $true }) }
-    catch { [void](Send-GitHub 'POST' "$base/refs" $cfg @{ ref = "refs/heads/sync/$devId"; sha = $c.sha }) }
+    $gz.Write($b, 0, $b.Length); $gz.Close(); ,$ms.ToArray()
 }
-function Pull-Peers($cfg) {
-    $base = "$($cfg.api)/repos/$($cfg.repo)/git"
-    try { $refs = Invoke-GitHub "$base/matching-refs/heads/sync/" $cfg } catch { if ($_.Exception.Message -match '\(404\)') { return }; throw }
-    foreach ($r in @($refs)) {
-        $dev = ($r.ref -split '/')[-1]
+function Expand-Bytes([byte[]]$b) {
+    $in = New-Object System.IO.Compression.GZipStream((New-Object System.IO.MemoryStream(,$b)), [System.IO.Compression.CompressionMode]::Decompress)
+    $out = New-Object System.IO.MemoryStream; $in.CopyTo($out); $in.Close(); ,$out.ToArray()
+}
+function Get-CloudDrives {
+    $out = New-Object System.Collections.ArrayList
+    $add = { param($kind, $path) if ($path -and (Test-Path -LiteralPath $path -PathType Container) -and -not ($out | Where-Object { $_.path -eq $path })) { [void]$out.Add(@{ kind = $kind; path = $path }) } }
+    foreach ($d in [IO.DriveInfo]::GetDrives()) { & $add 'Google Drive' (Join-Path $d.Name 'My Drive') }
+    & $add 'Google Drive' (Join-Path $env:USERPROFILE 'Google Drive\My Drive'); & $add 'Google Drive' (Join-Path $env:USERPROFILE 'My Drive')
+    & $add 'OneDrive' $env:OneDrive; & $add 'Dropbox' (Join-Path $env:USERPROFILE 'Dropbox'); & $add 'iCloud Drive' (Join-Path $env:USERPROFILE 'iCloudDrive')
+    ,$out.ToArray()
+}
+function Push-Save($save, [string]$folder) {
+    $raw = Read-Shared $save.FullName
+    $meta = [ordered]@{ device = $devId; host = $env:COMPUTERNAME; os = 'pc'; saveModified = $save.LastWriteTimeUtc.ToString('o'); uploaded = (Get-Date).ToUniversalTime().ToString('o'); sha256 = (Get-Sha256 $raw); size = $raw.Length }
+    $d = Join-Path $folder $devId
+    if (-not (Test-Path $d)) { New-Item -ItemType Directory -Path $d -Force | Out-Null }
+    Write-Atomic (Join-Path $d 'save.lua.gz') (Compress-Bytes $raw)
+    $sfile = Join-Path $dataDir 'settings.json'
+    if (Test-Path $sfile) { $meta.settingsModified = (Get-Item $sfile).LastWriteTimeUtc.ToString('o'); Write-Atomic (Join-Path $d 'settings.json') ([System.IO.File]::ReadAllBytes($sfile)) }
+    $snap = Join-Path $dataDir 'snapshot.json'
+    if (Test-Path $snap) { Write-Atomic (Join-Path $d 'snapshot.json.gz') (Compress-Bytes ([System.IO.File]::ReadAllBytes($snap))) }
+    Write-Atomic (Join-Path $d 'meta.json') ([System.Text.Encoding]::UTF8.GetBytes(($meta | ConvertTo-Json)))   # last: the rest is complete
+}
+function Pull-Peers([string]$folder) {
+    foreach ($pd in (Get-ChildItem -LiteralPath $folder -Directory)) {
+        $dev = $pd.Name
         if ($dev -eq $devId -or $dev -notmatch '^[a-z0-9-]+$') { continue }
-        $folder = Join-Path $devicesDir $dev
-        $have = Read-Json (Join-Path $folder 'meta.json')
-        if ($have -and $have.commit -eq $r.object.sha) { continue }
-        $commit = Invoke-GitHub "$base/commits/$($r.object.sha)" $cfg
-        $tree = @{}; foreach ($e in @((Invoke-GitHub "$base/trees/$($commit.tree.sha)" $cfg).tree)) { $tree[$e.path] = $e.sha }
-        if (-not $tree['save.lua.gz'] -or -not $tree['meta.json']) { continue }
-        $meta = [System.Text.Encoding]::UTF8.GetString((Get-GitHubRaw "$base/blobs/$($tree['meta.json'])" $cfg)) | ConvertFrom-Json
-        $gzb = Get-GitHubRaw "$base/blobs/$($tree['save.lua.gz'])" $cfg
-        $in = New-Object System.IO.Compression.GZipStream((New-Object System.IO.MemoryStream(,$gzb)), [System.IO.Compression.CompressionMode]::Decompress)
-        $out = New-Object System.IO.MemoryStream; $in.CopyTo($out); $in.Close()
-        $raw = $out.ToArray()
-        if ((Get-Sha256 $raw) -ne $meta.sha256) { throw "$($dev): the save arrived damaged" }
-        if (-not (Test-Path $folder)) { New-Item -ItemType Directory -Path $folder -Force | Out-Null }
-        [System.IO.File]::WriteAllBytes((Join-Path $folder 'save.lua.tmp'), $raw)
-        Move-Item -LiteralPath (Join-Path $folder 'save.lua.tmp') -Destination (Join-Path $folder 'save.lua') -Force
+        $mf = Join-Path $pd.FullName 'meta.json'; $gf = Join-Path $pd.FullName 'save.lua.gz'
+        if (-not (Test-Path $mf) -or -not (Test-Path $gf)) { continue }
+        $metaBytes = [System.IO.File]::ReadAllBytes($mf)
+        $version = Get-Sha256 $metaBytes
+        $local = Join-Path $devicesDir $dev
+        $have = Read-Json (Join-Path $local 'meta.json')
+        if ($have -and $have.version -eq $version) { continue }
+        $meta = [System.Text.Encoding]::UTF8.GetString($metaBytes) | ConvertFrom-Json
+        $raw = Expand-Bytes ([System.IO.File]::ReadAllBytes($gf))
+        if ((Get-Sha256 $raw) -ne $meta.sha256) { throw "$($dev): the save is damaged or still being written (will try again)" }
+        if (-not (Test-Path $local)) { New-Item -ItemType Directory -Path $local -Force | Out-Null }
+        Write-Atomic (Join-Path $local 'save.lua') $raw
         # settings: the computer where they changed last wins; the replaced file is kept as .bak
-        $mine = Join-Path $dataDir 'settings.json'
-        if ($tree['settings.json'] -and $meta.settingsModified) {
+        $ps = Join-Path $pd.FullName 'settings.json'; $mine = Join-Path $dataDir 'settings.json'
+        if ((Test-Path $ps) -and $meta.settingsModified) {
             $mineT = if (Test-Path $mine) { (Get-Item $mine).LastWriteTimeUtc } else { [DateTime]::MinValue }
             if ([DateTime]::Parse($meta.settingsModified).ToUniversalTime() -gt $mineT) {
-                $body = Get-GitHubRaw "$base/blobs/$($tree['settings.json'])" $cfg
+                $body = [System.IO.File]::ReadAllBytes($ps)
                 [void]([System.Text.Encoding]::UTF8.GetString($body) | ConvertFrom-Json)
                 if (Test-Path $mine) { Copy-Item -LiteralPath $mine -Destination "$mine.bak" -Force }
-                [System.IO.File]::WriteAllBytes("$mine.tmp", $body); Move-Item -LiteralPath "$mine.tmp" -Destination $mine -Force
+                Write-Atomic $mine $body
             }
         }
         $h = @{}; $meta.PSObject.Properties | ForEach-Object { $h[$_.Name] = $_.Value }
-        $h.commit = $r.object.sha; $h.downloaded = (Get-Date).ToUniversalTime().ToString('o')
-        Write-Json (Join-Path $folder 'meta.json') $h
+        $h.version = $version; $h.downloaded = (Get-Date).ToUniversalTime().ToString('o')
+        Write-Json (Join-Path $local 'meta.json') $h
     }
 }
 function Get-Peers {
@@ -418,18 +406,19 @@ function Get-Peers {
     }
     ,$out
 }
+function Get-SyncStatus { $f = Get-SyncFolder; @{ here = $devId; enabled = [bool]$f; folder = $f; drives = (Get-CloudDrives); peers = (Get-Peers); lastPush = $sync.lastPush; lastPull = $sync.lastPull; error = $sync.error } }
 function Step-Sync {
-    $cfg = Get-UpdCfg
-    $c = Read-Json $updCfgFile
-    if ($c -and $c.PSObject.Properties['sync'] -and -not $c.sync) { return }
+    $folder = Get-SyncFolder
+    if (-not $folder) { return }
     try {
+        if (-not (Test-Path -LiteralPath $folder -PathType Container)) { throw "the sync folder $folder is not there (is the cloud drive running?)" }
         $s = Get-Save
         $state = Join-Path $devicesDir '.pushed'
         if ($s -and ([DateTime]::UtcNow - $s.LastWriteTimeUtc).TotalSeconds -gt 10) {
             $stamp = $s.LastWriteTimeUtc.ToString('o')
             if (-not $sync.pushed -and (Test-Path $state)) { $sync.pushed = (Get-Content -Raw -LiteralPath $state).Trim() }
             if ($stamp -ne $sync.pushed) {
-                Push-Save $s $cfg
+                Push-Save $s $folder
                 if (-not (Test-Path $devicesDir)) { New-Item -ItemType Directory -Path $devicesDir -Force | Out-Null }
                 [System.IO.File]::WriteAllText($state, $stamp)
                 $sync.pushed = $stamp; $sync.lastPush = (Get-Date).ToUniversalTime().ToString('o')
@@ -437,7 +426,7 @@ function Step-Sync {
         }
         if ((Get-Date) -ge $sync.nextPull) {
             $sync.nextPull = (Get-Date).AddSeconds($syncSecs * 4)
-            Pull-Peers $cfg
+            Pull-Peers $folder
             $sync.lastPull = (Get-Date).ToUniversalTime().ToString('o')
         }
         $sync.error = $null
@@ -488,8 +477,26 @@ while ($listener.IsListening) {
             } else { $res.StatusCode = 404; $body = [System.Text.Encoding]::UTF8.GetBytes('no save yet') }
         } elseif ($path -eq '/api/devices') {
             $type = 'application/json; charset=utf-8'
-            $enabled = $true; $c = Read-Json $updCfgFile; if ($c -and $c.PSObject.Properties['sync'] -and -not $c.sync) { $enabled = $false }
-            $body = [System.Text.Encoding]::UTF8.GetBytes((@{ here = $devId; enabled = $enabled; peers = (Get-Peers); lastPush = $sync.lastPush; lastPull = $sync.lastPull; error = $sync.error } | ConvertTo-Json -Depth 5))
+            $body = [System.Text.Encoding]::UTF8.GetBytes((Get-SyncStatus | ConvertTo-Json -Depth 5))
+        } elseif ($path -eq '/api/sync-config' -and $req.HttpMethod -eq 'POST') {
+            # {"folder": "<a cloud drive folder>"} turns sync on (in a "Claude Companion" folder inside it), {"folder": null} off
+            $type = 'application/json; charset=utf-8'
+            $reader = New-Object System.IO.StreamReader($req.InputStream, [System.Text.Encoding]::UTF8); $text = $reader.ReadToEnd(); $reader.Close()
+            $want = $null; try { $want = ($text | ConvertFrom-Json).folder } catch { }
+            if ($req.Headers['X-CC'] -ne '1') { $res.StatusCode = 400; $body = [System.Text.Encoding]::UTF8.GetBytes('bad request') }
+            elseif ($want -and -not (Test-Path -LiteralPath $want -PathType Container)) { $res.StatusCode = 400; $body = [System.Text.Encoding]::UTF8.GetBytes('that folder does not exist') }
+            else {
+                $c = Read-Json $updCfgFile; $h = @{}; if ($c) { $c.PSObject.Properties | ForEach-Object { $h[$_.Name] = $_.Value } }
+                if ($want) {
+                    $target = if ((Split-Path -Leaf $want) -eq 'Claude Companion') { $want } else { Join-Path $want 'Claude Companion' }
+                    if (-not (Test-Path $target)) { New-Item -ItemType Directory -Path $target -Force | Out-Null }
+                    $h.sync = @{ folder = $target }
+                } else { $h.Remove('sync') }
+                if (-not (Test-Path $dataDir)) { New-Item -ItemType Directory -Path $dataDir -Force | Out-Null }
+                Write-Json $updCfgFile $h
+                $sync.pushed = $null; $sync.nextPull = [DateTime]::MinValue; Remove-Item -LiteralPath (Join-Path $devicesDir '.pushed') -ErrorAction SilentlyContinue
+                $body = [System.Text.Encoding]::UTF8.GetBytes((Get-SyncStatus | ConvertTo-Json -Depth 5))
+            }
         } elseif ($path -eq '/api/device-data') {
             $dev = [string]$req.QueryString['dev']
             $f = Join-Path (Join-Path $devicesDir $dev) 'save.lua'

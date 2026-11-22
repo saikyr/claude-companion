@@ -95,6 +95,24 @@ class Handler(BaseHTTPRequestHandler):
         # Claude's cards: ../companion-data/from-claude/state.json (see SCHEMA.md there).
         # Only this app sends the X-CC header; a web page can't add it without the browser asking first.
         n = int(self.headers.get('Content-Length') or 0)
+        if self.path.split('?')[0] == '/api/sync-config':
+            # {"folder": "<a cloud drive folder>"} turns sync on (in a "Claude Companion" folder inside it), {"folder": null} off
+            if self.headers.get('X-CC') != '1' or not 0 < n < 4096: return self.send(400, 'bad request')
+            try: want = json.loads(self.rfile.read(n).decode('utf-8')).get('folder')
+            except ValueError: return self.send(400, 'bad request')
+            cfg = read_json(UPDATE_CFG, {})
+            if want:
+                if not os.path.isdir(want): return self.send(400, 'that folder does not exist')
+                target = want if os.path.basename(os.path.normpath(want)) == 'Claude Companion' else os.path.join(want, 'Claude Companion')
+                os.makedirs(target, exist_ok=True)
+                cfg['sync'] = {'folder': target}
+            else:
+                cfg.pop('sync', None)
+            write_json(UPDATE_CFG, cfg)
+            _sync['nextPull'], _sync['pushed'] = 0.0, None
+            try: os.remove(os.path.join(DEVICES_DIR, '.pushed'))   # publish again to the new place
+            except OSError: pass
+            return self.send(200, json.dumps(sync_status()), TYPES['.json'])
         if self.path.split('?')[0] in ('/api/update', '/api/update-auto'):
             if self.headers.get('X-CC') != '1': return self.send(400, 'bad request')
             if n: self.rfile.read(min(n, 4096))
@@ -158,7 +176,10 @@ def write_json(path, data):
 
 
 def upd_cfg():
+    # where updates come from: web/channel.json, written by the build (the private repository for
+    # Gabriel's builds, the public download repository for everyone else's); update.json can override
     c = {'repo': REPO, 'auto': True, 'branch': 'stable', 'api': 'https://api.github.com'}   # api: only changed for testing
+    c.update({k: v for k, v in read_json(os.path.join(WEB, 'channel.json'), {}).items() if k in ('repo', 'branch')})
     c.update(read_json(UPDATE_CFG, {}))
     return c
 
@@ -307,15 +328,20 @@ def auto_update():
 
 
 # ---------------------------------------------------------------- one character on every computer
-# The game keeps a separate save on each computer, and writes it itself, so the saves can't be one
-# file. Instead each computer's server publishes its save to the others through the same private
-# repository the updates come from: a branch per computer (sync/<computer>) holding one commit with
-# save.lua.gz, meta.json and the app's settings.json. The commit has no parent, so the repository
-# doesn't grow with every save. Each server downloads the other computers' latest into
-# companion-data/devices/<computer>/, and the page merges them with this computer's save
-# (js/merge.js) before showing anything or writing snapshot.json. Nothing is ever written to a save.
-# Settings (gear weights and picks) follow the computer where they were changed last; the replaced
-# file is kept as settings.json.bak. Turn it off with "sync": false in companion-data/update.json.
+# The game keeps a separate save on each computer and writes it itself, so the saves can't be one
+# file. Instead each computer's server publishes its save (and the app's settings and snapshot) to a
+# store the person's computers share, and downloads the other computers' latest into
+# companion-data/devices/<computer>/. The page merges them with this computer's save (js/merge.js)
+# before showing anything or writing snapshot.json. Nothing is ever written to a save.
+# The store is a folder inside a cloud drive the person's computers already sync (Google Drive for
+# desktop, OneDrive, Dropbox, iCloud Drive), chosen once in the app (it lists the drives it finds) and
+# kept in companion-data/update.json "sync": {"folder": "..."}; off until chosen. Each computer writes
+# only its own subfolder, <folder>/<computer>/ (save.lua.gz, settings.json, snapshot.json.gz, then
+# meta.json last, with the save's SHA-256), so two computers never write the same file and the drive
+# never has a conflict to resolve. Everyone uses the same mechanism; no account beyond the drive.
+# Stores are pluggable (put / versions / get): a hosted one could be added later.
+# Settings (gear weights and picks) follow the computer where they changed last; the replaced file is
+# kept as settings.json.bak.
 import base64, gzip, hashlib, re
 DEVICES_DIR = os.path.join(DATA_DIR, 'devices')
 DEV = os.environ.get('CC_DEVICE') or re.sub(r'[^a-z0-9-]+', '-', DEVICE_HOST.lower()).strip('-') or 'computer'   # CC_DEVICE: tests only
@@ -323,75 +349,115 @@ SYNC_SECS = float(os.environ.get('CC_SYNC_SECS') or 15)   # tests only: how ofte
 _sync = {'pushed': None, 'lastPush': None, 'lastPull': None, 'error': None, 'nextPull': 0.0}
 
 
-def gh_send(method, url, tok, body):
-    req = urllib.request.Request(url, data=json.dumps(body).encode('utf-8'), method=method,
-                                 headers={'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json', 'User-Agent': 'claude-companion'})
-    if tok: req.add_header('Authorization', 'Bearer ' + tok)
-    with urllib.request.urlopen(req, timeout=60) as r: return json.loads(r.read().decode('utf-8') or '{}')
+def sync_cfg():
+    s = upd_cfg().get('sync')
+    return s if isinstance(s, dict) and s.get('folder') else None
 
 
-def gh_raw(url, tok):
-    req = urllib.request.Request(url, headers={'Accept': 'application/vnd.github.raw', 'User-Agent': 'claude-companion'})
-    if tok: req.add_header('Authorization', 'Bearer ' + tok)
-    with urllib.request.urlopen(req, timeout=120) as r: return r.read()
+class FolderStore:
+    """<folder>/<computer>/ in a folder the computers already share."""
+    def __init__(self, folder):
+        self.root = os.path.expanduser(folder)
+        if not os.path.isdir(self.root): raise ValueError(f'the sync folder {self.root} does not exist')
+
+    def put(self, files):
+        d = os.path.join(self.root, DEV)
+        os.makedirs(d, exist_ok=True)
+        for n, data in files.items():
+            if n == 'meta.json': continue
+            with open(os.path.join(d, n + '.tmp'), 'wb') as f: f.write(data)
+            os.replace(os.path.join(d, n + '.tmp'), os.path.join(d, n))
+        with open(os.path.join(d, 'meta.json.tmp'), 'wb') as f: f.write(files['meta.json'])   # last: it says the rest is complete
+        os.replace(os.path.join(d, 'meta.json.tmp'), os.path.join(d, 'meta.json'))
+
+    def versions(self):
+        out = {}
+        for dev in os.listdir(self.root):
+            m = os.path.join(self.root, dev, 'meta.json')
+            if os.path.isfile(m):
+                with open(m, 'rb') as f: out[dev] = hashlib.sha256(f.read()).hexdigest()
+        return out
+
+    def get(self, dev, version, names):
+        out = {}
+        for n in names:
+            p = os.path.join(self.root, dev, n)
+            if os.path.isfile(p):
+                with open(p, 'rb') as f: out[n] = f.read()
+        return out
 
 
-def push_save(save, cfg, tok):
-    base = f"{cfg['api']}/repos/{cfg['repo']}/git"
+def open_store():
+    s = sync_cfg()
+    return FolderStore(s['folder']) if s else None
+
+
+def cloud_drives():
+    """Cloud-drive folders on this computer, for the app to offer (Google Drive first)."""
+    home, out = os.path.expanduser('~'), []
+    def add(kind, path):
+        if path and os.path.isdir(path) and not any(o['path'] == path for o in out): out.append({'kind': kind, 'path': path})
+    if sys.platform == 'darwin':
+        cs = os.path.join(home, 'Library', 'CloudStorage')
+        for d in sorted(os.listdir(cs)) if os.path.isdir(cs) else []:
+            p = os.path.join(cs, d)
+            if d.startswith('GoogleDrive-'): add('Google Drive', os.path.join(p, 'My Drive'))
+            elif d.startswith('OneDrive'): add('OneDrive', p)
+            elif d.startswith('Dropbox'): add('Dropbox', p)
+        add('iCloud Drive', os.path.join(home, 'Library', 'Mobile Documents', 'com~apple~CloudDocs'))
+    elif os.name == 'nt':
+        import string
+        for L in string.ascii_uppercase:
+            add('Google Drive', f'{L}:\My Drive')
+        add('Google Drive', os.path.join(home, 'Google Drive', 'My Drive')); add('Google Drive', os.path.join(home, 'My Drive'))
+        add('OneDrive', os.environ.get('OneDrive')); add('Dropbox', os.path.join(home, 'Dropbox'))
+        add('iCloud Drive', os.path.join(home, 'iCloudDrive'))
+    else:
+        add('Dropbox', os.path.join(home, 'Dropbox'))
+    return out
+
+
+def push_save(store, save):
     with open(save, 'rb') as f: raw = f.read()
     meta = {'device': DEV, 'host': DEVICE_HOST, 'os': DEVICE_OS, 'saveModified': stamp_of(save), 'uploaded': datetime.now(timezone.utc).isoformat(),
             'sha256': hashlib.sha256(raw).hexdigest(), 'size': len(raw)}
-    entries = [('save.lua.gz', base64.b64encode(gzip.compress(raw, mtime=0)).decode('ascii'), 'base64'), ('meta.json', json.dumps(meta, indent=1), 'utf-8')]
+    files = {'save.lua.gz': gzip.compress(raw, mtime=0)}
     sfile = os.path.join(DATA_DIR, 'settings.json')
     if os.path.isfile(sfile):
-        with open(sfile, encoding='utf-8') as f: entries.append(('settings.json', f.read(), 'utf-8'))
+        with open(sfile, 'rb') as f: files['settings.json'] = f.read()
         meta['settingsModified'] = datetime.fromtimestamp(os.path.getmtime(sfile), timezone.utc).isoformat()
-        entries[1] = ('meta.json', json.dumps(meta, indent=1), 'utf-8')
-    tree = []
-    for path, content, enc in entries:
-        b = gh_send('POST', base + '/blobs', tok, {'content': content, 'encoding': enc})
-        tree.append({'path': path, 'mode': '100644', 'type': 'blob', 'sha': b['sha']})
-    t = gh_send('POST', base + '/trees', tok, {'tree': tree})
-    c = gh_send('POST', base + '/commits', tok, {'message': f"{DEV}: save of {meta['saveModified']}", 'tree': t['sha'], 'parents': []})
-    try: gh_send('PATCH', base + f'/refs/heads/sync/{DEV}', tok, {'sha': c['sha'], 'force': True})
-    except urllib.error.HTTPError as e:
-        if e.code not in (404, 422): raise
-        gh_send('POST', base + '/refs', tok, {'ref': f'refs/heads/sync/{DEV}', 'sha': c['sha']})
+    snap = os.path.join(DATA_DIR, 'snapshot.json')
+    if os.path.isfile(snap):   # the merged picture the app wrote: Claude can read it from the store
+        with open(snap, 'rb') as f: files['snapshot.json.gz'] = gzip.compress(f.read(), mtime=0)
+    files['meta.json'] = json.dumps(meta, indent=1).encode('utf-8')
+    store.put(files)
     return meta
 
 
-def pull_peers(cfg, tok):
-    base = f"{cfg['api']}/repos/{cfg['repo']}/git"
-    try: refs = gh_get(base + '/matching-refs/heads/sync/', tok)
-    except urllib.error.HTTPError as e:
-        if e.code == 404: return
-        raise
-    for r in refs:
-        dev = r['ref'].rsplit('/', 1)[-1]
+def pull_peers(store):
+    for dev, version in store.versions().items():
         if dev == DEV or not re.fullmatch(r'[a-z0-9-]+', dev): continue
         folder = os.path.join(DEVICES_DIR, dev)
         have = read_json(os.path.join(folder, 'meta.json'), {})
-        if have.get('commit') == r['object']['sha']: continue
-        commit = gh_get(base + '/commits/' + r['object']['sha'], tok)
-        tree = {e['path']: e['sha'] for e in gh_get(base + '/trees/' + commit['tree']['sha'], tok)['tree']}
-        if 'save.lua.gz' not in tree or 'meta.json' not in tree: continue
-        meta = json.loads(gh_raw(base + '/blobs/' + tree['meta.json'], tok).decode('utf-8'))
-        raw = gzip.decompress(gh_raw(base + '/blobs/' + tree['save.lua.gz'], tok))
-        if hashlib.sha256(raw).hexdigest() != meta.get('sha256'): raise ValueError(f'{dev}: the save arrived damaged')
+        if have.get('version') == version: continue
+        got = store.get(dev, version, ['meta.json', 'save.lua.gz', 'settings.json'])
+        if 'meta.json' not in got or 'save.lua.gz' not in got: continue
+        meta = json.loads(got['meta.json'].decode('utf-8'))
+        raw = gzip.decompress(got['save.lua.gz'])
+        if hashlib.sha256(raw).hexdigest() != meta.get('sha256'): raise ValueError(f'{dev}: the save arrived damaged or half-written')
         os.makedirs(folder, exist_ok=True)
         with open(os.path.join(folder, 'save.lua.tmp'), 'wb') as f: f.write(raw)
         os.replace(os.path.join(folder, 'save.lua.tmp'), os.path.join(folder, 'save.lua'))
         # settings: the computer where they changed last wins; the replaced file is kept as .bak
-        if 'settings.json' in tree and meta.get('settingsModified'):
+        if 'settings.json' in got and meta.get('settingsModified'):
             mine = os.path.join(DATA_DIR, 'settings.json')
             mine_t = datetime.fromtimestamp(os.path.getmtime(mine), timezone.utc).isoformat() if os.path.isfile(mine) else ''
             if meta['settingsModified'] > mine_t:
-                body = gh_raw(base + '/blobs/' + tree['settings.json'], tok)
-                json.loads(body.decode('utf-8'))
+                json.loads(got['settings.json'].decode('utf-8'))
                 if os.path.isfile(mine): shutil.copy2(mine, mine + '.bak')
-                with open(mine + '.tmp', 'wb') as f: f.write(body)
+                with open(mine + '.tmp', 'wb') as f: f.write(got['settings.json'])
                 os.replace(mine + '.tmp', mine)
-        meta['commit'] = r['object']['sha']
+        meta['version'] = version
         meta['downloaded'] = datetime.now(timezone.utc).isoformat()
         write_json(os.path.join(folder, 'meta.json'), meta)
         print(f"sync: got {dev}'s save of {meta.get('saveModified')}", flush=True)
@@ -408,35 +474,33 @@ def peers():
 
 
 def sync_status():
-    return {'here': DEV, 'enabled': bool(upd_cfg().get('sync', True)), 'peers': peers(), 'lastPush': _sync['lastPush'], 'lastPull': _sync['lastPull'], 'error': _sync['error']}
+    s = sync_cfg()
+    return {'here': DEV, 'enabled': bool(s), 'folder': s['folder'] if s else None, 'drives': cloud_drives(), 'peers': peers(), 'lastPush': _sync['lastPush'], 'lastPull': _sync['lastPull'], 'error': _sync['error']}
 
 
 def sync_loop():
     state = os.path.join(DEVICES_DIR, '.pushed')
     while True:
         time.sleep(SYNC_SECS)
-        cfg = upd_cfg()
-        if not cfg.get('sync', True): continue
+        if not sync_cfg(): continue
         try:
-            tok = gh_token(cfg)
+            store = open_store()
             save = find_save()
             # publish this computer's save once the game has finished writing it (10 s quiet)
             if save and time.time() - os.path.getmtime(save) > 10:
                 stamp = stamp_of(save)
                 pushed = _sync['pushed'] or (open(state).read().strip() if os.path.isfile(state) else None)
                 if stamp != pushed:
-                    push_save(save, cfg, tok)
+                    push_save(store, save)
                     os.makedirs(DEVICES_DIR, exist_ok=True)
                     with open(state, 'w') as f: f.write(stamp)
                     _sync['pushed'], _sync['lastPush'] = stamp, datetime.now(timezone.utc).isoformat()
                     print('sync: published the save of', stamp, flush=True)
             if time.time() >= _sync['nextPull']:
                 _sync['nextPull'] = time.time() + SYNC_SECS * 4
-                pull_peers(cfg, tok)
+                pull_peers(store)
                 _sync['lastPull'] = datetime.now(timezone.utc).isoformat()
             _sync['error'] = None
-        except urllib.error.HTTPError as e:
-            _sync['error'] = 'GitHub said %d' % e.code + (' (sign in with the GitHub CLI or add a token, see SCHEMA.md)' if e.code in (401, 403, 404) else '')
         except Exception as e:
             _sync['error'] = str(e)[:300]
 

@@ -6,13 +6,14 @@ loot, grinds, auction house prices and sales). The app shows it all in one windo
 computer and writes a compact `snapshot.json` that Claude reads when it coaches you. Claude's
 suggestions (farms, flips, quests, gear) come back as cards in the app's **From Claude** tab.
 
-Nothing leaves your computer: the app is a tiny server on `localhost` that reads the game's own
-saved file.
+The app is a tiny server on `localhost` that reads the game's own saved file. It updates itself
+when a new tested build is out, and, if you pick a cloud drive your computers share, it shows the same
+character on all of them. Nothing goes anywhere else. How it all fits: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Install
 
-1. Download `ClaudeCompanion-<version>.zip` from the [latest release](../../releases/latest).
-   (Building from source: see [Develop](#develop); the zip already has the 12 MB game-data pack.)
+1. Get the newest build: the `stable` branch of this repository (Code > Download ZIP on that branch),
+   or the public download repository once there is one. After this first install the app updates itself.
 2. Unzip it into your Forever AddOns folder, so you get `.../AddOns/ClaudeCompanion/ClaudeCompanion.toc`:
    - **Windows:** `C:\...\World of Warcraft\_forever_\Interface\AddOns\`
    - **macOS:** `/Applications/World of Warcraft/_forever_/Interface/AddOns/`
@@ -80,7 +81,8 @@ Key bindings: Options > Key Bindings > AddOns > Claude Companion.
 | `ClaudeCompanion/companion-data/SCHEMA.md` | The `snapshot.json` contract Claude reads, and the From Claude cards format |
 | `gamedata/` | Builds `web/data/gamedata.js` from QuestieDB, endgametools and ForeverDB |
 | `test/harness.lua` | Runs the addon against a mock game API (Lua 5.1) |
-| `tools/make-release.sh` | Builds the release zip |
+| `tools/publish-stable.py` | Publishes a build to the `stable` branch (CI runs it after a merge to main) |
+| `tools/install.sh` | One-time install on a Mac from the stable branch |
 | `tools/make-icons.py` | Draws the app icon (PNG for the installed app, `.icns` for the Mac launcher) |
 | `tools/check-cards.py` | Checks a From Claude `cards.json` before Claude writes it |
 | `docs/ARCHITECTURE.md` | How it fits together, data sources, contracts |
@@ -100,11 +102,14 @@ Key bindings: Options > Key Bindings > AddOns > Claude Companion.
     pip install lupa && sh gamedata/build.sh
     cp gamedata/work/out/gamedata.js ClaudeCompanion/web/data/
 
-    # release zip
-    sh tools/make-release.sh
+    # web tests: merge rules, self-update and sync end to end (no network)
+    node test/web/merge.test.js
+    python3 test/update_test.py
+    python3 test/sync_test.py
 
-CI (`.github/workflows/checks.yml`) runs the harness, Lua/JS/Python syntax checks, and refuses
-commits that contain a saved file or snapshot.
+CI (`.github/workflows/checks.yml`) runs all of it, plus syntax checks, and refuses commits that
+contain a saved file or snapshot. A merge to `main` that passes is published to `stable` by
+`.github/workflows/publish.yml`, and every installed app picks it up by itself.
 
 **Never commit personal data**: `SavedVariables`, `snapshot.json`, `web/data.js` and AH scans are
 in `.gitignore`.

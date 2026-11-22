@@ -5,11 +5,19 @@
 (function () {
   if (!location.protocol.startsWith('http') || /background=1/.test(location.search)) return;
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  // small cards in the bottom-right corner (this one and js/sync.js's) stack in one column
+  let corner = document.getElementById('cc-corner');
+  if (!corner) {
+    corner = document.createElement('div');
+    corner.id = 'cc-corner';
+    corner.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:50;display:flex;flex-direction:column;gap:10px;max-width:340px';
+    document.body.appendChild(corner);
+  }
   const box = document.createElement('div');
   box.id = 'cc-update';
-  box.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:50;max-width:340px;background:#17181d;border:1px solid #34353d;' +
-    'border-radius:10px;padding:12px 14px;font-size:13px;line-height:1.45;color:#e8e8ea;box-shadow:0 6px 24px rgba(0,0,0,.45);display:none';
-  document.body.appendChild(box);
+  box.style.cssText = 'background:#17181d;border:1px solid #34353d;border-radius:10px;padding:12px 14px;font-size:13px;line-height:1.45;' +
+    'color:#e8e8ea;box-shadow:0 6px 24px rgba(0,0,0,.45);display:none';
+  corner.appendChild(box);
   const btn = 'background:#e2b345;color:#141414;border:0;border-radius:6px;padding:5px 12px;font-weight:600;cursor:pointer;margin-right:8px';
   const link = 'background:none;border:0;color:#9a9890;cursor:pointer;padding:0;font-size:12px;text-decoration:underline';
   const DISMISS = 'cc.update.dismissed';
