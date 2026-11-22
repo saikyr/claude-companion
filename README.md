@@ -18,7 +18,9 @@ saved file.
    - **macOS:** `/Applications/World of Warcraft/_forever_/Interface/AddOns/`
 3. Start the game, log in, type `/cc sync` once. That saves everything the addon can see.
 4. Set up the app, once:
-   - **Windows:** double-click `AddOns\ClaudeCompanion\web\Claude Companion.bat`.
+   - **Windows:** double-click `AddOns\ClaudeCompanion\web\Claude Companion.bat` once. It adds
+     **Claude Companion** to the Start menu (right-click it there and pin it to the taskbar) and opens the
+     app in its own window. No console window opens, then or later.
    - **macOS:** open `AddOns/ClaudeCompanion/web/Claude Companion.app`. The first time, macOS blocks it
      because it came from the internet and isn't from the App Store: choose **Done**, then
      **System Settings > Privacy & Security > Open Anyway** (macOS 15 and later; on older versions,

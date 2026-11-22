@@ -2,6 +2,15 @@
 
 Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 
+## Unreleased (Windows app)
+
+- **Windows works like the Mac app:** `Claude Companion.bat` (run once, and after an update) adds
+  **Claude Companion** to the Start menu, with its icon (`web/icons/app.ico`), and the hidden server to
+  Startup. Both shortcuts run PowerShell through `conhost --headless`, so no console window ever shows.
+  The Start menu entry starts the server if it isn't running and opens the app in its own window (the
+  installed Edge/Chrome app if there is one, else `--app`, no tabs or address bar).
+- `server.ps1 -Open` (what the Start menu runs). `-Uninstall` removes both shortcuts.
+
 ## Unreleased (grinds end cleanly, one save per computer)
 
 - **A grind no longer runs on by itself.** Logging out ends it at the logout. A `/reload` or Sync keeps
