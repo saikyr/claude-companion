@@ -52,6 +52,8 @@ local function Each(fn)
     fn(c.session)
     local g = c.grind
     if g and not g.paused then g.last = ns.Now(); fn(g) end
+    local r = c.run
+    if r and r.inside then r.last = ns.Now(); fn(r) end
 end
 
 function ns.EndSession()
@@ -356,21 +358,48 @@ ns.On("UNIT_PET", RefreshGroupGUIDs)
 ns.OnLogin(RefreshGroupGUIDs)
 
 local lastKill = {}
+local recentKill = {} -- [name] = GetTime() of the last kill counted by name, so the XP line doesn't count it twice
+local function Count(name, mine, fields)
+    recentKill[name] = GetTime()
+    Each(function(s)
+        s.kills = s.kills + 1
+        if mine then s.myKills = (s.myKills or 0) + 1 end
+        s.killsBy[name] = (s.killsBy[name] or 0) + 1
+    end)
+    fields.name = name
+    fields.instance = Clean(select(2, Call(IsInInstance)))
+    ns.Log("kill", fields)
+end
 local function Kill(target, mine)
     target = Clean(target)
     if not target or lastKill[target] then return end
     lastKill[target] = true
     local info = seen[target] or {}
     local id = NpcID(target)
-    local name = info.name or ("npc " .. tostring(id or "?"))
-    Each(function(s)
-        s.kills = s.kills + 1
-        if mine then s.myKills = (s.myKills or 0) + 1 end
-        s.killsBy[name] = (s.killsBy[name] or 0) + 1
-    end)
-    ns.Log("kill", { name = name, npc = id, level = info.level, class = info.class, by = mine and "me" or "group",
-        instance = Clean(select(2, Call(IsInInstance))) })
+    Count(info.name or ("npc " .. tostring(id or "?")), mine,
+        { npc = id, level = info.level, class = info.class, by = mine and "me" or "group" })
 end
+-- "Scarlet Monk dies, you gain 120 experience." Counted only when no kill event came for that name
+-- in the last 2 seconds: inside instances the kill event's GUIDs read as secret, so this is often
+-- the only sign of a kill. Kills that give no XP (level 60, grey mobs) aren't seen this way.
+-- a game format string ("%s dies, you gain %d experience.") as a Lua pattern
+local function FormatPattern(fmt)
+    local p = fmt:gsub("%%%d?%$?([sd])", "\001%1")
+    p = p:gsub("([%(%)%.%+%-%*%?%[%]%^%$%%])", "%%%1")
+    p = p:gsub("\001s", "(.-)"):gsub("\001d", "%%d+")
+    return "^" .. p
+end
+ns.FormatPattern = FormatPattern
+local XP_KILL = FormatPattern(COMBATLOG_XPGAIN_FIRSTPERSON or "%s dies, you gain %d experience.")
+ns.On("CHAT_MSG_COMBAT_XP_GAIN", function(text)
+    text = Clean(text)
+    if not text or not ns.char then return end
+    local name = text:match(XP_KILL)
+    if not name or name == "" then return end
+    local t = recentKill[name]
+    if t and GetTime() - t < 2 then return end
+    Count(name, nil, { by = "xp" })
+end)
 
 ns.On("PARTY_KILL", function(attacker, target)
     attacker = Clean(attacker)
@@ -610,6 +639,120 @@ ns.On("GROUP_ROSTER_UPDATE", function()
     end)
 end)
 
+---------------------------------------------------------------- dungeon runs
+-- A run starts by itself when you enter a dungeon or raid and counts the same things as a grind
+-- (time, kills, loot, gold, XP, deaths, quests, rep), plus bosses and who you were with. Leaving
+-- doesn't end it at once: a run back after a wipe or a quest handed in outside keeps it. It ends
+-- when you enter a different instance, the instance is reset, you have been out of it for
+-- RUN_OUTSIDE, or (like a grind) this computer's save last saw it RUN_OUTSIDE before you log in.
+local RUN_OUTSIDE = 15 * 60
+
+local function InstanceNow()
+    local inside, kind = Call(IsInInstance)
+    kind = Clean(kind)
+    if not Clean(inside) or (kind ~= "party" and kind ~= "raid") then return nil end
+    local name, _, _, diffName, maxPlayers, _, _, mapID = Call(GetInstanceInfo)
+    return { name = Clean(name) or Clean(GetRealZoneText()) or "Dungeon", kind = kind, map = Clean(mapID),
+        difficulty = Clean(diffName), size = Clean(maxPlayers) }
+end
+ns.InstanceNow = InstanceNow
+
+local function Roster()
+    local out = {}
+    for _, m in ipairs(ns.Group and ns.Group() or {}) do out[#out + 1] = { name = m.name, level = m.level, class = m.class } end
+    return out
+end
+
+-- at: when it ended (default: when you were last inside). why: left / other / reset / away / logout / you
+function ns.RunEnd(why, at)
+    local c = ns.char
+    local r = c and c.run
+    if not r then return nil end
+    at = at or r.leftAt or ns.Now()
+    r.finish = at
+    r.ended = why
+    r.secs = math.max(0, at - r.start - (r.outsideSecs or 0) - (r.pausedSecs or 0))
+    r.vendorValue, r.ahValue = ns.LootValue(r)
+    r.coin = (r.bySource and r.bySource.loot) or 0
+    r.inside, r.leftAt = nil, nil
+    c.runs = c.runs or {}
+    ns.Push(c.runs, r, ns.LIMITS.sessions)
+    c.run = nil
+    ns.Log("runEnd", { name = r.name, secs = r.secs, kills = r.kills, bosses = #(r.bosses or {}), deaths = r.deaths, ended = why })
+    return r
+end
+
+local function RunStart(inst)
+    local c = ns.char
+    local r = NewTracker(inst.name)
+    r.kind, r.map, r.difficulty, r.size = inst.kind, inst.map, inst.difficulty, inst.size
+    r.bosses, r.group, r.device, r.inside, r.outsideSecs = {}, Roster(), ns.Device(), true, 0
+    c.run = r
+    ns.Log("runStart", { name = r.name, kind = r.kind, difficulty = r.difficulty, group = #r.group })
+    return r
+end
+
+-- where are we now: start, continue, park or end the run
+function ns.RunCheck()
+    local c = ns.char
+    if not c then return end
+    local inst, r, now = InstanceNow(), c.run, ns.Now()
+    if r and not r.inside and r.leftAt and now - r.leftAt > RUN_OUTSIDE then ns.RunEnd("left"); r = nil end
+    if inst then
+        if r and (r.map ~= inst.map or r.name ~= inst.name) then ns.RunEnd("other"); r = nil end
+        if not r then RunStart(inst)
+        elseif not r.inside then
+            r.outsideSecs = (r.outsideSecs or 0) + math.max(0, now - (r.leftAt or now))
+            r.inside, r.leftAt = true, nil
+            ns.Log("runBack", { name = r.name })
+        end
+    elseif r and r.inside then
+        r.inside, r.leftAt = nil, now
+        r.last = now
+        ns.Log("runLeft", { name = r.name })
+    end
+end
+ns.On("PLAYER_ENTERING_WORLD", function() ns.Try("run", ns.RunCheck) end)
+ns.On("ZONE_CHANGED_NEW_AREA", function() ns.Try("run", ns.RunCheck) end)
+C_Timer.NewTicker(30, function() ns.Try("run", ns.RunCheck) end)
+
+-- bosses: the encounter events (name, id, success) still come through in instances
+local function Boss(id, name, success, source)
+    local r = ns.char and ns.char.run
+    id, name = Clean(id), Clean(name)
+    if not r or not name then return end
+    for _, b in ipairs(r.bosses) do if (id and b.id == id) or b.name == name then return end end
+    if success == 1 or success == true then
+        r.bosses[#r.bosses + 1] = { id = id, name = name, t = ns.Now() }
+        ns.Log("boss", { name = name, encounter = id, run = r.name, source = source })
+    else
+        r.wipes = (r.wipes or 0) + 1
+        ns.Log("wipe", { name = name, encounter = id, run = r.name })
+    end
+end
+ns.On("ENCOUNTER_END", function(id, name, _, _, success) Boss(id, name, Clean(success), "encounter") end)
+ns.On("BOSS_KILL", function(id, name) Boss(id, name, 1, "bossKill") end)
+
+-- "X has been reset." for the instance this run is in
+ns.On("CHAT_MSG_SYSTEM", function(text)
+    text = Clean(text)
+    local r = ns.char and ns.char.run
+    if not text or not r or r.inside then return end
+    local name = text:match(ns.FormatPattern(INSTANCE_RESET_SUCCESS or "%s has been reset."))
+    if name and name == r.name then ns.RunEnd("reset") end
+end)
+
+-- the roster can change mid-run: remember everyone who was there
+ns.On("GROUP_ROSTER_UPDATE", function()
+    local r = ns.char and ns.char.run
+    if not r then return end
+    ns.Soon("runRoster", 2, function()
+        local known = {}
+        for _, m in ipairs(r.group) do known[m.name] = m end
+        for _, m in ipairs(Roster()) do if not known[m.name] then r.group[#r.group + 1] = m end end
+    end)
+end)
+
 ---------------------------------------------------------------- notes
 function ns.AddNote(text)
     if not ns.char or not text or text == "" then return end
@@ -634,6 +777,20 @@ ns.OnLogin(function()
     -- a grind carried over a /reload or a quick relog goes on, without the time logged out.
     -- Anything longer (a crash, a long disconnect, playing on the other computer) ends it at its
     -- last counted event, so it can't run on for hours by itself.
+    -- a dungeon run survives a reload or relog while you're still in it (a disconnect, a crash) if
+    -- you're back within RUN_OUTSIDE; longer than that, it ends when you were last seen in it
+    local r = c.run
+    if r then
+        local seenAt = math.max(c.lastSeen or 0, r.last or r.start)
+        if ns.Now() - seenAt > RUN_OUTSIDE then
+            ns.RunEnd("away", r.inside and seenAt or r.leftAt)
+        elseif r.inside then
+            -- logged out inside: the time logged out doesn't count
+            r.outsideSecs = (r.outsideSecs or 0) + math.max(0, ns.Now() - seenAt)
+            r.last = ns.Now()
+        end
+    end
+    C_Timer.After(2, function() ns.Try("run", ns.RunCheck) end)
     local g = c.grind
     -- a /reload that wasn't recognised as one ended the grind at "logout": seconds later, bring it back
     local last = c.grinds and c.grinds[#c.grinds]
@@ -660,6 +817,8 @@ ns.OnLogout(function()
     c.lastLogout = reloading and "reload" or "logout"
     -- a real logout ends the grind; a /reload (Sync) keeps it running
     if c.grind and not reloading then ns.GrindStop(true, nil, "logout") end
+    -- a dungeon run stays open over a logout (a disconnect); the next login decides
+    if c.run then c.run.last = ns.Now() end
     ns.Log("logout", { money = Clean(GetMoney()), reload = reloading or nil })
 end)
 

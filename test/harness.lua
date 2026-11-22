@@ -396,6 +396,76 @@ do
   check(#c.grinds == n0 + 4 + 1, "finished grinds kept (" .. (#c.grinds - n0) .. ")")
   if FAILED then error("grind lifecycle checks failed") end
 end
+-- dungeon runs: start on entering, count kills from the XP line, bosses, leave and come back, end
+do
+  local function check(ok, what) print((ok and "PASS " or "FAIL ") .. what); if not ok then FAILED = true end end
+  local c; for _, v in pairs(ClaudeCompanionDB.chars) do c = v end
+  local where = nil -- nil = outdoors, else { name, map }
+  local oldII, oldGI = IsInInstance, GetInstanceInfo
+  IsInInstance = function() if where then return true, "party" end return false, "none" end
+  GetInstanceInfo = function() if where then return where.name, "party", 1, "Normal", 5, 0, false, where.map end return "Burning Steppes", "none" end
+  local function go(w) where = w; Fire("ZONE_CHANGED_NEW_AREA"); Fire("PLAYER_ENTERING_WORLD") end
+  local BRD = { name = "Blackrock Depths", map = 230 }
+  c.run = nil; c.runs = c.runs or {}
+  local n0 = #c.runs
+  local oldUN = UnitName; UnitName = function(u) if u == "party1" then return "Graky" end return oldUN(u) end
+  go(BRD); UnitName = oldUN
+  check(c.run and c.run.name == "Blackrock Depths" and c.run.kind == "party" and c.run.inside, "entering BRD starts a run")
+  check(c.run and #c.run.group == 1, "the run remembers the group (" .. tostring(c.run and #c.run.group) .. ")")
+  local start = c.run.start
+  -- kills inside: the kill event's GUIDs are secret, the XP line still names the mob
+  Advance(30); Fire("CHAT_MSG_COMBAT_XP_GAIN", "Shadowforge Flame Keeper dies, you gain 312 experience. (+62 exp group bonus)")
+  Advance(30); Fire("CHAT_MSG_COMBAT_XP_GAIN", "Anvilrage Warden dies, you gain 300 experience.")
+  check(c.run.kills == 2 and c.run.killsBy["Shadowforge Flame Keeper"] == 1, "XP lines count as kills, by name (" .. c.run.kills .. ")")
+  local journalKill = c.journal[#c.journal]
+  check(journalKill.e == "kill" and journalKill.by == "xp" and journalKill.name == "Anvilrage Warden", "XP kill logged with the mob's name")
+  -- the same kill seen by both the kill event and the XP line counts once
+  local before = c.run.kills
+  Fire("CHAT_MSG_COMBAT_XP_GAIN", "Anvilrage Warden dies, you gain 300 experience.")
+  check(c.run.kills == before, "the same name within 2 s isn't counted twice")
+  -- a boss, a wipe, a death
+  Advance(60); Fire("ENCOUNTER_END", 227, "High Interrogator Gerstahn", 1, 5, 0)
+  Fire("ENCOUNTER_END", 227, "High Interrogator Gerstahn", 1, 5, 1)
+  Fire("BOSS_KILL", 227, "High Interrogator Gerstahn")
+  check(#c.run.bosses == 1 and c.run.bosses[1].name == "High Interrogator Gerstahn" and c.run.wipes == 1, "boss kill recorded once, wipe counted")
+  Fire("PLAYER_DEAD")
+  check(c.run.deaths == 1, "death counted in the run")
+  -- run back outside (ghost) for 3 min: same run, outside time doesn't count
+  Advance(60); go(nil)
+  check(c.run and not c.run.inside, "leaving parks the run")
+  Advance(180); go(BRD)
+  check(c.run and c.run.inside and c.run.start == start and c.run.outsideSecs == 180, "back within 15 min: same run, 180 s outside")
+  -- a quest handed in inside counts
+  Fire("QUEST_TURNED_IN", 4362, 17407, 23144)
+  check(c.run.quests == 1, "quest turned in counts in the run")
+  -- a /reload inside keeps it, and so does a short disconnect
+  Advance(120); ns.MarkReload(); Fire("PLAYER_LOGOUT"); Advance(5); Fire("PLAYER_LOGIN"); Fire("PLAYER_ENTERING_WORLD")
+  check(c.run and c.run.start == start and c.run.inside, "a /reload inside keeps the run")
+  Fire("PLAYER_LOGOUT"); Advance(240); Fire("PLAYER_LOGIN"); Fire("PLAYER_ENTERING_WORLD")
+  check(c.run and c.run.start == start and c.run.outsideSecs == 180 + 5 + 240, "a 4 min disconnect keeps the run, minus the time away (" .. tostring(c.run and c.run.outsideSecs) .. ")")
+  -- leave and stay out 16 min: it ends when you left
+  Advance(600); go(nil); local leftAt = ns.Now()
+  Advance(16 * 60); RunTickers()
+  local r = c.runs[#c.runs]
+  check(c.run == nil and #c.runs == n0 + 1 and r.ended == "left" and r.finish == leftAt, "16 min outside ends the run at the exit")
+  check(r.secs == (leftAt - start) - (180 + 5 + 240), "run time leaves out time outside and logged out (" .. tostring(r.secs) .. ")")
+  -- entering another instance ends the old run and starts a new one
+  go(BRD); Advance(60); go({ name = "Lower Blackrock Spire", map = 229 })
+  check(c.runs[#c.runs].name == "Blackrock Depths" and c.runs[#c.runs].ended == "other" and c.run.name == "Lower Blackrock Spire", "a different instance ends the old run")
+  -- logged out inside, back 3 h later (played on the other computer): ends when last seen
+  Advance(100); local lastIn = ns.Now(); c.run.last = lastIn
+  Fire("PLAYER_LOGOUT"); Advance(3 * 3600); where = nil; Fire("PLAYER_LOGIN"); Fire("PLAYER_ENTERING_WORLD")
+  r = c.runs[#c.runs]
+  check(c.run == nil and r.name == "Lower Blackrock Spire" and r.ended == "away" and r.finish == lastIn, "back 3 h later: the run ended when last seen")
+  -- reset while outside
+  go(BRD); Advance(30); go(nil)
+  Fire("CHAT_MSG_SYSTEM", "Blackrock Depths has been reset.")
+  check(c.run == nil and c.runs[#c.runs].ended == "reset", "an instance reset ends the run")
+  -- outdoors, a grind is not a run
+  check(c.run == nil, "no run outdoors")
+  IsInInstance, GetInstanceInfo = oldII, oldGI
+  if FAILED then error("dungeon run checks failed") end
+end
 local f = io.open("out.lua", "w"); f:write("ClaudeCompanionDB = " .. ser(ClaudeCompanionDB)); f:close()
 print("DIAG:")
 for k, d in pairs(ClaudeCompanionDB.chars["Gabriel-Atlas"].diag) do if d.err > 0 then print(k, d.err, d.lastErr) end end

@@ -2,6 +2,22 @@
 
 Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 
+## Unreleased (dungeon runs)
+
+- **Dungeon and raid runs are tracked by themselves.** Entering an instance starts a run on the same
+  tracker as grinds: time, kills, loot, gold, XP, deaths, quests and rep, plus bosses (`ENCOUNTER_END` /
+  `BOSS_KILL`), wipes and everyone in the group. Leaving parks it, so a run back after a wipe or a quest
+  handed in outside stays the same run (time outside doesn't count). It ends after 15 min outside, on
+  entering another instance, on "X has been reset.", or (like a grind) when this computer's save last saw
+  it more than 15 min before the next login. A /reload or a short disconnect inside keeps it.
+- **Kills inside dungeons are counted again.** Forever hides the kill event's GUIDs in instances, so
+  no kill at all was logged in BRD. Kills now also come from the XP line ("X dies, you gain N
+  experience"), which still names the mob (kills that give no XP are still missed).
+- **App: new Dungeons tab** with every run. Runs from before this update are rebuilt from the Journal
+  ("from the journal": kills counted from XP gains, no boss list), so past BRD runs show up too.
+- `snapshot.json`: `runs[]` (the last 10, newest first). Journal: `runStart`, `runLeft`, `runBack`,
+  `boss`, `wipe`, `runEnd`.
+
 ## Unreleased (Windows app)
 
 - **Windows works like the Mac app:** `Claude Companion.bat` (run once, and after an update) adds

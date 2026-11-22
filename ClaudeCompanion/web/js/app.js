@@ -255,7 +255,7 @@
   // ------------------------------------------------------------ tabs
   const TABS = [
     ['overview', 'Overview', 'inv_misc_book_09'], ['character', 'Character', 'inv_chest_cloth_17'], ['bags', 'Bags & Bank', 'inv_misc_bag_08'],
-    ['talents', 'Talents & Bars', 'spell_holy_holybolt'], ['grinds', 'Grinds', 'inv_misc_coin_02'], ['quests', 'Quests', 'inv_misc_note_01'],
+    ['talents', 'Talents & Bars', 'spell_holy_holybolt'], ['grinds', 'Grinds', 'inv_misc_coin_02'], ['runs', 'Dungeons', 'inv_misc_key_10'], ['quests', 'Quests', 'inv_misc_note_01'],
     ['professions', 'Professions', 'trade_engraving'], ['rep', 'Reputation', 'inv_misc_tournaments_banner_human'], ['auction', 'Auction House', 'inv_misc_coin_17'],
     ['journal', 'Journal', 'inv_misc_book_11'], ['system', 'System', 'trade_engineering'], ['gear', 'Gear', 'inv_helmet_06'],
     ['claude', 'From Claude', 'inv_scroll_03'],
@@ -264,7 +264,7 @@
   const NAV_GROUPS = [
     [null, ['overview', 'claude']],
     ['Character', ['character', 'gear', 'bags', 'talents', 'rep']],
-    ['Activity', ['quests', 'grinds', 'journal']],
+    ['Activity', ['quests', 'grinds', 'runs', 'journal']],
     ['Gold', ['professions', 'auction']],
   ];
   // How fresh each kind of saved data is. Things the game only shows while
@@ -1038,6 +1038,8 @@
     questDrop: (e) => `Abandoned quest #${e.quest}`, zone: (e) => `Entered ${esc(e.to)}`, death: () => '<span class="neg">Died</span>', note: (e) => `<i>“${esc(e.text)}”</i>`,
     equip: (e) => (e.item ? `Equipped ${itemIcon(e.item, { size: 'xs' })} ${itemName$(e.item, e.link)}` : `Unequipped ${esc(e.slotName || e.slot)}`),
     spec: (e) => `Switched to spec ${e.to}`, session: (e) => `New session${e.label ? ': ' + esc(e.label) : ''}`,
+    runStart: (e) => `Entered <b>${esc(e.name)}</b>: dungeon run started`, runEnd: (e) => `Dungeon run <b>${esc(e.name)}</b> over (${dur(e.secs)}, ${e.kills} kills, ${e.bosses || 0} bosses)`,
+    runLeft: (e) => `Left ${esc(e.name)}`, runBack: (e) => `Back in ${esc(e.name)}`, boss: (e) => `<b>Killed ${esc(e.name)}</b>`, wipe: (e) => `<span class="neg">Wiped on ${esc(e.name)}</span>`,
     grindStart: (e) => `Started grind <b>${esc(e.name)}</b>`, grindStop: (e) => `Finished grind <b>${esc(e.name)}</b> (${dur(e.secs)}, ${e.kills} kills)`,
     ahPost: (e) => `Posted ${e.link ? itemName$(keyOf(e.link), e.link) : esc(e.name)} ×${e.qty || 1} at ${money(e.unit)}`,
     ahSold: (e) => `Sold ${esc(e.name)}`, ahExpired: (e) => `Expired ${esc(e.name)}`, ahWon: (e) => `Won ${esc(e.name)}`, ahOutbid: (e) => `Outbid on ${esc(e.name)}`, ahRemoved: (e) => `Cancelled ${esc(e.name)}`,
@@ -1049,7 +1051,7 @@
     recipe: (e) => `Learned recipe ${esc(e.name || e.recipe)}`,
     login: () => 'Logged in', logout: () => 'Logged out', skill: (e) => esc(e.text), rep: (e) => esc(e.text), coin: (e) => esc(e.text),
   };
-  const EV_LABEL = { xp: 'XP', money: 'Money', coin: 'Coin', loot: 'Loot', kill: 'Kills', ahPost: 'AH posts', receive: 'Received', zone: 'Zones', group: 'Group', flightPath: 'Flight paths', equip: 'Gear', craft: 'Crafts', skill: 'Skills', login: 'Logins', logout: 'Logouts', disenchant: 'Disenchants', profession: 'Professions', death: 'Deaths', grindStart: 'Grind start', grindStop: 'Grind end', ahScan: 'AH scans', spec: 'Spec', questDone: 'Quests done', questAccept: 'Quests taken', questDrop: 'Quests dropped', level: 'Levels', note: 'Notes', session: 'Sessions', ahSold: 'AH sold', ahExpired: 'AH expired', ahWon: 'AH won', ahOutbid: 'AH outbid', ahRemoved: 'AH cancelled', cooldownCraft: 'Cooldowns', learn: 'Learned', recipe: 'Recipes', rep: 'Reputation' };
+  const EV_LABEL = { xp: 'XP', money: 'Money', coin: 'Coin', loot: 'Loot', kill: 'Kills', ahPost: 'AH posts', receive: 'Received', zone: 'Zones', group: 'Group', flightPath: 'Flight paths', equip: 'Gear', craft: 'Crafts', skill: 'Skills', login: 'Logins', logout: 'Logouts', disenchant: 'Disenchants', profession: 'Professions', death: 'Deaths', grindStart: 'Grind start', grindStop: 'Grind end', runStart: 'Run start', runEnd: 'Run end', runLeft: 'Run left', runBack: 'Run back', boss: 'Bosses', wipe: 'Wipes', ahScan: 'AH scans', spec: 'Spec', questDone: 'Quests done', questAccept: 'Quests taken', questDrop: 'Quests dropped', level: 'Levels', note: 'Notes', session: 'Sessions', ahSold: 'AH sold', ahExpired: 'AH expired', ahWon: 'AH won', ahOutbid: 'AH outbid', ahRemoved: 'AH cancelled', cooldownCraft: 'Cooldowns', learn: 'Learned', recipe: 'Recipes', rep: 'Reputation' };
   const evRow = (e) => `<div class="ev"><span class="t">${fmtTime(e.t)}</span><span class="what">${EV[e.e] ? EV[e.e](e) : esc(e.e)}</span><span class="where">${esc(e.sub || e.zone || '')}</span></div>`;
   V.journal = function () {
     const all = arr(CH.journal);
@@ -1154,7 +1156,7 @@
   window.CC = {
     load, loadText, V,
     api: { get CH() { return CH; }, STATE, GD, esc, arr, money, icon, itemIcon, anyItemIcon, anyItemName, gdItem, gdTip,
-      gdSourceLines, planPrice, priceOf, trackerStats, ago, dur, fmtTime, flipsOf, cooldowns, specTrees, specLabel, TREE_NAMES, gearIds, item, byId, render, QCOL },
+      gdSourceLines, planPrice, priceOf, trackerStats, lootStrip, ago, dur, fmtTime, flipsOf, cooldowns, specTrees, specLabel, TREE_NAMES, gearIds, item, byId, render, QCOL },
   };
 
   // ------------------------------------------------------------ data sources
