@@ -3,6 +3,15 @@
 # app and reads the game's saved file (ClaudeCompanion.lua) directly, so the
 # page updates by itself a few seconds after you Sync in game.
 # Nothing is sent anywhere: it only answers this computer.
+#
+# Daily use: the app is installed from Edge or Chrome as its own app (Start menu, taskbar), and
+# this server starts by itself when you sign in to Windows, hidden (a shortcut in your Startup folder).
+# "Claude Companion.bat" runs this script once to set that up, restart the server after an update,
+# and open the app.
+#   server.ps1             set up the Startup shortcut, (re)start the server hidden, open the app
+#   server.ps1 -Serve      just serve (what the Startup shortcut runs)
+#   server.ps1 -Uninstall  remove the Startup shortcut and stop the server
+param([switch]$Serve, [switch]$Uninstall)
 $ErrorActionPreference = 'Continue'
 $web = Split-Path -Parent $MyInvocation.MyCommand.Path
 $forever = (Resolve-Path (Join-Path $web '..\..\..\..')).Path   # ...\_forever_
@@ -11,23 +20,56 @@ $dataDir = Join-Path (Split-Path -Parent $web) 'companion-data'
 $cardsDir = Join-Path $dataDir 'from-claude'
 $port = 47615
 $prefix = "http://localhost:$port/"
-$host.UI.RawUI.WindowTitle = 'Claude Companion (close this window to stop)'
+$self = $MyInvocation.MyCommand.Path
+$startup = [Environment]::GetFolderPath('Startup')
+$autostart = Join-Path $startup 'Claude Companion server.lnk'
+$serveArgs = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$self`" -Serve"
 
-# The app window opens at a comfortable size for this screen and can be resized
-# freely; the page lays itself out for whatever size it gets.
-Add-Type -AssemblyName System.Windows.Forms
-
+function Test-Running {
+    try { (Invoke-WebRequest -UseBasicParsing -TimeoutSec 2 -Uri ($prefix + 'api/ping')).Content -eq 'claude-companion' } catch { $false }
+}
+# every other copy of this server (an older version, or one started some other way)
+function Stop-Servers {
+    Get-CimInstance Win32_Process -Filter "Name = 'powershell.exe' OR Name = 'pwsh.exe'" -ErrorAction SilentlyContinue |
+        Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine -like '*server.ps1*' } |
+        ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+}
 function Open-App {
+    # the app as installed from Edge or Chrome has a Start menu shortcut with its name
+    $programs = [Environment]::GetFolderPath('Programs')
+    $installed = Get-ChildItem -Path $programs -Filter 'Claude Companion.lnk' -Recurse -File -ErrorAction SilentlyContinue |
+        Where-Object { $_.FullName -notlike "$startup*" } | Select-Object -First 1
+    if ($installed) { Start-Process $installed.FullName; return }
+    # not installed yet: Edge (or the default browser), where the page offers to install it as an app
     $edge = @(
         (Join-Path ${env:ProgramFiles(x86)} 'Microsoft\Edge\Application\msedge.exe'),
         (Join-Path $env:ProgramFiles 'Microsoft\Edge\Application\msedge.exe')
     ) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
-    if (-not $edge) { Start-Process $prefix; return }
-    # 85% of the screen's free area, centred
-    $wa = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
-    $w = [int]($wa.Width * 0.85); $h = [int]($wa.Height * 0.9)
-    $x = $wa.X + [int](($wa.Width - $w) / 2); $y = $wa.Y + [int](($wa.Height - $h) / 2)
-    Start-Process -FilePath $edge -ArgumentList "--app=$prefix", "--window-size=$w,$h", "--window-position=$x,$y"
+    if ($edge) { Start-Process -FilePath $edge -ArgumentList '--new-window', $prefix } else { Start-Process $prefix }
+}
+
+if ($Uninstall) {
+    Remove-Item -LiteralPath $autostart -ErrorAction SilentlyContinue
+    Stop-Servers
+    exit
+}
+if (-not $Serve) {
+    $sh = New-Object -ComObject WScript.Shell
+    $lnk = $sh.CreateShortcut($autostart)
+    $lnk.TargetPath = (Join-Path $PSHOME 'powershell.exe')
+    $lnk.Arguments = $serveArgs
+    $lnk.WorkingDirectory = $web
+    $lnk.WindowStyle = 7                                  # minimised; the server then runs hidden
+    $lnk.Description = 'Claude Companion: the local app server'
+    $lnk.Save()
+    Stop-Servers                                          # so an update takes effect
+    Start-Process -FilePath (Join-Path $PSHOME 'powershell.exe') -ArgumentList $serveArgs -WindowStyle Hidden
+    for ($i = 0; $i -lt 40 -and -not (Test-Running); $i++) { Start-Sleep -Milliseconds 250 }
+    if (Test-Running) { Open-App } else {
+        Add-Type -AssemblyName System.Windows.Forms
+        [void][System.Windows.Forms.MessageBox]::Show("Claude Companion couldn't start its server on port $port. Is another program using it?", 'Claude Companion')
+    }
+    exit
 }
 
 function Find-Save {
@@ -51,47 +93,12 @@ function Read-Shared([string]$path) {
     } finally { $fs.Close() }
 }
 
-# Fallback if the server can't start: the old way (copy the save next to
-# the page as data.js every few seconds and open the page as a file).
-function Run-FileMode {
-    Write-Host '  Could not start the local server, using file mode instead.' -ForegroundColor Yellow
-    $out = Join-Path $web 'data.js'
-    Start-Process (Join-Path $web 'index.html')
-    $lastWrite = $null
-    while ($true) {
-        $file = Find-Save
-        if ($file -and $file.LastWriteTimeUtc -ne $lastWrite) {
-            Start-Sleep -Milliseconds 1500
-            $file.Refresh()
-            try {
-                $bytes = Read-Shared $file.FullName
-                $b64 = [Convert]::ToBase64String($bytes)
-                $stamp = $file.LastWriteTimeUtc.ToString('o')
-                [System.IO.File]::WriteAllText($out, "window.CC_DATA = { written: '$stamp', size: $($bytes.Length), b64: '$b64' };", (New-Object System.Text.UTF8Encoding($false)))
-                $lastWrite = $file.LastWriteTimeUtc
-                Write-Host ("  {0}  page updated" -f (Get-Date -Format 'HH:mm:ss'))
-            } catch { }
-        }
-        Start-Sleep -Seconds 3
-    }
-}
-
-# Already running? Then just open another window.
-try {
-    $r = Invoke-WebRequest -UseBasicParsing -TimeoutSec 2 -Uri ($prefix + 'api/ping')
-    if ($r.Content -eq 'claude-companion') { Open-App; exit }
-} catch { }
+# -Serve: already serving? then this copy isn't needed
+if (Test-Running) { exit }
 
 $listener = New-Object System.Net.HttpListener
 $listener.Prefixes.Add($prefix)
-try { $listener.Start() } catch { Run-FileMode; exit }
-
-Write-Host ''
-Write-Host '  Claude Companion is running.' -ForegroundColor Cyan
-Write-Host "  App: $prefix"
-Write-Host '  Leave this window open (it can stay minimised). Close it to stop.'
-Write-Host ''
-Open-App
+try { $listener.Start() } catch { exit 1 }
 
 $types = @{
     '.html' = 'text/html; charset=utf-8'; '.js' = 'application/javascript; charset=utf-8'; '.css' = 'text/css; charset=utf-8'

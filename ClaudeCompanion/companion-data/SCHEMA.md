@@ -5,7 +5,8 @@ The Companion app (`web/`) writes `snapshot.json` here every time it loads new g
 data, see `saveModified`). It is the page's own view of the
 character, so Claude's answers match what the app shows. Claude sessions read it from
 `_forever_/Interface/AddOns/ClaudeCompanion/companion-data/snapshot.json` on the computer the game runs on
-(Windows: `server.ps1` via `Claude Companion.bat`; macOS: `server.py` via `Claude Companion.command`).
+(Windows: `server.ps1`, set up by `Claude Companion.bat`; macOS: `server.py`, set up by `Claude Companion.app`;
+both start the server at login, hidden).
 
 The raw store is still the game's SavedVariables file
 (`WTF\Account\<account>\SavedVariables\ClaudeCompanion.lua`, global `ClaudeCompanionDB`).

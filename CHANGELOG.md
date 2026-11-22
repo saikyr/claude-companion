@@ -2,6 +2,18 @@
 
 Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 
+## Unreleased (app launch)
+
+- The app is a normal app now. **Claude Companion.app** (macOS, replaces the `.command`) and
+  **Claude Companion.bat** (Windows) set the local server to start at login, hidden (a LaunchAgent /
+  a Startup-folder shortcut), restart it so an update takes effect, and open the app. No Terminal or
+  PowerShell window to keep open.
+- The page installs as its own app (Chrome / Edge "Install as an app" button in the sidebar; Safari:
+  File > Add to Dock): Dock, Launchpad and Spotlight on a Mac, Start menu and taskbar on Windows.
+  New icon (`tools/make-icons.py`), manifest with local icons.
+- `server.py --serve / --uninstall`, `server.ps1 -Serve / -Uninstall`. Removed the old file mode
+  (`data.js` written next to the page when the server couldn't start).
+
 ## Unreleased (From Claude cards)
 
 - New **From Claude** tab, and its open cards on the Overview: Claude's suggestions (farm, flip, quest,

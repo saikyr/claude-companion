@@ -17,14 +17,21 @@ saved file.
    - **Windows:** `C:\...\World of Warcraft\_forever_\Interface\AddOns\`
    - **macOS:** `/Applications/World of Warcraft/_forever_/Interface/AddOns/`
 3. Start the game, log in, type `/cc sync` once. That saves everything the addon can see.
-4. Open the app:
-   - **Windows:** double-click `AddOns\ClaudeCompanion\web\Claude Companion.bat`. It opens in an
-     Edge app window. Leave the small minimised PowerShell window open; closing it stops the app.
-   - **macOS:** right-click `AddOns/ClaudeCompanion/web/Claude Companion.command` and choose
-     **Open** the first time (macOS asks once for files from the internet). After that a
-     double-click is enough. It uses the Python 3 that comes with Apple's Command Line Tools and
-     offers to install them if they're missing. Chrome or Edge open it as an app window; otherwise
-     your default browser.
+4. Set up the app, once:
+   - **Windows:** double-click `AddOns\ClaudeCompanion\web\Claude Companion.bat`.
+   - **macOS:** open `AddOns/ClaudeCompanion/web/Claude Companion.app`. The first time, macOS blocks it
+     because it came from the internet and isn't from the App Store: choose **Done**, then
+     **System Settings > Privacy & Security > Open Anyway** (macOS 15 and later; on older versions,
+     Control-click the app and choose **Open**). It uses the Python 3
+     that comes with Apple's Command Line Tools and offers to install them if they're missing.
+
+   This makes the app's small server start by itself, hidden, whenever you sign in to your computer
+   (no window to keep open), and opens the app in your browser. There, click **Install as an app**
+   at the bottom of the sidebar (Chrome or Edge), or in Safari choose **File > Add to Dock**. From
+   then on Claude Companion is a normal app: Dock, Launchpad and Spotlight on a Mac; Start menu and
+   taskbar on Windows. After updating the addon, run the setup once more so the new server runs.
+   To remove it from startup: `Claude Companion.bat uninstall` (Windows) or
+   `/usr/bin/python3 server.py --uninstall` in that folder (macOS).
 5. The app updates by itself a few seconds after each `/cc sync` (or logout) in game.
 
 To fill in everything once: open your bank, each profession window, a flight master, a mailbox
@@ -67,11 +74,12 @@ Key bindings: Options > Key Bindings > AddOns > Claude Companion.
 | Path | What |
 | --- | --- |
 | `ClaudeCompanion/` | The addon folder exactly as installed: Lua, `.toc`, and `web/` (the app) |
-| `ClaudeCompanion/web/` | App: `index.html`, `js/`, `css/`, `server.ps1` (Windows), `server.py` (macOS) |
+| `ClaudeCompanion/web/` | App: `index.html`, `js/`, `css/`, `server.ps1` + `Claude Companion.bat` (Windows), `server.py` + `Claude Companion.app` (macOS) |
 | `ClaudeCompanion/companion-data/SCHEMA.md` | The `snapshot.json` contract Claude reads, and the From Claude cards format |
 | `gamedata/` | Builds `web/data/gamedata.js` from QuestieDB, endgametools and ForeverDB |
 | `test/harness.lua` | Runs the addon against a mock game API (Lua 5.1) |
 | `tools/make-release.sh` | Builds the release zip |
+| `tools/make-icons.py` | Draws the app icon (PNG for the installed app, `.icns` for the Mac launcher) |
 | `tools/check-cards.py` | Checks a From Claude `cards.json` before Claude writes it |
 | `docs/ARCHITECTURE.md` | How it fits together, data sources, contracts |
 | `docs/ROADMAP.md` | What's next |

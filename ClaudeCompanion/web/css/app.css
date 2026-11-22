@@ -404,3 +404,11 @@ img.kic { width: var(--ic-sm); height: var(--ic-sm); border-radius: var(--r-sm);
   .ccard header { flex-wrap: wrap; }
   .ccard .cmain { padding-left: var(--sp4); }
 }
+
+/* ---------- install as an app (sidebar foot) ---------- */
+aside .foot .install { margin-bottom: var(--sp2); font-size: var(--f-sm); }
+aside .foot button.install { height: 2rem; border-radius: var(--r-sm); border: 1px solid var(--acc-line); background: var(--acc-bg); color: var(--t1); font: 500 var(--f-sm) var(--ui); cursor: pointer; }
+aside .foot button.install:hover { border-color: var(--acc); }
+aside .foot .install.hint { color: var(--t3); padding: 0 var(--sp2); }
+aside .foot .install.hint b { color: var(--t2); font-weight: 500; }
+@media (max-width: 75rem) { aside .foot .install { display: none; } }

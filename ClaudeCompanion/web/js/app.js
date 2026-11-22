@@ -1075,6 +1075,25 @@
     return h;
   };
 
+  // ------------------------------------------------------------ install as an app
+  // Chrome and Edge offer to install the page as its own app (Dock / Start menu, own window);
+  // Safari on a Mac does it with File > Add to Dock (support.apple.com/104996).
+  let installPrompt = null;
+  window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installPrompt = e; render(); });
+  window.addEventListener('appinstalled', () => { installPrompt = null; render(); });
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('[data-install]') || !installPrompt) return;
+    installPrompt.prompt();
+    installPrompt.userChoice.finally(() => { installPrompt = null; render(); });
+  });
+  function installHint() {
+    if (!location.protocol.startsWith('http') || matchMedia('(display-mode: standalone)').matches || navigator.standalone) return '';
+    if (installPrompt) return '<button class="install" data-install title="Its own window, in your Dock or Start menu">Install as an app</button>';
+    const ua = navigator.userAgent;
+    if (/Macintosh/.test(ua) && /Version\/\d+.*Safari\//.test(ua) && !/Chrome|Edg\//.test(ua)) return '<div class="install hint">To keep it in your Dock: <b>File &gt; Add to Dock</b></div>';
+    return '';
+  }
+
   // ------------------------------------------------------------ render
   function render() {
     const app = $('#app');
@@ -1096,7 +1115,7 @@
           <div class="row sb"><span>${money(c.money, { short: true })}</span><span class="dim small">${esc(w.sub || w.zone || '')}</span></div></div>
         <nav>${NAV_GROUPS.map(([gl, keys]) => `<div class="navg">${gl ? `<div class="navh">${gl}</div>` : ''}${keys.filter((k) => V[k]).map(navBtn).join('')}</div>`).join('')}</nav>
         ${g ? `<div class="live-grind" data-tab="grinds"><span class="tag">${g.paused ? 'paused' : 'grinding'}</span> ${esc(g.name)}</div>` : ''}
-        <div class="foot"><button data-tab="system" class="sys${STATE.tab === 'system' ? ' on' : ''}" title="What the addon can read"><img src="${ICON_URL}trade_engineering.jpg" alt="">System</button>
+        <div class="foot">${installHint()}<button data-tab="system" class="sys${STATE.tab === 'system' ? ' on' : ''}" title="What the addon can read"><img src="${ICON_URL}trade_engineering.jpg" alt="">System</button>
         <div class="sync ${STATE.live ? 'on' : ''}" title="${esc(fmtTime(s.taken))}"><span class="dot ${STATE.live ? 'ok' : 'never'}"></span>${STATE.live ? 'Live' : 'Offline copy'} · synced ${ago(s.taken)}</div></div>
       </aside>
       <section class="page"><header class="ph"><h1>${esc(tabLabel)}</h1><div class="ph-tools"></div></header><main>${body}</main></section>`;
@@ -1139,8 +1158,7 @@
   };
 
   // ------------------------------------------------------------ data sources
-  // 1) data embedded in a published copy, 2) data.js written by the watcher
-  // (checked every 5 seconds), 3) drag and drop the saved file.
+  // 1) data embedded in a published copy, 2) the local server (app mode), 3) drag and drop the saved file.
   const hashTab = (location.hash || '').slice(1);
   // any tab name: tabs from js/gear.js and js/cards.js register after this runs (an unknown one shows the Overview)
   if (/^[a-z]+$/.test(hashTab)) STATE.tab = hashTab;
@@ -1173,25 +1191,6 @@
     };
     poll();
     setInterval(poll, 3000);
-    setInterval(() => { if (CH && !document.querySelector('input:focus')) render(); }, 60000);
-  } else {
-    let lastStamp = null;
-    const poll = () => {
-      const s = document.createElement('script');
-      s.src = 'data.js?t=' + Date.now();
-      s.onload = () => {
-        s.remove();
-        const d = window.CC_DATA;
-        if (d && d.b64 && d.written !== lastStamp) {
-          lastStamp = d.written;
-          try { loadText(atob(d.b64), { live: true }); } catch (e) { console.error(e); }
-        } else if (!CH) render();
-      };
-      s.onerror = () => { s.remove(); if (!CH) render(); };
-      document.head.appendChild(s);
-    };
-    poll();
-    setInterval(poll, 5000);
     setInterval(() => { if (CH && !document.querySelector('input:focus')) render(); }, 60000);
   }
   document.addEventListener('dragover', (e) => e.preventDefault());

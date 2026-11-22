@@ -135,7 +135,7 @@
 
   // ------------------------------------------------------------ views
   V.claude = function () {
-    if (!server) return '<div class="empty">Claude\'s cards need the app\'s own window: start it with <b>Claude Companion.bat</b> (Windows) or <b>Claude Companion.command</b> (Mac).</div>';
+    if (!server) return '<div class="empty">Claude\'s cards need the app\'s own window: open <b>Claude Companion.bat</b> (Windows) or <b>Claude Companion.app</b> (Mac) in AddOns/ClaudeCompanion/web.</div>';
     const all = visible();
     let h = '';
     if (S.error) h += `<div class="empty bad">${esc(S.error)}</div>`;

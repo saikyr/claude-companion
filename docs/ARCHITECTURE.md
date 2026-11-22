@@ -12,7 +12,9 @@
  WTF/Account/<account>/SavedVariables/ClaudeCompanion.lua   (global ClaudeCompanionDB)
                  │ read directly, polled every 3 s via /api/stamp
                  ▼
- Local server on 127.0.0.1:47615  (web/server.ps1 on Windows, web/server.py on macOS)
+ Local server on 127.0.0.1:47615  (web/server.ps1 on Windows, web/server.py on macOS),
+   started at login, hidden: a Startup-folder shortcut (Windows) / a LaunchAgent (macOS),
+   set up by Claude Companion.bat / Claude Companion.app. The page installs as its own app (PWA).
    GET  /api/ping  /api/stamp  /api/data      POST /api/snapshot (needs header X-CC: 1)
                  │
                  ▼
