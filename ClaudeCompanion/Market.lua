@@ -6,7 +6,8 @@ local AH = C_AuctionHouse
 
 ---------------------------------------------------------------- price records
 -- ah.prices[key] = { id, suffix, name, q, icon, last, obs = { {t, min, qty, src}, ... } }
--- key = "itemID" or "itemID:suffix" (random-suffix items). min = per-unit copper.
+-- key = "itemID" or "itemID:suffix" (random-suffix items: the suffix number from the link, or, when the link
+-- has none, the roll's name from the listing, "3192:of Healing"). min = per-unit copper.
 local function Key(itemID, suffix)
     if not itemID then return nil end
     if suffix and suffix ~= 0 then return itemID .. ":" .. suffix end
@@ -310,22 +311,32 @@ local function Row(by, i, missing)
     local name, _, count, quality, _, _, _, _, _, buyout, _, _, _, _, _, _, itemID, all = Call(AH.GetReplicateItemInfo, i)
     count, buyout, itemID, all, name = Clean(count), Clean(buyout), Clean(itemID), Clean(all), Clean(name)
     if not (itemID and buyout and buyout > 0 and count and count > 0) then return end
-    local suffix
+    local suffix, roll
     -- random-suffix items ("Gossamer Cape of Healing") need the link to tell the suffixes apart
     if name and name:find(" of ", 1, true) then
         if all == false then missing[#missing + 1] = i; return end
         local link = Clean(Call(AH.GetReplicateItemLink, i))
         local s = link and link:match("item:%d+:[^:]*:[^:]*:[^:]*:[^:]*:[^:]*:([%-%d]*)")
         suffix = tonumber(s)
+        -- Forever's scan links leave that field empty (22 Nov: every roll of an item came back as one key).
+        -- The listing name still says the roll: when it is the base name plus " of ...", key the roll by name
+        -- ("3192:of Healing") and also count it in the item's own key (any roll).
+        if not suffix then
+            local base = Clean(Call(C_Item and C_Item.GetItemNameByID or GetItemInfo, itemID))
+            if base and #name > #base + 4 and name:sub(1, #base + 4) == base .. " of " then roll = name:sub(#base + 2) end
+        end
     end
-    local key = Key(itemID, suffix)
-    local b = by[key]
-    if not b then b = { id = itemID, suffix = suffix, units = {}, qty = 0, n = 0, name = name, q = Clean(quality) }; by[key] = b end
     local unit = math.floor(buyout / count)
-    b.qty = b.qty + count
-    b.n = b.n + 1
-    -- weight the median by stack size, capped so it stays cheap
-    for _ = 1, math.min(count, 20) do b.units[#b.units + 1] = unit end
+    local function add(key, sfx)
+        local b = by[key]
+        if not b then b = { id = itemID, suffix = sfx, units = {}, qty = 0, n = 0, name = name, q = Clean(quality) }; by[key] = b end
+        b.qty = b.qty + count
+        b.n = b.n + 1
+        -- weight the median by stack size, capped so it stays cheap
+        for _ = 1, math.min(count, 20) do b.units[#b.units + 1] = unit end
+    end
+    add(Key(itemID, suffix), suffix)
+    if roll then add(itemID .. ":" .. roll, roll) end
 end
 
 -- turn what was read into one price observation per item (also a slice per frame)
@@ -391,6 +402,15 @@ local function Finish(by, n, missing)
             scan.state, scan.phase, scan.total, scan.done = "rereading", "rereading", #again, 0
             local by2, still = {}, {}
             Sliced(1, #again, function(k) Row(by2, again[k], still) end, function()
+                -- the reread replaces this scan's reading of a key, so add what the first pass found for it
+                -- (an item's own key and a roll's key often have listings from both passes)
+                for key, b2 in pairs(by2) do
+                    local b1 = by[key]
+                    if b1 then
+                        b2.qty, b2.n = b2.qty + b1.qty, b2.n + b1.n
+                        for _, u in ipairs(b1.units) do b2.units[#b2.units + 1] = u end
+                    end
+                end
                 Store(by2, n, still, 2, function() scan.state = "idle"; scan.phase = nil; Refresh() end)
             end)
         end)

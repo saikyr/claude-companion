@@ -26,6 +26,7 @@
   const SCHOOL = { fire: 110, shadow: 111, frost: 112, arcane: 113, nature: 114, holy: 115 };
   // a % line is worth this many rating points (CONV)
   const PCT = { 116: [S.crit, 14], 21: [S.crit, 14], 117: [S.hit, 10], 18: [S.hit, 10], 118: [S.dodge, 12], 119: [S.parry, 15], 120: [S.block, 5] };
+  const PCT_KEYS = Object.keys(PCT);
   // COST per point, Stamina = 1. n = items the cost was measured on; 'assumed' = no clean sample
   const COST = {
     [S.str]: [1, 'measured, 31 item groups'], [S.agi]: [1, 'measured, 30'], [S.int]: [1, 'measured, 30'], [S.spi]: [1, 'measured, 35'],
@@ -48,8 +49,8 @@
   const SPECS = [
     ['WARRIOR', 'Arms', 'iv-arms', 'Arms', 'phys', ['dps', 'hit', 'exp', 'crit', 'str'], ['haste', 'agi', 'ap'], [], 'arms-warrior-melee-dps'],
     ['WARRIOR', 'Fury', 'iv-fury', 'Fury', 'phys', ['dps', 'hit', 'exp', 'crit', 'str'], ['haste', 'agi', 'ap'], [], 'fury-warrior-melee-dps'],
-    ['WARRIOR', 'Protection', 'iv-protwar-threat', 'Protection: threat', 'phys', ['exp', 'hit', 'agi', 'str', 'sta'], [], [], 'protection-warrior-tank'],
-    ['WARRIOR', 'Protection', 'iv-protwar-survival', 'Protection: survival', 'tank', ['sta', 'armor', 'agi', 'avoid', 'def'], [], [], 'protection-warrior-tank'],
+    ['WARRIOR', 'Protection', 'iv-protwar-threat', 'Protection (threat)', 'phys', ['exp', 'hit', 'agi', 'str', 'sta'], [], [], 'protection-warrior-tank'],
+    ['WARRIOR', 'Protection', 'iv-protwar-survival', 'Protection (survival)', 'tank', ['sta', 'armor', 'agi', 'avoid', 'def'], [], [], 'protection-warrior-tank'],
     ['ROGUE', 'Assassination', 'iv-assassination', 'Assassination', 'phys', ['exp', 'hit', 'agi', 'dps', 'crit'], [], [], 'assassination-rogue-melee-dps'],
     ['ROGUE', 'Combat', 'iv-combat', 'Combat', 'phys', ['exp', 'hit', 'agi', 'dps', 'crit'], [], [], 'combat-rogue-melee-dps'],
     ['ROGUE', 'Subtlety', 'iv-subtlety', 'Subtlety', 'phys', ['dps', 'exp', 'hit', 'wskill', 'agi'], [], [], 'subtlety-rogue-melee-dps'],
@@ -62,19 +63,19 @@
     ['WARLOCK', 'Affliction', 'iv-affliction', 'Affliction', 'spell', ['hit', 'sp', 'crit', 'haste', 'int'], [], ['shadow'], 'affliction-warlock-ranged-dps'],
     ['WARLOCK', 'Demonology', 'iv-demonology', 'Demonology', 'spell', ['hit', 'sp', 'crit', 'haste', 'int'], [], ['shadow', 'fire'], 'demonology-warlock-ranged-dps'],
     ['WARLOCK', 'Destruction', 'iv-destruction', 'Destruction', 'spell', ['hit', 'sp', 'haste', 'crit', 'int'], [], ['fire', 'shadow'], 'destruction-warlock-ranged-dps'],
-    ['PRIEST', 'Discipline', 'iv-disc', 'Discipline (guide order)', 'heal', ['heal', 'mp5', 'spi', 'int', 'crit'], [], [], 'discipline-priest-healer'],
-    ['PRIEST', 'Holy', 'iv-holy', 'Holy (guide order)', 'heal', ['heal', 'mp5', 'spi', 'int', 'crit'], [], [], 'holy-priest-healer'],
-    ['PRIEST', 'Shadow', 'iv-shadow', 'Shadow (guide order)', 'spell', ['hit', 'sp', 'crit', 'pen', 'spi'], [], ['shadow'], 'shadow-priest-ranged-dps'],
+    ['PRIEST', 'Discipline', 'iv-disc', 'Discipline', 'heal', ['heal', 'mp5', 'spi', 'int', 'crit'], [], [], 'discipline-priest-healer'],
+    ['PRIEST', 'Holy', 'iv-holy', 'Holy', 'heal', ['heal', 'mp5', 'spi', 'int', 'crit'], [], [], 'holy-priest-healer'],
+    ['PRIEST', 'Shadow', 'iv-shadow', 'Shadow', 'spell', ['hit', 'sp', 'crit', 'pen', 'spi'], [], ['shadow'], 'shadow-priest-ranged-dps'],
     ['PALADIN', 'Holy', 'iv-holypal', 'Holy', 'heal', ['heal', 'int', 'spi', 'mp5', 'crit'], [], [], 'holy-paladin-healer'],
     ['PALADIN', 'Protection', 'iv-protpal', 'Protection', 'tank', ['sta', 'def', 'sp', 'int', 'str'], [], ['holy'], 'protection-paladin-tank'],
-    ['PALADIN', 'Retribution', 'iv-ret-unsealed', 'Retribution: Unsealed Wrath', 'phys', ['dps', 'hit', 'exp', 'str', 'sp'], ['crit', 'agi', 'int'], ['holy'], 'retribution-paladin-melee-dps'],
-    ['PALADIN', 'Retribution', 'iv-ret-holyshock', 'Retribution: Holy Shock', 'phys', ['dps', 'hit', 'sp', 'crit', 'exp'], ['str', 'agi', 'int'], ['holy'], 'retribution-paladin-melee-dps'],
+    ['PALADIN', 'Retribution', 'iv-ret-unsealed', 'Retribution (Unsealed Wrath)', 'phys', ['dps', 'hit', 'exp', 'str', 'sp'], ['crit', 'agi', 'int'], ['holy'], 'retribution-paladin-melee-dps'],
+    ['PALADIN', 'Retribution', 'iv-ret-holyshock', 'Retribution (Holy Shock)', 'phys', ['dps', 'hit', 'sp', 'crit', 'exp'], ['str', 'agi', 'int'], ['holy'], 'retribution-paladin-melee-dps'],
     ['SHAMAN', 'Elemental', 'iv-elemental', 'Elemental', 'spell', ['sp', 'hit', 'crit', 'int', 'mp5'], [], ['nature', 'fire', 'frost'], 'elemental-shaman-ranged-dps'],
     ['SHAMAN', 'Enhancement', 'iv-enhancement', 'Enhancement', 'phys', ['dps', 'hit', 'exp', 'str', 'int', 'sp'], [], ['nature', 'fire', 'frost'], 'enhancement-shaman-melee-dps', 'Nov 13, 2026'],
     ['SHAMAN', 'Restoration', 'iv-restosham', 'Restoration', 'heal', ['heal', 'crit', 'int', 'spi', 'mp5'], [], [], 'restoration-shaman-healer'],
     ['DRUID', 'Balance', 'iv-balance', 'Balance', 'spell', ['hit', 'crit', 'sp', 'int'], [], ['arcane', 'nature'], 'balance-druid-ranged-dps'],
-    ['DRUID', 'Feral', 'iv-feral-cat', 'Feral: cat and bear threat', 'phys', ['dps', 'exp', 'hit', 'agi', 'str'], ['crit', 'ap'], [], 'feral-druid-melee-dps-and-tank'],
-    ['DRUID', 'Feral', 'iv-feral-bear', 'Feral: bear survival', 'tank', ['armor', 'def', 'sta', 'agi', 'dodge'], [], [], 'feral-druid-melee-dps-and-tank'],
+    ['DRUID', 'Feral', 'iv-feral-cat', 'Feral (cat, bear threat)', 'phys', ['dps', 'exp', 'hit', 'agi', 'str'], ['crit', 'ap'], [], 'feral-druid-melee-dps-and-tank'],
+    ['DRUID', 'Feral', 'iv-feral-bear', 'Feral (bear survival)', 'tank', ['armor', 'def', 'sta', 'agi', 'dodge'], [], [], 'feral-druid-melee-dps-and-tank'],
     ['DRUID', 'Restoration', 'iv-restodruid', 'Restoration', 'heal', ['heal', 'int', 'spi', 'mp5', 'crit'], [], [], 'restoration-druid-healer'],
   ];
   // Guide words that the pack has no stat for: weapon skill shows on gear as a skill line, not a stat.
@@ -89,22 +90,24 @@
     const w = {}, basis = {};
     const put = (k, v, why) => { if (v > 0) { w[k] = +v.toFixed(3); basis[k] = why; } };
     const factor = (tok) => { const i = order.indexOf(tok); return i >= 0 ? RANK[i] : also.includes(tok) ? ALSO : 0; };
-    const placed = (tok) => { const i = order.indexOf(tok); return i >= 0 ? `#${i + 1} in the guide` : also.includes(tok) ? 'also valued by the guide' : ''; };
+    const ORD = ['1st', '2nd', '3rd', '4th', '5th', '6th'];
+    const placed = (tok) => { const i = order.indexOf(tok); return i >= 0 ? `${ORD[i]} in the guide's order (× ${RANK[i]})` : also.includes(tok) ? `also valued by the guide (× ${ALSO})` : ''; };
+    const cost = (c) => `, × ${c} for what a point costs on Forever gear`;
     const simple = ['str', 'agi', 'int', 'spi', 'sta', 'hit', 'crit', 'exp', 'haste', 'mp5', 'def', 'dodge', 'pen', 'armor'];
-    simple.forEach((tok) => { const f = factor(tok); if (f) put(S[tok], COST[S[tok]][0] * f, `${placed(tok)} × cost ${COST[S[tok]][0]}`); });
-    if (factor('avoid')) { const f = factor('avoid'); put(S.dodge, COST[S.dodge][0] * f, `${placed('avoid')} (Avoidance) × cost`); put(S.parry, COST[S.parry][0] * f, `${placed('avoid')} (Avoidance) × cost`); }
-    if (role === 'tank' && w[S.dodge] == null && factor('agi')) put(S.dodge, COST[S.dodge][0] * ALSO, 'tank: dodge');
+    simple.forEach((tok) => { const f = factor(tok); if (f) put(S[tok], COST[S[tok]][0] * f, placed(tok) + cost(COST[S[tok]][0])); });
+    if (factor('avoid')) { const f = factor('avoid'); put(S.dodge, COST[S.dodge][0] * f, `Avoidance: ${placed('avoid')}${cost(COST[S.dodge][0])}`); put(S.parry, COST[S.parry][0] * f, `Avoidance: ${placed('avoid')}${cost(COST[S.parry][0])}`); }
+    if (role === 'tank' && w[S.dodge] == null && factor('agi')) put(S.dodge, COST[S.dodge][0] * ALSO, 'Tanks: some value on Dodge');
     // spell power: damage specs count spell damage and their own schools; healers count healing
     if (role === 'heal') {
       const f = factor('heal');
-      put(S.heal, COST[S.heal][0] * f, `${placed('heal')} × cost ${COST[S.heal][0]}`);
-      put(S.sp, w[S.heal], 'spell power heals for the same amount (1 point = 1 healing)');
+      put(S.heal, COST[S.heal][0] * f, placed('heal') + cost(COST[S.heal][0]));
+      put(S.sp, w[S.heal], 'Spell power heals for the same amount as +healing');
     } else if (factor('sp')) {
       const v = COST[S.sp][0] * factor('sp');
-      put(S.sp, v, `${placed('sp')} × cost 1`); put(S.sdmg, v, 'spell damage = spell power for damage');
-      schools.forEach((sc) => put(SCHOOL[sc], v, `${sc} damage counts for your ${sc} spells`));
+      put(S.sp, v, placed('sp') + cost(1)); put(S.sdmg, v, 'Spell damage counts the same as spell power for damage');
+      schools.forEach((sc) => put(SCHOOL[sc], v, `${sc[0].toUpperCase() + sc.slice(1)} damage counts in full for your ${sc} spells`));
       // "+X healing and +X/3 damage" items (Forever's healing stat) still give a third as damage
-      put(S.heal, v / 3, 'healing items also give a third as spell damage');
+      put(S.heal, v / 3, 'Healing items also give a third as much spell damage');
     }
     // attack power: ranked, or implied by the stat that gives it (CONV); weapon DPS = 14 attack power
     if (role === 'phys' || role === 'ranged' || (role === 'tank' && order.includes('str'))) {
@@ -114,53 +117,79 @@
       const apAgi = agiAp && w[S.agi] ? (w[S.agi] * 0.5) / agiAp : 0;   // about half of Agility's value is its attack power, half its crit
       const ranked = factor('ap') ? COST[S.ap][0] * factor('ap') : 0;
       const ap = Math.max(ranked, apStr, apAgi);
-      if (ap) put(S.ap, ap, ranked >= apStr && ranked >= apAgi ? `${placed('ap')} × cost 0.5` : apStr >= apAgi ? `from Strength (${per[0]} attack power per Strength)` : 'from Agility (half its value)');
+      if (ap) put(S.ap, ap, ranked >= apStr && ranked >= apAgi ? placed('ap') + cost(0.5) : apStr >= apAgi ? `What Strength gives: ${per[0]} attack power per Strength` : 'What Agility gives: half its value is attack power');
       if (order.includes('dps') || also.includes('dps')) put('dps', ap * 14, '14 attack power = 1 weapon DPS (Forever client)');
     }
-    if (role === 'tank' && order.includes('sta')) put(S.bv, COST[S.bv][0] * ALSO, 'shield block value');
+    if (role === 'tank' && order.includes('sta')) put(S.bv, COST[S.bv][0] * ALSO, 'Tanks: some value on shield block value');
     return { w, basis };
   }
 
-  // Priest: the two sets worked out for this project from Forever mechanics (18 Nov 2026; Holy from
-  // the mana model in the project's stat-weights notes, Shadow from the same notes). Kept as the
-  // Priest defaults; the guide-order sets sit next to them.
+  // Priest: worked out for this project from Forever's own spell and regen numbers (18 Nov 2026, the
+  // project's stat-weights notes), because the guides give an order but no numbers and their order is for
+  // level-60 raids. They replace the guide-order sets for Priests; the guide's order is kept for comparison.
+  const HEAL_W = { 41: 1, 45: 1, 5: 1.6, 43: 2.3, 6: 0.7, 32: 0.3 };
+  const HEAL_WHY = {
+    41: 'The unit: every other number is "worth this many points of +healing".',
+    45: 'Spell power heals for the same amount as +healing.',
+    5: '1 Intellect = 15 mana (16.5 with Mental Strength). 1 mana is worth about 0.19 healing in a pull you run out of mana (3.2 healing per mana / 17 healing per +1 healing over one mana bar). Counted for half of all pulls: 1.6.',
+    43: 'MP5 gives mana all fight long: about 48 mana per point over a 2-minute bar, × 0.19 × half the pulls: 2.3. Worth more in long fights (3.5 at 4 minutes), less in short ones.',
+    6: 'Spirit regen counts at 50% while casting (Meditation 3/3), and the model assumes you never leave the 5-second rule: 0.7, the lowest case. Gaps in casting make it worth more.',
+    32: '14 crit rating = 1% crit (Forever client). A crit heal adds 50%, but about a third of it overheals: 0.3.',
+  };
+  const HEAL_NOTE = 'One point of +healing = 1. Mana stats are counted for the pulls where you run short of mana (half of them, a middle estimate), which is why Intellect and MP5 sit above what the raid guides suggest: while levelling in dungeons you run out of mana before you run out of time. If you rarely go out of mana, copy this and lower Intellect, MP5 and Spirit.';
+  const HEAL_SRC = { label: 'Worked out 18 Nov 2026 from Forever priest numbers: heal coefficients (foreverchanges.pro), base heals (metabot.gg), Spirit and Meditation (conquestcapped.com), 14 crit rating = 1% (foreverdb.net/stats)', url: null };
   const PROJECT = [
-    { id: 'healing', cls: 'PRIEST', trees: ['Discipline', 'Holy'], name: 'Healing (mana model)', role: 'heal',
-      w: { 41: 1, 45: 1, 5: 1.6, 43: 2.3, 6: 0.7, 32: 0.3, 116: 4.2, 21: 4.2 },
-      src: { label: 'Worked out 18 Nov 2026 from Forever priest mechanics (heal coefficients, Spirit regen, Meditation, 50% of pulls mana-short)', url: null },
-      note: '+1 healing = 1. Mana stats are worth more the more often you run out of mana.' },
-    { id: 'shadow', cls: 'PRIEST', trees: ['Shadow'], name: 'Shadow (project weights)', role: 'spell',
-      w: { 45: 1, 42: 1, 111: 1, 6: 0.55, 43: 0.66, 5: 0.35, 32: 0.3, 116: 4.2, 21: 4.2, 31: 0.2, 117: 2, 18: 2 },
-      src: { label: 'Project Shadow weights (22 Nov 2026)', url: null },
-      note: '+1 shadow spell power = 1.' },
+    { id: 'healing', cls: 'PRIEST', trees: ['Holy'], name: 'Holy', role: 'heal', w: HEAL_W, why: HEAL_WHY, note: HEAL_NOTE, src: HEAL_SRC },
+    { id: 'disc', cls: 'PRIEST', trees: ['Discipline'], name: 'Discipline', role: 'heal', w: HEAL_W, why: HEAL_WHY, note: HEAL_NOTE, src: HEAL_SRC },
+    { id: 'shadow', cls: 'PRIEST', trees: ['Shadow'], name: 'Shadow', role: 'spell',
+      w: { 45: 1, 42: 1, 111: 1, 6: 0.55, 43: 0.66, 5: 0.35, 32: 0.3, 31: 0.2 },
+      why: {
+        45: 'The unit: every other number is "worth this many points of shadow spell power".',
+        42: 'Spell damage counts for shadow spells in full.', 111: 'Shadow damage counts in full.',
+        6: 'Spirit Tap doubles Spirit for 15 s after each kill and keeps 50% regen while casting, so Spirit refills you between pulls: 0.55.',
+        43: 'Steady mana through a questing loop (about 6 kills per mana bar): 0.66.',
+        5: '15 mana per point plus a little crit: 0.35.',
+        32: '14 crit rating = 1% crit; crits add 50% (100% in Shadowform) to Mind Blast and Mind Flay only: 0.3.',
+        31: '10 hit rating = 1% hit. Against mobs of your level you already hit 96%, and Shadow Focus adds more, so little is missed: 0.2.',
+      },
+      note: 'One point of shadow spell power = 1. Built for questing and dungeons: kill, regen with Spirit Tap, next pull. For raid bosses (17% spell hit needed), copy this and raise Hit.',
+      src: { label: 'Worked out 18 Nov 2026 from Forever shadow ranks (metabot.gg), talents (foreverchanges.pro talents), 14 crit / 10 hit rating = 1% (foreverdb.net/stats); coefficients are Classic rules', url: null } },
   ];
 
-  const BUILTIN = {};
+  const BUILTIN = {}, GUIDE = {};
   SPECS.forEach((row) => {
     const [cls, tree, id, name, role, order, also, , slug, upd] = row;
     const d = derive(row);
-    BUILTIN[id] = { id, cls, trees: [tree], name, role, w: d.w, basis: d.basis, order: order.map((t) => WORD[t]), also: also.map((t) => WORD[t]),
+    const p = { id, cls, trees: [tree], name, role, w: d.w, basis: d.basis, order: order.map((t) => WORD[t]), also: also.map((t) => WORD[t]),
       missing: order.filter((t) => NO_STAT[t]).map((t) => NO_STAT[t]),
-      src: { label: `Icy Veins, WoW Forever ${name.split(':')[0].replace(' (guide order)', '')} stat priority (updated ${upd || 'Nov 4, 2026'}, read 22 Nov 2026)`, url: IV + slug + '-pve-stat-priority' },
-      note: 'Starter weights: the guide\'s order × what each stat costs on Forever gear. Not a simulation.' };
+      src: { label: `Icy Veins, WoW Forever ${name.replace(/ \(.*\)$/, '')} stat priority (updated ${upd || 'Nov 4, 2026'}, read 22 Nov 2026)`, url: IV + slug + '-pve-stat-priority' },
+      note: 'The order is the guide\'s. Each number = that place in the order × what one point of the stat costs on Forever gear, so a stat that items give a lot of (Healing: 0.54 of a point of budget each) gets a smaller number than a rare one (MP5: 2.33). Not a simulation: copy it and change what you know better.' };
+    // a tree the project worked out its own numbers for keeps the guide's order only for comparison
+    if (PROJECT.some((x) => x.cls === cls && x.trees.includes(tree))) GUIDE[cls + '/' + tree] = p; else BUILTIN[id] = p;
   });
-  PROJECT.forEach((p) => { BUILTIN[p.id] = p; });
-  // what each tree uses until you pick something else
+  PROJECT.forEach((p) => { p.guide = GUIDE[p.cls + '/' + p.trees[0]] || null; BUILTIN[p.id] = p; });
+  // what each tree uses until you pick something else: its first profile
   const DEFAULT = {};
   Object.values(BUILTIN).forEach((p) => p.trees.forEach((t) => { const k = p.cls + '/' + t; if (!DEFAULT[k]) DEFAULT[k] = p.id; }));
-  DEFAULT['PRIEST/Discipline'] = 'healing'; DEFAULT['PRIEST/Holy'] = 'healing'; DEFAULT['PRIEST/Shadow'] = 'shadow';
+  PROJECT.forEach((p) => p.trees.forEach((t) => { DEFAULT[p.cls + '/' + t] = p.id; }));
 
   // ---------------------------------------------------------------- your own profiles
   // Saved in this browser (localStorage 'cc.weights.v1'), per class so alts of the same class share
   // them. Which profile a spec uses is kept per character and spec ('cc.gear.profile.<name>.<spec>',
   // the key the Gear tab always used).
   const KEY = 'cc.weights.v1';
-  const store = () => { try { return JSON.parse(localStorage.getItem(KEY) || 'null') || { profiles: {} }; } catch (e) { return { profiles: {} }; } };
+  const store = () => {
+    let st; try { st = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { st = null; }
+    st = st && st.profiles ? st : { profiles: {} };
+    // older saves could carry a fixed weight for a "%" line, which hid edits to its rating: drop it
+    Object.values(st.profiles).forEach((p) => { if (p && p.w) PCT_KEYS.forEach((k) => delete p.w[k]); });
+    return st;
+  };
   const save = (st) => localStorage.setItem(KEY, JSON.stringify(st));
-  const clean = (w) => { const o = {}; Object.entries(w || {}).forEach(([k, v]) => { v = Number(v); if (v > 0 && isFinite(v)) o[k] = +v.toFixed(3); }); return o; };
+  const clean = (w) => { const o = {}; Object.entries(w || {}).forEach(([k, v]) => { v = Number(v); if (v > 0 && isFinite(v) && !PCT[k]) o[k] = +v.toFixed(3); }); return o; };   // "%" lines follow their rating
 
   const W = {
-    S, PCT, COST, RANK, ALSO, AP_PER, SPECS, BUILTIN, WORD,
+    S, PCT, COST, RANK, ALSO, AP_PER, SPECS, BUILTIN, GUIDE, WORD,
     get: (id) => BUILTIN[id] || store().profiles[id] || null,
     custom: (cls) => Object.values(store().profiles).filter((p) => !cls || p.cls === cls),
     // every profile you can pick for a class, built-in first; a tree's own ones first
@@ -259,48 +288,78 @@
   const char = () => ((A.CH && A.CH.snap) || {}).character || {};
   const names = () => (A.GD && A.GD.stat) || {};
   const fmt = (v) => (v == null ? '' : String(+Number(v).toFixed(3)));
+  // "%" lines are scored through their rating (PCT), so they aren't shown as weights of their own
+  const SHOWN = (k) => !PCT[k];
 
   // which profile each of your specs uses (the Gear tab's spec list)
   function specList() { return CC.gear && CC.gear.specs ? CC.gear.specs() : []; }
+  // how a spec came to use its weights, in words
+  function reason(sp) {
+    const pick = CC.gear.pickedProfile(sp);
+    if (pick) return 'Your pick';
+    return sp.tree ? `Default: most of your talent points are in ${sp.tree}` : 'Default';
+  }
+
+  // one profile: its numbers as bars, then why
+  function profileCard(sel) {
+    const own = !!sel.own;
+    const keys = (own ? W.EDITABLE.filter(SHOWN) : []).concat(Object.keys(sel.w).filter(SHOWN)).filter((k, i, a) => a.findIndex((x) => String(x) === String(k)) === i)
+      .sort((a, b) => (sel.w[b] || 0) - (sel.w[a] || 0));
+    const max = Math.max(...keys.map((k) => sel.w[k] || 0), 0.001);
+    let h = `<div class="wcard"><div class="row sb"><div><div class="nm">${esc(sel.name)} <span class="badge">${own ? 'yours' : 'built in'}</span></div>`;
+    h += own ? `<p class="meta">Your own profile${sel.from && W.get(sel.from) ? `, copied from ${esc(W.get(sel.from).name)}` : ''}. Saved in this browser.</p>` : '';
+    h += `</div><div class="chips">${own
+      ? `<button data-wrename="${esc(sel.id)}">Rename</button>${sel.from && W.BUILTIN[sel.from] ? `<button data-wreset="${esc(sel.id)}">Reset to original</button>` : ''}<button data-wcopy="${esc(sel.id)}">Copy</button><button class="neg" data-wdel="${esc(sel.id)}">Delete</button>`
+      : `<button data-wcopy="${esc(sel.id)}">Copy to edit</button>`}</div></div>`;
+    h += '<div class="wbars">';
+    keys.forEach((k) => {
+      const v = sel.w[k] || 0;
+      h += `<div class="wb"><span class="wn">${esc(W.statName(k, names()))}</span><span class="bar"><i style="--w:${((100 * v) / max).toFixed(1)}%"></i></span>${own
+        ? `<input type="number" step="0.05" min="0" data-wset="${esc(sel.id)}" data-wstat="${esc(k)}" value="${fmt(sel.w[k])}" placeholder="0">`
+        : `<b class="num">${fmt(v)}</b>`}</div>`;
+    });
+    h += '</div>';
+    // why
+    const base = own && sel.from ? W.get(sel.from) : sel;
+    const why = (base && (base.why || base.basis)) || {};
+    h += `<h3>Why these numbers</h3>`;
+    if (own) h += `<p class="meta">These are your numbers.${base && base !== sel ? ` The reasons below are for ${esc(base.name)}, the profile you copied.` : ''}</p>`;
+    if (base && base.note) h += `<p class="why-note">${esc(base.note)}</p>`;
+    const rows = Object.keys(why).filter(SHOWN).sort((a, b) => ((base.w || {})[b] || 0) - ((base.w || {})[a] || 0));
+    if (rows.length) h += `<ul class="whys">${rows.map((k) => `<li><b>${esc(W.statName(k, names()))} ${fmt((base.w || {})[k])}</b><span>${esc(why[k])}</span></li>`).join('')}</ul>`;
+    if (base && base.order && base.order.length) h += `<p class="meta">Guide order: ${base.order.map((x, i) => `${i + 1}. ${esc(x)}`).join(' · ')}${base.also && base.also.length ? ` · also: ${esc(base.also.join(', '))}` : ''}.</p>`;
+    if (base && base.guide) h += `<p class="meta">For comparison, the guide's order (written for level-60 raids): ${base.guide.order.map((x, i) => `${i + 1}. ${esc(x)}`).join(' · ')} (<a href="${esc(base.guide.src.url)}" target="_blank" rel="noopener">Icy Veins</a>).</p>`;
+    if (base && base.missing && base.missing.length) h += `<p class="meta">Not scored yet: ${esc(base.missing.join('; '))}.</p>`;
+    if (base && base.src) h += `<p class="meta">Source: ${base.src.url ? `<a href="${esc(base.src.url)}" target="_blank" rel="noopener">${esc(base.src.label)}</a>` : esc(base.src.label)}.</p>`;
+    h += `<p class="meta">An item's score is the sum of each stat × its number. Crit, hit, dodge, parry and block "%" lines count as rating (14 crit, 10 hit, 12 dodge, 15 parry, 5 block rating = 1%, Forever client via foreverdb.net/stats). Not counted: hit caps, and Use or proc effects.</p>`;
+    return h + '</div>';
+  }
 
   V.weights = function () {
     const ch = char(), cls = ch.classFile;
     if (!cls) return '<div class="empty">Your character isn\'t saved yet: Sync in game.</div>';
     const specs = specList();
     specs.forEach((sp) => W.migrate(ch.name, sp.i, cls));
-    const all = W.forClass(cls);
+    const active = (A.CH.snap || {}).activeSpec;
+    const builtIn = Object.values(BUILTIN).filter((p) => p.cls === cls), mine = W.custom(cls);
+    const activeSpec = specs.find((s) => s.i === active) || specs[0];
     const sel = W.get(A.STATE.wProfile) && W.get(A.STATE.wProfile).cls === cls ? W.get(A.STATE.wProfile)
-      : W.get(specs.length && CC.gear.profileKey ? CC.gear.profileKey(specs.find((s) => s.i === (A.CH.snap || {}).activeSpec) || specs[0]) : null) || all[0];
+      : W.get(activeSpec ? CC.gear.profileKey(activeSpec) : null) || builtIn[0];
     let h = '';
     if (specs.length) {
-      h += `<h2>Your specs</h2><div class="table wspec"><div class="thead"><div>Spec</div><div>Scores gear with</div></div>`;
+      h += `<h2>Your specs</h2><p class="meta">Each spec uses the weights for the talent tree you have the most points in, unless you pick others.</p><div class="table wspec"><div class="thead"><div>Spec</div><div>Scores gear with</div><div>Why</div></div>`;
       specs.forEach((sp) => {
-        const cur = CC.gear.profileKey(sp);
-        h += `<div class="tr"><div class="c-main"><div class="nm">${esc(sp.label)}${sp.i === (A.CH.snap || {}).activeSpec ? ' <span class="badge on">active</span>' : ''}</div></div><div><select data-wspec="${sp.i}">${W.forClass(cls, sp.tree).map((p) => `<option value="${esc(p.id)}"${p.id === cur ? ' selected' : ''}>${esc(p.name)}${p.own ? ' (yours)' : ''}</option>`).join('')}</select></div></div>`;
+        const cur = CC.gear.profileKey(sp), picked = CC.gear.pickedProfile(sp), def = W.defaultFor(cls, sp.tree);
+        const opts = [`<option value=""${picked ? '' : ' selected'}>${esc((W.get(def) || {}).name || 'Default')} (default)</option>`]
+          .concat(builtIn.concat(mine).filter((p) => p.id !== def || picked).map((p) => `<option value="${esc(p.id)}"${picked && p.id === cur ? ' selected' : ''}>${esc(p.name)}${p.own ? ' (yours)' : ''}</option>`));
+        h += `<div class="tr"><div class="c-main"><div class="nm">${esc(sp.label)}${sp.i === active ? ' <span class="badge on">active</span>' : ''}</div></div><div><select data-wspec="${sp.i}">${opts.join('')}</select></div><div class="dim small">${esc(reason(sp))}</div></div>`;
       });
       h += '</div>';
     }
-    h += `<h2>Profiles for ${esc(ch.class || cls)}</h2><div class="chips">${all.map((p) => `<button data-wprof="${esc(p.id)}" class="${sel && p.id === sel.id ? 'on' : ''}">${esc(p.name)}${p.own ? ' <span>yours</span>' : ''}</button>`).join('')}<button data-wnew="">+ New empty profile</button></div>`;
-    if (!sel) return h + '<div class="empty">No profiles for this class yet.</div>';
-    h += `<div class="wcard"><div class="row sb"><div><div class="nm">${esc(sel.name)}</div>`;
-    if (sel.src) h += `<p class="meta">${sel.src.url ? `<a href="${esc(sel.src.url)}" target="_blank" rel="noopener">${esc(sel.src.label)}</a>` : esc(sel.src.label)}</p>`;
-    if (sel.own) h += `<p class="meta">Your own profile${sel.from && W.get(sel.from) ? `, copied from “${esc(W.get(sel.from).name)}”` : ''}. Saved in this browser.</p>`;
-    h += `</div><div class="chips">${sel.own
-      ? `<button data-wrename="${esc(sel.id)}">Rename</button>${sel.from && W.BUILTIN[sel.from] ? `<button data-wreset="${esc(sel.id)}">Reset to original</button>` : ''}<button data-wcopy="${esc(sel.id)}">Copy</button><button class="neg" data-wdel="${esc(sel.id)}">Delete</button>`
-      : `<button data-wcopy="${esc(sel.id)}">Copy to edit</button>`}</div></div>`;
-    if (sel.order) h += `<p class="prio">${sel.order.map((x, i) => `<span><b>${i + 1}</b> ${esc(x)}</span>`).join('')}${sel.also && sel.also.length ? `<span class="dim">also: ${esc(sel.also.join(', '))}</span>` : ''}</p>`;
-    if (sel.missing && sel.missing.length) h += `<p class="meta">Not scored yet: ${esc(sel.missing.join('; '))}.</p>`;
-    if (sel.note) h += `<p class="meta">${esc(sel.note)}</p>`;
-    // the numbers: read-only for built-in profiles, editable for yours
-    const keys = W.EDITABLE.filter((k) => sel.own || sel.w[k] != null).concat(Object.keys(sel.w).filter((k) => !W.EDITABLE.map(String).includes(String(k))));
-    h += `<div class="wedit">${keys.map((k) => {
-      const v = sel.w[k];
-      const why = sel.basis && sel.basis[k] ? ` title="${esc(sel.basis[k])}"` : '';
-      return `<label${why}><span>${esc(W.statName(k, names()))}</span>${sel.own ? `<input type="number" step="0.05" min="0" data-wset="${esc(sel.id)}" data-wstat="${esc(k)}" value="${fmt(v)}" placeholder="0">` : `<b class="num">${fmt(v)}</b>`}</label>`;
-    }).join('')}</div>`;
-    h += `<p class="meta">Points per 1 of each stat; an item's score is the sum of stat × weight. Crit, hit, dodge, parry and block “%” lines count as rating (14 crit, 10 hit, 12 dodge, 15 parry, 5 block rating = 1%, Forever client via foreverdb.net/stats) unless a profile gives them their own number. Hover a number to see where it came from.</p></div>`;
-    h += `<details class="how"><summary>How the starter weights are worked out</summary><p>Order: each spec's WoW Forever stat priority page on Icy Veins (linked above). Those pages give an order, not numbers. Cost: what one point of each stat uses of an item's stat budget on Forever gear, measured from the game-data pack (Forever client tooltips): Stamina, Strength, Agility, Intellect, Spirit and Spell Power 1, Healing 0.54, Hit 1.33, Crit 0.86, MP5 2.33, Attack Power 0.5, Defense 1.79, Dodge 1.08; Expertise, Parry, Haste, Spell Pierce and bonus Armor have no clean sample and are assumed (the tooltip on each number says so). Starter weight = cost × 1, 0.8, 0.65, 0.5, 0.4 or 0.32 for 1st to 6th in the order, 0.3 for stats the guide says are also valued, 0 for the rest. Attack power comes from the stat that gives it (2 per Strength for Warriors, Paladins, Shamans, Druids; half of Agility's value for Rogues and Hunters); 14 attack power = 1 weapon DPS. Hit and Expertise count the same before and after their cap, because the app doesn't know your hit total yet: stop weighing them once you're capped (8% melee and ranged, 17% spells against raid bosses).</p></details>`;
-    return h;
+    h += `<h2>Weights</h2><div class="toolbar"><span class="dim small">Built in</span><div class="chips">${builtIn.map((p) => `<button data-wprof="${esc(p.id)}" class="${sel && p.id === sel.id ? 'on' : ''}">${esc(p.name)}</button>`).join('')}</div>`;
+    h += `<span class="dim small">Yours</span><div class="chips">${mine.map((p) => `<button data-wprof="${esc(p.id)}" class="${sel && p.id === sel.id ? 'on' : ''}">${esc(p.name)}</button>`).join('')}<button data-wnew="">+ New</button></div></div>`;
+    if (!sel) return h + '<div class="empty">No weights for this class yet.</div>';
+    return h + profileCard(sel);
   };
 
   const rerender = () => A.render();
@@ -316,7 +375,7 @@
       const id = t.dataset.wdel;
       W.remove(id);
       // a spec that used it goes back to its default
-      specList().forEach((sp) => { if (CC.gear.profileKey(sp) === id) CC.gear.setProfile(sp, null); });
+      specList().forEach((sp) => { if (CC.gear.pickedProfile(sp) === id) CC.gear.setProfile(sp, null); });
       A.STATE.wProfile = null;
     } else if (t.dataset.wrename != null) {
       const p = W.get(t.dataset.wrename);
@@ -329,6 +388,6 @@
     const inp = e.target.closest('[data-wset]');
     if (inp) { W.set(inp.dataset.wset, inp.dataset.wstat, inp.value); rerender(); return; }
     const sel = e.target.closest('[data-wspec]');
-    if (sel) { const sp = specList().find((s) => String(s.i) === sel.dataset.wspec); if (sp) CC.gear.setProfile(sp, sel.value); rerender(); }
+    if (sel) { const sp = specList().find((s) => String(s.i) === sel.dataset.wspec); if (sp) CC.gear.setProfile(sp, sel.value || null); A.STATE.wProfile = null; rerender(); }
   });
 })();

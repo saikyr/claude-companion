@@ -318,6 +318,8 @@
 
   CC.advice = {
     FLAG, ORDER, compute, bestOwned, bestOwnedHTML, tipHTML, markOf, slotHint, summary, chipsHTML,
+    // shared with the Gear page (js/gear.js)
+    owned, wearable, statsOf, effectOf, invOf,
     of: (key) => compute().byKey[key] || null,
     // for the Claude snapshot
     snapshot() {
