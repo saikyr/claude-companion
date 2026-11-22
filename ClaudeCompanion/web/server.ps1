@@ -20,7 +20,7 @@ $forever = (Resolve-Path (Join-Path $web '..\..\..\..')).Path   # ...\_forever_
 $accounts = Join-Path $forever 'WTF\Account'
 $dataDir = Join-Path (Split-Path -Parent $web) 'companion-data'
 $cardsDir = Join-Path $dataDir 'from-claude'
-$port = 47615
+$port = if ($env:CC_PORT) { [int]$env:CC_PORT } else { 47615 }   # CC_PORT: only for testing a second copy
 $files = @{ '/api/cards' = (Join-Path $cardsDir 'cards.json'); '/api/cards-state' = (Join-Path $cardsDir 'state.json'); '/api/settings' = (Join-Path $dataDir 'settings.json') }
 $prefix = "http://localhost:$port/"
 $self = $MyInvocation.MyCommand.Path
@@ -212,7 +212,8 @@ function Get-UpdCfg {
     $auto = if ($c -and $null -ne $c.auto) { [bool]$c.auto } else { $true }
     $tok = if ($c -and $c.token) { $c.token } elseif ($env:CC_GITHUB_TOKEN) { $env:CC_GITHUB_TOKEN } else { $null }
     if (-not $tok) { $gh = Get-Command gh -ErrorAction SilentlyContinue; if ($gh) { try { $t = (& $gh.Source auth token 2>$null); if ($LASTEXITCODE -eq 0 -and $t) { $tok = ([string]$t).Trim() } } catch { } } }
-    @{ repo = $repo; auto = $auto; token = $tok }
+    $api = if ($c -and $c.api) { $c.api } else { 'https://api.github.com' }   # api: only changed for testing
+    @{ repo = $repo; auto = $auto; token = $tok; api = $api }
 }
 function Invoke-GitHub([string]$url, $cfg, [switch]$Raw) {
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -239,7 +240,7 @@ function Check-Update([switch]$Force) {
     $cfg = Get-UpdCfg
     $upd.checked = Get-Date
     try {
-        $rels = Invoke-GitHub "https://api.github.com/repos/$($cfg.repo)/releases?per_page=10" $cfg
+        $rels = Invoke-GitHub "$($cfg.api)/repos/$($cfg.repo)/releases?per_page=10" $cfg
         $latest = $null
         foreach ($r in @($rels)) {
             if ($r.draft) { continue }
@@ -270,7 +271,7 @@ function Install-Update {
         $latest = Check-Update -Force
         if (-not $latest) { return @{ ok = $false; error = $(if ($upd.error) { $upd.error } else { 'No release found.' }) } }
         $cfg = Get-UpdCfg
-        $bytes = Invoke-GitHub "https://api.github.com/repos/$($cfg.repo)/releases/assets/$($latest.asset)" $cfg -Raw
+        $bytes = Invoke-GitHub "$($cfg.api)/repos/$($cfg.repo)/releases/assets/$($latest.asset)" $cfg -Raw
         $work = Join-Path $env:TEMP ('cc-update-' + [guid]::NewGuid().ToString('N'))
         New-Item -ItemType Directory -Path $work | Out-Null
         $zip = Join-Path $work 'release.zip'
