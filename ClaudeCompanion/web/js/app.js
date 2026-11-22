@@ -405,10 +405,18 @@
     </div></div>`;
     let h = `<div class="charlay"><div class="cmain"><div class="sheet"><div class="col">${LEFT.map((n) => slot(n, 'l')).join('')}</div><div class="col">${RIGHT.map((n) => slot(n, 'r')).join('')}</div>
       <div class="weap">${WEAP.map((n) => slot(n, 'l')).join('')}</div></div>`;
-    const taxi = Object.entries(CH.taxi || {}).sort((a, b) => a[0].localeCompare(b[0]));
+    const taxi = Object.entries(CH.taxi || {}).filter(([n]) => !/^zzOLD/.test(n)).sort((a, b) => a[0].localeCompare(b[0]));
     const tl = taxi.length ? Math.max(...taxi.map(([, t]) => t.last || 0)) : null;
     h += `<h2>Flight paths <span class="dim small">${taxi.length} known</span> ${savedPill(tl, 30 * 24 * HOUR)}</h2>`;
-    h += taxi.length ? `<div class="chips">${taxi.map(([n]) => `<span class="chip">${esc(n)}</span>`).join('')}</div>` : '<div class="empty">Talk to any flight master once, then Sync.</div>';
+    if (!taxi.length) h += '<div class="empty">Talk to any flight master once, then Sync.</div>';
+    else {
+      // grouped by continent; the flight map only lists the continent you're on
+      const groups = {};
+      taxi.forEach(([n, t]) => { if (/^zzOLD/.test(n)) return; const k = (t && t.continent) || 'Continent not noted yet'; (groups[k] = groups[k] || []).push(n); });
+      Object.entries(groups).sort().forEach(([k, names]) => { h += `<div class="small dim">${esc(k)}</div><div class="chips">${names.map((n) => `<span class="chip">${esc(n)}</span>`).join('')}</div>`; });
+      const read = CH.taxiRead || {};
+      ['Eastern Kingdoms', 'Kalimdor'].filter((k) => !read[k]).forEach((k) => { h += `<div class="dim small">${k}: open a flight map there once, then Sync, to save its flight paths.</div>`; });
+    }
     h += `</div><div class="cside">${stats}`;
     const sets = arr(s.gearSets);
     if (sets.length) {
@@ -1039,6 +1047,7 @@
     equip: (e) => (e.item ? `Equipped ${itemIcon(e.item, { size: 'xs' })} ${itemName$(e.item, e.link)}` : `Unequipped ${esc(e.slotName || e.slot)}`),
     spec: (e) => `Switched to spec ${e.to}`, session: (e) => `New session${e.label ? ': ' + esc(e.label) : ''}`,
     runStart: (e) => `Entered <b>${esc(e.name)}</b>: dungeon run started`, runEnd: (e) => `Dungeon run <b>${esc(e.name)}</b> over (${dur(e.secs)}, ${e.kills} kills, ${e.bosses || 0} bosses)`,
+    groupLoot: (e) => `${e.item ? itemIcon(e.item, { size: 'xs' }) + ' ' : ''}${itemName$(e.item, e.link)} → <b>${esc(e.who)}</b>${e.how === 'won' ? ' (won)' : ''}`,
     runLeft: (e) => `Left ${esc(e.name)}`, runBack: (e) => `Back in ${esc(e.name)}`, boss: (e) => `<b>Killed ${esc(e.name)}</b>`, wipe: (e) => `<span class="neg">Wiped on ${esc(e.name)}</span>`,
     grindStart: (e) => `Started grind <b>${esc(e.name)}</b>`, grindStop: (e) => `Finished grind <b>${esc(e.name)}</b> (${dur(e.secs)}, ${e.kills} kills)`,
     ahPost: (e) => `Posted ${e.link ? itemName$(keyOf(e.link), e.link) : esc(e.name)} ×${e.qty || 1} at ${money(e.unit)}`,
@@ -1051,7 +1060,7 @@
     recipe: (e) => `Learned recipe ${esc(e.name || e.recipe)}`,
     login: () => 'Logged in', logout: () => 'Logged out', skill: (e) => esc(e.text), rep: (e) => esc(e.text), coin: (e) => esc(e.text),
   };
-  const EV_LABEL = { xp: 'XP', money: 'Money', coin: 'Coin', loot: 'Loot', kill: 'Kills', ahPost: 'AH posts', receive: 'Received', zone: 'Zones', group: 'Group', flightPath: 'Flight paths', equip: 'Gear', craft: 'Crafts', skill: 'Skills', login: 'Logins', logout: 'Logouts', disenchant: 'Disenchants', profession: 'Professions', death: 'Deaths', grindStart: 'Grind start', grindStop: 'Grind end', runStart: 'Run start', runEnd: 'Run end', runLeft: 'Run left', runBack: 'Run back', boss: 'Bosses', wipe: 'Wipes', ahScan: 'AH scans', spec: 'Spec', questDone: 'Quests done', questAccept: 'Quests taken', questDrop: 'Quests dropped', level: 'Levels', note: 'Notes', session: 'Sessions', ahSold: 'AH sold', ahExpired: 'AH expired', ahWon: 'AH won', ahOutbid: 'AH outbid', ahRemoved: 'AH cancelled', cooldownCraft: 'Cooldowns', learn: 'Learned', recipe: 'Recipes', rep: 'Reputation' };
+  const EV_LABEL = { xp: 'XP', money: 'Money', coin: 'Coin', loot: 'Loot', kill: 'Kills', ahPost: 'AH posts', receive: 'Received', zone: 'Zones', group: 'Group', flightPath: 'Flight paths', equip: 'Gear', craft: 'Crafts', skill: 'Skills', login: 'Logins', logout: 'Logouts', disenchant: 'Disenchants', profession: 'Professions', death: 'Deaths', grindStart: 'Grind start', grindStop: 'Grind end', runStart: 'Run start', runEnd: 'Run end', runLeft: 'Run left', runBack: 'Run back', boss: 'Bosses', wipe: 'Wipes', groupLoot: 'Group loot', ahScan: 'AH scans', spec: 'Spec', questDone: 'Quests done', questAccept: 'Quests taken', questDrop: 'Quests dropped', level: 'Levels', note: 'Notes', session: 'Sessions', ahSold: 'AH sold', ahExpired: 'AH expired', ahWon: 'AH won', ahOutbid: 'AH outbid', ahRemoved: 'AH cancelled', cooldownCraft: 'Cooldowns', learn: 'Learned', recipe: 'Recipes', rep: 'Reputation' };
   const evRow = (e) => `<div class="ev"><span class="t">${fmtTime(e.t)}</span><span class="what">${EV[e.e] ? EV[e.e](e) : esc(e.e)}</span><span class="where">${esc(e.sub || e.zone || '')}</span></div>`;
   V.journal = function () {
     const all = arr(CH.journal);

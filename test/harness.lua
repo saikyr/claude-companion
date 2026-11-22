@@ -466,6 +466,45 @@ do
   IsInInstance, GetInstanceInfo = oldII, oldGI
   if FAILED then error("dungeon run checks failed") end
 end
+-- group loot and rolls; flight paths per continent
+do
+  local function check(ok, what) print((ok and "PASS " or "FAIL ") .. what); if not ok then FAILED = true end end
+  local c; for _, v in pairs(ClaudeCompanionDB.chars) do c = v end
+  local oldII, oldGI = IsInInstance, GetInstanceInfo
+  IsInInstance = function() return true, "party" end
+  GetInstanceInfo = function() return "Blackrock Depths", "party", 1, "Normal", 5, 0, false, 230 end
+  c.run = nil; Fire("PLAYER_ENTERING_WORLD")
+  local SC = "|cnIQ3:|Hitem:11932::::::::59:1487:::::::::|h[Guiding Stave of Wisdom]|h|r"
+  local GREY = "|cnIQ0:|Hitem:4583::::::::58:1487:::::::::|h[Thick Furry Mane]|h|r"
+  Fire("CHAT_MSG_LOOT", "Graky has selected Need for: " .. SC)
+  Fire("CHAT_MSG_LOOT", "Sap has selected Greed for: " .. SC)
+  Fire("CHAT_MSG_LOOT", "Need Roll - 87 for " .. SC .. " by Graky")
+  Fire("CHAT_MSG_LOOT", "Greed Roll - 12 for " .. SC .. " by Sap")
+  Fire("CHAT_MSG_LOOT", "Graky won: " .. SC)
+  Fire("CHAT_MSG_LOOT", "Sap receives loot: " .. GREY .. ".")
+  local gl = c.run.groupLoot or {}
+  check(#gl == 1 and gl[1].who == "Graky" and gl[1].how == "won" and gl[1].q == 3, "who won the Stave is in the run (" .. #gl .. ")")
+  local byWho = {}; for _, r in ipairs(gl[1] and gl[1].rolls or {}) do byWho[r.who] = r end
+  check(byWho.Graky and byWho.Graky.choice == "need" and byWho.Graky.roll == 87 and byWho.Sap and byWho.Sap.roll == 12, "the rolls are kept with it")
+  check(c.journal[#c.journal].e == "groupLoot" and c.journal[#c.journal].who == "Graky", "groupLoot in the journal; grey loot of others skipped")
+  local before = #gl
+  Fire("CHAT_MSG_LOOT", "You receive loot: " .. SC .. ".")
+  check(#(c.run.groupLoot or {}) == before, "own loot isn't group loot")
+  IsInInstance, GetInstanceInfo = oldII, oldGI
+  c.run = nil
+  -- flight paths: the map names its continent; paths from the other continent stay
+  c.taxi = { ["Stormwind, Elwynn"] = { first = 1, last = 1 }, ["zzOLDRiverglades, Farholde Keep"] = { first = 1, last = 1 } }
+  local oldTM, oldMap = GetTaxiMapID, C_Map
+  GetTaxiMapID = function() return 1414 end
+  C_Map = setmetatable({ GetMapInfo = function(id) return { name = id == 1414 and "Kalimdor" or "Eastern Kingdoms" } end }, { __index = oldMap })
+  TaxiNodeGetType = TaxiNodeGetType or function() return "REACHABLE" end
+  ns.ReadTaxi()
+  check(c.taxi["Stormwind, Elwynn"] and c.taxi["Talrendis Point, Azshara"] and c.taxi["Talrendis Point, Azshara"].continent == "Kalimdor", "Kalimdor paths added, Eastern Kingdoms ones kept")
+  check(c.taxi["zzOLDRiverglades, Farholde Keep"] == nil, "old zzOLD node dropped")
+  check(c.taxiRead and c.taxiRead.Kalimdor, "which continent was read is saved")
+  GetTaxiMapID, C_Map = oldTM, oldMap
+  if FAILED then error("group loot / flight path checks failed") end
+end
 local f = io.open("out.lua", "w"); f:write("ClaudeCompanionDB = " .. ser(ClaudeCompanionDB)); f:close()
 print("DIAG:")
 for k, d in pairs(ClaudeCompanionDB.chars["Gabriel-Atlas"].diag) do if d.err > 0 then print(k, d.err, d.lastErr) end end

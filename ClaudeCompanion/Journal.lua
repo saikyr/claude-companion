@@ -309,7 +309,69 @@ ns.On("CHAT_MSG_LOOT", function(text)
             end
         end
     end
+    ns.GroupLoot(text)
 end)
+
+-- Loot that went to someone else in the group, and the rolls for it, so "did the Scepter drop
+-- for someone else?" has an answer. Greens and better (and anything whose quality is unknown).
+-- Kept in the journal ("groupLoot", "roll") and in the dungeon run (run.groupLoot[]).
+local OTHER, rolls = nil, {}
+local function QualityOf(link) return tonumber(link:match("|cnIQ(%d)")) or (ns.QualityFromColor and ns.QualityFromColor(link)) end
+function ns.GroupLoot(text)
+    local FP = ns.FormatPattern
+    if not FP then return end
+    if not OTHER then
+        OTHER = {}
+        local function add(fmt, kind, order) if fmt then OTHER[#OTHER + 1] = { FP(fmt) .. "$", kind, order } end end
+        add(LOOT_ROLL_YOU_WON or "You won: %s", "youWon", "l")
+        add(LOOT_ROLL_WON or "%s won: %s", "won", "wl")
+        add(LOOT_ITEM_MULTIPLE or "%s receives loot: %sx%d.", "loot", "wl")
+        add(LOOT_ITEM or "%s receives loot: %s.", "loot", "wl")
+        add(LOOT_ITEM_PUSHED or "%s receives item: %s.", "loot", "wl")
+        add(LOOT_ROLL_ROLLED_NEED or "Need Roll - %d for %s by %s", "need", "lw")
+        add(LOOT_ROLL_ROLLED_GREED or "Greed Roll - %d for %s by %s", "greed", "lw")
+        add(LOOT_ROLL_NEED or "%s has selected Need for: %s", "needPick", "wl")
+        add(LOOT_ROLL_GREED or "%s has selected Greed for: %s", "greedPick", "wl")
+        add(LOOT_ROLL_PASSED or "%s passed on: %s", "pass", "wl")
+        add(LOOT_ROLL_PASSED_AUTO or "%s automatically passed on: %s because he cannot loot that item.", "pass", "wl")
+    end
+    for _, p in ipairs(OTHER) do
+        local a, b = text:match(p[1])
+        if a then
+            local who, link
+            if p[3] == "l" then link, who = a, UnitName("player") elseif p[3] == "lw" then link, who = a, b else who, link = a, b end
+            if not link or not link:find("|H") then return end
+            local q = QualityOf(link)
+            if q and q < 2 then return end
+            local key = ns.NoteItem(link)
+            local name = link:match("%[(.-)%]")
+            local kind = p[2]
+            if kind == "need" or kind == "greed" then
+                local n = tonumber(text:match("(%d+)"))
+                rolls[name] = rolls[name] or {}
+                rolls[name][who] = { kind, n }
+                return
+            elseif kind == "needPick" or kind == "greedPick" or kind == "pass" then
+                rolls[name] = rolls[name] or {}
+                if not rolls[name][who] then rolls[name][who] = { kind == "pass" and "pass" or (kind == "needPick" and "need" or "greed") } end
+                return
+            end
+            local won = kind == "won" or kind == "youWon"
+            if kind == "loot" and who == UnitName("player") then return end -- own loot is counted above
+            local list = {}
+            for w, r in pairs(rolls[name] or {}) do list[#list + 1] = { who = w, choice = r[1], roll = r[2] } end
+            rolls[name] = nil
+            local e = { who = who, link = link, item = key, q = q, how = won and "won" or "loot", rolls = #list > 0 and list or nil }
+            ns.Log("groupLoot", e)
+            local r = ns.char and ns.char.run
+            if r and r.inside then
+                r.groupLoot = r.groupLoot or {}
+                r.groupLoot[#r.groupLoot + 1] = { t = ns.Now(), who = who, item = key, link = link, q = q, how = e.how, rolls = e.rolls }
+            end
+            return
+        end
+    end
+end
 
 ns.On("CHAT_MSG_MONEY", function(text)
     text = Clean(text)

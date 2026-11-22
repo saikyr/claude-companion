@@ -52,6 +52,16 @@
           secs: x.secs != null ? x.secs : null, kills: x.kills || 0, paused: !!x.paused, ended: x.ended || null });
         return { running: g ? one(g) : null, recent: arr(CH.grinds).slice(-5).reverse().map(one) };
       })(),
+      // flight paths you know, by continent; read{} = when that continent's flight map was last open
+      // (paths on a continent never read since the addon noted continents are under "unknown")
+      flightPaths: (() => {
+        const by = {};
+        Object.entries(CH.taxi || {}).forEach(([n, x]) => { if (/^zzOLD/.test(n)) return; const k = (x && x.continent) || 'unknown'; (by[k] = by[k] || []).push(n); });
+        Object.values(by).forEach((l) => l.sort());
+        const read = {};
+        Object.entries(CH.taxiRead || {}).forEach(([k, v]) => { read[k] = v ? new Date(v * 1000).toISOString() : null; });
+        return { byContinent: by, read };
+      })(),
       // dungeon and raid runs, newest first (js/runs.js); fromJournal = rebuilt from the Journal (before the addon tracked runs)
       runs: (() => {
         if (!CC.runs) return [];
@@ -64,7 +74,10 @@
             coin: st.coin, itemsValue: Math.round(st.ah),
             loot: Object.values(r.loot || {}).map((l) => ({ id: l.id, name: l.name || (A.item(l.item) || {}).name || null, q: l.q != null ? l.q : (A.item(l.item) || {}).q, count: l.count }))
               .filter((l) => (l.q || 0) >= 2),
-            group: arr(r.group).map((m) => m.name), fromJournal: !!r.fromJournal };
+            group: arr(r.group).map((m) => m.name), fromJournal: !!r.fromJournal,
+            // loot that went to someone else (greens and better), with the rolls when there were any
+            groupLoot: arr(r.groupLoot).map((g) => ({ t: t(g.t), who: g.who, name: (g.link || '').replace(/.*\[(.*)\].*/, '$1') || null, q: g.q, how: g.how,
+              rolls: arr(g.rolls).map((x) => ({ who: x.who, choice: x.choice, roll: x.roll != null ? x.roll : null })) })) };
         });
       })(),
       // when each part was last read in game; some parts only update while that window is open in game

@@ -15,6 +15,14 @@ Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
   experience"), which still names the mob (kills that give no XP are still missed).
 - **App: new Dungeons tab** with every run. Runs from before this update are rebuilt from the Journal
   ("from the journal": kills counted from XP gains, no boss list), so past BRD runs show up too.
+- **Group loot and rolls:** items (green and better) that go to someone else, who won them and every
+  Need / Greed / Pass and roll, from the loot chat lines. In the run (`groupLoot[]`), the Journal
+  (`groupLoot`) and the Dungeons tab ("Went to others").
+- **Flight paths by continent:** the flight map only lists the continent you're on. Paths were already
+  kept across continents; now each notes its continent, `taxiRead` says which continent's map was read
+  when, the app groups them and says which continent still needs a flight map opened, and
+  `snapshot.json` has `flightPaths`. Old "zzOLD" nodes are dropped.
+- Bosses come from the game's own encounter events, not from the Dungeon Journal addon.
 - `snapshot.json`: `runs[]` (the last 10, newest first). Journal: `runStart`, `runLeft`, `runBack`,
   `boss`, `wipe`, `runEnd`.
 

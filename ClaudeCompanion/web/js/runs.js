@@ -93,6 +93,7 @@
       ${bosses.length ? `<div class="small">Bosses: ${bosses.map((b) => esc(b.name)).join(', ')}</div>` : ''}
       ${epics.length ? `<div class="small">Blues and better: ${epics.map((l) => (l.item ? A.itemIcon(l.item, { size: 'xs' }) : '') + ' ' + esc(l.name || (A.item(l.item) || {}).name || (l.link || '').replace(/.*\[(.*)\].*/, '$1'))).join(', ')}</div>` : ''}
       <div class="row wrap">${A.lootStrip(r) || '<span class="dim small">no drops</span>'}</div>
+      ${arr(r.groupLoot).length ? `<div class="small">Went to others: ${r.groupLoot.map((g) => `${g.item ? A.itemIcon(g.item, { size: 'xs' }) : ''} ${esc((g.link || '').replace(/.*\[(.*)\].*/, '$1'))} → <b>${esc(g.who)}</b>${g.how === 'won' ? ' (won' + (arr(g.rolls).length ? ': ' + g.rolls.map((x) => esc(x.who) + ' ' + esc(x.choice) + (x.roll != null ? ' ' + x.roll : '')).join(', ') : '') + ')' : ''}`).join(' · ')}</div>` : ''}
       ${arr(r.questList).length ? `<div class="small">Quests: ${r.questList.map(esc).join(', ')}</div>` : ''}
       ${Object.keys(r.rep || {}).length ? `<div class="small">${Object.entries(r.rep).map(([f, n]) => `<span class="${n >= 0 ? 'pos' : 'neg'}">${n >= 0 ? '+' : ''}${n}</span> ${esc(f)}`).join(' · ')}</div>` : ''}
       ${arr(r.group).length ? `<div class="dim small">With ${r.group.map((m) => esc(m.name) + (m.level ? ' ' + m.level : '')).join(', ')}</div>` : ''}
