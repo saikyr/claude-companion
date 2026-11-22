@@ -21,7 +21,12 @@ $accounts = Join-Path $forever 'WTF\Account'
 $dataDir = Join-Path (Split-Path -Parent $web) 'companion-data'
 $cardsDir = Join-Path $dataDir 'from-claude'
 $port = if ($env:CC_PORT) { [int]$env:CC_PORT } else { 47615 }   # CC_PORT: only for testing a second copy
-$files = @{ '/api/cards' = (Join-Path $cardsDir 'cards.json'); '/api/cards-state' = (Join-Path $cardsDir 'state.json'); '/api/settings' = (Join-Path $dataDir 'settings.json') }
+$files = @{ '/api/cards' = (Join-Path $cardsDir 'cards.json'); '/api/cards-state' = (Join-Path $cardsDir 'state.json'); '/api/settings' = (Join-Path $dataDir 'settings.json')
+            # js/sync.js: this computer's sync key and its copy of the other computers' history
+            '/api/sync' = (Join-Path $dataDir 'sync.json'); '/api/sync-cache' = (Join-Path $dataDir 'sync-cache.json') }
+# what the page may write (POST): the snapshot for Claude, plus the files above except Claude's cards
+$writable = @{ '/api/snapshot' = (Join-Path $dataDir 'snapshot.json') }
+foreach ($k in $files.Keys) { if ($k -ne '/api/cards') { $writable[$k] = $files[$k] } }
 $prefix = "http://localhost:$port/"
 $self = $MyInvocation.MyCommand.Path
 $startup = [Environment]::GetFolderPath('Startup')
@@ -103,6 +108,17 @@ if (-not $Serve) {
     exit
 }
 
+# this install's sync device key (js/sync.js), made once, here: one place makes it, so an app window
+# and the hidden browser starting at the same moment can't each make their own
+function Ensure-SyncKey([string]$f) {
+    $st = Read-Json $f
+    if ($st -and $st.key -and ([string]$st.key).Length -ge 32) { return }
+    $b = New-Object byte[] 32
+    [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b)
+    $key = -join ($b | ForEach-Object { $_.ToString('x2') })
+    if ($st) { $st | Add-Member -NotePropertyName key -NotePropertyValue $key -Force } else { $st = [pscustomobject]@{ key = $key } }
+    Write-Json $f $st
+}
 function Find-Save {
     Get-ChildItem -Path $accounts -Filter 'ClaudeCompanion.lua' -Recurse -File -ErrorAction SilentlyContinue |
         Where-Object { $_.Directory.Name -eq 'SavedVariables' } |
@@ -329,7 +345,7 @@ function Restart-Server {
 $restartAfter = $false
 $pending = $listener.GetContextAsync()
 while ($listener.IsListening) {
-    if ((Get-Date) -ge $bgNext) { try { Check-Background } catch { }; $bgNext = (Get-Date).AddSeconds(5) }
+    if ($env:CC_BACKGROUND -ne '0' -and (Get-Date) -ge $bgNext) { try { Check-Background } catch { }; $bgNext = (Get-Date).AddSeconds(5) }   # CC_BACKGROUND=0: tests only
     if ((Get-Date) -ge $updNext) {
         $updNext = (Get-Date).AddMinutes(30)
         try { $st = Get-UpdStatus; if ($st.available -and $st.auto) { $r = Install-Update; if ($r.ok) { Restart-Server } } } catch { }
@@ -380,9 +396,10 @@ while ($listener.IsListening) {
         } elseif ($files.ContainsKey($path) -and $req.HttpMethod -eq 'GET') {
             # Claude's cards (cards.json, Claude writes it), what you did with them (state.json) and the app's settings
             $f = $files[$path]
+            if ($path -eq '/api/sync') { Ensure-SyncKey $f }
             if (Test-Path $f -PathType Leaf) { $body = Read-Shared $f; $type = 'application/json; charset=utf-8' }
             else { $res.StatusCode = 204; $body = [byte[]]@() }   # none yet
-        } elseif (($path -eq '/api/snapshot' -or $path -eq '/api/cards-state' -or $path -eq '/api/settings') -and $req.HttpMethod -eq 'POST') {
+        } elseif ($writable.ContainsKey($path) -and $req.HttpMethod -eq 'POST') {
             # the page's summary for Claude (..\companion-data\snapshot.json) and what you did with
             # Claude's cards (..\companion-data\from-claude\state.json); see SCHEMA.md there.
             # Only this app sends the X-CC header; a web page can't add it without the browser asking first.
@@ -391,9 +408,7 @@ while ($listener.IsListening) {
             } else {
                 $reader = New-Object System.IO.StreamReader($req.InputStream, [System.Text.Encoding]::UTF8)
                 $text = $reader.ReadToEnd(); $reader.Close()
-                if ($path -eq '/api/snapshot') { $dir = $dataDir; $name = 'snapshot.json' }
-                elseif ($path -eq '/api/settings') { $dir = $dataDir; $name = 'settings.json' }
-                else { $dir = $cardsDir; $name = 'state.json' }
+                $dir = Split-Path -Parent $writable[$path]; $name = Split-Path -Leaf $writable[$path]
                 if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
                 $tmp = Join-Path $dir ($name + '.tmp')
                 [System.IO.File]::WriteAllText($tmp, $text, (New-Object System.Text.UTF8Encoding($false)))

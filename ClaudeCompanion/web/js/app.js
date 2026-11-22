@@ -1106,8 +1106,11 @@
     }
   }
 
+  let RAW = null;   // this computer's own save, as read; DB is what's shown (with other computers' history, js/sync.js)
   function load(db, opts) {
-    DB = db || {};
+    RAW = db || {};
+    DB = RAW;
+    try { if (window.CC && window.CC.syncView) DB = window.CC.syncView(RAW) || RAW; } catch (e) { console.warn('sync view', e); DB = RAW; }
     NAME_PRICE = null;
     const chars = DB.chars || {};
     const keys = Object.keys(chars).filter((k) => chars[k] && chars[k].snap);
@@ -1130,8 +1133,8 @@
   const loadText = (binary, opts) => load(window.CCLua.parse(binary).ClaudeCompanionDB, opts);
   // for view modules in their own files (js/gear.js): they add V.<tab> and use these helpers
   window.CC = {
-    load, loadText, V,
-    api: { get CH() { return CH; }, STATE, GD, esc, arr, money, icon, itemIcon, anyItemIcon, anyItemName, gdItem, gdTip,
+    load, loadText, V, reload: () => RAW && load(RAW, { live: STATE.live }),
+    api: { get CH() { return CH; }, get RAW() { return RAW; }, get DB() { return DB; }, STATE, GD, esc, arr, money, icon, itemIcon, anyItemIcon, anyItemName, gdItem, gdTip,
       gdSourceLines, planPrice, priceOf, trackerStats, lootStrip, ago, dur, fmtTime, flipsOf, cooldowns, specTrees, specLabel, TREE_NAMES, gearIds, item, byId, render, QCOL, deOutcome },
   };
 

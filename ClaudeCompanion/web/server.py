@@ -5,8 +5,10 @@
 #   http://localhost:47615   /api/ping  /api/stamp  /api/data  POST /api/snapshot
 #                            /api/cards  /api/cards-state  POST /api/cards-state
 #                            /api/settings  POST /api/settings
+#                            /api/sync  /api/sync-cache  (+ POST): js/sync.js's device key and its copy of the
+#                            other computers' history, in companion-data/ (sync.json, sync-cache.json)
 # It serves the app and reads the game's saved file (ClaudeCompanion.lua) directly.
-# Nothing is sent anywhere: it only answers this computer.
+# The server itself only answers this computer. The page syncs history with the backend (js/sync.js).
 import glob, json, os, shutil, subprocess, sys, tempfile, threading, time, urllib.error, urllib.request, webbrowser
 from datetime import datetime, timezone
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
@@ -39,6 +41,20 @@ def find_save():
         return _save['path']
 
 
+_sync_lock = threading.Lock()
+
+
+def ensure_sync_key(path):
+    # this install's sync device key (js/sync.js), made once, here: one place makes it, so an app
+    # window and the hidden browser starting at the same moment can't each make their own
+    with _sync_lock:
+        st = read_json(path, None)
+        if isinstance(st, dict) and len(str(st.get('key') or '')) >= 32: return
+        st = st if isinstance(st, dict) else {}
+        st['key'] = os.urandom(32).hex()
+        write_json(path, st)
+
+
 def stamp_of(path):
     # the save file's modified time; the page copies it into snapshot.json as saveModified
     return datetime.fromtimestamp(os.path.getmtime(path), timezone.utc).isoformat()
@@ -69,9 +85,11 @@ class Handler(BaseHTTPRequestHandler):
             with open(save, 'rb') as f: return self.send(200, f.read(), 'application/octet-stream')
         if path == '/api/update':
             return self.send(200, json.dumps(update_status(force='force=1' in self.path)), TYPES['.json'])
-        if path in ('/api/cards', '/api/cards-state', '/api/settings'):
+        if path in ('/api/cards', '/api/cards-state', '/api/settings', '/api/sync', '/api/sync-cache'):
             f = {'/api/cards': os.path.join(CARDS_DIR, 'cards.json'), '/api/cards-state': os.path.join(CARDS_DIR, 'state.json'),
-                 '/api/settings': os.path.join(DATA_DIR, 'settings.json')}[path]
+                 '/api/settings': os.path.join(DATA_DIR, 'settings.json'), '/api/sync': os.path.join(DATA_DIR, 'sync.json'),
+                 '/api/sync-cache': os.path.join(DATA_DIR, 'sync-cache.json')}[path]
+            if path == '/api/sync': ensure_sync_key(f)
             if not os.path.isfile(f): return self.send(204, b'')   # none yet
             with open(f, 'rb') as fh: return self.send(200, fh.read(), TYPES['.json'])
         rel = urllib.request.url2pathname(path.lstrip('/')) or 'index.html'
@@ -100,7 +118,8 @@ class Handler(BaseHTTPRequestHandler):
             if r.get('ok'): restart_soon()
             return
         target = {'/api/snapshot': (DATA_DIR, 'snapshot.json'), '/api/cards-state': (CARDS_DIR, 'state.json'),
-                  '/api/settings': (DATA_DIR, 'settings.json')}.get(self.path.split('?')[0])
+                  '/api/settings': (DATA_DIR, 'settings.json'), '/api/sync': (DATA_DIR, 'sync.json'),
+                  '/api/sync-cache': (DATA_DIR, 'sync-cache.json')}.get(self.path.split('?')[0])
         if not target or self.headers.get('X-CC') != '1' or n <= 0 or n > 20 * 1024 * 1024:
             return self.send(400, 'bad request')
         body = self.rfile.read(n)
@@ -442,7 +461,8 @@ def serve(open_after):
     print(f'Claude Companion serving {URL} for {FOREVER}', flush=True)
     if not os.path.isdir(os.path.join(FOREVER, 'WTF')):
         print('Note: no WTF folder found next to Interface. Put ClaudeCompanion in _forever_/Interface/AddOns.', flush=True)
-    threading.Thread(target=background_snapshot, daemon=True).start()
+    if os.environ.get('CC_BACKGROUND') != '0':          # CC_BACKGROUND=0: only for tests (no hidden browser)
+        threading.Thread(target=background_snapshot, daemon=True).start()
     threading.Thread(target=auto_update, daemon=True).start()
     if open_after: open_app()
     try: srv.serve_forever()

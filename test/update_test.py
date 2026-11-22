@@ -89,7 +89,7 @@ def main():
     cfg = {'repo': 'me/cc', 'api': f'http://127.0.0.1:{API_PORT}', 'token': 'test-token', 'auto': False}
     with open(os.path.join(cd, 'update.json'), 'w') as f: json.dump(cfg, f)
     old_server = open(os.path.join(addon, 'web', 'server.py'), 'rb').read()
-    env = dict(os.environ, CC_PORT=str(APP_PORT), LOCALAPPDATA=os.path.join(tmp, 'local'), HOME=os.path.join(tmp, 'home'))
+    env = dict(os.environ, CC_PORT=str(APP_PORT), CC_BACKGROUND='0', LOCALAPPDATA=os.path.join(tmp, 'local'), HOME=os.path.join(tmp, 'home'))
     os.makedirs(env['HOME'], exist_ok=True)
     if PS1:
         cmd = ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', os.path.join(addon, 'web', 'server.ps1'), '-Serve']
