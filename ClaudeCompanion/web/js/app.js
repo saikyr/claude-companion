@@ -407,21 +407,10 @@
       <div class="card"><span class="k">Bags</span><span class="v">${total - used} free</span><span class="sub">${used}/${total} used</span></div>
       ${lg ? `<div class="card link" data-tab="grinds"><span class="k">Last grind</span><span class="v">${gph(lg.perHour)}/hr</span><span class="sub">${esc(last.name || '')} · ${dur(lg.secs)}</span></div>` : ''}
     </div>`;
-    const cds = cooldowns();
-    const ready = arr(s.quests).filter((q) => q.ready || q.complete);
-    h += (window.CC.cards ? window.CC.cards.overview() : '') + '<div class="grid2"><section>';
-    if (cds.length || ready.length) {
-      h += '<h2>Now</h2><div class="list">';
-      cds.forEach((c) => { h += `<div class="li">${icon(c.icon, { size: 'sm' })}<div class="grow">${esc(c.name)}${c.prof ? `<div class="sub">${esc(c.prof)} cooldown</div>` : ''}</div><div class="num">${cdWhen(c)}</div></div>`; });
-      ready.forEach((q) => { const gq = GD && GD.quests[q.id]; const to = gq && arr(gq.to)[0]; h += `<div class="li"><span class="ic sm qmark">?</span><div class="grow">${esc(q.title)}<div class="sub">ready to turn in${to ? ' to ' + esc(gdWho(to)) : ''}</div></div></div>`; });
-      h += '</div>';
-    }
-    else h += '<h2>Now</h2><div class="empty">Nothing waiting: no cooldowns or quests ready to turn in.</div>';
-    h += '</section><section><h2>Saved data</h2><div class="list fresh">';
-    freshness().forEach((f) => {
-      h += `<div class="li${f.tab ? ' link' : ''}"${f.tab ? ` data-tab="${f.tab}"` : ''}><span class="dot ${f.st}"></span><div class="grow">${esc(f.label)}${f.st !== 'ok' ? `<div class="sub">${esc(f.how)}</div>` : ''}</div><div class="num"><span class="pill ${f.st}">${f.t ? (f.st === 'old' ? 'out of date · ' : '') + ago(f.t) : FRESH_LABEL.never}</span></div></div>`;
-    });
-    h += '</div></section></div>';
+    // what's out of date and changes the advice below (the full list is on the System tab)
+    const stale = freshness().filter((f) => f.st !== 'ok' && ['snap', 'ah', 'bank'].includes(f.key));
+    if (stale.length) h += `<div class="list fresh">${stale.map((f) => `<div class="li link" data-tab="${f.tab}"><span class="dot ${f.st}"></span><div class="grow">${esc(f.label)}: ${f.t ? 'saved ' + ago(f.t) : FRESH_LABEL.never}<div class="sub">${esc(f.how)}, so the steps below use current data</div></div></div>`).join('')}</div>`;
+    h += window.CC.next ? window.CC.next.html() : '<div class="empty">Loading…</div>';
     return h;
   };
 
@@ -806,19 +795,24 @@
     return out;
   }
   // what a craft costs (reagents at AH median) against what the result sells for
-  function craftProfit(r) {
-    if (!r.output) return null;
-    const v = planPrice(r.output);
-    if (!v) return null;
-    const makes = ((r.makesMin || 1) + (r.makesMax || r.makesMin || 1)) / 2;
+  // what a craft's reagents cost: AH median, else about 4x a vendor-only reagent's sell price; missing = reagents with no price
+  function craftCost(r) {
     let cost = 0, missing = 0;
     arr(r.reagents).forEach((g) => {
       const p = planPrice(g.id);
       const it = byId(g.id);
       if (p) cost += p * (g.need || 1);
-      else if (it && it.sell) cost += it.sell * 4 * (g.need || 1); // vendor-only reagents cost about 4x their sell price
+      else if (it && it.sell) cost += it.sell * 4 * (g.need || 1);
       else missing++;
     });
+    return { cost, missing };
+  }
+  function craftProfit(r) {
+    if (!r.output) return null;
+    const v = planPrice(r.output);
+    if (!v) return null;
+    const makes = ((r.makesMin || 1) + (r.makesMax || r.makesMin || 1)) / 2;
+    const { cost, missing } = craftCost(r);
     const value = Math.round(v * makes * (1 - RULES.ahCut)); // the AH keeps its cut of the sale
     return { cost, value, profit: value - cost, missing };
   }
@@ -1132,6 +1126,11 @@
     Object.entries(CH.diag || {}).sort().forEach(([k, d]) => (h += `<div class="diag${d.err ? ' bad' : ''}"><span class="k">${esc(k)}</span><span class="num">${d.ok || 0} ok${d.err ? ` · <span class="neg">${d.err} errors</span>` : ''}</span>${d.lastErr ? `<div class="sub neg">${esc(d.lastErr)}</div>` : ''}</div>`));
     h += '</div>';
     if (caps.secret) h += `<h3>Values</h3><div class="row wrap">${Object.entries(caps.secret).map(([k, v]) => `<span class="tag ${v === 'readable' ? 'ok' : 'bad'}">${esc(k)}: ${esc(v)}</span>`).join('')}</div>`;
+    h += '<h3>Saved data</h3><div class="list fresh">';
+    freshness().forEach((f) => {
+      h += `<div class="li${f.tab ? ' link' : ''}"${f.tab ? ` data-tab="${f.tab}"` : ''}><span class="dot ${f.st}"></span><div class="grow">${esc(f.label)}${f.st !== 'ok' ? `<div class="sub">${esc(f.how)}</div>` : ''}</div><div class="num"><span class="pill ${f.st}">${f.t ? (f.st === 'old' ? 'out of date · ' : '') + ago(f.t) : FRESH_LABEL.never}</span></div></div>`;
+    });
+    h += '</div>';
     h += `<p class="dim small">Addon ${esc(DB.addonVersion)} · schema ${DB.schema} · ${Object.keys(ITEMS).length} items · ${Object.keys(SPELLS).length} spells · ${arr(CH.journal).length} events · ${CH.syncs || 0} syncs</p>`;
     return h;
   };
@@ -1222,7 +1221,7 @@
   window.CC = {
     load, loadText, V, reload: () => RAW && load(RAW, { live: STATE.live }),
     api: { get CH() { return CH; }, get RAW() { return RAW; }, get DB() { return DB; }, STATE, GD, esc, arr, money, icon, itemIcon, anyItemIcon, anyItemName, gdItem, gdTip,
-      gdSourceLines, itemGates, recipeLine, planPrice, priceOf, trackerStats, lootStrip, ago, dur, fmtTime, flipsOf, cooldowns, specTrees, specLabel, TREE_NAMES, gearIds, item, byId, render, QCOL, deOutcome },
+      gdSourceLines, itemGates, recipeLine, planPrice, priceOf, trackerStats, lootStrip, ago, dur, fmtTime, flipsOf, cooldowns, craftCost, specTrees, specLabel, TREE_NAMES, gearIds, item, byId, render, QCOL, deOutcome },
   };
 
   // ------------------------------------------------------------ data sources

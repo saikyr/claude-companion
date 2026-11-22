@@ -2,7 +2,7 @@
 // Shadow (17/0/33) spec, two gear sets, a few items in the bags and bank, and an Auction House scan with
 // fixed-stat items and random-suffix greens (keyed the way the addon keys them: "id:of Healing").
 // No personal data: the item ids are game items; names and numbers are invented.
-//   const { saveLua } = require('./gear-fixture.js'); saveLua(nowSeconds)  ->  "ClaudeCompanionDB = {...}"
+//   const { saveLua } = require('./gear-fixture.js'); saveLua(nowSeconds[, { snap: {...more snapshot fields}, professions }])  ->  "ClaudeCompanionDB = {...}"
 'use strict';
 
 function lua(v, ind = '') {
@@ -30,7 +30,7 @@ const SLOT = { 1: 'Head', 2: 'Neck', 3: 'Shoulder', 5: 'Chest', 6: 'Waist', 7: '
 const SHADOW = { 1: 14111, 2: 279833, 3: 14112, 5: 14136, 6: 254073, 7: 14144, 8: 14108, 9: 254067, 10: 254101, 11: 7553, 12: 12543, 13: 276744, 14: 270276, 15: 15603, 16: 11922, 17: 11904, 18: 20082 };
 const HEALS = Object.assign({}, SHADOW, { 7: 10807, 9: 254061, 11: 273031, 13: 19990, 14: 11819, 17: 11262, 18: 17745 });
 
-function saveLua(now) {
+function saveLua(now, extra) {
   const item = (id) => `item:${id}::::::::59:::::`;
   const items = {
     // in the bags: Theka's Last Breath (a trinket the Holy set doesn't use); in the bank: Devout Mantle
@@ -78,6 +78,8 @@ function saveLua(now) {
     bank: { taken: now - 86400, bags: [{ id: -1, items: [{ slot: 1, item: item(16695), count: 1 }] }] },
     ah: { lastScan: { t: scanT, auctions: 31000, items: 7300 }, prices },
   };
+  if (extra && extra.snap) Object.assign(ch.snap, extra.snap);
+  if (extra && extra.professions) ch.professions = extra.professions;
   return 'ClaudeCompanionDB = ' + lua({ schema: 1, chars: { [ch.key]: ch }, items, spells: {}, npcs: {}, quests: {} });
 }
 module.exports = { saveLua };

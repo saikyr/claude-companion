@@ -124,6 +124,8 @@
       gear: CC.gear ? CC.gear.summary() : [],
       // what the app says about each item you own (js/advice.js); keep-only items are left out
       bagAdvice: CC.advice ? CC.advice.snapshot() : [],
+      // the Now page's ranked next steps (js/next.js), Hybrid order; each gain is the app's own score per spec
+      nextSteps: CC.next ? CC.next.snapshot() : [],
       bestOwned: CC.advice ? CC.advice.bestOwnedSnapshot() : [],
       weightProfiles: window.CCWeights ? window.CCWeights.custom((s.character || {}).classFile).map((p) => ({ id: p.id, name: p.name, from: p.from, weights: p.w })) : [],
       equipped: arr(s.equipped).filter((e) => e && e.item).map((e) => ({ slot: e.slotName, id: Number((/item:(\d+)/.exec(e.item) || [])[1]), name: (A.item(e.item) || {}).name })),
