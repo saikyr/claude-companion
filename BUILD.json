@@ -1,15 +1,15 @@
 {
  "version": "1.4.0",
- "built": "2026-11-22T17:44:57+00:00",
+ "built": "2026-11-22T17:50:48+00:00",
  "channel": {
   "repo": "saikyr/claude-companion",
   "branch": "stable"
  },
  "from": {
   "branch": "main",
-  "commit": "34281b62b8d241e484af345f5fc9a5633da5e256"
+  "commit": "3883a860e0106113b0bee38bee82578b22cbcf1a"
  },
- "notes": "Specs keep the game's numbers (wrong active spec), Professions selector + reagent tooltips, AH letters counted once",
+ "notes": "Quest log links to ForeverChanges, not Wowhead; CI refuses Wowhead links (#55)",
  "files": {
   "Bindings.xml": "f4ad14d769e58eb18cd49da688fb23d64dec6be99a7684b9993ea0689616bf09",
   "ClaudeCompanion.toc": "87915db63dcb911f027bc5c400284fe70fa58142f561efc0dea4134bd6625c42",
@@ -35,8 +35,8 @@
   "web/icons/icon-512.png": "658263476e4a5ac0371ed8fe85671973603436e42e550d92b937c495ba78e567",
   "web/index.html": "9addc293d8830e45ac398c2c9517229c583c555f6171261ed4e31e5392089380",
   "web/js/advice.js": "9237d93946f3e5208701e541bd80645f25e6684b881402991d2c0d6471945096",
-  "web/js/app.js": "4c4517158110c344bc39e6c21192064d7e44c5a006f3d809b1b2157482866bc9",
-  "web/js/cards.js": "27fbd8b2b8ee2a3de0b9d2677d642bbe471fec722c62fce8bb070ac27e78731f",
+  "web/js/app.js": "b19ca011ea42fa99255d2a03ce1c542fa6108c3fc615a57f87c83fb03dbe8eb5",
+  "web/js/cards.js": "f1636114eb544dfe1d61495f382e84e987ed6a9e4a69f9c6b4df19ca21ab9d20",
   "web/js/claude.js": "3df1e52be93aafcb3518313b7bc1889e61014a8ff5dea2d225e95f9ac6b88fa7",
   "web/js/gear.js": "a3d012264402960bdd5cd6dc329690d1adc112b06251b8620da6850afc91886f",
   "web/js/icons.js": "3179331f23af1fd412b265a3fc170efa047375350cbb8f5d77e3eeadf39deabc",
