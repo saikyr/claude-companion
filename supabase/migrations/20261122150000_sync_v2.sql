@@ -112,7 +112,6 @@ begin
            x->'data' as data, coalesce((x->>'mutable')::boolean, false) as mutable
     from jsonb_array_elements(p_records) with ordinality as e(x, i) order by x->>'id', i desc),
   upd as (
-    -- (a tracker first sent as history before trackers became replaceable becomes replaceable here)
     update public.records r set data = s.data, t = s.t, device_id = d.id, mutable = true, seq = nextval('public.records_seq'), updated_at = now()
     from src s where s.mutable and r.account_id = d.account_id and r.id = s.id and r.data is distinct from s.data
     returning 1),

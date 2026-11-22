@@ -10,7 +10,7 @@ jobs:
         env:
           POSTGRES_PASSWORD: postgres
         ports: ['5432:5432']
-        options: --health-cmd pg_isready --health-interval 2s --health-timeout 5s --health-retries 20
+        options: --health-cmd "pg_isready -U postgres" --health-interval 2s --health-timeout 5s --health-retries 20
     env:
       PGHOST: localhost
       PGPORT: 5432
@@ -20,7 +20,7 @@ jobs:
       # Nothing in this job may reach the live sync backend, whatever a later step starts.
       - name: Block the live sync backend
         run: |
-          echo "0.0.0.0 jucbngafdnyaizfxgplk.supabase.co" | sudo tee -a /etc/hosts
+          printf '0.0.0.0 jucbngafdnyaizfxgplk.supabase.co\n:: jucbngafdnyaizfxgplk.supabase.co\n' | sudo tee -a /etc/hosts
           ! curl -s --max-time 5 -o /dev/null https://jucbngafdnyaizfxgplk.supabase.co
       - uses: actions/checkout@v4
       - name: Install Lua 5.1
