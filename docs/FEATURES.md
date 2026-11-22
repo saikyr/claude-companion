@@ -24,6 +24,7 @@ record; `data` holds the addon's record as saved. Times are Unix seconds, money 
 | --- | --- |
 | `/cc` | open or close the in-game window |
 | `/cc start <name>` / `/cc stop` / `/cc pause` | a named grind (below) |
+| `/cc target <item>` | an item you farm for in the running grind (shift-click it in); again takes it off; alone lists them. Up to 3 |
 | `/cc status` | gold, kills and XP per hour of the running grind, else of the session |
 | `/cc scan` | full AH scan (same as the "Scan AH" button under the AH window), once per 15 min |
 | `/cc note <text>` | a note for Claude (history kind `note`) |
@@ -63,7 +64,8 @@ recorded per craft.
 
 | Feature | Records | Where | Claude reads |
 | --- | --- | --- | --- |
-| **Grinds** (`/cc start <name>`, `/cc stop`) | counted time (pauses and logged-out time left out), kills (by mob), looted coin, loot, XP, deaths, rep, disenchants, zones. Ends by itself at logout, after 30 min with nothing counted (`idle`), or `away`. Shows after the next `/reload` | kind `grind` (running one: kind `live`); Grinds tab | snapshot `grind.running`, `grind.recent[]` (5); all: `kind = 'grind'` |
+| **Grinds** (`/cc start <name>`, `/cc stop`) | counted time (pauses and logged-out time left out), kills (by mob), looted coin, loot, XP, deaths, rep, disenchants, zones, targets (`/cc target`, kept per grind name for the next start). Ends by itself at logout, after 30 min with nothing counted (`idle`), or `away`. Shows after the next `/reload` | kind `grind` (running one: kind `live`); Grinds tab | snapshot `grind.running`, `grind.recent[]` (5); all: `kind = 'grind'` |
+| **Grind panel** (in game) | while a grind runs: time counted, gold per hour, kills per hour and total, deaths, coin per hour vs items per hour (AH median of your newest scan, else vendor), the most valuable drops with icons, and targets: dropped vs expected (your kills of each creature that drops it × the drop chance ForeverDB **measured on Forever**, with its sample size; the tooltip gives the chance of none so far). Classic rates are never used: with no Forever rate it says "rate unknown" and shows your own count (1 per N kills, with a 95% range in the tooltip). After `/cc stop` it shows the grind's summary until closed. Shift-click pause, shift-right-click stop, alt-click a drop to make it a target | `UI.lua`; drop chances `Drops.lua` (made from the pack by `tools/make-drops.py`; loads after a game restart, not a /reload) | the grind record's `targets[]` (`id`, `name`, `got`, `expected`, `kills`, `rated`, `sample`); snapshot `grind.*.targets` |
 | Grind gold per hour | `(looted coin + loot at today's AH median, else vendor price) / counted hours`. Loot value is what it would sell for, not what it sold for | Grinds tab, From Claude cards with `track` | compute from the record the same way, or quote the Grinds tab |
 | Sessions | the same counters from login to logout, automatic | kind `session` | `kind = 'session'` |
 | **Dungeon and raid runs** | automatic from entering an instance: time inside, kills, bosses, wipes, deaths, XP, quests, coin, loot (green+), loot value, group, loot that went to others with the rolls. Ends after 15 min outside, another instance, a reset, or away | kind `run`; Dungeons tab | snapshot `runs[]` (10); all: `kind = 'run'` |

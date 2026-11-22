@@ -8,6 +8,7 @@
 Core.lua
 Snapshot.lua
 Journal.lua
+Drops.lua
 Market.lua
 Professions.lua
 UI.lua
