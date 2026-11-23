@@ -3,6 +3,7 @@
 Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 
 ## 1.5.0 (in progress: every merge to main updates itself)
+- **Flight paths: only the ones you know.** Greyed-out flight points on the flight map were saved as known (Cenarion Hold, for one). Now only the ones you can fly to count, and a path the map no longer shows as known is dropped the next time you open a flight map on that continent.
 - **Claude for friends, in the download.** A friend's own Claude can't read the Companion's private code, so
   what it follows now comes with the app, in `AddOns/ClaudeCompanion/claude/`: its guide, how to set up a
   Claude project (with the text to paste), the answering rules, the feature list and the card checkers.

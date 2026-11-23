@@ -576,6 +576,17 @@ do
   check(c.taxi["Stormwind, Elwynn"] and c.taxi["Talrendis Point, Azshara"] and c.taxi["Talrendis Point, Azshara"].continent == "Kalimdor", "Kalimdor paths added, Eastern Kingdoms ones kept")
   check(c.taxi["zzOLDRiverglades, Farholde Keep"] == nil, "old zzOLD node dropped")
   check(c.taxiRead and c.taxiRead.Kalimdor, "which continent was read is saved")
+  -- greyed-out (DISTANT) nodes aren't known; a path this continent's map no longer shows as known is dropped
+  c.taxi["Cenarion Hold, Silithus"] = { first = 1, last = 1, continent = "Kalimdor" }
+  local oldN, oldName, oldType = NumTaxiNodes, TaxiNodeName, TaxiNodeGetType
+  NumTaxiNodes = function() return 3 end
+  TaxiNodeName = function(i) return ({ "Talrendis Point, Azshara", "Astranaar, Ashenvale", "Moonglade" })[i] end
+  TaxiNodeGetType = function(i) return ({ "CURRENT", "REACHABLE", "DISTANT" })[i] end
+  ns.ReadTaxi()
+  check(c.taxi["Moonglade"] == nil, "a DISTANT node isn't saved as known")
+  check(c.taxi["Cenarion Hold, Silithus"] == nil, "a Kalimdor path the map no longer lists as known is dropped")
+  check(c.taxi["Astranaar, Ashenvale"] and c.taxi["Stormwind, Elwynn"], "known paths and the other continent's are kept")
+  NumTaxiNodes, TaxiNodeName, TaxiNodeGetType = oldN, oldName, oldType
   GetTaxiMapID, C_Map = oldTM, oldMap
   if FAILED then error("group loot / flight path checks failed") end
 end
