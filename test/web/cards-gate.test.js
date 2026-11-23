@@ -92,6 +92,7 @@ const CASES = [
   ['an AH price, wrong number', { id: 'ah-bad', title: 'Destiny price', facts: [{ label: 'Destiny on your AH', value: '250g', src: 'ah:647@1795369186#min' }] }, [], ['value']],
   ['an AH price from a scan that never happened', { id: 'ah-none', title: 'Destiny price', facts: [{ label: 'Destiny on your AH', value: '235g', src: 'ah:647@1795000000#min' }] }, [], ['value']],
   ['an AH price src without the scan time', { id: 'ah-fmt', title: 'Destiny price', facts: [{ label: 'Destiny on your AH', value: '235g', src: 'ah:647#min' }] }, ['src'], []],
+  ['an AH price src with a leading zero', { id: 'ah-zero', title: 'Destiny price', facts: [{ label: 'Destiny on your AH', value: '235g', src: 'ah:0647@1795369186#min' }] }, ['src'], []],
   ['profit with only flips#sold', { id: 'sold', title: 'Flip profit', facts: [{ label: 'Sold', value: '90g', src: 'flips#sold' }] }, ['profit'], []],
 ];
 // chat lines: [text, rules]

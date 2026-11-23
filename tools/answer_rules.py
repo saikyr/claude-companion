@@ -37,7 +37,7 @@ SRC = (r'game\.drop:\d{1,9}:\d{1,12}'                            # item id : cre
        r'|(grind|run):[^@#]+@\d{4}-\d\d-\d\dT[\d:.]+Z#(gph|gph_low|gph_high|kills|hours|deaths)'  # a grind or run in the snapshot: name@start#field
        r'|flips#(profit|sold|paid)'                              # snapshot ah.flips.totals (profit = sales matched to buys)
        r'|snapshot#[A-Za-z0-9_.]+'                               # any field of the newest snapshot, dot path, [n] as .n
-       r'|ah:\d{1,9}@\d{9,11}#(min|med)')                         # the player's AH scan: item id @ scan time (unix) -> ah_obs
+       r'|ah:[1-9]\d{0,8}@\d{9,11}#(min|med)')                         # the player's AH scan: item id @ scan time (unix) -> ah_obs
 
 
 def has(pat, t): return re.search(pat, t, A) is not None

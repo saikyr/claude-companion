@@ -25,7 +25,7 @@ create or replace function private.answer_pat(p text) returns text language sql 
     when 'duo' then '\y(duo|duos|duoed|duoing|duoable|duo-able|solo|solos|soloed|soloing|soloable|solo-able|two-man|2-man|two man|2 man)\y'
     when 'duo_ok' then '\yunknown\y|not measured|measured run|your (own )?measured'
     when 'card_duo_ok' then '\yunknown\y|not measured'
-    when 'src' then '^(game\.drop:\d{1,9}:\d{1,12}|(grind|run):[^@#]+@\d{4}-\d\d-\d\dT[\d:.]+Z#(gph|gph_low|gph_high|kills|hours|deaths)|flips#(profit|sold|paid)|snapshot#[A-Za-z0-9_.]+|ah:\d{1,9}@\d{9,11}#(min|med))$'
+    when 'src' then '^(game\.drop:\d{1,9}:\d{1,12}|(grind|run):[^@#]+@\d{4}-\d\d-\d\dT[\d:.]+Z#(gph|gph_low|gph_high|kills|hours|deaths)|flips#(profit|sold|paid)|snapshot#[A-Za-z0-9_.]+|ah:[1-9]\d{0,8}@\d{9,11}#(min|med))$'
   end $$;
 
 -- fact_problem with the account: AH scan prices, then everything else as before
@@ -52,8 +52,9 @@ create or replace function private.brief_grind_mobs(p_root uuid, g jsonb) return
                    order by (value #>> '{}')::numeric desc, key limit 3) k)
     from public.records h join public.accounts a on a.id = h.account_id
    where coalesce(a.merged_into, a.id) = p_root and not a.retired and h.kind = 'grind' and h.data->>'name' = g->>'name'
-     and jsonb_typeof(h.data->'killsBy') = 'object' and jsonb_typeof(h.data->'start') = 'number'
-     and to_timestamp((h.data->>'start')::numeric) = case when private.is_time(g->>'start') then (g->>'start')::timestamptz end
+     and jsonb_typeof(h.data->'killsBy') = 'object'
+     and case when jsonb_typeof(h.data->'start') = 'number' then (h.data->>'start')::numeric end
+       = case when private.is_time(g->>'start') then extract(epoch from (g->>'start')::timestamptz) end
    order by h.t desc limit 1 $$;
 
 create or replace function private.check_cards(p_account uuid, p_cards jsonb) returns jsonb
@@ -288,7 +289,7 @@ begin
               from jsonb_array_elements(private.brief_arr(s->'grind'->'recent') || jsonb_build_array(coalesce(s->'grind'->'running', 'null'::jsonb))) g
              where jsonb_typeof(g) = 'object'
             union all
-            select jsonb_build_object('what', 'run', 'name', r->>'name', 'start', r->>'start', 'end', r->>'finish', 'hours', r->'hours',
+            select jsonb_build_object('what', 'run', 'name', r->>'name', 'start', r->>'start', 'end', coalesce(r->>'finish', r->>'start'), 'hours', r->'hours',
                      'kills', r->'kills', 'bosses', jsonb_array_length(private.brief_arr(r->'bosses')), 'gph', r->'gph', 'gph_low', r->'gph_low',
                      'gph_high', r->'gph_high', 'complete', r->'complete', 'incomplete', case when jsonb_array_length(private.brief_arr(r->'incomplete')) > 0 then r->'incomplete' end)
               from jsonb_array_elements(private.brief_arr(s->'runs')) r) u

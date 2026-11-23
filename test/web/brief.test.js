@@ -96,6 +96,8 @@ function snapshot(ageMs, extra) {
     check(m[0].start && !('mobs' in m[0]), 'a measured grind has its start (for a card src); no grind record yet, so no mobs');
     B.query(`insert into public.records (account_id, id, device_id, char_key, kind, t, data) values (${q(account)}, 'Ana-Realm|grind|g1', null, 'Ana-Realm', 'grind', ${Math.floor((NOW - 7200e3) / 1000)},
       jsonb_build_object('name', 'cultists', 'start', ${Math.floor((NOW - 7200e3) / 1000)}, 'killsBy', '{"Scarlet Cultist": 50, "Scarlet Monk": 20, "Rat": 1, "Dog": 9}'::jsonb));`);
+    B.query(`insert into public.records (account_id, id, device_id, char_key, kind, t, data) values (${q(account)}, 'Ana-Realm|grind|odd', null, 'Ana-Realm', 'grind', 1,
+      '{"name": "cultists", "start": 1e20, "killsBy": {"X": 1}}'::jsonb), (${q(account)}, 'Ana-Realm|grind|odd2', null, 'Ana-Realm', 'grind', 2, '{"name": "cultists", "start": "soon", "killsBy": {}}'::jsonb);`);
     const mobs = brief(['gold']).gold.measured[0].mobs;
     check(Array.isArray(mobs) && mobs.length === 3 && mobs[0].name === 'Scarlet Cultist' && mobs[0].kills === 50 && mobs[2].name === 'Dog', 'and the mobs it killed, from its grind record (top 3)');
     check(!('deaths' in m[0]), '0 deaths are left out');
