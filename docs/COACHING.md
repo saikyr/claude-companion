@@ -127,8 +127,10 @@ audit reads the project chat for the 7 days before, lists every correction in a 
 the baseline (12 to 22 Nov, before this foundation was rebuilt: `docs/audit-baseline.json`). A cause that
 rises is a rule that isn't holding, and the fix is a mechanism (data, a check, a card), not another rule.
 The audit reports to the coordinator: the totals, the causes that rose and fell, and for each cause that
-rose one proposed mechanism. A mechanism is a PR (reversible, so it goes ahead); it never asks him to
-approve anything.
+rose one mechanism. The audit thread is a build thread, so it builds the mechanism itself (a PR with an
+independent review before merge, section 5, or a card fix through the gate) and the report links it. It
+never asks him to approve anything. If the scheduled task stops firing (it shows in the task list) or its
+thread is gone, the coordinator asks a new thread to create it again with the same schedule and prompt.
 
 The log format (one row per correction; quotes verbatim, typos kept, at most 25 words per message):
 
