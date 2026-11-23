@@ -47,7 +47,10 @@ quest reward for Shadow only while the app already showed it as a Holy upgrade.
 scores. A quest counts if it, or any step of its chain, has its objective inside a dungeon or raid
 (pack `quests[id].type` `Dungeon`, or `cat` / the objective naming an instance; `Raid` also marks
 outdoor raid-group quests such as The Battle of Darrowshire, so check where the objective is). In a quest-log
-cleanup, list those as KEEP, each tagged with its dungeon. Only open-world quests can go on a drop list.
+cleanup, list those as KEEP, each tagged with its dungeon. Steps of a key or attunement chain (data/rules.js
+`unlocks`) and quests giving rep with a faction some reward needs (until Exalted) are KEEP too. The app
+marks all of these (snapshot `quests[].keep` / `keepWhy`; `game.quest(...)->'keep'` for any quest). Only
+open-world quests can go on a drop list.
 This rule exists because a cleanup once told the player to drop Blackrock Spire and Scholomance quests
 because their rewards scored low.
 

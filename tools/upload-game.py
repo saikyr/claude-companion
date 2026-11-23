@@ -4,8 +4,9 @@
     python3 tools/pack-to-rows.py --out dist/game
     GAME_TOKEN=<GitHub OIDC token> python3 tools/upload-game.py dist/game [--url URL]
 
-Skips when the database already has this pack. Each chunk is one request; reads switch to the new pack
-only when the last call (finish) has counted every row, so a failed run leaves the old pack in use.
+Skips when the database already has this pack. Each chunk is one request into the slot reads are not
+using; reads switch to it only when the last call (finish) has counted every row, so a failed run leaves
+the old pack whole and in use, and the next run loads again.
 """
 import json, os, sys, time, urllib.request
 

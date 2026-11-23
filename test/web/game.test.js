@@ -65,12 +65,28 @@ const lit = (s) => '$j$' + s + '$j$';
     check(brs && brs.dungeonQuest === true && brs.zone === 'Blackrock Spire', 'game.quest: a Blackrock Spire quest is a dungeon quest');
     const strat = one(`select game.instance('Stratholme')::text`);
     check(strat.bosses.length > 5 && strat.drops.length > 50 && strat.rules && strat.rules.raid === false && strat.unlocks.length >= 1, `game.instance: Stratholme bosses (${strat.bosses.length}), drops, not a raid, its service-entrance key`);
+    const av = one(`select json_agg(x)::text from (select (game.quest(id::text))->0->'dungeonQuest' d from game.quests q join game.live l on q.slot = l.slot and q.pack = l.hash where cat = 'Alterac Valley') x`);
+    check(av.length > 10 && av.every((x) => x.d === false), `game.quest: battleground quests are not dungeon quests (Alterac Valley, ${av.length})`);
+    const lore = one(`select game.quest('1159')::text`)[0];
+    const pre = lore && lore.prev[0] ? one(`select game.quest('${lore.prev[0].id}')::text`)[0] : null;
+    check(lore && lore.dungeonQuest && pre && pre.dungeonQuest && pre.keep.step, `game.quest: an earlier step of a dungeon chain is kept too (${pre && pre.title}: ${pre && JSON.stringify(pre.keep)})`);
+    const scara = one(`select game.quest('5803')::text`)[0];
+    check(scara.dungeonQuest && /Scholomance/.test(scara.keep.dungeon) && scara.keep.step.id === 5505, `game.quest: Araj's Scarab is kept for the Scholomance key (${JSON.stringify(scara.keep)})`);
+    const scholo = one(`select game.instance('Scholomance')::text`);
+    check(scholo.dropsTotal > 300 && scholo.drops.length === 300 && scholo.drops[0].boss === true, `game.instance: the best 300 of ${scholo.dropsTotal} drops, bosses first, with the total`);
 
-    // a second load of the same pack changes nothing; a new pack replaces the rows and reads follow it
-    const before = B.query('select count(*) from game.drops');
-    const f0 = meta.files.find((f) => f.table === 'rules');
-    B.query(`set role service_role; select public.game_load('${meta.hash}', 'rules', ${lit(fs.readFileSync(path.join(out, f0.file), 'utf8'))}::jsonb);`);
-    check(B.query('select count(*) from game.drops') === before, 'loading the same rows again adds nothing');
+    // reads stay whole while a new pack loads, and after a load that fails half-way (a slot of its own)
+    const live = () => B.query('select count(*) from game.drop_rates') + '/' + B.query(`select count(*) from game.items i join game.live l on i.slot = l.slot and i.pack = l.hash`);
+    const before = live();
+    const f0 = meta.files.find((f) => f.table === 'drops');
+    B.query(`set role service_role; select public.game_load('ffffffffffffffff', 'drops', ${lit(fs.readFileSync(path.join(out, f0.file), 'utf8'))}::jsonb);`);
+    check(live() === before && one('select game.status()::text').pack === meta.hash, `a half-loaded new pack changes no read (${before})`);
+    check(/incomplete/.test(fails(`set role service_role; select public.game_finish('ffffffffffffffff', ${lit(JSON.stringify(meta))}::jsonb);`)), 'and it is never switched to');
+    check(/in use/.test(fails(`set role service_role; select public.game_load('${meta.hash}', 'rules', '[]');`)), 'the pack in use is never written');
+    // a full second pack (same rows, another hash) switches reads to the other slot, whole
+    for (const f of meta.files) B.query(`set role service_role; select public.game_load('eeeeeeeeeeeeeeee', '${f.table}', ${lit(fs.readFileSync(path.join(out, f.file), 'utf8'))}::jsonb);`);
+    B.query(`set role service_role; select public.game_finish('eeeeeeeeeeeeeeee', ${lit(JSON.stringify(meta))}::jsonb);`);
+    check(one('select game.status()::text').pack === 'eeeeeeeeeeeeeeee' && live() === before, `a finished pack replaces the old one whole (${live()})`);
   } finally { B.drop(); fs.rmSync(out, { recursive: true, force: true }); }
   console.log(failed ? `\n${failed} failed` : '\nall passed');
   process.exit(failed ? 1 : 0);

@@ -53,6 +53,7 @@ jobs:
   game-data:
     if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
@@ -60,6 +61,7 @@ jobs:
       - name: Load the game-data pack into the database (skipped when it is already there)
         run: |
           python3 tools/pack-to-rows.py --out dist/game
-          export GAME_TOKEN=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=claude-companion-publish" \
-                | python3 -c 'import json, sys; print(json.load(sys.stdin)["value"])')
+          GAME_TOKEN=$(curl -sS --fail -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=claude-companion-publish" \
+                | python3 -c 'import json, sys; print(json.load(sys.stdin)["value"])') || { echo 'no GitHub OIDC token'; exit 1; }
+          export GAME_TOKEN
           python3 tools/upload-game.py dist/game
