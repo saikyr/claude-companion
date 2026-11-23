@@ -654,6 +654,26 @@
     return `${names[best] || 'Tree ' + (best + 1)} ${t.map((x) => x.points).join('/')}`;
   }
   const TREE_NAMES = { PRIEST: ['Discipline', 'Holy', 'Shadow'], MAGE: ['Arcane', 'Fire', 'Frost'], WARLOCK: ['Affliction', 'Demonology', 'Destruction'], DRUID: ['Balance', 'Feral', 'Restoration'], PALADIN: ['Holy', 'Protection', 'Retribution'], SHAMAN: ['Elemental', 'Enhancement', 'Restoration'], WARRIOR: ['Arms', 'Fury', 'Protection'], ROGUE: ['Assassination', 'Combat', 'Subtlety'], HUNTER: ['Beast Mastery', 'Marksmanship', 'Survival'] };
+  // the spell-rank check above the bars: what is below your best rank, and what the trainer has
+  function ranksHtml(R, RS) {
+    const lvl = (x) => (x.level ? ` <span class="dim">level ${x.level}</span>` : '');
+    const rk = (x) => (x.rank != null ? ` ${x.rank}` : '');
+    let h = '<section class="ranks"><h2>Spell ranks</h2>';
+    if (RS && RS.outdated.length) {
+      h += `<p class="need">${RS.outdated.length} spell${RS.outdated.length > 1 ? 's' : ''} on this spec's bars ${RS.outdated.length > 1 ? 'are' : 'is'} below the best rank you know. Drag the new rank from your spellbook onto the bar:</p><ul>${RS.outdated.map((o) => `<li>${esc(o.name)}: rank ${o.rank} on the bar, you know rank ${o.best}${o.key ? ` <span class="dim">(${esc(o.key)})</span>` : ''}</li>`).join('')}</ul>`;
+    } else if (RS) h += `<p>Every ranked spell on this spec's bars is your best rank${RS.unranked.length ? ` (${RS.unranked.length} with no rank in your spellbook to compare)` : ''}.</p>`;
+    if (!R.trainer) h += '<p class="dim">Your class trainer hasn\'t been read yet: open its window once in game, then /reload, and new ranks to train show here.</p>';
+    else {
+      const when = R.trainer.taken ? savedPill(R.trainer.taken, 14 * 24 * HOUR) : '';
+      h += R.train.length
+        ? `<p class="need">To train now${R.trainCost ? ` (${money(R.trainCost)} in all)` : ''}:</p><ul>${R.train.map((x) => `<li>${esc(x.name)}${rk(x)}${lvl(x)}${x.cost ? ' ' + money(x.cost) : ''}</li>`).join('')}</ul>`
+        : '<p>Nothing new to train for your level.</p>';
+      const next = R.later.filter((x) => x.level === (R.later[0] || {}).level);
+      if (next.length) h += `<p class="dim">Next at level ${next[0].level}: ${next.map((x) => esc(x.name) + rk(x)).join(', ')}</p>`;
+      h += `<p class="foot-note">From the trainer${R.trainer.npc ? ' ' + esc(R.trainer.npc) : ''} ${when}</p>`;
+    }
+    return h + '</section>';
+  }
   V.talents = function () {
     const raw = CH.specs || {};
     const specs = Object.entries(raw).map(([k, sp]) => ({ sp, i: Number(k) })).filter((x) => x.sp && (x.i === 1 || x.i === 2));
@@ -695,6 +715,12 @@
       h += `<div class="trees">${arr(sp.talents.tabs).map((tab) => `<div class="tree"><div class="treehd"><span>${esc(tab.name)}</span><b>${tab.points}</b></div><div class="tgrid" style="--cols:4">${arr(tab.talents).map((x) => `<div class="tn ${!x.rank ? 'off' : x.rank >= x.max ? 'max' : 'part'}" style="grid-column:${x.col};grid-row:${x.tier}">${icon(x.icon, { tip: [{ l: x.name }, { l: `Rank ${x.rank}/${x.max}`, lc: 'ffd100' }], badge: `${x.rank}/${x.max}`, dim: !x.rank })}</div>`).join('')}</div></div>`).join('')}</div>`;
     }
     const bars = arr(sp.actionBars);
+    // spell ranks (js/spells.js, the one check): bars below your best rank, ranks the trainer has for you
+    const R = window.CCSpells ? window.CCSpells.check(CH) : null;
+    const RS = R && R.specs.find((x) => x.spec === cur);
+    const old = {};
+    if (RS) RS.outdated.forEach((o) => { old[o.slot] = o; });
+    if (R) h += ranksHtml(R, RS);
     h += `<div class="grid2 tbars"><section><h2>Action bars ${savedPill(sp.barsTaken, cur === active ? 6 * HOUR : 14 * 24 * HOUR)}</h2>`;
     if (!bars.length) h += '<div class="empty">Not saved yet. Switch to this spec in game and Sync.</div>';
     else {
@@ -714,7 +740,9 @@
           const a = bySlot[s];
           if (!a) { cells.push(emptySlot()); continue; }
           any = true;
-          if (a.kind === 'spell' && SPELLS[a.id]) cells.push(icon(a.icon, { spell: a.id, key: a.key }));
+          const o = old[s];
+          if (o) cells.push(icon(a.icon, { tip: [{ l: o.name }, { l: `Rank ${o.rank} on this bar: you know rank ${o.best}`, lc: 'e9a23b' }], key: a.key, badge: `${o.rank}/${o.best}`, cls: 'oldrank' }));
+          else if (a.kind === 'spell' && SPELLS[a.id]) cells.push(icon(a.icon, { spell: a.id, key: a.key }));
           else if (a.kind === 'item' && byId(a.id)) cells.push(icon(a.icon, { item: byId(a.id).key, key: a.key }));
           else {
             const lines = [{ l: a.name || a.kind }];

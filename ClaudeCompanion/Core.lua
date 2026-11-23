@@ -13,6 +13,7 @@
 --     snap = { taken = <epoch>, character = {...}, stats = {...}, equipped = {...}, ... },
 --     bank = { taken, bags }, professions = { [name] = {...} }, taxi = {...}, mail = {...},
 --     specs = { [1] = { taken, talents, actionBars }, [2] = {...} },
+--     trainer = { taken, npc, class, level, services = { {name, rank, status, level, cost} } },  -- class trainer, read while open
 --     history = { {t, level, xp, money, ...}, ... },   -- one line per sync, for graphs
 --     journal = { {t, e = "loot"|"kill"|..., ...}, ... }, -- event timeline
 --     session = <current>, sessions = { <finished>, ... },
@@ -25,7 +26,7 @@ ns.VERSION = "1.5.0"
 ns.SCHEMA = 1
 -- the source commit of this build: tools/publish-stable.py writes it here; "dev" in a checkout.
 -- The app compares it with the build it runs itself, to say when the game still needs a /reload.
-ns.BUILD = "4d690d97e131"
+ns.BUILD = "60a94aea207f"
 
 BINDING_HEADER_CLAUDECOMPANION = "Claude Companion"
 BINDING_NAME_CLAUDECOMPANION_TOGGLE = "Open or close Claude window"

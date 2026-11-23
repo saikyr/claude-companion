@@ -15,7 +15,7 @@ record; `data` holds the addon's record as saved. Times are Unix seconds, money 
   (PR #64); typing it says "type /reload". Nothing done since the last `/reload` is anywhere yet.
 - After a save, each computer's app sends new history and its snapshot to Supabase (about a minute).
   Check `at` on the snapshot row and say how old it is.
-- Windows the game only shows while open (bank, mailbox, AH, profession windows, flight map) are read
+- Windows the game only shows while open (bank, mailbox, AH, profession windows, the class trainer, flight map) are read
   only while open. `snapshot.taken` says when each was last read.
 
 ## Chat commands (`/cc` or `/claude`, UI.lua)
@@ -84,7 +84,10 @@ recorded per craft.
 | Quest log with every reward scored for every spec, and the chain's next quest | Quests tab | `quests[]` (`rewards[].specs[]`, `next`) |
 | Quests to keep: `keep: true` with `keepWhy` and `dungeon` when the quest or any step of its chain is a pack `Dungeon` quest, has its quest zone or objective in an instance, or is a step of a key or attunement (`rules.js` unlocks: the Skeleton Key, the Seal of Ascension...); also when it gives rep with a faction some item needs (pack `req`) and the character isn't Exalted. `rep[]`: the rep a quest gives. Never on a drop list | snapshot only | `quests[].keep`, `keepWhy`, `dungeon`, `rep`; the brief's `quests[]` |
 | Quests you can do, attunements and keys, ranked next steps (a quest the pack has twice, same title, zone, objective and rewards, counts once) | Overview (Now) | `nextSteps[]` |
-| Talents and action bars, both specs | Talents & Bars | save only (`specs`) |
+| Talents and action bars, both specs (every slot: spell id, item, macro, key) | Talents & Bars | snapshot `spells.specs[].bars`; raw: the `now` record's `specs` (below) |
+| **Spell ranks**: each spec's bar spells below the best rank in your spellbook (marked on the bar, listed above it; a low rank kept beside the best one on the same bars is left alone); from the class trainer's own list (read while its window is open: every rank it teaches, the level and cost, learned or not; weapon masters and pet trainers, which open the same window, are left out) the ranks to train now and the next ones. The game's list, so Forever's own spells and ranks are right. No trainer visited yet: bars are still checked, "to train" says to open the trainer once | Talents & Bars, Spell ranks (`js/spells.js`) | snapshot `spells` (`specs[].outdated`, `train[]`, `later[]`, `known[]`, `trainer.taken`) |
+| Spellbook: every spell and rank the game lists in it (each bar slot also saves its own rank) | Talents & Bars (the rank check) | snapshot `spells.known[]`; raw: `now` record `snap.spellbook` |
+| Macros (name and text), key bindings, buffs, currencies, gear sets, completed quests, weapon skills | Talents & Bars (macros), Character | raw only: the `now` record's `snap` (below) |
 | Reputation | Reputation tab | `reputation[]` |
 | Professions, recipes, cooldowns (Mooncloth, transmutes) | Professions tab | `professions[]`, `cooldowns[]` |
 | Flight paths per continent | Character tab | `flightPaths` |
@@ -99,6 +102,31 @@ measured against the two-hander alone. The pre-BiS plan takes a one-hander plus 
 when the pair scores higher. Shields and held-in-off-hand items go in the off hand for anyone; one-hand and
 off-hand weapons only with the Dual Wield skill (snapshot `skills`, or a Rogue), and then a one-hander is
 measured in whichever hand it gains most.
+
+## Everything saved, online: the `now` record
+
+The snapshot is the app's summary, with its scores. **Everything the addon saved about the character is
+online too**, in one `now` record per computer (replaced at each sync), so nothing is kept from Claude: when the
+snapshot or the brief lacks a fact the addon records, read it there, and quote its time. Scores and
+verdicts still come only from the snapshot (the scoring rule).
+
+```sql
+select id, to_timestamp(t) saved, jsonb_object_keys(data->'snap') part from private.history
+ where account = '<account>' and kind = 'now' order by t desc;            -- one row per computer and part
+select data->'snap'->'macros' from private.history
+ where account = '<account>' and kind = 'now' order by t desc limit 1;    -- the newest computer's macros
+```
+
+| `now` part | Holds |
+| --- | --- |
+| `snap` | the last in-game read: `character`, `stats`, `equipped`, `bags` (every slot), `gearSets`, `talents`, `macros` (name, text), `bindings`, `spellbook` (every rank, spell id), `skills` (weapon and profession skill), `reputation`, `currencies`, `quests`, `completedQuests`, `group`, `buffs`, `activeSpec`, `taken`; `kept` lists parts kept from the read before at logout |
+| `specs` | per talent group (1, 2): `talents` / `traits`, `actionBars` (slot, kind, id, name, key, macro text), `talentsTaken`, `barsTaken` |
+| `trainer` | the class trainer's list when its window was last open: `services[]` {name, rank, status available / unavailable / used, level, cost}, `npc`, `level`, `taken` |
+| `bank`, `mail`, `professions` | bank bags, mailbox, each profession's recipes and reagents, each with its `taken` |
+| `taxi`, `taxiRead`, `ah` (`owned`, `lastScan`), `bossLog` | flight paths, your auctions, the last scan, the Dungeon Journal addon's boss log |
+
+Not online: the addon's item cache (names and tooltips of items seen; the pack has the same facts) and its
+`diag` counters (`caps` in the snapshot says what the game allows).
 
 ## Claude, sync, updates
 
