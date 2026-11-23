@@ -82,6 +82,12 @@ const CASES = [
   ['a time that is not ISO', { id: 'iso', title: 'x', created: 'yesterday' }, ['format'], []],
   ['an item id that is not a number', { id: 'item-x', title: 'x', items: [{ id: 'x' }] }, ['format'], []],
   ['a huge id in a src', { id: 'huge', title: 'x', facts: [{ label: 'Drop rate', value: '1% (5 kills)', src: 'game.drop:99999999999:202' }] }, ['src'], []],
+  ['an impossible date', { id: 'date', title: 'x', expires: '2026-13-01T00:00:00Z' }, ['format'], []],
+  ['mobs as one string', { id: 'mobs', title: 'x', track: { grind: 'g', mobs: 'ogre' } }, ['format'], []],
+  ['a rate written as 2 in 5', farm({ summary: 'About 2 in 5 drop it.' }), ['rate'], []],
+  ['gold each hour', { id: 'each', title: 'Cultists', summary: 'About 120 gold each hour.' }, ['gph'], []],
+  ['a duo claim, unknown said about something else', farm({ id: 'duo-other', title: 'Duo Strat Live', risk: 'Deaths unknown.' }), ['duo'], []],
+  ['a yes/no snapshot field', { id: 'rest-no', title: 'Rested', facts: [{ label: 'Resting', value: 'yes', src: 'snapshot#character.resting' }] }, [], []],
   ['profit with only flips#sold', { id: 'sold', title: 'Flip profit', facts: [{ label: 'Sold', value: '90g', src: 'flips#sold' }] }, ['profit'], []],
 ];
 // chat lines: [text, rules]
@@ -117,7 +123,7 @@ function pyRules(card) {
   const r = spawnSync('python3', [path.join(ROOT, 'tools', 'check-cards.py'), f], { encoding: 'utf8' });
   fs.rmSync(f);
   if (r.status === 0) return [];
-  return r.stdout.trim().split('\n').map((l) => (/\[(\w+)\]/.exec(l) || [, 'format'])[1]);
+  return r.stdout.trim().split('\n').map((l) => (/: \[(\w+)\] /.exec(l) || [, 'format'])[1]);
 }
 
 (async () => {

@@ -19,9 +19,9 @@ create or replace function private.answer_pat(p text) returns text language sql 
     when 'wowhead' then 'wowhead'
     when 'profit' then '\yprofit'
     when 'flips' then '\yflip'
-    when 'pct' then '\d(\.\d+)?\s*(%|percent\y)|\y1 in \d'
+    when 'pct' then '\d(\.\d+)?\s*(%|percent\y)|\y(\d+|one|two|three|a) in (\d|ten|five|four|three|two)'
     when 'sample' then '\d[\d,]*\s*(corpses|kills|looted)|\yn\s*=\s*\d|\yclassic\y|\yunknown\y'
-    when 'gph_num' then '\d[\d,.]*\s*k?\s*(g|gold)\s*(/|per|an|a)\s*(h|hr|hour)\y|\d[\d,.]*\s*k?\s*(g|gold)\s*hourly\y|\d[\d,.]*\s*k\s*/\s*(h|hr|hour)\y'
+    when 'gph_num' then '\d[\d,.]*\s*k?\s*(g|gold)\s*(/|per|an|a|each|every)\s*(h|hr|hour)\y|\d[\d,.]*\s*k?\s*(g|gold)\s*hourly\y|\d[\d,.]*\s*k\s*/\s*(h|hr|hour)\y'
     when 'gph_ok' then '\ymeasured\y|grinds tab|dungeons tab|\yunknown\y|\yapp''?s? (gph|says|shows|measured|tracked)'
     when 'duo' then '\y(duo|duos|duoed|duoing|duoable|duo-able|solo|solos|soloed|soloing|soloable|solo-able|two-man|2-man|two man|2 man)\y'
     when 'duo_ok' then '\yunknown\y|not measured|measured run|your (own )?measured'
@@ -59,6 +59,10 @@ create or replace function private.card_lines(c jsonb) returns setof text langua
 -- a fact as one line: "label: value (note)"
 create or replace function private.fact_line(f jsonb) returns text language sql immutable set search_path = '' as $$
   select coalesce(f->>'label', 'None') || ': ' || coalesce(f->>'value', 'None') || coalesce(' (' || nullif(f->>'note', '') || ')', '') $$;
+
+-- a real time (not 2026-13-01 or 25:00)
+create or replace function private.is_time(p text) returns boolean language plpgsql immutable set search_path = '' as $$
+begin perform p::timestamptz; return true; exception when others then return false; end $$;
 
 -- the numbers written in a text (commas dropped)
 create or replace function private.numbers_in(p text) returns numeric[] language sql immutable set search_path = '' as $$
@@ -126,7 +130,10 @@ begin
     if jsonb_typeof(v) = 'number' then
       if not exists (select 1 from unnest(nums) n where abs(n - (v #>> '{}')::numeric) <= greatest(0.5, abs((v #>> '{}')::numeric) * 0.01)) then
         return 'the snapshot says ' || split_part(src, '#', 2) || ' = ' || (v #>> '{}'); end if;
-    elsif jsonb_typeof(v) in ('string', 'boolean') then
+    elsif jsonb_typeof(v) = 'boolean' then
+      if lower(txt) !~ (case when v = 'true'::jsonb then '\y(true|yes)\y' else '\y(false|no|not)\y' end) then
+        return 'the snapshot says ' || split_part(src, '#', 2) || ' = ' || (v #>> '{}'); end if;
+    elsif jsonb_typeof(v) = 'string' then
       if position(lower(v #>> '{}') in lower(txt)) = 0 then return 'the snapshot says ' || split_part(src, '#', 2) || ' = ' || (v #>> '{}'); end if;
     else return 'snapshot#' || split_part(src, '#', 2) || ' is a list or an object: point at one field';
     end if;
@@ -167,7 +174,7 @@ begin
       case when c ? 'status' and (jsonb_typeof(c->'status') <> 'string' or c->>'status' not in ('open', 'done', 'withdrawn')) then 'unknown status' end,
       (select string_agg(k2 || ' is not an ISO time', '; ') from unnest(array['created', 'updated', 'expires']) k2
         where jsonb_typeof(c->k2) not in ('null') and (jsonb_typeof(c->k2) <> 'string'
-          or c->>k2 !~ '^\d{4}-\d\d-\d\d([T ]\d\d:\d\d(:\d\d(\.\d+)?)?)?(Z|[+-]\d\d(:?\d\d)?)?$')),
+          or c->>k2 !~ '^\d{4}-\d\d-\d\d([T ]\d\d:\d\d(:\d\d(\.\d+)?)?)?(Z|[+-]\d\d(:?\d\d)?)?$' or not private.is_time(c->>k2))),
       (select string_agg(k2 || ' must be text', '; ') from unnest(array['summary', 'character', 'where', 'body', 'risk']) k2
         where jsonb_typeof(c->k2) not in ('null', 'string')),
       (select string_agg(k2 || ' must be a list', '; ') from unnest(array['steps', 'facts', 'items', 'sources']) k2
@@ -195,7 +202,9 @@ begin
       union all select private.fact_line(ff) from jsonb_array_elements(case when jsonb_typeof(c->'facts') = 'array' then c->'facts' else '[]'::jsonb end) ff
        where jsonb_typeof(ff) = 'object') y;
     whole := coalesce(whole, '');
-    duo_ok := whole ~ private.answer_pat('card_duo_ok') or exists (select 1 from jsonb_array_elements(case when jsonb_typeof(c->'facts') = 'array' then c->'facts' else '[]'::jsonb end) ff
+    duo_ok := exists (select 1 from (select private.card_lines(c) x union all select private.fact_line(ff) from jsonb_array_elements(
+                 case when jsonb_typeof(c->'facts') = 'array' then c->'facts' else '[]'::jsonb end) ff where jsonb_typeof(ff) = 'object') y
+               where lower(y.x) ~ private.answer_pat('duo') and lower(y.x) ~ private.answer_pat('card_duo_ok')) or exists (select 1 from jsonb_array_elements(case when jsonb_typeof(c->'facts') = 'array' then c->'facts' else '[]'::jsonb end) ff
        where jsonb_typeof(ff) = 'object' and ff->>'src' like 'run:%');
     for l, isfact in select x, false from private.card_lines(c) x
                      union all select private.fact_line(ff), true from jsonb_array_elements(case when jsonb_typeof(c->'facts') = 'array' then c->'facts' else '[]'::jsonb end) ff
@@ -273,6 +282,6 @@ begin
 end $$;
 
 revoke all on function private.claude_put_setting(uuid, text, text), private.check_cards(uuid, jsonb), private.fact_problem(jsonb, jsonb),
-  private.answer_pat(text), private.answer_line_rules(text), private.card_lines(jsonb), private.fact_line(jsonb), private.numbers_in(text),
+  private.answer_pat(text), private.is_time(text), private.answer_line_rules(text), private.card_lines(jsonb), private.fact_line(jsonb), private.numbers_in(text),
   private.quotes_gold(text, numeric)
   from public, anon, authenticated;

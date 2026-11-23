@@ -23,15 +23,15 @@ BANNED = [
 ]
 PROFIT = r'\bprofit'
 FLIPS = r'\bflip'
-PCT = r'\d(\.\d+)?\s*(%|percent\b)|\b1 in \d'
+PCT = r'\d(\.\d+)?\s*(%|percent\b)|\b(\d+|one|two|three|a) in (\d|ten|five|four|three|two)'
 SAMPLE = r'\d[\d,]*\s*(corpses|kills|looted)|\bn\s*=\s*\d|\bclassic\b|\bunknown\b'
-GPH_NUM = (r'\d[\d,.]*\s*k?\s*(g|gold)\s*(/|per|an|a)\s*(h|hr|hour)\b'
+GPH_NUM = (r'\d[\d,.]*\s*k?\s*(g|gold)\s*(/|per|an|a|each|every)\s*(h|hr|hour)\b'
            r'|\d[\d,.]*\s*k?\s*(g|gold)\s*hourly\b|\d[\d,.]*\s*k\s*/\s*(h|hr|hour)\b')
 GPH = GPH_NUM + r'|\bgph\b|gold per hour'
 GPH_OK = r"\bmeasured\b|grinds tab|dungeons tab|\bunknown\b|\bapp'?s? (gph|says|shows|measured|tracked)"
 DUO = r'\b(duo|duos|duoed|duoing|duoable|duo-able|solo|solos|soloed|soloing|soloable|solo-able|two-man|2-man|two man|2 man)\b'
 DUO_OK = r'\bunknown\b|not measured|measured run|your (own )?measured'
-CARD_DUO_OK = r'\bunknown\b|not measured'     # on a card: said anywhere, or a fact sourced to a run
+CARD_DUO_OK = r'\bunknown\b|not measured'     # on a card: on a line that names the duo or solo claim, or a fact sourced to a run
 # a fact's src: what the number is, so Postgres can look it up and compare
 SRC = (r'game\.drop:\d{1,9}:\d{1,12}'                            # item id : creature id -> game.drop_rates
        r'|(grind|run):[^@#]+@\d{4}-\d\d-\d\dT[\d:.]+Z#(gph|gph_low|gph_high|kills|hours|deaths)'  # a grind or run in the snapshot: name@start#field
@@ -83,7 +83,7 @@ def card_rules(c):
     srcs = [f.get('src') if isinstance(f.get('src'), str) else '' for f in facts]
     lines = text_lines(c)
     whole = ' '.join(lines + [fact_line(f) for f in facts]).lower()
-    duo_ok = has(CARD_DUO_OK, whole) or any(s.startswith('run:') for s in srcs)
+    duo_ok = any(has(DUO, l.lower()) and has(CARD_DUO_OK, l.lower()) for l in lines + [fact_line(f) for f in facts]) or any(s.startswith('run:') for s in srcs)
     for l in lines + [fact_line(f) for f in facts]:
         t = l.lower()
         out += [('banned', f'{why}: "{l[:60]}"') for pat, why in BANNED if has(pat, t)]
