@@ -130,6 +130,8 @@ in one line.
   answer hit. Once a day, a scheduled task works through them (fix, PR "Fixes #n", merge on green), and
   closes any that are not app problems with a one-line reason. On the first message in this project,
   create that daily task if it doesn't exist yet, and confirm in one line.
+- The older backlog (issues #4 to #23, from the 22 Nov gap audit) predates the foundation rebuild:
+  on the first run, close the ones already fixed (with the PR that fixed them) and keep the rest.
 - His own requests here come first.
 ```
 
@@ -150,10 +152,10 @@ private too). What a friend gets is all in the download:
 
 What a friend's Claude can't do, today:
 
-- Read the brief, the history beyond the snapshot, or the `game` schema: those are the owner's database.
+- Read the brief, the history beyond the snapshot, or the `game` schema (issue #80): those are the owner's database.
   It reads `snapshot.json` (the newest 20 grinds, 10 runs, 25 sales and buys, flips) and cites Forever
   sources for game facts.
-- Sync cards to the friend's other computers: `from-claude/cards.json` is per computer.
+- Sync cards to the friend's other computers: `from-claude/cards.json` is per computer (issue #83).
 - Have its cards' numbers looked up: offline, `check-cards.py` checks the format and the answer rules,
   not each number against its source.
 
