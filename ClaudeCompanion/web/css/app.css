@@ -485,6 +485,11 @@ button.card { font: inherit; color: inherit; text-align: left; cursor: pointer; 
 .src { display: inline-flex; align-items: center; gap: var(--sp1); font-size: var(--f-sm); color: var(--t2); white-space: nowrap; }
 .src::before { content: ""; width: 0.4375rem; height: 0.4375rem; border-radius: 50%; background: var(--line2); flex: none; }
 .src-owned::before { background: var(--pos); } .src-ah::before { background: var(--adv-ah); }
+/* Gear: raid, PvP and not-yet-seen items, left out of Pre-BiS */
+details.later { margin-top: var(--sp3); }
+details.later summary { cursor: pointer; list-style-position: outside; }
+details.later summary h3 { display: inline; }
+.src-unseen { color: var(--t3); }
 /* the slot list (left) and one slot in full (right) */
 .gearlay { display: grid; grid-template-columns: minmax(18rem, 24rem) minmax(0, 1fr); gap: var(--sp4); align-items: start; }
 .slotlist { position: sticky; top: 4.75rem; max-height: calc(100vh - 5.5rem); overflow-y: auto; background: var(--s1); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
@@ -507,6 +512,7 @@ label.sel .k { font: 600 var(--f-lbl) var(--ui); text-transform: uppercase; lett
 .slotdet .det-h + h3 { margin-top: var(--sp3); }
 .slotdet h3 span { text-transform: none; letter-spacing: 0; font-weight: 400; }
 .prelist .thead, .prelist .tr { grid-template-columns: minmax(0, 1fr) 6.5rem 4rem 9.5rem; }
+.laterlist .thead, .laterlist .tr { grid-template-columns: minmax(0, 1fr) 13rem 4rem 4rem; }
 .prelist .tr.target { background: var(--acc-bg); }
 .prelist .act { display: flex; align-items: center; justify-content: flex-end; gap: var(--sp2); }
 .st { font-size: var(--f-sm); color: var(--t3); white-space: nowrap; }
@@ -539,6 +545,8 @@ ul.whys b { color: var(--t1); font-weight: 600; font-variant-numeric: tabular-nu
   .gopt .thead, .gopt .tr { grid-template-columns: minmax(0, 1fr) 6.5rem 4.5rem; }
   .gopt .thead > :nth-child(2), .gopt .tr > :nth-child(2), .gopt .thead > :nth-child(4), .gopt .tr > :nth-child(4) { display: none; }
   .prelist .thead, .prelist .tr { grid-template-columns: minmax(0, 1fr) 7.5rem; }
+  .laterlist .thead, .laterlist .tr { grid-template-columns: minmax(0, 1fr) 8rem; }
+  .laterlist .thead > :nth-child(3), .laterlist .tr > :nth-child(3), .laterlist .thead > :nth-child(4), .laterlist .tr > :nth-child(4) { display: none; }
   .prelist .thead > :nth-child(2), .prelist .tr > :nth-child(2), .prelist .thead > :nth-child(3), .prelist .tr > :nth-child(3) { display: none; }
   .ahup .thead > :nth-child(5), .ahup .tr > :nth-child(5), .ahup .thead > :nth-child(2), .ahup .tr > :nth-child(2) { display: none; }
   .ahup .thead, .ahup .tr { grid-template-columns: minmax(0, 1fr) 7rem 4.5rem; }
