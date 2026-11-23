@@ -41,13 +41,15 @@ def check(d):
             if c.get(k) is not None and not iso(c[k]): bad.append(f'{at}: {k} is not an ISO time')
         for k in ('summary', 'character', 'where', 'body', 'risk'):
             if c.get(k) is not None and not isinstance(c[k], str): bad.append(f'{at}: {k} must be text')
-        if not all(isinstance(s, str) for s in c.get('steps', [])): bad.append(f'{at}: steps must be a list of text')
+        for k in ('steps', 'facts', 'items', 'sources'):
+            if k in c and not isinstance(c[k], list): bad.append(f'{at}: {k} must be a list')
+        if isinstance(c.get('steps'), list) and not all(isinstance(s, str) for s in c['steps']): bad.append(f'{at}: steps must be a list of text')
         if not all(isinstance(f, dict) and isinstance(f.get('label'), str) and isinstance(f.get('value'), str)
-                   and set(f) <= {'label', 'value', 'note', 'src'} for f in c.get('facts', [])):
+                   and set(f) <= {'label', 'value', 'note', 'src'} for f in (c['facts'] if isinstance(c.get('facts'), list) else [])):
             bad.append(f'{at}: each fact needs label and value (text), and may have note and src')
-        if not all(isinstance(i, dict) and isinstance(i.get('id'), int) and i['id'] > 0 for i in c.get('items', [])):
+        if not all(isinstance(i, dict) and isinstance(i.get('id'), int) and i['id'] > 0 for i in (c['items'] if isinstance(c.get('items'), list) else [])):
             bad.append(f'{at}: each item needs a numeric game item id')
-        if not all(isinstance(s, dict) and isinstance(s.get('label'), str) and (s.get('url') is None or str(s['url']).startswith(('https://', 'http://'))) for s in c.get('sources', [])):
+        if not all(isinstance(s, dict) and isinstance(s.get('label'), str) and (s.get('url') is None or str(s['url']).startswith(('https://', 'http://'))) for s in (c['sources'] if isinstance(c.get('sources'), list) else [])):
             bad.append(f'{at}: each source needs a label (and an http(s) url if any)')
         if c.get('step') is not None and not (isinstance(c['step'], str) and re.fullmatch(r'(quest|item|npc):\d+|(dungeon|zone):\S.*', c['step'])):
             bad.append(f'{at}: step is quest:<id>, item:<id>, npc:<id>, dungeon:<name> or zone:<name>')

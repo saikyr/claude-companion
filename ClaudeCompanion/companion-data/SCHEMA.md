@@ -100,9 +100,10 @@ Reinstalling the addon by copying the zip over the folder keeps both files; dele
 Unknown fields are refused by the checker, so a typo can't hide a field.
 
 The answer rules (open cards only; `tools/answer_rules.py`, and online the same in Postgres, which refuses
-the whole list): numbers carry `src` and match it; a % has its sample, or says Classic, or unknown; "profit"
-only with a `flips#profit` fact; gold per hour only the app's measured number; duo or solo claims are
-measured or say unknown; no layer tips, `/run` scripts or Wowhead.
+the whole list): rates and gold per hour go in `facts[]`, never in the title, summary, steps or body;
+every number in a fact carries `src` and matches it (a Forever rate with its % and corpses, a Classic one
+saying Classic, an incomplete grind's gph saying so); "profit" only with a `flips#profit` fact; duo or solo
+claims need a `run:` fact or say unknown; no layer tips, `/run` scripts or Wowhead (sources included).
 
 ### state.json
 
