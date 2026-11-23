@@ -22,6 +22,10 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
         { id: 4184, title: 'The True Masters', level: 54, complete: true, ready: true }],
       group: [{ name: 'Friend', level: 56, class: 'MAGE', online: true }],
     },
+    // a finished 1-hour grind: 10g looted, one Glowing Brightwood Staff (AH median 95g in the fixture's scan)
+    grinds: [{ name: 'test grind', start: now - 7200, last: now - 3600, finish: now - 3600, secs: 3600, kills: 60, deaths: 0,
+      coin: 100000, bySource: { loot: 100000 }, zones: { 'Burning Steppes': 60 }, loot: { 812: { id: 812, name: 'Glowing Brightwood Staff', count: 1, q: 4 } } }],
+    caps: { api: { GetLootSourceInfo: 'function' }, secret: {}, checked: now, loot: { t: now, slots: 2, sources: 2, value: 'readable' } },
     professions: { Tailoring: { name: 'Tailoring', rank: 268, taken: now - 3600, recipes: [
       { name: 'Runecloth Bag', difficulty: 1, reagents: [{ id: 14048, need: 5 }] },
       { name: 'Runecloth Belt', difficulty: 0, reagents: [{ id: 14048, need: 3 }] },
@@ -126,6 +130,22 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   const snapNext = await page.evaluate(() => window.CC.next.snapshot());
   check(snapNext.length > 3 && snapNext.every((x) => x.id && x.kind && typeof x.value === 'number'), 'snapshot nextSteps: id, kind, value');
   if (posted) { const j = JSON.parse(posted); check(Array.isArray(j.nextSteps) && j.nextSteps.length > 3, 'the snapshot sent to the server has nextSteps'); }
+
+  // ---- gold per hour comes from the app, with a range and completeness (the brief copies these)
+  const snap = await page.evaluate(() => window.CC.snapshot());
+  const g = (snap.grind.recent || [])[0] || {};
+  check(g.name === 'test grind' && g.hours === 1 && g.coin === 100000, 'snapshot grind: hours and coin');
+  check(g.gph === 100000 + 950000 && g.gph_low < g.gph && g.gph_high >= g.gph, `snapshot grind: gph at the AH median, gph_low at vendor price, gph_high >= gph (${g.gph_low} / ${g.gph} / ${g.gph_high})`);
+  check(g.complete === true && Array.isArray(g.incomplete) && g.incomplete.length === 0 && /copper per hour/.test(g.basis), 'a finished hour-long grind is complete');
+  const app = await page.evaluate(() => window.CC.api.trackerStats(window.CC.api.CH.grinds[0]).perHour);
+  check(Math.round(app) === g.gph, 'the Grinds tab and the snapshot show the same gold per hour');
+  // ---- dungeon quests are marked keep (CLAUDE.md, the dungeon-quest rule)
+  const dq = (snap.quests || []).find((q) => q.id === 5089);
+  check(dq && dq.keep === true && dq.dungeon === 'Blackrock Spire', "a dungeon quest is keep, with its dungeon (General Drakkisath's Command: Blackrock Spire)");
+  // ---- what the client allows addons
+  check(snap.caps && snap.caps.loot && snap.caps.loot.sources === 2, 'snapshot caps: the loot-source probe');
+  // ---- skills read: the gear advice is there for every spec
+  check(Array.isArray(snap.gear) && snap.gear.length >= 2 && snap.gear.every((x) => x.label), 'snapshot gear: one entry per spec');
 
   if (shots) {
     fs.mkdirSync(shots, { recursive: true });

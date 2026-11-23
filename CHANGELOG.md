@@ -3,6 +3,20 @@
 Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 
 ## 1.5.0 (in progress: every merge to main updates itself)
+- **Gear advice and professions reach Claude again.** At logout the game lists only the skill headers
+  (Weapon Skills, Armor Proficiencies...), and every save is a logout, so the snapshot had no skills: the
+  gear advice for every spec and the professions list were empty online. A logout that reads only headers
+  now keeps the skills read at login, like bags and gold.
+- **One gold per hour, from the app.** Each grind and run in the snapshot carries `gph` (the Grinds tab's
+  number), `gph_low` (loot at vendor price), `gph_high` (the best recent AH median), `hours`, and
+  `complete` with the reasons when it isn't. Claude quotes these; it never works gold per hour out itself.
+- **The brief.** `private.claude_brief(account)` on the sync backend: a few KB of where the player is now,
+  with its age, built from the newest snapshot of any computer (gear per spec, quests with dungeon quests
+  marked keep, flips as profit, sales as revenue, measured gold per hour).
+- **What Forever lets addons read, measured in game.** At a loot window the addon notes whether the game
+  names the corpse each item came from; inside an instance, whether GUIDs can be read; and whether combat
+  logging can be read. Read-only: nothing changes in game. This decides how drop rates and resistances can
+  be measured on Forever.
 - **A run's bosses and loot names show on every computer.** The Dungeon Journal addon's boss log goes with
   each computer's "now" and the view joins both, so a run played on the PC lists its bosses on the Mac;
   run loot in the snapshot takes its name from the game-data pack when this computer never saw the item.

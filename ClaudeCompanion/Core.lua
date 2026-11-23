@@ -432,7 +432,10 @@ local API_NAMES = { "C_AuctionHouse", "C_TooltipInfo", "C_EquipmentSet", "GetTal
     "GetFactionInfo", "C_CurrencyInfo", "C_QuestLog", "GetQuestLogTitle", "C_Container", "GetContainerItemInfo",
     "C_Map", "C_UnitAuras", "UnitBuff", "GetAuctionItemInfo", "PostAuction", "GetInboxInvoiceInfo", "NumTaxiNodes",
     "C_Item", "GetItemInfo", "GetItemStats", "issecretvalue", "CombatLogGetCurrentEventInfo", "GetSpellBonusHealing",
-    "GetManaRegen", "C_Spell", "GetMacroInfo", "GetActionInfo", "GetNumBindings", "GetBindLocation" }
+    "GetManaRegen", "C_Spell", "GetMacroInfo", "GetActionInfo", "GetNumBindings", "GetBindLocation",
+    -- for measuring Forever drop rates and resistances (docs/ROADMAP.md): which mob each loot slot came
+    -- from, and whether the combat log can be read or turned on by an addon
+    "GetLootSourceInfo", "GetLootSlotLink", "GetNumLootItems", "LoggingCombat", "CombatLog_Object_IsA", "UnitTokenFromGUID" }
 
 function ns.Capabilities()
     local caps = { api = {}, secret = {}, version = ns.VERSION, checked = ns.Now() }
@@ -451,6 +454,7 @@ function ns.Capabilities()
     probe("UnitGUID", UnitGUID, "player")
     probe("GetManaRegen", GetManaRegen)
     probe("GetSpellBonusHealing", GetSpellBonusHealing)
+    probe("LoggingCombat", LoggingCombat)               -- reading only: never turns logging on or off
     local _, build, _, toc = GetBuildInfo()
     caps.build, caps.toc = ns.Clean(build), ns.Clean(toc)
     if Enum and type(Enum.BagIndex) == "table" then
@@ -458,5 +462,33 @@ function ns.Capabilities()
         for k, v in pairs(Enum.BagIndex) do caps.bagIndex[k] = ns.Clean(v) end
     end
     caps.realm = { GetRealmName = ns.Clean(ns.Call(GetRealmName)), normalized = ns.Clean(ns.Call(GetNormalizedRealmName)) }
+    -- probes that need a place: kept from the last time they ran (ns.ProbeInstance, ns.ProbeLoot)
+    local old = ns.char.caps
+    if type(old) == "table" then caps.instance, caps.loot = old.instance, old.loot end
     ns.char.caps = caps
+end
+
+-- Inside a dungeon: can the addon still read GUIDs there (Forever may hide them in instances)?
+function ns.ProbeInstance(name)
+    local caps = ns.char and ns.char.caps
+    if type(caps) ~= "table" then return end
+    local function state(fn, ...)
+        local ok, v = pcall(fn, ...)
+        if not ok then return "error" elseif v == nil then return "nil" end
+        return ns.IsSecret(v) and "secret" or "readable"
+    end
+    caps.instance = { t = ns.Now(), name = name, UnitGUID = state(UnitGUID, "player"),
+        target = UnitExists and UnitExists("target") and state(UnitGUID, "target") or "no target" }
+end
+
+-- With a loot window open: does GetLootSourceInfo say which corpse each slot came from?
+function ns.ProbeLoot()
+    local caps = ns.char and ns.char.caps
+    if type(caps) ~= "table" or type(GetLootSourceInfo) ~= "function" or type(GetNumLootItems) ~= "function" then return end
+    local n, ok, got = ns.Clean(ns.Call(GetNumLootItems)) or 0, 0, nil
+    for i = 1, n do
+        local okc, guid = pcall(GetLootSourceInfo, i)
+        if okc and guid ~= nil then got = ns.IsSecret(guid) and "secret" or "readable"; ok = ok + 1 end
+    end
+    caps.loot = { t = ns.Now(), slots = n, sources = ok, value = got or (n > 0 and "nil" or "no slots") }
 end

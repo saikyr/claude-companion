@@ -1,0 +1,148 @@
+-- The brief: one small JSON of where the player is now, built from what the app already computed
+-- (the newest snapshot of any of the account's computers) and the synced history. Claude's first read
+-- for any question about the player (CLAUDE.md, "Before answering"): a few KB instead of the whole
+-- snapshot, with its age, so an agent never answers from memory or works numbers out by hand.
+-- Nothing here computes advice or gold per hour: gear scores, dungeon flags and gph come from the
+-- app (js/gear.js, js/claude.js, js/app.js goldOf); this only selects and trims. Sales are summed as
+-- revenue; profit is only ah.flips (sales matched to recorded buys).
+-- Only for the project owner's SQL access (the Supabase connector): private schema, no API grant.
+--   select private.claude_brief('<account id>');                      -- the default parts
+--   select private.claude_brief('<account id>', array['quests','rep']); -- just these parts, in full
+
+-- a JSON array, or an empty one for null / JSON null / anything else (snapshots from older builds)
+create or replace function private.brief_arr(v jsonb) returns jsonb language sql immutable set search_path = '' as $$
+  select case when jsonb_typeof(v) = 'array' then v else '[]'::jsonb end $$;
+
+create or replace function private.claude_brief(p_account uuid, p_parts text[] default null) returns jsonb
+language plpgsql stable security definer set search_path = '' as $$
+declare
+  root uuid; s jsonb; s_t bigint; s_comp text; s_upd timestamptz; now_t bigint := extract(epoch from now())::bigint;
+  parts text[] := coalesce(p_parts, array['character', 'specs', 'quests', 'gold', 'professions', 'cooldowns', 'caps']);
+  full_parts boolean := p_parts is not null;   -- asked for by name: no trimming
+  out jsonb; builds jsonb; age int;
+begin
+  select coalesce(merged_into, id) into root from public.accounts where id = p_account;
+  if root is null then raise exception 'no such account'; end if;
+
+  -- the newest snapshot: the save it was built from, then when it arrived
+  select r.data, r.t, dv.name, r.updated_at into s, s_t, s_comp, s_upd
+    from public.records r join public.accounts a on a.id = r.account_id left join public.devices dv on dv.id = r.device_id
+   where coalesce(a.merged_into, a.id) = root and not a.retired and r.kind = 'snapshot'
+   order by r.t desc, r.updated_at desc limit 1;
+  if s is null then
+    return jsonb_build_object('meta', jsonb_build_object('account', root, 'snapshot', null,
+      'note', 'No snapshot online yet: the player opens the app once after a /reload or logout.'));
+  end if;
+
+  select coalesce(jsonb_agg(jsonb_build_object('computer', dv.name, 'build', r.data->'app'->>'build', 'savedInGame', r.data->>'savedInGame')
+                            order by r.t desc), '[]'::jsonb) into builds
+    from public.records r join public.accounts a on a.id = r.account_id left join public.devices dv on dv.id = r.device_id
+   where coalesce(a.merged_into, a.id) = root and not a.retired and r.kind = 'snapshot';
+
+  age := greatest(0, (now_t - s_t) / 60)::int;
+  out := jsonb_build_object('meta', jsonb_build_object(
+    'account', root, 'computer', s_comp, 'savedInGame', s->>'savedInGame', 'snapshotArrived', s_upd,
+    'ageMinutes', age, 'stale', age > 60,
+    'build', s->'app'->>'build', 'computers', builds,
+    'quote', jsonb_build_array(
+      'Say how old this is (ageMinutes) in every answer that uses it.',
+      'Gold per hour: quote gph / gph_low / gph_high as given; never work one out. complete=false: say why (incomplete).',
+      'Profit is only gold.flips; gold.sales7d is revenue.',
+      'Gear and rewards: the app''s scores for every spec; quests with keep=true are dungeon quests: never on a drop list.',
+      'Anything not here: the snapshot (CLAUDE.md queries) or docs/FEATURES.md. Not tracked = say so.')));
+
+  if 'character' = any(parts) then
+    out := out || jsonb_build_object('character', jsonb_build_object(
+      'name', s->'character'->>'name', 'level', s->'character'->'level', 'class', s->'character'->>'class',
+      'race', s->'character'->>'race', 'faction', s->'character'->>'faction',
+      'gold', round(coalesce((s->'character'->>'money')::numeric, 0) / 10000, 2),
+      'where', s->'character'->'where', 'hearth', s->'character'->>'hearth',
+      'savedParts', s->'taken'));
+  end if;
+
+  -- per spec: what the app compares against, its best upgrades now (top 5 by gain) and pre-BiS still missing
+  if 'specs' = any(parts) then
+    out := out || jsonb_build_object('specs', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'spec', g->>'label', 'active', g->'active', 'weights', g->>'weightsName', 'comparedWith', g->>'comparedWith',
+        'upgrades', coalesce((select jsonb_agg(jsonb_build_object('slot', u->>'slot', 'id', u->'id', 'name', u->>'name', 'gain', u->'gain',
+                                     'source', u->>'source', 'where', u->'where', 'ah', u->'ah') order by (u->>'gain')::numeric desc)
+                              from (select u from jsonb_array_elements(private.brief_arr(g->'upgrades')) u
+                                     order by (u->>'gain')::numeric desc limit case when full_parts then 1000 else 5 end) x), '[]'::jsonb),
+        'preBisMissing', coalesce((select jsonb_agg(jsonb_build_object('slot', p->>'slot', 'name', p->>'name', 'where', p->'where'))
+                                    from (select p from jsonb_array_elements(private.brief_arr(g->'preBis')) p
+                                           where p->>'status' = 'missing' limit case when full_parts then 1000 else 6 end) y), '[]'::jsonb)))
+        from jsonb_array_elements(private.brief_arr(s->'gear')) g), '[]'::jsonb));
+    if jsonb_array_length(out->'specs') = 0 then
+      out := jsonb_set(out, '{meta,quote}', (out->'meta'->'quote') || jsonb_build_array(
+        'specs is empty: this snapshot has no gear advice (the save had no skills, or an older build). Say so; never score gear by hand.'));
+    end if;
+  end if;
+
+  -- the quest log: keep (dungeon) flags and, per reward, only the specs it is an upgrade for;
+  -- rewardsNoGain = rewards that are an upgrade for no spec (asked for by name: all of them, listed)
+  if 'quests' = any(parts) then
+    out := out || jsonb_build_object('quests', coalesce((
+      select jsonb_agg(jsonb_build_object('id', q->'id', 'title', q->>'title', 'level', q->'level', 'complete', q->'complete',
+        'keep', coalesce(q->'keep', 'false'::jsonb), 'dungeon', q->'dungeon',
+        'rewards', coalesce((select jsonb_agg(jsonb_build_object('name', r->>'name', 'how', r->>'how',
+                               'upgradeFor', coalesce((select jsonb_agg(jsonb_build_object('spec', sp->>'spec', 'gain', sp->'gain'))
+                                                         from jsonb_array_elements(private.brief_arr(r->'specs')) sp
+                                                        where coalesce((sp->>'gain')::numeric, 0) > 0), '[]'::jsonb),
+                               'scored', jsonb_typeof(r->'specs') = 'array'))
+                              from jsonb_array_elements(private.brief_arr(q->'rewards')) r
+                             -- trimmed: only rewards that are an upgrade for some spec, or that the app couldn't score
+                             where full_parts or jsonb_typeof(r->'specs') <> 'array'
+                                or exists (select 1 from jsonb_array_elements(r->'specs') sp where coalesce((sp->>'gain')::numeric, 0) > 0)), '[]'::jsonb),
+        'rewardsNoGain', case when full_parts then null else (select count(*) from jsonb_array_elements(private.brief_arr(q->'rewards')) r
+                             where jsonb_typeof(r->'specs') = 'array'
+                               and not exists (select 1 from jsonb_array_elements(r->'specs') sp where coalesce((sp->>'gain')::numeric, 0) > 0)) end))
+        from jsonb_array_elements(private.brief_arr(s->'quests')) q), '[]'::jsonb));
+  end if;
+
+  -- gold: flips are profit, sales are revenue, measured = the app's gph for each grind and run
+  if 'gold' = any(parts) then
+    out := out || jsonb_build_object('gold', jsonb_build_object(
+      'flips', s->'ah'->'flips'->'totals',
+      'sales7d', (select jsonb_build_object('revenue', coalesce(sum((r.data->>'net')::numeric), 0), 'sales', count(*), 'label', 'revenue (AH cut taken off), not profit')
+                    from private.history r where r.account = root and r.kind = 'ah_sale' and r.t > s_t - 7 * 86400),
+      'buys7d', (select jsonb_build_object('paid', coalesce(sum((r.data->>'price')::numeric), 0), 'buys', count(*))
+                    from private.history r where r.account = root and r.kind = 'ah_buy' and r.t > s_t - 7 * 86400),
+      'measured', coalesce((
+        select jsonb_agg(m order by m->>'end' desc) from (
+          select m from (
+            select jsonb_build_object('what', 'grind', 'name', g->>'name', 'zones', g->'zones', 'end', coalesce(g->>'finish', g->>'last'),
+                     'hours', g->'hours', 'kills', g->'kills', 'deaths', g->'deaths', 'gph', g->'gph', 'gph_low', g->'gph_low', 'gph_high', g->'gph_high',
+                     'complete', g->'complete', 'incomplete', g->'incomplete') m
+              from jsonb_array_elements(private.brief_arr(s->'grind'->'recent') || jsonb_build_array(coalesce(s->'grind'->'running', 'null'::jsonb))) g
+             where jsonb_typeof(g) = 'object'
+            union all
+            select jsonb_build_object('what', 'run', 'name', r->>'name', 'end', coalesce(r->>'finish', r->>'start'), 'hours', r->'hours',
+                     'kills', r->'kills', 'bosses', jsonb_array_length(private.brief_arr(r->'bosses')), 'gph', r->'gph', 'gph_low', r->'gph_low',
+                     'gph_high', r->'gph_high', 'complete', r->'complete', 'incomplete', r->'incomplete')
+              from jsonb_array_elements(private.brief_arr(s->'runs')) r) u
+          order by m->>'end' desc limit case when full_parts then 1000 else 12 end) z), '[]'::jsonb),
+      'units', 'gph fields: copper per hour (10000 = 1 gold), before the 5% AH cut, loot counted sold or not'));
+  end if;
+
+  if 'professions' = any(parts) then out := out || jsonb_build_object('professions', coalesce(s->'professions', '[]'::jsonb)); end if;
+  if 'cooldowns' = any(parts) then out := out || jsonb_build_object('cooldowns', coalesce(s->'cooldowns', '[]'::jsonb)); end if;
+  if 'caps' = any(parts) then
+    out := out || jsonb_build_object('caps', case when s->'caps' is null then null else jsonb_build_object(
+      'checked', s->'caps'->'checked', 'build', s->'caps'->'build',
+      'GetLootSourceInfo', s->'caps'->'api'->>'GetLootSourceInfo', 'LoggingCombat', s->'caps'->'secret'->>'LoggingCombat',
+      'loot', s->'caps'->'loot', 'instance', s->'caps'->'instance') end);
+  end if;
+  if 'rep' = any(parts) then out := out || jsonb_build_object('rep', coalesce(s->'reputation', '[]'::jsonb)); end if;
+  if 'bags' = any(parts) then out := out || jsonb_build_object('bags', coalesce(s->'bagAdvice', '[]'::jsonb)); end if;
+  if 'next' = any(parts) then out := out || jsonb_build_object('next', coalesce(s->'nextSteps', '[]'::jsonb)); end if;
+  if 'ah' = any(parts) then out := out || jsonb_build_object('ah', coalesce(s->'ah', '{}'::jsonb)); end if;
+  if 'runs' = any(parts) then out := out || jsonb_build_object('runs', coalesce(s->'runs', '[]'::jsonb)); end if;
+  out := jsonb_strip_nulls(out);   -- fields an older snapshot lacks are left out, not null
+  out := jsonb_set(out, '{meta,parts}', to_jsonb(parts));
+  out := jsonb_set(out, '{meta,more}', '["rep","bags","next","ah","runs"]'::jsonb);
+  return out;
+end $$;
+
+revoke all on function private.claude_brief(uuid, text[]) from public, anon, authenticated;
+revoke all on function private.brief_arr(jsonb) from public, anon, authenticated;

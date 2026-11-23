@@ -49,6 +49,27 @@
     return [...arr(gq.reward).map(([id, n]) => rated(id, 'get', n)), ...arr(gq.choice).map(([id, n]) => rated(id, 'choose', n)), ...arr(gq.rewardAny).map(([id, n]) => rated(id, 'any', n))];
   }
 
+  // A dungeon quest (CLAUDE.md, the dungeon-quest rule): this quest or any step of its chain is a
+  // pack Dungeon quest or has its objective in an instance ('Raid' alone also marks outdoor raid-group
+  // quests, so only with an instance zone). Gives the instance's name, else null. Never drop these.
+  function dungeonOf(id) {
+    const Q = (A.GD && A.GD.quests) || {};
+    let inst = null;
+    try { inst = CC.next && CC.next._dungeonIndex ? CC.next._dungeonIndex() : null; } catch (e) { inst = null; }
+    const isInst = (z) => !!(z && inst && inst[z] && !inst[z].pvp);
+    const seen = new Set(), todo = [id];
+    while (todo.length && seen.size < 40) {
+      const q = todo.shift();
+      if (seen.has(q)) continue;
+      seen.add(q);
+      const g = Q[q];
+      if (!g) continue;
+      if (g.type === 'Dungeon' || isInst(g.cat)) return g.cat || 'a dungeon';
+      arr(g.prev).concat(arr(g.next)).forEach((n) => todo.push(n));
+    }
+    return null;
+  }
+
   function build() {
     const CH = A.CH;
     if (!CH || !CH.snap) return null;
@@ -75,11 +96,12 @@
       grind: (() => {
         const g = CH.grind;
         const t = (x) => (x ? new Date(x * 1000).toISOString() : null);
-        const one = (x) => ({ name: x.name, device: x.device || null, start: t(x.start), last: t(x.last), finish: t(x.finish),
+        const one = (x, live) => Object.assign({ name: x.name, device: x.device || null, start: t(x.start), last: t(x.last), finish: t(x.finish),
           secs: x.secs != null ? x.secs : null, kills: x.kills || 0, deaths: x.deaths || 0, paused: !!x.paused, ended: x.ended || null,
+          zones: Object.keys(x.zones || {}),
           targets: arr(x.targets).map((g) => ({ id: g.id, name: g.name, got: g.got || 0, expected: g.expected != null ? g.expected : null,
-            kills: g.kills || 0, rated: !!g.rated, sample: g.sample || null })) });
-        return { running: g ? one(g) : null, recent: arr(CH.grinds).slice(-5).reverse().map(one) };
+            kills: g.kills || 0, rated: !!g.rated, sample: g.sample || null })) }, A.goldOf(x, { live }));
+        return { running: g ? one(g, true) : null, recent: arr(CH.grinds).slice(-20).reverse().map((x) => one(x)) };
       })(),
       // flight paths you know, by continent; read{} = when that continent's flight map was last open
       // (paths on a continent never read since the addon noted continents are under "unknown")
@@ -100,7 +122,7 @@
           return { name: r.name, kind: r.kind || null, difficulty: r.difficulty || null, device: r.device || null, live: !!r.live, inside: r.live ? !!r.inside : null,
             start: t(r.start), finish: t(r.finish), ended: r.ended || null, secs: Math.round(st.secs), kills: r.kills || 0,
             bosses: arr(r.bosses).map((b) => b.name), bossSource: arr(r.bosses).length ? (r.bossSource || 'encounter events') : null, wipes: r.wipes || 0, deaths: r.deaths || 0, xp: r.xp || 0, quests: r.quests || 0,
-            coin: st.coin, itemsValue: Math.round(st.ah),
+            ...A.goldOf(r, { live: !!r.live }),
             loot: Object.values(r.loot || {}).map((l) => ({ id: l.id, name: l.name || (A.item(l.item) || {}).name || (l.id ? A.anyItemName(l.id) : null), q: l.q != null ? l.q : (A.item(l.item) || {}).q, count: l.count }))
               .filter((l) => (l.q || 0) >= 2),
             group: arr(r.group).map((m) => m.name), fromJournal: !!r.fromJournal,
@@ -120,6 +142,9 @@
         return { character: t(s.taken), bank: t((CH.bank || {}).taken), mail: t((CH.mail || {}).taken), flightPaths: t(taxi.length ? Math.max(...taxi) : null),
           ahScan: t((ah.lastScan || {}).t), ahOwned: t((ah.owned || {}).taken), professions: profs, specs };
       })(),
+      // what this game client allows addons (Core.lua ns.Capabilities): APIs present, values secret or
+      // readable, and the place probes (loot window: which corpse each slot came from; inside an instance: GUIDs)
+      caps: CH.caps || null,
       pack: A.GD ? { built: A.GD.built ? new Date(A.GD.built * 1000).toISOString() : null, from: A.GD.from } : null,
       character: { name: c.name, level: c.level, xp: c.xp, xpMax: c.xpMax, rested: c.rested, class: c.class, race: c.race,
         faction: c.faction, money: c.money, where: c.where, hearth: c.hearth },
@@ -134,7 +159,10 @@
       quests: arr(s.quests).filter((q) => q && q.id).map((q) => {
         const gq = (A.GD && A.GD.quests[q.id]) || {};
         const to = arr(gq.to)[0];
+        const dungeon = dungeonOf(q.id);
         return { id: q.id, title: q.title, level: q.level, complete: !!(q.ready || q.complete), failed: !!q.failed,
+          // keep: a dungeon or raid quest (or a step of one): never on a drop list, whatever its rewards score
+          dungeon, keep: !!dungeon,
           objectives: arr(q.objectives).map((o) => o.text), turnIn: to ? { npc: to[1], zone: to[2], x: to[3], y: to[4] } : null,
           xp: (q.rewards || {}).xp, money: (q.rewards || {}).money,
           // every reward item scored for every spec by the app's one engine (js/advice.js rate): read

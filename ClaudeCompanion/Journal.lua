@@ -897,6 +897,7 @@ local function RunStart(inst)
     r.kind, r.map, r.difficulty, r.size = inst.kind, inst.map, inst.difficulty, inst.size
     r.bosses, r.group, r.device, r.inside, r.outsideSecs = {}, Roster(), ns.Device(), true, 0
     c.run = r
+    ns.Try("caps:instance", ns.ProbeInstance, r.name)
     ns.Log("runStart", { name = r.name, kind = r.kind, difficulty = r.difficulty, group = #r.group })
     return r
 end
@@ -922,6 +923,7 @@ function ns.RunCheck()
     end
 end
 ns.On("PLAYER_ENTERING_WORLD", function() ns.Try("run", ns.RunCheck) end)
+ns.On("LOOT_OPENED", function() ns.Try("caps:loot", ns.ProbeLoot) end)
 ns.On("ZONE_CHANGED_NEW_AREA", function() ns.Try("run", ns.RunCheck) end)
 C_Timer.NewTicker(30, function() ns.Try("run", ns.RunCheck) end)
 

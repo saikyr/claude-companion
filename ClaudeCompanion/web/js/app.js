@@ -694,6 +694,36 @@
     });
     return { secs, hrs, coin, vendor, ah, unpriced, total: coin + ah, perHour: (coin + ah) / hrs };
   }
+  // The one gold-per-hour for Claude (snapshot grinds and runs, the brief): the same numbers as the
+  // Grinds and Dungeons tabs, plus a range and whether the tracking is complete. No agent works out
+  // gold per hour itself; it quotes these fields (docs/FEATURES.md, "Gold per hour").
+  //   gph       coin + loot at your AH median (vendor price when never seen on the AH), per hour
+  //   gph_low   coin + loot at vendor price: what it is worth for sure
+  //   gph_high  coin + loot at the highest median your scans saw in the 7 days before it ended
+  // All before the AH's 5% cut, whether the loot was sold or not. Copper per hour.
+  const WEEK = 7 * 86400;
+  function goldOf(t, opts) {
+    const st = trackerStats(t);
+    const end = t.finish || t.last || t.start || 0;
+    let high = 0;
+    Object.entries(t.loot || {}).forEach(([id, l]) => {
+      const it = item(l.item) || byId(l.id || id) || {};
+      const obs = arr(((((CH && CH.ah) || {}).prices || {})[String(l.id || id)] || {}).obs).filter((o) => o && o.t && o.t <= end + 3600 && o.t >= end - WEEK && (o.med || o.min));
+      const best = obs.reduce((m, o) => Math.max(m, o.med || o.min), 0);
+      const pp = planPrice(l.id || id);
+      high += Math.max(best, pp != null ? pp : it.sell || 0) * l.count;
+    });
+    const per = (v) => Math.round(v / st.hrs);
+    const why = [];
+    if ((opts || {}).live || (!t.finish && !t.ended)) why.push('still running: numbers as of the last save');
+    if (t.ended === 'away') why.push('ended by the addon after time away or a crash: the end time is its last counted event');
+    if (t.paused) why.push('paused');
+    if (st.secs < 600) why.push('under 10 minutes: too short to quote as a rate');
+    if (t.fromJournal) why.push('rebuilt from the journal (before the addon tracked runs): kills from XP, no bosses');
+    return { hours: +(st.secs / 3600).toFixed(2), coin: st.coin, itemsValue: Math.round(st.ah), itemsVendor: Math.round(st.vendor), itemsUnpriced: st.unpriced,
+      gph: per(st.total), gph_low: per(st.coin + st.vendor), gph_high: per(st.coin + Math.max(high, st.ah)),
+      complete: why.length === 0, incomplete: why, basis: 'copper per hour, before the 5% AH cut, sold or not' };
+  }
   function lootStrip(t, n) {
     const list = Object.entries(t.loot || {}).map(([id, l]) => Object.assign({ id }, l, { q: l.q != null ? l.q : (item(l.item) || {}).q || 0 }))
       .sort((a, b) => b.q - a.q || b.count - a.count);
@@ -1243,7 +1273,7 @@
   window.CC = {
     load, loadText, V, reload: () => RAW && load(RAW, { live: STATE.live }),
     api: { get CH() { return CH; }, get RAW() { return RAW; }, get DB() { return DB; }, STATE, GD, esc, arr, money, icon, itemIcon, anyItemIcon, anyItemName, gdItem, gdTip,
-      gdSourceLines, itemGates, recipeLine, planPrice, priceOf, trackerStats, lootStrip, ago, dur, fmtTime, flipsOf, cooldowns, craftCost, specTrees, specLabel, TREE_NAMES, gearIds, item, byId, render, QCOL, deOutcome },
+      gdSourceLines, itemGates, recipeLine, planPrice, priceOf, trackerStats, goldOf, lootStrip, ago, dur, fmtTime, flipsOf, cooldowns, craftCost, specTrees, specLabel, TREE_NAMES, gearIds, item, byId, render, QCOL, deOutcome },
   };
 
   // ------------------------------------------------------------ data sources
