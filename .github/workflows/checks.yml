@@ -66,6 +66,8 @@ jobs:
         run: node test/web/cards-gate.test.js
       - name: The weekly correction audit (tools/audit.py, docs/COACHING.md)
         run: python3 test/audit_test.py
+      - name: The combat-log reader on sample logs (js/combatlog.js)
+        run: node test/web/combatlog.test.js
       - name: Game-data loader syntax
         run: python3 -m py_compile tools/pack-to-rows.py tools/upload-game.py
       - name: History sync in the real app page (Chromium, the real backend SQL, the harness's save)
@@ -93,7 +95,7 @@ jobs:
         run: python3 tools/check-cards.py test/fixtures/cards.json
       - name: No personal data
         run: |
-          ! git ls-files | grep -E 'SavedVariables|snapshot\.json$|settings\.json$|sync(-cache)?\.json$|web/data\.js$'
+          ! git ls-files | grep -E 'SavedVariables|snapshot\.json$|settings\.json$|sync(-cache)?\.json$|combat\.json$|web/data\.js$'
 
   # The PC's server (server.ps1) under Windows PowerShell 5.1, the one Windows ships: the same API test.
   windows-server:

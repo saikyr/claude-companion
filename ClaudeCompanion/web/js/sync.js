@@ -66,7 +66,7 @@
     // a running tracker can carry a lot of loot; keep the record under the backend's size limit
     if (!x) return null;
     if (JSON.stringify(x).length < LIVE_CAP / 3) return x;
-    const y = Object.assign({}, x); delete y.loot; delete y.groupLoot; delete y.killsBy; y.slim = true;
+    const y = Object.assign({}, x); delete y.loot; delete y.groupLoot; delete y.killsBy; delete y.lootBy; y.slim = true;
     return y;
   }
 

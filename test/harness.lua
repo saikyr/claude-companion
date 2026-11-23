@@ -621,6 +621,64 @@ do
   check(c.caps.instance and c.caps.loot, "the place probes survive the next login's capability check")
   if FAILED then error("capability checks failed") end
 end
+-- loot by corpse: which creature each drop came from, each corpse counted once
+do
+  local function check(ok, what) print((ok and "PASS " or "FAIL ") .. what); if not ok then FAILED = true end end
+  local c; for _, v in pairs(ClaudeCompanionDB.chars) do c = v end
+  SlashCmdList.CLAUDECOMPANION("start lootby")
+  local g = c.grind
+  local oldN, oldS, oldL = GetNumLootItems, GetLootSourceInfo, GetLootSlotLink
+  local A, B = "Creature-0-1-2-3-6137-00000A", "Creature-0-1-2-3-6137-00000B"
+  -- area loot: slot 1 is coin from A, slot 2 two Mageweave from A and one from B, slot 3 a secret source
+  GetNumLootItems = function() return 3 end
+  GetLootSlotLink = function(i) if i == 2 then return "|cffffffff|Hitem:4338::|h[Mageweave Cloth]|h|r" end end
+  GetLootSourceInfo = function(i)
+    if i == 1 then return A, 1 elseif i == 2 then return A, 2, B, 1 end
+    return SECRET, 1
+  end
+  Fire("LOOT_OPENED")
+  local b = g.lootBy and g.lootBy["Son of Arkkoroc"]
+  check(b and b.npc == 6137 and b.corpses == 2 and b.items["4338"] == 3, "area loot: two corpses, three Mageweave, one creature")
+  Fire("LOOT_OPENED")   -- the same corpses again (window reopened, or skinned): not counted twice
+  check(b and b.corpses == 2 and b.items["4338"] == 3, "a corpse opened twice counts once")
+  local n = 0; for _ in pairs(g.lootBy) do n = n + 1 end
+  check(n == 1, "a secret corpse GUID records nothing")
+  GetLootSourceInfo = function() return "GameObject-0-1-2-3-1731-00000C", 1 end
+  Fire("LOOT_OPENED")
+  n = 0; for _ in pairs(g.lootBy) do n = n + 1 end
+  check(n == 1, "a mining node or chest is not a creature")
+  GetLootSourceInfo = nil
+  Fire("LOOT_OPENED")
+  check(n == 1, "a client without GetLootSourceInfo records nothing and doesn't break")
+  -- pick pocket: the source is the living target; skinning: a gathering cast just before
+  local T = "Creature-0-1-2-3-6137-00000D"
+  local oldG, oldDead, oldName = UnitGUID, UnitIsDead, C_Spell.GetSpellName
+  UnitGUID = function(u) if u == "target" then return T end return oldG(u) end
+  UnitIsDead = function() return false end
+  GetLootSourceInfo = function() return T, 1 end
+  Fire("LOOT_OPENED")
+  check(b.corpses == 2 and not g.lootBy["npc 6137"], "a pick-pocketed living mob is not a corpse")
+  UnitIsDead = oldDead
+  C_Spell.GetSpellName = function() return "Skinning" end
+  Fire("UNIT_SPELLCAST_SUCCEEDED", "player", "s", 8617)
+  C_Spell.GetSpellName = oldName
+  GetLootSourceInfo = function() return "Creature-0-1-2-3-6137-00000E", 1 end
+  Fire("LOOT_OPENED")
+  check(b.corpses == 2, "skinning a corpse is not a drop")
+  Advance(5)
+  -- one corpse, no quantity from the source: the slot's stack size
+  GetLootSlotInfo = function() return 1, "Mageweave Cloth", 4 end
+  GetLootSourceInfo = function() return "Creature-0-1-2-3-6137-00000F" end
+  GetNumLootItems = function() return 2 end
+  Fire("LOOT_OPENED")
+  check(b.corpses == 3 and b.items["4338"] == 7, "a stack with no per-corpse quantity counts its size (" .. tostring(b.items["4338"]) .. ")")
+  UnitGUID = oldG; GetLootSlotInfo = nil
+  GetNumLootItems, GetLootSourceInfo, GetLootSlotLink = oldN, oldS, oldL
+  SlashCmdList.CLAUDECOMPANION("stop")
+  local last = c.grinds[#c.grinds]
+  check(last and last.name == "lootby" and last.lootBy and last.lootBy["Son of Arkkoroc"].corpses == 3, "a finished grind keeps lootBy")
+  if FAILED then error("loot-by-corpse checks failed") end
+end
 -- bosses from the ForeverDungeonJournal addon's run log (same shape as Gabriel's save)
 do
   local function check(ok, what) print((ok and "PASS " or "FAIL ") .. what); if not ok then FAILED = true end end

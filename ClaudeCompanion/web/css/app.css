@@ -432,6 +432,8 @@ img.kic { width: var(--ic-sm); height: var(--ic-sm); border-radius: var(--r-sm);
 .ccard .cmain { padding: 0 var(--sp4) var(--sp4) calc(var(--sp4) + var(--ic-sm) + var(--sp3)); display: flex; flex-direction: column; gap: var(--sp3); }
 .ccard .cmain p { margin: 0; }
 .ccard .sum { color: var(--t2); }
+.ccard .crisk { margin: 0; color: var(--t2); font-size: var(--f-sm); border-left: 2px solid var(--warn); padding-left: var(--sp2); }
+.ccard .crisk b { color: var(--warn); font-weight: 600; margin-right: var(--sp1); }
 .ccard .cbody { display: flex; flex-direction: column; gap: var(--sp2); color: var(--t2); font-size: var(--f-sm); }
 .ccard.closed summary { list-style: none; cursor: pointer; }
 .ccard.closed summary::-webkit-details-marker { display: none; }

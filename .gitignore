@@ -5,6 +5,7 @@ SavedVariables/
 ClaudeCompanion/companion-data/snapshot.json
 ClaudeCompanion/companion-data/snapshot.json.tmp
 ClaudeCompanion/companion-data/settings.json*
+ClaudeCompanion/companion-data/combat.json*
 ClaudeCompanion/companion-data/from-claude/
 ClaudeCompanion/companion-data/update.json
 ClaudeCompanion/companion-data/installed.json

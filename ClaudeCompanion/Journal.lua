@@ -493,11 +493,15 @@ end)
 ---------------------------------------------------------------- kills
 -- Remember names/levels of units we see, since a kill only gives a GUID.
 local seen = {}
+local npcNames = {}   -- [npc id] = the name last seen for it, for a corpse that was never targeted (area loot)
 local function Remember(unit)
     local guid = Clean(UnitGUID(unit))
     if not guid or UnitIsPlayer(unit) then return end
     seen[guid] = { name = Clean(UnitName(unit)), level = Clean(UnitLevel(unit)),
         class = Clean(Call(UnitClassification, unit)), type = Clean(Call(UnitCreatureType, unit)) }
+    local kind, _, _, _, _, id = strsplit("-", guid)
+    -- creatures only: a pet's GUID carries its creature id too, with the name its owner gave it
+    if (kind == "Creature" or kind == "Vehicle") and tonumber(id) and seen[guid].name then npcNames[tonumber(id)] = seen[guid].name end
 end
 ns.On("PLAYER_TARGET_CHANGED", function() Remember("target") end)
 ns.On("UPDATE_MOUSEOVER_UNIT", function() Remember("mouseover") end)
@@ -543,7 +547,7 @@ local function Kill(target, mine)
     lastKill[target] = true
     local info = seen[target] or {}
     local id = NpcID(target)
-    Count(info.name or ("npc " .. tostring(id or "?")), mine,
+    Count(info.name or (id and npcNames[id]) or ("npc " .. tostring(id or "?")), mine,
         { npc = id, level = info.level, class = info.class, by = mine and "me" or "group" })
 end
 -- "Scarlet Monk dies, you gain 120 experience." Counted only when no kill event came for that name
@@ -586,6 +590,70 @@ ns.On("CHAT_MSG_COMBAT_HOSTILE_DEATH", function(text)
         Kill(tgt, true)
     end
 end)
+
+---------------------------------------------------------------- loot by corpse
+-- With a loot window open, GetLootSourceInfo(slot) names the corpse (GUID) each slot came from, and
+-- how many. Each corpse counts once (opened again, skinned later, or several at once with area loot),
+-- so a tracker learns what each creature dropped and how many of its corpses were opened:
+--   lootBy[name] = { npc = id, corpses = n, items = { ["<itemID>"] = count } }
+-- A drop counts when the window shows it, taken or not. A corpse with nothing on it opens no window,
+-- so the app gives a creature's own rate between drops per kill (killsBy) and drops per opened corpse.
+-- Nothing is recorded when the GUID is secret or missing (caps.loot says which).
+-- Not drops: a pick-pocketed living mob, and skinning, herbs or ore from a corpse (a gathering cast just
+-- before the window). Those windows are left out.
+local opened, openedN = {}, 0
+local GATHER = { ["Pick Pocket"] = true, ["Skinning"] = true, ["Herb Gathering"] = true, ["Mining"] = true }
+local gatherAt = -100
+ns.On("UNIT_SPELLCAST_SUCCEEDED", function(unit, _, spellID)
+    if Clean(unit) ~= "player" then return end
+    spellID = Clean(spellID)
+    local name = spellID and Clean(Call(C_Spell and C_Spell.GetSpellName or GetSpellInfo, spellID))
+    if name and GATHER[name] then gatherAt = GetTime() end
+end)
+local function LootSources()
+    if type(GetLootSourceInfo) ~= "function" or not ns.char then return end
+    if GetTime() - gatherAt < 3 then return end
+    local alive = Clean(UnitGUID("target"))
+    if alive and Clean(Call(UnitIsDead, "target")) then alive = nil end
+    local n = Clean(Call(GetNumLootItems)) or 0
+    local fresh, order = {}, {}   -- corpses not counted before: [guid] = { name, npc, items }
+    for i = 1, n do
+        local link = Clean(Call(GetLootSlotLink, i))
+        local itemID = type(link) == "string" and tonumber(link:match("item:(%d+)")) or nil
+        local src = { pcall(GetLootSourceInfo, i) }
+        local last = table.maxn(src)
+        -- one corpse and no quantity given: the slot's own stack size
+        local slotQty = last <= 3 and Clean(select(3, Call(GetLootSlotInfo, i))) or nil
+        if src[1] then
+            for j = 2, last, 2 do
+                local guid = Clean(src[j])
+                local npc = guid ~= alive and NpcID(guid)
+                if npc and not opened[guid] then
+                    local f = fresh[guid]
+                    if not f then
+                        local info = seen[guid] or {}
+                        f = { name = info.name or npcNames[npc] or ("npc " .. npc), npc = npc, items = {} }
+                        fresh[guid] = f; order[#order + 1] = guid
+                    end
+                    if itemID then f.items[tostring(itemID)] = (f.items[tostring(itemID)] or 0) + (tonumber(Clean(src[j + 1])) or tonumber(slotQty) or 1) end
+                end
+            end
+        end
+    end
+    for _, guid in ipairs(order) do
+        local f = fresh[guid]
+        opened[guid] = true; openedN = openedN + 1
+        Each(function(s)
+            s.lootBy = s.lootBy or {}
+            local b = s.lootBy[f.name] or { npc = f.npc, corpses = 0, items = {} }
+            b.corpses = b.corpses + 1
+            for id, q in pairs(f.items) do b.items[id] = (b.items[id] or 0) + q end
+            s.lootBy[f.name] = b
+        end)
+    end
+    if openedN > 5000 then opened, openedN = {}, 0 end   -- a long session: forget old corpses (they despawned long ago)
+end
+ns.On("LOOT_OPENED", function() ns.Try("lootBy", LootSources) end)
 
 ---------------------------------------------------------------- xp and level
 local lastXP, lastMax
