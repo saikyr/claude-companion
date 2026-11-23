@@ -134,6 +134,18 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   const ms = await page.evaluate(() => { const t = performance.now(); window.CC.api.STATE.tab = 'gear'; window.CC.api.render(); window.CC.gear.summary(); return performance.now() - t; });
   console.log(`     (Gear page + snapshot: ${Math.round(ms)} ms)`);
   check(ms < 3000, 'the Gear page and its snapshot take under 3 s');
+  // ---- spell ranks: Talents & Bars and Claude's snapshot (js/spells.js)
+  await page.evaluate(() => { window.CC.api.STATE.tab = 'talents'; window.CC.api.STATE.spec = 1; window.CC.api.render(); });
+  const tb = await text('main');
+  check(/Flash Heal: rank 6 on the bar, you know rank 7/.test(tb), 'Talents & Bars: a bar spell below your best rank is named');
+  check(/To train now/.test(tb) && /Greater Heal 5/.test(tb) && /Next at level 60: Holy Fire 8/.test(tb), "Talents & Bars: the trainer's ranks to train now and next");
+  check((await page.$$('.abars .ic.oldrank')).length === 1, 'Talents & Bars: the outdated bar slot is marked');
+  const sp = await page.evaluate(() => window.CC.snapshot().spells);
+  const s1 = sp && sp.specs.find((x) => x.spec === 1);
+  check(s1 && s1.outdated.length === 1 && s1.outdated[0].rank === 6 && s1.outdated[0].best === 7 && s1.bars.find((b) => b.slot === 2).rank === 9,
+    'snapshot: spells.specs[].outdated and each bar spell with its rank');
+  check(sp && sp.train.length === 1 && sp.train[0].name === 'Greater Heal' && sp.later[0].level === 60 && sp.trainer.npc === 'High Priestess Laurena'
+    && sp.known.some((k) => k.name === 'Flash Heal' && k.rank === 7), 'snapshot: spells.train, later, trainer and known ranks');
   // ---- one source model for every item: a crafted item says its recipe, where that comes from, and what it needs
   const craft = await page.evaluate(() => window.CC.api.gdSourceLines(17015).map((l) => l.l));   // Dark Iron Reaver
   check(craft.some((l) => /^Crafted \(Blacksmithing\) · Recipe: Plans: Dark Iron Reaver \(skill 300\), sold by Lokhtos Darkbargainer, Blackrock Depths$/.test(l)),

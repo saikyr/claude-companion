@@ -65,6 +65,7 @@
     out.snap = pick('snap', (s) => s.taken);
     out.bank = pick('bank', (b) => b.taken);
     out.mail = pick('mail', (m) => m.taken);
+    out.trainer = pick('trainer', (x) => x.taken);
     // a Lua table keyed 1, 2, ... arrives as a JS array (index 0, 1, ...): keep the game's keys, so spec 1
     // from one computer and spec 1 from another are the same entry
     const entries = (x) => (Array.isArray(x) ? x.map((v, i) => [String(i + 1), v]) : Object.entries(x || {}));

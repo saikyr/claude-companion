@@ -58,6 +58,7 @@ name something you can't reach, use this instead; this guide wins where they dif
 | Is X an upgrade? Best in slot? Which quest reward? | the app's scores **for every spec**: `gear[]` (one entry per spec: `upgrades`, `preBis` with `alternatives`), `bagAdvice[]`, `bestOwned[]`, `quests[].rewards[].specs[]`, `quests[].next` | score items by hand, or for one spec only |
 | Which quests to keep | `quests[].keep` and `keepWhy` | suggest dropping a quest marked `keep` |
 | What to do next | `nextSteps[]` (the app's Now page, best first) | |
+| Are my action bars at the best rank? What can I train? | `spells` (`specs[].outdated`, `bars[]`, `train[]`, `later[]`, `known[]`; the trainer's list is as new as `spells.trainer.taken`) | guess ranks from memory or Classic lists |
 | Gold per hour, grinds, runs | `grind.recent[]` (last 20), `grind.running`, `runs[]` (last 10) | your own arithmetic |
 | Sales, buys, profit | `ah.sold[]`, `ah.bought[]` (last 25 each), `ah.flips` | calling a sale profit |
 | Game facts: drops, quests, vendors | named Forever sources (foreverchanges.pro, ForeverDB, endgametools, QuestieDB Forever), each cited; a Classic number is labelled Classic; a drop rate needs its sample size, or it is "unknown" | Wowhead; a rate with no sample |

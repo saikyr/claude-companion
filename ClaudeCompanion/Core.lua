@@ -13,6 +13,7 @@
 --     snap = { taken = <epoch>, character = {...}, stats = {...}, equipped = {...}, ... },
 --     bank = { taken, bags }, professions = { [name] = {...} }, taxi = {...}, mail = {...},
 --     specs = { [1] = { taken, talents, actionBars }, [2] = {...} },
+--     trainer = { taken, npc, class, level, services = { {name, rank, status, level, cost} } },  -- class trainer, read while open
 --     history = { {t, level, xp, money, ...}, ... },   -- one line per sync, for graphs
 --     journal = { {t, e = "loot"|"kill"|..., ...}, ... }, -- event timeline
 --     session = <current>, sessions = { <finished>, ... },

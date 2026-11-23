@@ -73,8 +73,15 @@ function saveLua(now, extra) {
       skills: [{ name: 'Cloth', rank: 1, skillLineCategoryID: 8 }, { name: 'Daggers', rank: 295, skillLineCategoryID: 6 }, { name: 'Maces', rank: 280, skillLineCategoryID: 6 },
         { name: 'Staves', rank: 290, skillLineCategoryID: 6 }, { name: 'Wands', rank: 295, skillLineCategoryID: 6 }, { name: 'Tailoring', rank: 268 }, { name: 'Enchanting', rank: 276 }],
       reputation: [{ name: 'Stormwind', reaction: 7 }, { name: 'Timbermaw Hold', reaction: 3 }, { name: 'Argent Dawn', reaction: 4 }],
+      // spell ranks (js/spells.js): Flash Heal rank 6 sits on spec 1's bar while rank 7 is known
+      spellbook: [{ name: 'Holy', spells: [{ name: 'Flash Heal', rank: 'Rank 6', id: 10916, icon: 135907 }, { name: 'Flash Heal', rank: 'Rank 7', id: 10917, icon: 135907 },
+        { name: 'Renew', rank: 'Rank 9', id: 10929, icon: 135953 }] }],
     },
-    specs: { 1: spec(17, 33, 0), 2: spec(17, 0, 33) },
+    specs: { 1: Object.assign(spec(17, 33, 0), { barsTaken: now - 600, actionBars: [{ slot: 1, kind: 'spell', id: 10916, name: 'Flash Heal', icon: 135907, key: '1' },
+      { slot: 2, kind: 'spell', id: 10929, name: 'Renew', icon: 135953, key: '2' }] }), 2: spec(17, 0, 33) },
+    trainer: { taken: now - 3600, npc: 'High Priestess Laurena', class: 'PRIEST', level: 59, services: [
+      { name: 'Greater Heal', rank: 'Rank 5', status: 'available', level: 58, cost: 38000 },
+      { name: 'Holy Fire', rank: 'Rank 8', status: 'unavailable', level: 60, cost: 40000 }] },
     bank: { taken: now - 86400, bags: [{ id: -1, items: [{ slot: 1, item: item(16695), count: 1 }] }] },
     ah: { lastScan: { t: scanT, auctions: 31000, items: 7300 }, prices },
   };

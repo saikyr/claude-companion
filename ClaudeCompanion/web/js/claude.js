@@ -177,7 +177,7 @@
         Object.entries(CH.specs || {}).forEach(([k, sp]) => { specs[k] = t(sp && (sp.talentsTaken || sp.barsTaken)); });
         const profs = {};
         Object.values(CH.professions || {}).forEach((p) => { if (p && p.name) profs[p.name] = t(p.taken); });
-        return { character: t(s.taken), bank: t((CH.bank || {}).taken), mail: t((CH.mail || {}).taken), flightPaths: t(taxi.length ? Math.max(...taxi) : null),
+        return { trainer: t((CH.trainer || {}).taken), character: t(s.taken), bank: t((CH.bank || {}).taken), mail: t((CH.mail || {}).taken), flightPaths: t(taxi.length ? Math.max(...taxi) : null),
           ahScan: t((ah.lastScan || {}).t), ahOwned: t((ah.owned || {}).taken), professions: profs, specs };
       })(),
       // what this game client allows addons (Core.lua ns.Capabilities): APIs present, values secret or
@@ -214,6 +214,29 @@
           // the next quest in the chain and what it gives, scored the same way
           next: arr(gq.next).slice(0, 1).map((n) => { const nq = (A.GD && A.GD.quests[n]) || {}; return { id: n, title: nq.t || null, rewards: questRewards(null, nq) }; })[0] || null };
       }),
+      // spell ranks (js/spells.js, the one check): each spec's bars with the rank of every spell, the ones
+      // below the best rank you know (outdated), and from the class trainer's list (read while its window was
+      // open) the ranks to train now and later. known = the best rank of each ranked spell in your spellbook
+      spells: (() => {
+        if (!window.CCSpells) return null;
+        const t = (x) => (x ? new Date(x * 1000).toISOString() : null);
+        const R = window.CCSpells.check(CH);
+        const rk = window.CCSpells.rankNo;
+        const byId = {};
+        arr(s.spellbook).forEach((tab) => arr(tab && tab.spells).forEach((x) => { if (x && x.id != null) byId[x.id] = x; }));
+        const known = {};
+        Object.values(byId).forEach((x) => { const r = rk(x.rank); if (r != null && !x.passive && (!known[x.name] || r > known[x.name])) known[x.name] = r; });
+        return {
+          book: { taken: t(R.book.taken), spells: R.book.spells },
+          trainer: R.trainer ? { taken: t(R.trainer.taken), npc: R.trainer.npc, level: R.trainer.level } : null,
+          specs: R.specs.map((x) => ({ spec: x.spec, active: x.active, taken: t(x.taken), spells: x.spells, outdated: x.outdated, unranked: x.unranked,
+            bars: arr((CH.specs || {})[x.spec] && CH.specs[x.spec].actionBars).filter((a) => a && a.kind)
+              .map((a) => ({ slot: a.slot, key: a.key || null, kind: a.kind, name: a.name || (byId[a.id] || {}).name || null,
+                rank: a.kind === 'spell' && byId[a.id] ? rk(byId[a.id].rank) : null })) })),
+          train: R.train, trainCost: R.trainCost, later: R.later.slice(0, 20), laterTotal: R.later.length,
+          known: Object.entries(known).sort((a, b) => a[0].localeCompare(b[0])).map(([name, rank]) => ({ name, rank })),
+        };
+      })(),
       cooldowns: A.cooldowns ? A.cooldowns().map((c) => ({ name: c.name, profession: c.prof || null, readyAt: c.ends })) : [],
       professions: arr(s.skills).filter((k, i, all) => k && k.maxRank > 1 && k.skillLineCategoryID === 11 && all.findIndex((y) => y && y.name === k.name) === i)
         .map((k) => ({ name: k.name, rank: k.rank, max: k.maxRank })),
