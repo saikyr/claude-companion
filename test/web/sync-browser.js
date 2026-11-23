@@ -69,12 +69,14 @@ const check = (ok, what) => { console.log((ok ? 'ok   ' : 'FAIL ') + what); if (
   check(online && online === (snap.character || {}).name, `the snapshot is online for Claude too (${online})`);
   check(Array.isArray(snap.quests) && snap.quests.every((q) => Array.isArray(q.rewards) && 'next' in q), 'every quest in the snapshot carries its scored rewards and the chain\'s next quest');
   // Claude writes a card online; the app shows it, and what the player does goes back online
-  const cards = JSON.stringify({ schema: 1, cards: [{ id: 'browser-card', kind: 'quest', title: 'Card from Claude online', step: 'quest:1' }] });
+  const cards = JSON.stringify({ schema: 1, cards: [{ id: 'browser-card', kind: 'quest', title: 'Card from Claude online', step: 'quest:1' },
+    { id: 'browser-farm', kind: 'farm', title: 'Farm card online', risk: 'Elite patrol at the camp: pull one at a time.' }] });
   B.query(`select private.claude_put_setting('${st.account}', 'cc.claude.cards', '${cards.replace(/'/g, "''")}')`);
   // (a sync already running when this asks for one doesn't fetch again: ask until it has come)
   await page.waitForFunction(() => { window.CC.syncNow(); return window.CC.cards.open().some((c) => c.id === 'browser-card'); }, null, { timeout: 20000, polling: 1000 });
   await page.click('button[data-tab="claude"]');
   check(/Card from Claude online/.test(await page.textContent('main')), 'a card Claude wrote online shows in From Claude');
+  check(/Risk\s*Elite patrol at the camp/.test(await page.textContent('.ccard.k-farm .crisk').catch(() => '')), 'a farm card shows its risk line');
   await page.click('[data-card="browser-card"][data-cact="done"]');
   for (let i = 0; i < 20 && !/browser-card/.test(B.query(`select coalesce(data->>'v', '') from public.records where id = 'setting|cc.claude.cardsState'`) || ''); i++) {
     await page.evaluate(() => window.CC.syncNow()); await page.waitForTimeout(1000);

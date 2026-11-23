@@ -3,6 +3,13 @@
 Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 
 ## 1.5.0 (in progress: every merge to main updates itself)
+- **Which creature each drop came from.** Where the game names the corpse of each loot slot, grinds, runs and
+  sessions count every creature's corpses and what they held, so the app can give your own drop rate per
+  creature with its sample (between drops per kill and drops per opened corpse). Shows after a /reload.
+- **The combat log, read by the app.** With /combatlog on in game, the app reads the game's own log files
+  and keeps, per creature, how often your and your group's spells were resisted by school, and kills. Only
+  those counts leave the computer.
+- **Risk on cards.** A farm card's risk (elites, patrols, deaths) shows as its own line under the summary.
 - **Cards are checked by the database.** Every number on a From Claude card names where it comes from,
   and the database looks it up before the card reaches you: a wrong gold per hour, a drop rate without its
   sample, a Classic rate not called Classic, sales called profit, an unmeasured duo claim, a farm card with no

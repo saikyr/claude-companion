@@ -146,6 +146,8 @@
     const head = `<header><img class="kic" src="${ICON_URL}${ki}.jpg" alt=""><div class="grow"><div class="ttl">${esc(c.title)}</div><div class="sub">${meta}</div></div><div class="acts">${acts}</div></header>`;
     let body = '';
     if (c.summary) body += `<p class="sum">${esc(c.summary)}</p>`;
+    // what can go wrong (required on a farm card by the card gate): shown before the numbers, so it is read
+    if (c.risk) body += `<p class="crisk"><b>Risk</b> ${esc(c.risk)}</p>`;
     if (arr(c.facts).length) body += `<dl class="facts">${arr(c.facts).map((f) => `<div><dt>${esc(f.label)}</dt><dd>${esc(f.value)}${f.note ? `<span class="sub">${esc(f.note)}</span>` : ''}</dd></div>`).join('')}</dl>`;
     if (arr(c.items).length) body += `<div class="list citems">${arr(c.items).map(itemRow).join('')}</div>`;
     body += trackLine(c);

@@ -40,6 +40,30 @@ const post = (u, body, h) => fetch(base + u, { method: 'POST', headers: Object.a
     (r) => { r.resume(); ok(r.statusCode); }).on('error', () => ok('error')));
   check(foreign === 400 || foreign === 'error', `a request for another host name is refused (${foreign})`);
   check(JSON.parse(fs.readFileSync(path.join(dataDir, 'sync.json'), 'utf8')).key === k1.key, 'so the key stays');
+  // the game's combat log (js/combatlog.js): listed newest first, read from a byte, only from Logs/
+  const logs = path.join(dataDir, '..', '..', '..', '..', 'Logs');
+  fs.mkdirSync(logs, { recursive: true });
+  const older = path.join(logs, 'WoWCombatLog-112126_101010.txt'), newer = path.join(logs, 'WoWCombatLog-112226_231212.txt');
+  fs.writeFileSync(older, 'old\n'); fs.utimesSync(older, new Date(Date.now() - 86400000), new Date(Date.now() - 86400000));
+  const text = '11/22/2026 23:12:12.0000  COMBAT_LOG_VERSION,22,ADVANCED_LOG_ENABLED,0,BUILD_VERSION,1.15.8,PROJECT_ID,2\n' + 'x'.repeat(5 * 1024 * 1024) + '\nend\n';
+  fs.writeFileSync(newer, text);
+  fs.writeFileSync(path.join(logs, 'secret.txt'), 'not a log');
+  const list = await (await get('api/combatlog')).json();
+  check(list.files && list.files.length === 2 && list.files[0].name === path.basename(newer) && list.files[0].size === Buffer.byteLength(text) && list.files[0].mtime > 0,
+    'combatlog lists the game\'s logs, newest first, with sizes (other files left out)');
+  const head = Buffer.from(await (await get('api/combatlog?file=' + encodeURIComponent(path.basename(newer)) + '&from=0')).arrayBuffer());
+  check(head.length === 4 * 1024 * 1024 && head.toString('utf8', 0, 80).includes('COMBAT_LOG_VERSION'), `combatlog reads 4 MB at a time from the start (${head.length})`);
+  const tail = Buffer.from(await (await get('api/combatlog?file=' + encodeURIComponent(path.basename(newer)) + '&from=' + (Buffer.byteLength(text) - 4))).arrayBuffer());
+  check(tail.toString() === 'end\n', 'and from any byte to the end');
+  const past = await get('api/combatlog?file=' + encodeURIComponent(path.basename(newer)) + '&from=' + (Buffer.byteLength(text) + 10));
+  check(past.ok && (await past.arrayBuffer()).byteLength === 0, 'past the end: nothing');
+  for (const bad of ['secret.txt', '..%2F..%2FWTF%2Fx.txt', 'WoWCombatLog%2F..%2F..%2Fx.txt']) {
+    const r = await get('api/combatlog?file=' + bad + '&from=0');
+    check(r.status === 404, `combatlog refuses ${decodeURIComponent(bad)} (${r.status})`);
+  }
+  check((await get('api/combatlog?file=' + encodeURIComponent(path.basename(newer)) + '&from=abc')).status === 400, 'combatlog refuses a bad offset');
+  const combat = JSON.stringify({ v: 1, files: { a: 10 }, npcs: { 'Son of Arkkoroc': { kills: 3 } } });
+  check((await post('api/combat', combat)).ok && (await (await get('api/combat')).text()) === combat, 'the page saves its combat-log counts and reads them back');
   const up = await (await get('api/update')).json();
   check(up && 'installed' in up && 'available' in up, 'update status answers');
   console.log(failed ? `\n${failed} FAILED` : '\nall passed');

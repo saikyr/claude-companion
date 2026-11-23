@@ -7,9 +7,10 @@
 #                            /api/settings  POST /api/settings
 #                            /api/sync  /api/sync-cache  (+ POST): js/sync.js's device key and its copy of the
 #                            other computers' history, in companion-data/ (sync.json, sync-cache.json)
+#                            /api/combatlog (the game's combat log, read only)  /api/combat (+ POST): js/combatlog.js's counts
 # It serves the app and reads the game's saved file (ClaudeCompanion.lua) directly.
 # The server itself only answers this computer. The page syncs history with the backend (js/sync.js).
-import glob, json, os, re, shutil, subprocess, sys, tempfile, threading, time, urllib.error, urllib.request, webbrowser
+import glob, json, os, re, shutil, subprocess, sys, tempfile, threading, time, urllib.error, urllib.parse, urllib.request, webbrowser
 from datetime import datetime, timezone
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 
@@ -26,6 +27,8 @@ URL = f'http://localhost:{PORT}/'
 TYPES = {'.html': 'text/html; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
          '.json': 'application/json; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.ico': 'image/x-icon'}
 
+COMBATLOG_NAME = re.compile(r'^WoWCombatLog[A-Za-z0-9_.-]*\.txt$')
+COMBATLOG_CHUNK = 4 * 1024 * 1024
 _save = {'path': None, 'found': 0.0}
 _lock = threading.Lock()
 
@@ -111,10 +114,12 @@ class Handler(BaseHTTPRequestHandler):
             with open(save, 'rb') as f: return self.send(200, f.read(), 'application/octet-stream')
         if path == '/api/update':
             return self.send(200, json.dumps(update_status(force='force=1' in self.path)), TYPES['.json'])
-        if path in ('/api/cards', '/api/cards-state', '/api/settings', '/api/sync', '/api/sync-cache'):
+        if path == '/api/combatlog':
+            return self.combatlog()
+        if path in ('/api/cards', '/api/cards-state', '/api/settings', '/api/sync', '/api/sync-cache', '/api/combat'):
             f = {'/api/cards': os.path.join(CARDS_DIR, 'cards.json'), '/api/cards-state': os.path.join(CARDS_DIR, 'state.json'),
                  '/api/settings': os.path.join(DATA_DIR, 'settings.json'), '/api/sync': os.path.join(DATA_DIR, 'sync.json'),
-                 '/api/sync-cache': os.path.join(DATA_DIR, 'sync-cache.json')}[path]
+                 '/api/sync-cache': os.path.join(DATA_DIR, 'sync-cache.json'), '/api/combat': os.path.join(DATA_DIR, 'combat.json')}[path]
             if path == '/api/sync': ensure_sync_key(f)
             if not os.path.isfile(f): return self.send(204, b'')   # none yet
             with open(f, 'rb') as fh: return self.send(200, fh.read(), TYPES['.json'])
@@ -126,6 +131,27 @@ class Handler(BaseHTTPRequestHandler):
             with open(full, 'rb') as f:
                 return self.send(200, f.read(), TYPES.get(os.path.splitext(full)[1].lower(), 'text/plain; charset=utf-8'))
         self.send(404, 'not found')
+
+    # The game's combat log (_forever_/Logs/WoWCombatLog*.txt, written only while /combatlog is on), read
+    # by js/combatlog.js: no ?file= lists the logs, newest first; ?file=<name>&from=<byte> gives up to
+    # 4 MB from there. Only names the game gives its logs, only that folder; the page keeps per-creature
+    # counts from it and nothing else (no player names, no lines).
+    def combatlog(self):
+        q = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+        logs = os.path.join(FOREVER, 'Logs')
+        name = (q.get('file') or [None])[0]
+        if name is None:
+            hits = [h for h in glob.glob(os.path.join(logs, 'WoWCombatLog*.txt')) if COMBATLOG_NAME.match(os.path.basename(h))]
+            hits.sort(key=os.path.getmtime, reverse=True)
+            out = [{'name': os.path.basename(h), 'size': os.path.getsize(h), 'mtime': int(os.path.getmtime(h))} for h in hits[:20]]
+            return self.send(200, json.dumps({'files': out}), TYPES['.json'])
+        try: start = max(0, int((q.get('from') or ['0'])[0]))
+        except ValueError: return self.send(400, 'bad from')
+        full = os.path.join(logs, name)
+        if not COMBATLOG_NAME.match(name) or not os.path.isfile(full): return self.send(404, 'no such log')
+        with open(full, 'rb') as f:
+            f.seek(start)
+            return self.send(200, f.read(COMBATLOG_CHUNK), 'application/octet-stream')
 
     def do_POST(self):
         if self.foreign_host(): return
@@ -147,7 +173,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         target = {'/api/snapshot': (DATA_DIR, 'snapshot.json'), '/api/cards-state': (CARDS_DIR, 'state.json'),
                   '/api/settings': (DATA_DIR, 'settings.json'), '/api/sync': (DATA_DIR, 'sync.json'),
-                  '/api/sync-cache': (DATA_DIR, 'sync-cache.json')}.get(self.path.split('?')[0])
+                  '/api/sync-cache': (DATA_DIR, 'sync-cache.json'), '/api/combat': (DATA_DIR, 'combat.json')}.get(self.path.split('?')[0])
         if not target or self.headers.get('X-CC') != '1' or n <= 0 or n > 20 * 1024 * 1024:
             return self.send(400, 'bad request')
         body = self.rfile.read(n)
