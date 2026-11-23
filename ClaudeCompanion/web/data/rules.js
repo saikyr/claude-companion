@@ -15,6 +15,8 @@ window.GAMERULES = {
   instances: {
     raids: ['Molten Core', "Onyxia's Lair", 'Blackwing Lair', "Zul'Gurub", "Ruins of Ahn'Qiraj", "Temple of Ahn'Qiraj", 'Naxxramas', 'Barrow Deeps', 'Hyjal Summit'],
     battlegrounds: ['Alterac Valley', 'Warsong Gulch', 'Arathi Basin'],
+    // QuestieDB quest sorts that are raid content though no raid zone is named (Atiesh, Thunderfury)
+    raidQuestSorts: ['Legendary'],
   },
   // Attunements and keys: what opens an instance or a part of one, and the quests or items that give it.
   // Quest and item ids are the game-data pack's (QuestieDB Forever / ForeverDB); the app checks them against your

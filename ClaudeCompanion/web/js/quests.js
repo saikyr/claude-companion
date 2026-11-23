@@ -111,5 +111,36 @@
     if (!qs.length || !state().known) return false;
     return qs.every((q) => isDone(q) || !forYou(q));
   }
-  CC.quests = { pack, isDone, inLog, forYou, repGap, chain, status, rewardQuests, rewardGone, known: () => state().known };
+  // Raid content: the quest itself is a raid quest (pack type Raid, set in a raid, a starting item that drops
+  // in one, a raid quest sort), or an earlier step of its chain is set in a raid, done or not (Fang of
+  // Korialstrasz needs C'Thun; Atiesh, Naxxramas). An earlier step's type Raid alone doesn't count: that
+  // also marks group quests such as The Battle of Darrowshire and Upper Blackrock Spire, whose follow-ups
+  // are pre-raid gear. Instance names: data/rules.js.
+  const INST = (window.GAMERULES || {}).instances || {};
+  const RAID_ZONES = new Set(arr(INST.raids)), RAID_SORTS = new Set(arr(INST.raidQuestSorts));
+  const raidZone = (z) => !!z && RAID_ZONES.has(z);
+  const inRaid = (q) => raidZone(q.cat) || RAID_SORTS.has(q.cat) || arr(q.starter_item).some((it) => arr(((A.GD && A.GD.src) || {})[it]).some((r) => raidZone(r[7])));
+  let RAID = new Map(), RAID_GD = null;
+  function raid(id) {
+    id = Number(id);
+    if (RAID_GD !== A.GD) { RAID = new Map(); RAID_GD = A.GD; }
+    if (RAID.has(id)) return RAID.get(id);
+    const q = pack(id);
+    let yes = !!q && (q.type === 'Raid' || inRaid(q));
+    if (q && !yes) {
+      const seen = new Set([id]), todo = arr(q.prev).slice();
+      while (todo.length && !yes) {
+        const p = Number(todo.shift());
+        if (seen.has(p)) continue;
+        seen.add(p);
+        const pq = pack(p);
+        if (!pq) continue;
+        if (inRaid(pq)) yes = true;
+        else todo.push(...arr(pq.prev));
+      }
+    }
+    RAID.set(id, yes);
+    return yes;
+  }
+  CC.quests = { pack, isDone, inLog, forYou, repGap, chain, status, rewardQuests, rewardGone, raid, known: () => state().known };
 })();

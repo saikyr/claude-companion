@@ -91,5 +91,24 @@ test('Gear: a class quest reward for another class is not a source', () => {
   assert.ok(!c.byId['22004'], 'another class only');
 });
 
+test('raid content: the quest, or an earlier step set in a raid, done or not', () => {
+  assert.ok(Q.raid(9257), 'Atiesh (Legendary sort, its earlier step a raid quest)');
+  assert.ok(Q.raid(8745), "Treasure of the Timeless One: its chain runs through Molten Core and Blackwing Lair");
+  assert.ok(Q.raid(8790), 'Imperial Qiraji Regalia: set in the Temple of Ahn\'Qiraj');
+  assert.ok(!Q.raid(5942), 'Hidden Treasures, after The Battle of Darrowshire (a raid-group quest outdoors): pre-raid');
+  assert.ok(!Q.raid(4765), 'Delivery to Ridgewell (Upper Blackrock Spire chain): pre-raid');
+  assert.ok(!Q.raid(8999), 'Saving the Best for Last (dungeon set 0.5): pre-raid');
+});
+test('Gear: raid quest rewards are no pre-BiS source (Atiesh, the Qiraji staves, Fang of Korialstrasz)', () => {
+  const use = { 2: [4, 10, 15, 19], 4: [0, null, 1] };
+  const c = ctx.CC.gear._candidates(use, 'Priest');
+  for (const id of ['22631', '21275', '21273', '21523']) assert.ok(!c.byId[id], GD.items[id][0] + ' left out');
+  // kept, with why: shown under "Raid, PvP and not in game yet", never a target
+  const atiesh = c.later.find((x) => x.id === 22631);
+  assert.ok(atiesh && atiesh.avail === 'raid', 'Atiesh kept as raid content');
+  assert.ok(c.later.some((x) => x.avail === 'unseen'), 'items Forever is not known to have yet are kept too');
+  assert.ok(c.later.every((x) => !c.byId[x.key]), 'never also a source for now or pre-BiS');
+});
+
 console.log(failed ? `\n${failed} FAILED` : '\nall passed');
 process.exit(failed ? 1 : 0);

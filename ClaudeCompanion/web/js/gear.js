@@ -134,10 +134,15 @@
   // One word for the kind of source, used for the source column and the filters.
   const KINDS = [['owned', 'Yours'], ['ah', 'On the AH'], ['dungeon', 'Dungeon'], ['quest', 'Quest'], ['crafted', 'Crafted'], ['vendor', 'Vendor'], ['roll', 'Random green'], ['world', 'World drop'], ['raid', 'Raid'], ['pvp', 'PvP']];
   const KIND_WORD = Object.fromEntries(KINDS);
+  // Why an item is not in Upgrades or Pre-BiS (candidates' `avail`); the snapshot writes the key
+  const AVAIL = { raid: 'Raid', pvp: 'PvP (Honor)', unseen: 'Not seen on Forever yet' };
+  const availWord = (c) => AVAIL[c.avail] + (c.avail !== 'unseen' && c.seen === false ? ' · not seen on Forever yet' : '');
+  // a quest reward is raid gear when the quest or an earlier step of its chain is raid content (quests.js)
+  const raidQuest = (qid) => (CC.quests && CC.quests.raid ? CC.quests.raid(qid) : ((A.GD.quests || {})[qid] || {}).type === 'Raid');
   function kindOf(id) {
     const size = (A.GD.size || {})[id] || 0, rows = arr((A.GD.src || {})[id]);
     const how = (A.GD.how || {})[id] || '';
-    if (size >= 20 || rows.some((r) => r[0] === 'quest' && ((A.GD.quests || {})[r[2]] || {}).type === 'Raid')) return 'raid';
+    if (size >= 20 || rows.some((r) => r[0] === 'quest' && raidQuest(r[2]))) return 'raid';
     if (isPvp(id)) return 'pvp';
     if (/^World Drop/.test(how)) return 'world';
     if (size || /^(Boss Drop|Dungeon)/.test(how)) return 'dungeon';
@@ -160,7 +165,7 @@
     const Q = CC.quests;
     const ck = JSON.stringify(use) + cls + (SFX ? SFX.built : '') + '|' + (((A.CH && A.CH.snap) || {}).taken || 0) + '|' + arr(((A.CH && A.CH.snap) || {}).completedQuests).length;
     if (cache && cache.ck === ck) return cache;
-    const fixed = [], rolls = [], byId = {};
+    const fixed = [], rolls = [], byId = {}, later = [];
     const skipped = { 'quest reward you already took (or not for you)': 0, 'raid only': 0, 'PvP honor gear': 0, 'other faction only': 0, 'only Classic data says where it comes from': 0, 'no endgametools tooltip': 0, 'not for your class': 0, 'no known source': 0 };
     const side = (char().faction || '')[0];            // 'A' or 'H'; vendors that only serve the other side don't count
     for (const [k, g] of Object.entries((A.GD && A.GD.items) || {})) {
@@ -180,13 +185,19 @@
       const rr = rollsOf(k);
       if (vend && !myVend.length && !src && !how) { skipped['other faction only']++; continue; }
       const onForever = how || rr || arr(src).some((r) => r[10] === 'f') || myVend.some((v) => v[5]);
-      if (!onForever) { skipped[src || vend ? 'only Classic data says where it comes from' : 'no known source']++; continue; }
       const size = (A.GD.size || {})[k] || 0;
-      const raidQuest = arr(src).some((r) => r[0] === 'quest' && ((A.GD.quests || {})[r[2]] || {}).type === 'Raid');
-      if (size >= 20 || raidQuest) { skipped['raid only']++; continue; }
-      if (isPvp(id)) { skipped['PvP honor gear']++; continue; }
+      const fromRaid = arr(src).some((r) => r[0] === 'quest' && raidQuest(r[2]));
+      // Not for now or pre-BiS, but kept and shown with why (AVAIL): raid content, PvP honor gear, and items
+      // Forever isn't known to have yet (only Classic data names a source, or none does)
+      const avail = size >= 20 || fromRaid ? 'raid' : isPvp(id) ? 'pvp' : !onForever ? 'unseen' : null;
       // only a quest gives it, and every such quest is done (or for the other faction or another class)
       if (Q && !vend && (!how || /^Quest/.test(how) && !/ · (Vendor|World Drop|Drop|Boss Drop|Profession|PvP reward) · /.test(' · ' + how + ' · ')) && arr(src).every((r) => r[0] === 'quest') && Q.rewardGone(id)) { skipped['quest reward you already took (or not for you)']++; continue; }
+      if (avail === 'pvp' && vend && !myVend.length) { skipped['other faction only']++; continue; }
+      if (avail) {
+        skipped[avail === 'raid' ? 'raid only' : avail === 'pvp' ? 'PvP honor gear' : src || vend ? 'only Classic data says where it comes from' : 'no known source']++;
+        later.push({ id, key: k, g, name: g[0], inv: g[4], req: g[3] || 0, boe, size, how, kind: kindOf(id), avail, seen: !!onForever, st: W.fromPack(g) });
+        continue;
+      }
       const base = { id, g, inv: g[4], req: g[3] || 0, boe, size, how, kind: kindOf(id) };
       if (rr) {
         // each roll is its own item: "Elegant Mantle of Healing"; the base's armor still counts
@@ -202,7 +213,7 @@
         fixed.push(c); byId[k] = c;
       }
     }
-    cache = { ck, fixed, rolls, byId, skipped };
+    cache = { ck, fixed, rolls, byId, later, skipped };
     return cache;
   }
 
@@ -274,7 +285,7 @@
   // For one spec's weights and baseline: per slot what it has, the upgrades usable now (several, from every
   // kind of source), the AH listings that are upgrades, the rolls worth searching for, and pre-BiS targets
   // with alternatives (best items up to level 60, raids left out).
-  const NOW_MAX = 6, PRE_ALTS = 4;
+  const NOW_MAX = 6, PRE_ALTS = 4, LATER_MAX = 8;
   function plan(w, lvl, base, picks, reach) {
     const use = canUse(), ch = char();
     const cand = candidates(use, ch.class);
@@ -336,7 +347,9 @@
       const want = arr(picks[name]).map((k) => pre.find((y) => y.c.key === k)).filter(Boolean);
       const targets = want.concat(pre.filter((y) => !want.includes(y))).slice(0, n).map((y) => Object.assign({ picked: want.includes(y) }, y));
       const alts = pre.filter((y) => !targets.some((t) => t.c.name === y.c.name)).slice(0, PRE_ALTS);
-      return { name, nums, cur, weakest, blocked, ups, now, ahUps, search, targets, alts, pre };
+      // ---- not in game yet, raid or PvP: the best few, scored the same way, never a target
+      const later = distinct(cand.later.filter(fitsPre).map((c) => x(c)).sort((a, b) => b.s - a.s)).slice(0, LATER_MAX);
+      return { name, nums, cur, weakest, blocked, ups, now, ahUps, search, targets, alts, pre, later };
     });
     // Main hand: a two-hander target makes the off hand target moot (and the other way round)
     const mh = slots.find((s) => s.name === 'Main hand'), oh = slots.find((s) => s.name === 'Off hand');
@@ -482,7 +495,16 @@
     });
     h += '</div>';
     if (rest.length > PRE_SHOW) h += `<button class="linkbtn more" data-gearpreall="${all ? '' : esc(sl.name)}">${all ? 'Show fewer' : `Show all ${rest.length + n}`}</button>`;
-    return h + '</section>';
+    return h + laterList(sl) + '</section>';
+  }
+
+  // Raid, PvP and not-yet-seen items: shown with why they aren't in Upgrades or Pre-BiS
+  function laterList(sl) {
+    if (!sl.later.length) return '';
+    let h = `<details class="later"><summary><h3>Raid, PvP and not in game yet <span>· ${sl.later.length} left out of Pre-BiS</span></h3></summary>`;
+    h += `<div class="table laterlist"><div class="thead"><div>Item</div><div>Why not now</div><div class="c-num">Score</div><div class="c-num">Gain</div></div>`;
+    sl.later.forEach((y) => { h += `<div class="tr">${itemCell(y.c)}<div><span class="src src-${esc(y.c.avail)}">${esc(availWord(y.c))}</span></div><div class="c-num">${fmt1(y.s)}</div><div class="c-num ${y.d > 0 ? 'pos' : 'dim'}">${gainTxt(y.d)}</div></div>`; });
+    return h + '</div></details>';
   }
 
   // Auction House: upgrades listed now, then the random-suffix rolls worth searching for
@@ -608,6 +630,9 @@
         out.preBis = P.slots.filter((sl) => !sl.twoHander).flatMap((sl) => sl.targets.map((t) => ({ slot: sl.name, id: t.c.id, name: t.c.name, roll: t.c.roll || null, score: +t.s.toFixed(1),
           picked: t.picked, status: baseIds.has(t.c.id) && !t.c.roll ? 'done' : t.c.kind === 'owned' ? t.c.where : (!t.c.roll && P.at[t.c.id]) || 'missing', where: whereOf(t.c), needs: needs(t.c),
           alternatives: sl.alts.map((y) => ({ id: y.c.id, name: y.c.name, score: +y.s.toFixed(1), where: whereOf(y.c) })) })));
+        // raid, PvP and not-yet-seen items, the best 3 per slot: never targets; `availability` says why
+        out.notInPreBis = P.slots.flatMap((sl) => sl.later.slice(0, 3).map((y) => ({ slot: sl.name, id: y.c.id, name: y.c.name, score: +y.s.toFixed(1), gain: +y.d.toFixed(1),
+          availability: y.c.avail, seenOnForever: y.c.seen, where: whereOf(y.c) })));
         return out;
       });
     },
