@@ -77,11 +77,11 @@ These are settled. Don't reopen them unless he does.
 
 | Item | State | What to do |
 | --- | --- | --- |
-| `from-coaching` issues | At the split: #80, #81, #82, #83, #85 (this handoff). The live list is the open issues with that label; work started in the build project since (#86 fixed #81) | The daily task works them |
+| `from-coaching` issues | At the split: #80, #81, #82, #83, #85 (this handoff: close it once you've read this file and triaged the old backlog). The live list is the open issues with that label; work started in the build project since (#86 fixed #81) | The daily task works them |
 | Old backlog #4 to #23 | From the 22 Nov gap audit, before the rebuild; several are fixed | On the first run, close each fixed one with its PR and keep the rest |
 | Combat log (#77) | The dmg / resisted column layout hasn't been checked against a real Forever log | It needs `/combatlog` on in game. When snapshot `combat` fills, check the numbers. Until then empty is expected |
 | Loot by corpse (#77) | Confirmed readable on his build `0e7c4e91c449` (`caps.loot`, see #82) | Nothing; the lesson stands: check `caps` and `app.build` against the merge time before calling a Lua change broken |
-| Brief size | 10.7 KB with both specs filled (#82) | The brief only selects. Trim what's selected, and never compute in it |
+| Brief size | 10.7 KB at the split; #88 took it to 9.4 KB; the target is about 6 KB (#82) | The brief only selects. Trim what's selected, and never compute in it |
 | Quest prerequisites | QuestieDB's "all of" and "any one of" are merged in the pack, so the check is lenient. The Dire Maul Crescent Key has no wing-level lock. MC has no date on the Forever timeline | Known limits of `js/quests.js`. Fix when an issue hits them |
 | Game-data pack | Rebuilt by hand (`gamedata/build.sh`, about 10 min). CI warns when it's over 30 days old. #20 asks for a weekly rebuild | Open |
 
