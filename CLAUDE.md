@@ -125,5 +125,9 @@ line) must print `ok` before an answer with numbers, rates, gold or plans is sen
 - Versions: `ClaudeCompanion.toc` `## Version` = `Core.lua` `ns.VERSION` = newest `CHANGELOG.md` heading.
   `test/contract.test.js` checks this and every other contract; run it, plus the tests for what you
   touched ([docs/DEVELOP.md](docs/DEVELOP.md)).
+- A PR that changes the "Coaching project instructions" text in [docs/PROJECTS.md](docs/PROJECTS.md) ends
+  with a reply to the owner giving the new text to paste: it reaches the coaching project no other way.
+  Everything else coaching reads fresh from `main`. State at the split, his decisions, traps:
+  [docs/HANDOFF.md](docs/HANDOFF.md).
 - No Wowhead links (CI fails); quest links go to foreverchanges.pro. Words and colours in the app:
   [docs/ui-language.md](docs/ui-language.md).

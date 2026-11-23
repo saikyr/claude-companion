@@ -28,6 +28,14 @@ self-update. Coaching sees it in the next snapshot (`app.build`).
 Cards are coaching's own writes: a card that fails the gate later is rewritten or withdrawn by coaching,
 not filed.
 
+## Keeping each project current
+
+Coaching reads CLAUDE.md, COACHING.md and FEATURES.md fresh from `main`, so the build project keeps them
+current in the same PR as the change, and coaching follows with no step from the owner. Only a change to
+the coaching instructions text below needs pasting: the build PR that changes it gives him the new text in
+its reply. What the build project inherited at the split (state, his decisions, traps):
+[HANDOFF.md](HANDOFF.md).
+
 ## What the owner does (once)
 
 1. In Claude, create a project named **Claude Companion (build)**, add the repository
