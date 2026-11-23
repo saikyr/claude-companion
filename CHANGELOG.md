@@ -3,6 +3,10 @@
 Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 
 ## 1.5.0 (in progress: every merge to main updates itself)
+- **Claude for friends, in the download.** A friend's own Claude can't read the Companion's private code, so
+  what it follows now comes with the app, in `AddOns/ClaudeCompanion/claude/`: its guide, how to set up a
+  Claude project (with the text to paste), the answering rules, the feature list and the card checkers.
+  It updates with the app.
 - **Which creature each drop came from.** Where the game names the corpse of each loot slot, grinds, runs and
   sessions count every creature's corpses and what they held, so the app can give your own drop rate per
   creature with its sample (between drops per kill and drops per opened corpse). Shows after a /reload.

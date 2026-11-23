@@ -32,6 +32,13 @@ release = importlib.util.module_from_spec(_spec); _spec.loader.exec_module(relea
 NEVER = {'companion-data/snapshot.json', 'companion-data/settings.json', 'companion-data/update.json',
          'companion-data/sync.json', 'companion-data/sync-cache.json',
          'companion-data/installed.json', 'web/data.js', 'web/channel.json'}
+# The Claude kit: a friend's Claude can't read this private repository, so the rules it follows ship in
+# every build, in ClaudeCompanion/claude/ next to its own guide (claude/GUIDE.md, claude/SETUP.md).
+# Copied from their one owner here, never kept as a second copy in git. A change to these alone is not a
+# new build (no /reload asked for it): the kit goes out with the next build.
+KIT = {'claude/COACHING.md': 'docs/COACHING.md', 'claude/FEATURES.md': 'docs/FEATURES.md',
+       'claude/answer_rules.py': 'tools/answer_rules.py', 'claude/check-cards.py': 'tools/check-cards.py',
+       'claude/check-answer.py': 'tools/check-answer.py'}
 
 
 def git(*a, cwd=ROOT, check=True):
@@ -69,6 +76,11 @@ def assemble(work, repo, notes, ver, src_branch, src_sha):
             shutil.copy2(full, dest)
             if rel == 'Core.lua': stamp_build(dest, src_sha)
             with open(dest, 'rb') as fh: files[rel] = hashlib.sha256(fh.read()).hexdigest()
+    for rel, src in KIT.items():
+        dest = os.path.join(work, 'ClaudeCompanion', *rel.split('/'))
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        shutil.copy2(os.path.join(ROOT, *src.split('/')), dest)
+        with open(dest, 'rb') as fh: files[rel] = hashlib.sha256(fh.read()).hexdigest()
     # the channel this build keeps updating from
     # (and which build it is: the app compares it with the build the game last saved with)
     # "url": the public download folder (supabase/functions/publish-build), what installed apps read;

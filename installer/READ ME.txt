@@ -16,6 +16,9 @@ In game: type /reload (it saves everything). The app shows your character a few
 seconds later. Open your bank, profession windows, a flight master and the auction house once
 (press "Claude scan"), switch to your other spec once, then /reload again to fill everything in.
 
+Claude as your coach (optional)
+  After installing, open AddOns/ClaudeCompanion/claude/SETUP.md.
+
 Your data
   Everything the addon records stays in your game's own saved file. The app syncs your history
   between your own computers through the Companion's sync service, under a private random key made

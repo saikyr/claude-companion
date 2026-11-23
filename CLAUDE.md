@@ -10,6 +10,11 @@ computers (Supabase). **The app is complete without Claude.** Claude is an optio
 what the app computed and writes suggestions back as From Claude cards. Every boundary, its owner and
 its CI check: [docs/INTERFACES.md](docs/INTERFACES.md).
 
+**Which project are you in?** Coaching and building are separate Claude projects
+([docs/PROJECTS.md](docs/PROJECTS.md)). Coaching follows everything here except "Changing the code", and
+files app gaps as `from-coaching` issues. Building follows "Changing the code" and works those issues; it
+doesn't coach. A friend's Claude follows `ClaudeCompanion/claude/GUIDE.md`, shipped in every build.
+
 ## Before answering
 
 How to answer (read the question literally, depth, routing, tone, the weekly audit): [docs/COACHING.md](docs/COACHING.md).
@@ -83,7 +88,8 @@ select * from private.history where account = '<account>' and kind = 'grind' ord
 
 **A friend's own Claude project** has no access to the owner's database: it reads
 `AddOns/ClaudeCompanion/companion-data/snapshot.json` on the friend's computer (folder access). Same
-fields. Set-up: [docs/CLAUDE-PROJECT.md](docs/CLAUDE-PROJECT.md).
+fields. Its guide and set-up ship with the app: `ClaudeCompanion/claude/GUIDE.md` and `SETUP.md`
+([docs/PROJECTS.md](docs/PROJECTS.md), "A friend").
 
 ## Writing (cards only)
 

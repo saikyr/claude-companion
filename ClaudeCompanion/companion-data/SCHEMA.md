@@ -69,7 +69,7 @@ tab and on the Overview as cards. The same cards file format goes one of two way
 
 The app shows both card sources as one list: the same `id` in both is one card, the newer `updated` wins.
 It checks every 5 seconds, so a new card shows without a reload.
-**Before writing cards.json, run `python3 tools/check-cards.py cards.json`** (in the repo); it must print `ok`.
+**Before writing cards.json, run `python3 tools/check-cards.py cards.json`** (in the repo; a friend's Claude: `claude/check-cards.py` in the addon folder); it must print `ok`.
 Reinstalling the addon by copying the zip over the folder keeps both files; deleting the folder first loses them.
 
 ### cards.json, schema 1
