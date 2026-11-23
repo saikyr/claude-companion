@@ -3,6 +3,12 @@
 Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 
 ## 1.5.0 (in progress: every merge to main updates itself)
+- **Game data in the database for Claude.** The same pack the app uses, loaded after every merge that changes
+  it: items with every source, quests and their chains, creatures, vendors, instance rules. Every drop rate
+  says what it is: measured on Forever (with its range and how many corpses), a Classic rate (never passed
+  off as Forever), or unknown. Claude looks facts up there instead of on the web.
+- **More quests marked keep.** Besides dungeon quests: every step of a key or attunement chain (Araj's
+  Scarab leads to the Skeleton Key), and quests giving rep with a faction whose rewards you can still earn.
 - **Gear advice and professions reach Claude again.** At logout the game lists only the skill headers
   (Weapon Skills, Armor Proficiencies...), and every save is a logout, so the snapshot had no skills: the
   gear advice for every spec and the professions list were empty online. A logout that reads only headers

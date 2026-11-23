@@ -79,7 +79,7 @@ recorded per craft.
 | Gear per spec: worn, upgrades, AH upgrades, rolls to search, pre-BiS with alternatives, class sets | Gear tab | `gear[]` (one per spec), `bestOwned[]` |
 | Stat weights per spec, own profiles | Stat weights tab | `gear[].weightValues`, `weightProfiles[]` |
 | Quest log with every reward scored for every spec, and the chain's next quest | Quests tab | `quests[]` (`rewards[].specs[]`, `next`) |
-| Dungeon quests flagged: `keep: true` and `dungeon` (the instance) when the quest or any step of its chain is a pack `Dungeon` quest or has its objective in an instance. Never on a drop list | snapshot only | `quests[].keep`, `quests[].dungeon`; the brief's `quests[]` |
+| Quests to keep: `keep: true` with `keepWhy` and `dungeon` when the quest or any step of its chain is a pack `Dungeon` quest, has its quest zone or objective in an instance, or is a step of a key or attunement (`rules.js` unlocks: the Skeleton Key, the Seal of Ascension...); also when it gives rep with a faction some item needs (pack `req`) and the character isn't Exalted. `rep[]`: the rep a quest gives. Never on a drop list | snapshot only | `quests[].keep`, `keepWhy`, `dungeon`, `rep`; the brief's `quests[]` |
 | Quests you can do, attunements and keys, ranked next steps | Overview (Now) | `nextSteps[]` |
 | Talents and action bars, both specs | Talents & Bars | save only (`specs`) |
 | Reputation | Reputation tab | `reputation[]` |
@@ -102,6 +102,7 @@ still missing, every spec), `quests[]` (`keep`/`dungeon`, each reward's `upgrade
 
 | Feature | Where |
 | --- | --- |
+| **Game data in the database** (`game` schema, owner): every item, its sources, quests and chains, NPCs, vendors, instance rules, from the same pack as the app (loaded by `publish.yml` when the pack changes). Drop rates are labelled: `forever` = ForeverDB measured it on Forever kills, with a 95% range and the number of corpses; `classic` = a Classic rate, never a Forever one; `unknown` = seen on Forever (or only in Classic data), no rate. `game.quest` gives `keep` (dungeon, why, the chain step) by the app's own keep test, battlegrounds left out. Long lists say their size (`sourcesTotal`, `dropsTotal`). A new pack loads into a second copy and reads switch only when every row is there, so a failed load never leaves reads short. No source publishes mob resistances or respawn times for Forever: `game.npc` says so | `game.item`, `game.npc`, `game.quest`, `game.instance`, `game.drop_rates`, `game.status()` |
 | What the game lets the addon read (`caps`): which APIs exist, which values are secret; at a loot window whether `GetLootSourceInfo` names the corpse of each slot (`caps.loot`); inside an instance whether GUIDs are readable (`caps.instance`); whether `LoggingCombat` can be read. Read-only probes: they change nothing in game | snapshot `caps`, the brief's `caps` |
 | From Claude cards (Claude writes, the player ticks or closes) | From Claude tab, Overview; setting `cc.claude.cards`, choices in `cc.claude.cardsState` |
 | Sync between computers (union of history, newest "now" per part); can be turned off per computer | System tab; [ARCHITECTURE.md](ARCHITECTURE.md) |

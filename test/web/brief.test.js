@@ -31,7 +31,7 @@ function snapshot(ageMs, extra) {
         preBis: [{ slot: 'Head', name: 'Devout Crown', status: 'missing', where: 'Scholomance' }, { slot: 'Chest', name: 'Robe', status: 'done' }] },
       { spec: 2, label: 'Shadow', active: false, weightsName: 'Shadow', upgrades: [up(9)], preBis: [] }],
     quests: [
-      { id: 5089, title: "General Drakkisath's Command", level: 60, complete: false, dungeon: 'Blackrock Spire', keep: true,
+      { id: 5089, title: "General Drakkisath's Command", level: 60, complete: false, dungeon: 'Blackrock Spire', keep: true, keepWhy: 'dungeon quest', rep: [],
         rewards: [{ name: 'Ring', how: 'choose', specs: [{ spec: 'Holy', gain: 0 }, { spec: 'Shadow', gain: 4.5 }] }] },
       { id: 1, title: 'Kill boars', level: 55, complete: true, dungeon: null, keep: false, rewards: [{ name: 'Old reward', how: 'get', specs: null }] }],
     grind: { running: null, recent: [
@@ -76,7 +76,8 @@ function snapshot(ageMs, extra) {
 
     // quests: keep flags and rewards per spec
     const dq = b.quests.find((x) => x.id === 5089), oq = b.quests.find((x) => x.id === 1);
-    check(dq.keep === true && dq.dungeon === 'Blackrock Spire' && oq.keep === false, 'dungeon quests keep their keep flag and dungeon');
+    check(dq.keep === true && dq.dungeon === 'Blackrock Spire' && dq.keepWhy === 'dungeon quest' && oq.keep === false, 'dungeon quests keep their keep flag, dungeon and why');
+    check(b.meta.quote.some((x) => /game\.item/.test(x)), 'the brief points at the game schema for game facts');
     check(dq.rewards[0].upgradeFor.length === 1 && dq.rewards[0].upgradeFor[0].spec === 'Shadow', 'a reward lists the specs it is an upgrade for (Shadow, not Holy)');
     check(oq.rewards[0].scored === false, 'a reward the app did not score says so');
 
