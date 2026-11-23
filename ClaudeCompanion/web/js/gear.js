@@ -390,10 +390,6 @@
 
   // ---------------------------------------------------------------- view parts
   // an item: icon (with its tooltip), name in its quality colour, badges, and where it comes from
-  function icon(c) {
-    if (c.kind === 'owned' && c.key && A.item(c.key)) return A.itemIcon(c.key, { size: 'sm' });
-    return A.anyItemIcon(c.id, { size: 'sm' });
-  }
   const tagsOf = (c) => {
     const t = [];
     if (c.req > (char().level || 0)) t.push(`level ${c.req}`);
@@ -404,7 +400,8 @@
   function itemCell(c, sub) {
     const q = c.roll ? (c.g[1] || 2) : (c.kind === 'owned' && A.item(c.key) ? A.item(c.key).q : c.g[1]);
     const nd = c.kind === 'owned' ? [] : needs(c);
-    return `<div class="c-main">${icon(c)}<div class="grow"><div class="nm"><span class="q${q}">${esc(c.name || c.g[0])}</span>${tagsOf(c)}</div><div class="sub">${esc(sub != null ? sub : whereOf(c))}</div>${nd.length ? `<div class="sub need">Needs ${esc(nd.join(' and '))}</div>` : ''}</div></div>`;
+    // the shared item cell (app.js itemCell): icon and name both carry the item's tooltip
+    return A.itemCell(c.id, { key: c.kind === 'owned' ? c.key : null, name: c.name || c.g[0], q, tags: tagsOf(c), sub: sub != null ? sub : whereOf(c), need: nd.length ? 'Needs ' + nd.join(' and ') : '' });
   }
   const srcCell = (y) => {
     const k = y.ah ? 'ah' : y.c.kind;
@@ -424,7 +421,7 @@
     let h = `<div class="slotlist"><div class="sl-h">${setSel}</div><div class="sl-cols"><span>Slot</span><span>Has</span><span class="c-num">Score</span><span class="c-num">Best</span></div>`;
     P.slots.forEach((sl) => {
       const best = sl.blocked ? null : sl.ups[0];
-      const cur = sl.cur.map((x) => (x.id ? `<span class="have">${A.anyItemIcon(x.id, { size: 'xs' })}<span>${esc(A.anyItemName(x.id))}</span></span>` : '<span class="have dim">empty</span>')).join('');
+      const cur = sl.cur.map((x) => (x.id ? `<span class="have">${A.itemIconOf(x.id, { size: 'xs' })}${A.itemLink(x.id)}</span>` : '<span class="have dim">empty</span>')).join('');
       h += `<button class="slotrow${sl.name === sel ? ' on' : ''}" data-gearslot="${esc(sl.name)}"><span class="sn">${esc(sl.name)}</span><span class="cur">${cur}</span><span class="c-num">${fmt1(sl.weakest.s)}</span><span class="c-num ${best ? 'pos' : 'dim'}">${best ? gainTxt(best.d) : sl.blocked ? '2H' : '—'}</span></button>`;
     });
     return h + '</div>';

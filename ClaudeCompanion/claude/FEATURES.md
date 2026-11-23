@@ -82,7 +82,7 @@ recorded per craft.
 | Stat weights per spec, own profiles | Stat weights tab | `gear[].weightValues`, `weightProfiles[]` |
 | Quest log with every reward scored for every spec, and the chain's next quest | Quests tab | `quests[]` (`rewards[].specs[]`, `next`) |
 | Quests to keep: `keep: true` with `keepWhy` and `dungeon` when the quest or any step of its chain is a pack `Dungeon` quest, has its quest zone or objective in an instance, or is a step of a key or attunement (`rules.js` unlocks: the Skeleton Key, the Seal of Ascension...); also when it gives rep with a faction some item needs (pack `req`) and the character isn't Exalted. `rep[]`: the rep a quest gives. Never on a drop list | snapshot only | `quests[].keep`, `keepWhy`, `dungeon`, `rep`; the brief's `quests[]` |
-| Quests you can do, attunements and keys, ranked next steps | Overview (Now) | `nextSteps[]` |
+| Quests you can do, attunements and keys, ranked next steps (a quest the pack has twice, same title, zone, objective and rewards, counts once) | Overview (Now) | `nextSteps[]` |
 | Talents and action bars, both specs | Talents & Bars | save only (`specs`) |
 | Reputation | Reputation tab | `reputation[]` |
 | Professions, recipes, cooldowns (Mooncloth, transmutes) | Professions tab | `professions[]`, `cooldowns[]` |
@@ -96,9 +96,9 @@ scores by hand (CLAUDE.md, the scoring rule).
 
 **Start here: the brief.** `select private.claude_brief('<account>');` returns a few KB built from the
 newest snapshot of any of the account's computers: `meta` (which computer, `ageMinutes`, `stale` over an
-hour, each computer's newest build, how to quote), `character`, `specs[]` (the app's top 3 upgrades and 4 pre-BiS
+hour, the build, and each computer's newest build when they differ, how to quote), `character`, `specs[]` (the app's top 3 upgrades and 4 pre-BiS
 still missing, every spec, with `upgradesTotal` / `preBisMissingTotal`), `quests[]` (`keep`/`dungeon`/`keepWhy`, each reward's `upgradeFor` specs, `unscored[]` = rewards the app has no score for; empty fields left out), `gold`
-(`flips` = profit, `sales7d` = revenue and `buys7d`, both for every character of the account, `measured[]` = the app's gph for the 6 newest grinds and runs, each with its `start` for a card's src, and for grinds the `mobs` it killed),
+(`flips` = profit, `sales7d` = revenue and `buys7d`, both for every character of the account, `measured[]` = the app's gph for the 6 newest grinds and runs, each with its `start` for a card's src, and for grinds the `mobs` it killed as `"<name> ×<kills>"`), shortened in the default: no quest `level`, `keepWhy` as `rep: <faction +n>` or `step: <quest>` next to its dungeon, each `where` cut to its first clause;
 `professions`, `cooldowns`, `caps`. More parts in full by name: `array['rep','bags','next','ah','runs']`
 (or any default part, untrimmed). It selects; it computes nothing (`supabase/migrations/*_claude_brief.sql`).
 

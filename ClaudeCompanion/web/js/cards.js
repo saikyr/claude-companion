@@ -12,10 +12,9 @@
   const A = CC.api, V = CC.V, esc = A.esc, arr = A.arr;
   // icon images only, as in app.js (docs/ARCHITECTURE.md, Data sources)
   const ICON_URL = 'https://wow.zamimg.com/images/wow/icons/large/';
-  const KINDS = {
-    farm: ['Farm', 'inv_misc_coin_02'], flip: ['AH flip', 'inv_misc_coin_17'], quest: ['Quest', 'inv_misc_note_01'],
-    gear: ['Gear', 'inv_helmet_06'], craft: ['Craft', 'trade_engraving'], route: ['Route', 'inv_misc_map_01'], note: ['Note', 'inv_scroll_03'],
-  };
+  // each kind's word, and its icon from the app's one icon map (app.js UI_ICON)
+  const KIND_WORD = { farm: 'Farm', flip: 'AH flip', quest: 'Quest', gear: 'Gear', craft: 'Craft', route: 'Route', note: 'Note' };
+  const KINDS = Object.fromEntries(Object.entries(KIND_WORD).map(([k, w]) => [k, [w, A.uiIcon(k)]]));
   const kindOf = (c) => (KINDS[c.kind] ? c.kind : 'note');
   const server = location.protocol.startsWith('http');
   const S = { cards: [], error: null, have: false, state: { schema: 1, cards: {} }, raw: '', rawState: '', kind: null, view: 'open' };
@@ -123,13 +122,13 @@
       Object.entries(g.loot || {}).forEach(([id, l]) => { const k = l.id || id; drops[k] = (drops[k] || 0) + (l.count || 0); });
     });
     const mobs = arr(t.mobs).map((m) => `${by[m] || 0} ${esc(m)}`).join(' · ');
-    const got = arr(c.items).map((x) => `${drops[x.id] || 0} ${esc(A.anyItemName(x.id))}`).join(' · ');
+    const got = arr(c.items).map((x) => `${drops[x.id] || 0} ${A.itemLink(x.id)}`).join(' · ');
     const live = A.CH.grind && gs.includes(A.CH.grind);
     return `<div class="ctrack"><span class="tag${live ? ' ok' : ''}">${live ? 'tracking now' : 'tracked'}</span> ${gs.length} run${gs.length > 1 ? 's' : ''} as <b>${esc(t.grind)}</b>: ${A.dur(s)} · ${kills} kills · ${A.money(Math.round(val / (s / 3600)), { short: true })}/hr${mobs ? `<div class="sub">Kills: ${mobs}</div>` : ''}${got ? `<div class="sub">Drops: ${got}</div>` : ''}</div>`;
   }
   function itemRow(x) {
     const p = A.planPrice(x.id);
-    return `<div class="li">${A.anyItemIcon(x.id, { size: 'sm' })}<div class="grow"><div>${esc(A.anyItemName(x.id))}</div>${x.note ? `<div class="sub">${esc(x.note)}</div>` : ''}</div><div class="num">${p != null ? A.money(p, { short: true }) + '<div class="sub">your AH</div>' : '<span class="dim small">not priced</span>'}</div></div>`;
+    return `<div class="li">${A.itemIconOf(x.id)}<div class="grow"><div>${A.itemLink(x.id)}</div>${x.note ? `<div class="sub">${esc(x.note)}</div>` : ''}</div><div class="num">${p != null ? A.money(p, { short: true }) + '<div class="sub">your AH</div>' : '<span class="dim small">not priced</span>'}</div></div>`;
   }
   const para = (t) => String(t).split(/\n\s*\n/).map((p) => `<p>${esc(p.trim())}</p>`).join('');
   const link = (s) => (/^https?:\/\//.test(s.url || '') ? `<a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.label || s.url)}</a>` : esc(s.label || ''));
