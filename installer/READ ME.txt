@@ -17,7 +17,7 @@ seconds later. Open your bank, profession windows, a flight master and the aucti
 (press "Claude scan"), switch to your other spec once, then /reload again to fill everything in.
 
 Claude as your coach (optional)
-  After installing, open AddOns/ClaudeCompanion/claude/SETUP.md.
+  Open AddOns/ClaudeCompanion/claude/SETUP.md: one text to paste into a Claude desktop project.
 
 Your data
   Everything the addon records stays in your game's own saved file. The app syncs your history
