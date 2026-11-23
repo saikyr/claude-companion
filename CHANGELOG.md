@@ -3,6 +3,9 @@
 Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 
 ## 1.5.0 (in progress: every merge to main updates itself)
+- **A shorter brief.** The brief Claude reads first leaves out empty fields and keeps the top 3 upgrades per
+  spec, the 4 next pre-BiS pieces and the 6 newest grinds and runs (each with its total); ask for a part by
+  name to get it whole.
 - **Game data in the database for Claude.** The same pack the app uses, loaded after every merge that changes
   it: items with every source, quests and their chains, creatures, vendors, instance rules. Every drop rate
   says what it is: measured on Forever (with its range and how many corpses), a Classic rate (never passed

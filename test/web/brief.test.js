@@ -69,9 +69,9 @@ function snapshot(ageMs, extra) {
     check(size < 6144, `the default brief is small (${size} bytes)`);
     check(b.character.gold === 207.96, 'gold in gold (207.96)');
 
-    // gear: the app's own gains, top 5, every spec
+    // gear: the app's own gains, top 3 with the total, every spec
     check(b.specs.length === 2 && b.specs[0].spec === 'Holy' && b.specs[1].spec === 'Shadow', 'every spec');
-    check(b.specs[0].upgrades.length === 5 && b.specs[0].upgrades[0].gain === 8 && b.specs[0].upgrades[4].gain === 4, 'top 5 upgrades by the app\'s gain');
+    check(b.specs[0].upgrades.length === 3 && b.specs[0].upgrades[0].gain === 8 && b.specs[0].upgrades[2].gain === 6 && b.specs[0].upgradesTotal >= 5, 'top 3 upgrades by the app\'s gain, with the total');
     check(b.specs[0].preBisMissing.length === 1 && b.specs[0].preBisMissing[0].name === 'Devout Crown', 'pre-BiS still missing');
 
     // quests: keep flags and rewards per spec
@@ -100,6 +100,8 @@ function snapshot(ageMs, extra) {
     // parts by name, in full
     const p = brief(['specs', 'rep']);
     check(p.specs[0].upgrades.length === 8 && p.rep.length === 1 && !p.quests, 'parts asked for come in full, and only those');
+    check(!('savedParts' in b.character), 'per-part save times left out of the default brief');
+    check(b.quests.every((q) => q.complete !== false && !(Array.isArray(q.rewards) && q.rewards.length === 0) && q.rewardsNoGain !== 0), 'the default brief leaves out empty and default quest fields');
     check(brief().caps.loot.sources === 2 && brief().caps.LoggingCombat === 'readable', 'caps: what the game lets the addon read');
 
     // a snapshot without gear advice says so, so nobody scores gear by hand
