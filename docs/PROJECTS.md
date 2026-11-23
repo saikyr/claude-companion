@@ -36,15 +36,15 @@ the coaching instructions text below needs pasting: the build PR that changes it
 its reply. What the build project inherited at the split (state, his decisions, traps):
 [HANDOFF.md](HANDOFF.md).
 
-## What the owner does (once)
+## Setting it up (done 23 Nov)
 
-1. In Claude, create a project named **Claude Companion (build)**, add the repository
-   `saikyr/claude-companion` to it, and paste the build instructions below into its instructions.
-2. In that project, send one message: **start**. Its Claude sets up its daily task and confirms.
+1. The owner created a project named **Claude Companion (build)**, add the repository
+   `saikyr/claude-companion` to it, and pasted the build instructions below into its instructions.
+2. He sent it **start**; its Claude created its daily task.
+3. The coordinator pasted the coaching instructions below into the coaching project ("wow forever").
 
 The texts below leave out his name, character and account id (`<name>`, `<account id>`: never
-committed); the copy he pastes has them filled in. The coaching instructions below replace this project's current instructions; the coordinator applies
-them. Nothing else moves: the coaching project keeps its memory, project files and scheduled tasks
+committed); the pasted copies have them filled in. Nothing else moved: the coaching project keeps its memory, project files and scheduled tasks
 (the weekly audit, the Mooncloth reminder).
 
 ## Coaching project instructions
@@ -59,7 +59,7 @@ This project coaches. It never builds: the app is built in the project "Claude C
   and writes From Claude cards. Nothing else.
 - Every agent follows the repo's CLAUDE.md (all of it except "Changing the code") and docs/COACHING.md.
   The repo is attached to read docs and code, run tools/check-cards.py and tools/check-answer.py,
-  and open from-coaching issues. Never push to it.
+  and open from-coaching issues (gh: env -u GH_TOKEN gh api ...). Never push to it.
 - Before ANY answer about the app, his data or his gold: read docs/FEATURES.md, then query the app's data
   (private.claude_brief first). Never state a feature exists or doesn't, or quote a number, without
   having read it. If it isn't recorded, say so.

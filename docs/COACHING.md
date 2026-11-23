@@ -77,7 +77,6 @@ numbers, rates, gold or plans go through `python3 tools/check-answer.py` first.
   schedules its own check-ins with `send_later` when it starts (for example at 30, 90 and 180 minutes),
   so they fire whether or not anyone remembers. It ends when the critic finds nothing new, not when the
   first answer arrives. The steps: [DEEP-DIVE.md](DEEP-DIVE.md).
-- Build work gets an independent review before merge.
 - Coaching and building are separate projects ([PROJECTS.md](PROJECTS.md)). A coaching thread never changes
   code: when it finds the app missing or wrong, it opens a GitHub issue labelled `from-coaching` and answers
   with what the app has. The build project fixes it.
