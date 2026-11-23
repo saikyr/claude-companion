@@ -108,6 +108,8 @@ test('Gear: raid quest rewards are no pre-BiS source (Atiesh, the Qiraji staves,
   assert.ok(atiesh && atiesh.avail === 'raid', 'Atiesh kept as raid content');
   assert.ok(c.later.some((x) => x.avail === 'unseen'), 'items Forever is not known to have yet are kept too');
   assert.ok(c.later.every((x) => !c.byId[x.key]), 'never also a source for now or pre-BiS');
+  assert.ok(c.later.some((x) => GD.items[x.key][11] === 'f' && x.avail === 'unseen' && !x.seen), 'gear with ForeverDB stats only (no Forever client tooltip) is kept as not seen yet');
+  assert.ok(Object.values(c.byId).every((x) => x.g[11] === 'e'), 'upgrades and pre-BiS only from the Forever client\'s own tooltips');
 });
 
 console.log(failed ? `\n${failed} FAILED` : '\nall passed');
