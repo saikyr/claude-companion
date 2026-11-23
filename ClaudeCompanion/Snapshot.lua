@@ -643,6 +643,10 @@ local function Empty(name, v)
         for _, b in ipairs(v) do if b.items and #b.items > 0 then return false end end
         return true
     end
+    if name == "skills" then                         -- at logout the game lists only the headers (Weapon Skills...), no skills
+        for _, k in ipairs(v) do if type(k) == "table" and not k.isHeader then return false end end
+        return true
+    end
     return false
 end
 local KEEP_IF_ZERO = { "money", "manaMax", "healthMax" }
