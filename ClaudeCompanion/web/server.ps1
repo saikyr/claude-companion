@@ -23,7 +23,11 @@ $cardsDir = Join-Path $dataDir 'from-claude'
 $port = if ($env:CC_PORT) { [int]$env:CC_PORT } else { 47615 }   # CC_PORT: only for testing a second copy
 $files = @{ '/api/cards' = (Join-Path $cardsDir 'cards.json'); '/api/cards-state' = (Join-Path $cardsDir 'state.json'); '/api/settings' = (Join-Path $dataDir 'settings.json')
             # js/sync.js: this computer's sync key and its copy of the other computers' history
-            '/api/sync' = (Join-Path $dataDir 'sync.json'); '/api/sync-cache' = (Join-Path $dataDir 'sync-cache.json') }
+            '/api/sync' = (Join-Path $dataDir 'sync.json'); '/api/sync-cache' = (Join-Path $dataDir 'sync-cache.json')
+            # js/combatlog.js: its per-creature counts from the game's combat log
+            '/api/combat' = (Join-Path $dataDir 'combat.json') }
+$logsDir = Join-Path $forever 'Logs'
+$combatLogName = '^WoWCombatLog[A-Za-z0-9_.-]*\.txt\z'
 # what the page may write (POST): the snapshot for Claude, plus the files above except Claude's cards
 $writable = @{ '/api/snapshot' = (Join-Path $dataDir 'snapshot.json') }
 foreach ($k in $files.Keys) { if ($k -ne '/api/cards') { $writable[$k] = $files[$k] } }
@@ -438,6 +442,39 @@ while ($listener.IsListening) {
                 $body = Read-Shared $save.FullName
                 $type = 'application/octet-stream'
             } else { $res.StatusCode = 404; $body = [System.Text.Encoding]::UTF8.GetBytes('no save yet') }
+        } elseif ($path -eq '/api/combatlog' -and $req.HttpMethod -eq 'GET') {
+            # the game's combat log, read only (same as server.py): no file= lists the logs, newest first;
+            # file=<name>&from=<byte> gives up to 4 MB from there. Only the game's own log names, only that folder.
+            $q = @{}
+            foreach ($kv in $req.Url.Query.TrimStart('?').Split('&')) { $i = $kv.IndexOf('='); if ($i -gt 0) { $q[[Uri]::UnescapeDataString($kv.Substring(0, $i))] = [Uri]::UnescapeDataString($kv.Substring($i + 1)) } }
+            $name = $q['file']
+            if (-not $name) {
+                $type = 'application/json; charset=utf-8'
+                $list = @()
+                if (Test-Path $logsDir) {
+                    $list = @(Get-ChildItem -LiteralPath $logsDir -Filter 'WoWCombatLog*.txt' -File -ErrorAction SilentlyContinue |
+                        Where-Object { $_.Name -cmatch $combatLogName } | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 20 |
+                        ForEach-Object { '{"name":"' + $_.Name + '","size":' + $_.Length + ',"mtime":' + [int64][Math]::Floor(($_.LastWriteTimeUtc - [DateTime]'1970-01-01').TotalSeconds) + '}' })
+                }
+                $body = [System.Text.Encoding]::UTF8.GetBytes('{"files":[' + ($list -join ',') + ']}')
+            } else {
+                $from = [int64]0
+                $full = Join-Path $logsDir $name
+                $fromText = if ($q.ContainsKey('from')) { [string]$q['from'] } else { '0' }
+                if (-not [int64]::TryParse($fromText, [ref]$from) -or $from -lt 0) { $res.StatusCode = 400; $body = [System.Text.Encoding]::UTF8.GetBytes('bad from') }
+                elseif ($name -cnotmatch $combatLogName -or -not (Test-Path -LiteralPath $full -PathType Leaf)) { $res.StatusCode = 404; $body = [System.Text.Encoding]::UTF8.GetBytes('no such log') }
+                else {
+                    $fs = [System.IO.File]::Open($full, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
+                    try {
+                        $n = [int][Math]::Max(0, [Math]::Min(4MB, $fs.Length - $from))
+                        $buf = New-Object byte[] $n
+                        if ($n -gt 0) { [void]$fs.Seek($from, [System.IO.SeekOrigin]::Begin); $read = 0
+                            while ($read -lt $n) { $k = $fs.Read($buf, $read, $n - $read); if ($k -le 0) { break }; $read += $k }
+                            if ($read -lt $n) { $short = New-Object byte[] $read; [Array]::Copy($buf, $short, $read); $buf = $short } }
+                        $body = [byte[]]$buf; $type = 'application/octet-stream'
+                    } finally { $fs.Close() }
+                }
+            }
         } elseif ($path -eq '/api/update' -and $req.HttpMethod -eq 'GET') {
             $type = 'application/json; charset=utf-8'
             $body = [System.Text.Encoding]::UTF8.GetBytes((Get-UpdStatus -Force:($req.Url.Query -like '*force=1*') | ConvertTo-Json -Depth 5))

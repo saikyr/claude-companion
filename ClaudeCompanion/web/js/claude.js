@@ -94,6 +94,16 @@
     return null;
   }
 
+  // a tracker's lootBy for Claude: the 10 creatures with the most corpses, their 8 commonest items
+  function lootByOf(x) {
+    const by = Object.entries(x.lootBy || {});
+    if (!by.length) return null;
+    return by.sort((a, b) => (b[1].corpses || 0) - (a[1].corpses || 0)).slice(0, 10).map(([name, b]) => ({
+      // kills seen before the creature's name was known are under "npc <id>"
+      name, npc: b.npc || null, kills: ((x.killsBy || {})[name] || 0) + (b.npc && name !== 'npc ' + b.npc ? (x.killsBy || {})['npc ' + b.npc] || 0 : 0), corpses: b.corpses || 0,
+      items: Object.entries(b.items || {}).sort((p, q) => q[1] - p[1]).slice(0, 8).map(([id, n]) => ({ id: Number(id), name: A.anyItemName(Number(id)), count: n })) }));
+  }
+
   function build() {
     const CH = A.CH;
     if (!CH || !CH.snap) return null;
@@ -124,7 +134,11 @@
           secs: x.secs != null ? x.secs : null, kills: x.kills || 0, deaths: x.deaths || 0, paused: !!x.paused, ended: x.ended || null,
           zones: Object.keys(x.zones || {}),
           targets: arr(x.targets).map((g) => ({ id: g.id, name: g.name, got: g.got || 0, expected: g.expected != null ? g.expected : null,
-            kills: g.kills || 0, rated: !!g.rated, sample: g.sample || null })) }, A.goldOf(x, { live }));
+            kills: g.kills || 0, rated: !!g.rated, sample: g.sample || null })),
+          // what each creature dropped, by corpse (the addon's lootBy; game builds where the loot window names
+          // its corpse): kills = your and your group's kills of it, corpses = its corpses you opened. Its own
+          // rate for an item lies between count / kills (corpses with no loot open no window) and count / corpses
+          lootBy: lootByOf(x) }, A.goldOf(x, { live }));
         return { running: g ? one(g, true) : null, recent: arr(CH.grinds).slice(-20).reverse().map((x) => one(x)) };
       })(),
       // flight paths you know, by continent; read{} = when that continent's flight map was last open
@@ -169,6 +183,9 @@
       // what this game client allows addons (Core.lua ns.Capabilities): APIs present, values secret or
       // readable, and the place probes (loot window: which corpse each slot came from; inside an instance: GUIDs)
       caps: CH.caps || null,
+      // the game's combat log on this computer (js/combatlog.js), when /combatlog was on: per creature, your and
+      // your group's spells by school (n, full resists, damage and damage resisted) and kills. Counts only
+      combat: CC.combat && CC.combat.state ? CC.combat.api.summary(CC.combat.state) : null,
       pack: A.GD ? { built: A.GD.built ? new Date(A.GD.built * 1000).toISOString() : null, from: A.GD.from } : null,
       character: { name: c.name, level: c.level, xp: c.xp, xpMax: c.xpMax, rested: c.rested, class: c.class, race: c.race,
         faction: c.faction, money: c.money, where: c.where, hearth: c.hearth },
@@ -213,7 +230,7 @@
   }
 
   let last = '';
-  document.addEventListener('cc:loaded', () => {
+  const write = () => {
     if (location.protocol === 'file:') return;          // file mode has no server to write it
     setTimeout(async () => {
       await settingsReady; await installedReady;
@@ -231,7 +248,9 @@
       CC.lastSnapshot = snap;
       if (CC.syncNow) CC.syncNow();
     }, 500);
-  });
+  };
+  document.addEventListener('cc:loaded', write);
+  document.addEventListener('cc:combat', write);   // new combat-log counts (js/combatlog.js) read after the load
   // settings changed in the app (a gear pick, own weights) reach the hidden browser too
   if (!BACKGROUND && location.protocol.startsWith('http')) settingsReady.then(() => setInterval(saveSettings, 10000));
   CC.snapshot = build;
