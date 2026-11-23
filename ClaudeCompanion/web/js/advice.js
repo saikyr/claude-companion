@@ -272,7 +272,7 @@
     b.rows.forEach((r) => {
       const fx = (id) => (effectOf(id) ? ' <span class="dim" title="Its Use or proc effect isn\'t in the score">+ effect</span>' : '');
       const cell = (p) => `<div class="pick">${A.itemIcon(p.o.key, { size: 'xs' })}<span class="q${p.it.q}" data-item="${esc(p.o.key)}">${esc(p.it.name)}</span> <span class="dim">${p.s.toFixed(1)} · ${whereWord[p.o.where]}</span>${fx(p.it.id)}</div>`;
-      const nowCell = (x) => (x ? `<div class="pick">${A.anyItemIcon(x.id, { size: 'xs' })}<span>${esc(A.anyItemName(x.id))}</span> <span class="dim">${x.s.toFixed(1)}</span>${fx(x.id)}</div>` : '<div class="pick dim">empty</div>');
+      const nowCell = (x) => (x ? `<div class="pick">${A.anyItemIcon(x.id, { size: 'xs' })}${A.itemLink(x.id)} <span class="dim">${x.s.toFixed(1)}</span>${fx(x.id)}</div>` : '<div class="pick dim">empty</div>');
       const up = r.gain > 0.5;
       h += `<div class="tr${up ? ' adv-row' : ''}"><div class="dim">${esc(r.name)}</div><div>${r.best.map(cell).join('') || '<span class="dim">nothing you can wear</span>'}</div><div>${r.now.map(nowCell).join('')}</div><div class="c-num${up ? ' pos' : ' dim'}">${up ? '+' + r.gain.toFixed(1) : '✓'}</div></div>`;
     });

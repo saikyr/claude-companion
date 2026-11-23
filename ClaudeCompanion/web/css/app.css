@@ -186,6 +186,9 @@ span[data-item], .nm [data-tip] { font-weight: 500; }
 .c-main .grow { min-width: 0; }
 .c-main .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .c-main .sub { color: var(--t3); font-size: var(--f-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* one item inside a line of text (A.itemInline): small icon, then the name */
+.iteminl { display: inline-flex; align-items: center; gap: var(--sp1); vertical-align: middle; max-width: 100%; }
+.iteminl + .iteminl { margin-left: var(--sp2); }
 .c-num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .c-num.best { color: var(--t1); font-weight: 600; }
 .c-reag { display: flex; flex-wrap: wrap; gap: 2px var(--sp2); }

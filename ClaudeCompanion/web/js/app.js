@@ -210,6 +210,63 @@
     return icon(g ? g[5] : null, Object.assign({ q: g ? g[1] : 1, tip: gdTip(id) }, o));
   }
 
+  // ------------------------------------------------------------ one item, drawn the same on every page
+  // Icon and name in the item's quality colour, both with its tooltip (your copy when you have one,
+  // else the pack's). id: item id; o: {key: your copy's item key, name, q, count, size}
+  function ownKey(id, o) { if (o && o.key && item(o.key)) return o.key; const mine = ITEM_BY_ID[id]; return mine ? mine.key : null; }
+  function itemLink(id, o) {
+    o = o || {};
+    const key = ownKey(id, o), mine = key && item(key), g = gdItem(id);
+    const q = o.q != null ? o.q : mine && mine.q != null ? mine.q : g ? g[1] : 1;
+    const name = o.name || (mine && mine.name) || (g && g[0]) || '#' + id;
+    const attr = key ? ` data-item="${esc(key)}"` : g ? ` data-tip="${esc(JSON.stringify(gdTip(id)))}"` : '';
+    return `<span class="q${q}"${attr}>${esc(name)}</span>`;
+  }
+  function itemIconOf(id, o) {
+    o = o || {};
+    const key = ownKey(id, o), io = { size: o.size || 'sm', count: o.count };
+    if (o.q != null) io.q = o.q;
+    return key ? itemIcon(key, io) : anyItemIcon(id, io);
+  }
+  // the item cell of a table row (.tr) or list row: icon, name and badges, then sub lines and a Needs line.
+  // o.sub: text (escaped here) or an array of texts; o.subHtml: markup; o.tags: markup after the name; o.need: text
+  function itemCell(id, o) {
+    o = o || {};
+    const subs = [].concat(o.sub == null ? [] : o.sub).filter((x) => x != null && x !== '').map((x) => `<div class="sub">${esc(x)}</div>`).join('')
+      + (o.subHtml ? `<div class="sub">${o.subHtml}</div>` : '');
+    return `<div class="c-main">${itemIconOf(id, o)}<div class="grow"><div class="nm">${itemLink(id, o)}${o.tags || ''}</div>${subs}${o.need ? `<div class="sub need">${esc(o.need)}</div>` : ''}</div></div>`;
+  }
+  // a small icon then the name, inside a line of text
+  const itemInline = (id, o) => `<span class="iteminl">${itemIconOf(id, Object.assign({ size: 'xs' }, o))}${itemLink(id, o)}</span>`;
+
+  // ------------------------------------------------------------ the app's own icons (tabs, kinds of step and card)
+  // One map, every name checked against the Classic client's icon set (test/web/icons.test.js):
+  // no icon from a later expansion, none that belongs to one class or race.
+  const UI_ICON = {
+    overview: 'inv_misc_book_09', claude: 'inv_scroll_03', character: 'inv_chest_cloth_17', gear: 'inv_helmet_06',
+    weights: 'inv_misc_note_02', bags: 'inv_misc_bag_08', talents: 'inv_misc_book_06', rep: 'inv_banner_02',
+    quests: 'inv_misc_note_01', grinds: 'inv_misc_coin_02', runs: 'inv_misc_bone_humanskull_01', journal: 'inv_misc_book_11',
+    professions: 'trade_blacksmithing', auction: 'inv_misc_coin_01', system: 'inv_misc_gear_01',
+    // kinds of next step and of From Claude card
+    dungeon: 'inv_misc_bone_humanskull_01', quest: 'inv_misc_note_01', zone: 'inv_misc_map_01', unlock: 'inv_misc_key_04',
+    prof: 'trade_blacksmithing', farm: 'inv_misc_coin_02', flip: 'inv_misc_coin_01', craft: 'trade_blacksmithing',
+    route: 'inv_misc_map_01', note: 'inv_scroll_03', cooldown: 'spell_holy_magicalsentry',
+  };
+  // each profession's own icon (the game's)
+  const PROF_ICON = { Tailoring: 'trade_tailoring', Enchanting: 'trade_engraving', Cooking: 'inv_misc_food_15', Alchemy: 'trade_alchemy', Blacksmithing: 'trade_blacksmithing',
+    Engineering: 'trade_engineering', Leatherworking: 'trade_leatherworking', 'First Aid': 'spell_holy_sealofsacrifice', Mining: 'trade_mining', Herbalism: 'trade_herbalism',
+    Skinning: 'inv_misc_pelt_wolf_01', Fishing: 'trade_fishing' };
+  // Talents & Bars: your class's own icon when the save says your class
+  const CLASS_ICON = { WARRIOR: 'ability_warrior_battleshout', PALADIN: 'spell_holy_sealofmight', HUNTER: 'ability_hunter_aimedshot', ROGUE: 'ability_backstab',
+    PRIEST: 'spell_holy_holybolt', SHAMAN: 'spell_nature_bloodlust', MAGE: 'spell_frost_frostbolt02', WARLOCK: 'spell_shadow_shadowbolt', DRUID: 'ability_druid_catform' };
+  const ALLIANCE = /^(Human|Dwarf|Night ?Elf|Gnome|High ?Elf)$/i, HORDE = /^(Orc|Undead|Scourge|Tauren|Troll|Goblin)$/i;
+  function uiIcon(k) {
+    const c = ((CH && CH.snap) || {}).character || {};
+    if (k === 'talents' && c.class) { const ic = CLASS_ICON[String(c.classFile || c.class).toUpperCase().replace(/ /g, '')]; if (ic) return ic; }
+    if (k === 'rep' && c.race) { if (HORDE.test(c.race)) return 'inv_bannerpvp_01'; if (ALLIANCE.test(c.race)) return 'inv_bannerpvp_02'; }
+    return UI_ICON[k] || 'inv_misc_questionmark';
+  }
+
   // AH price for an item id: the newest full-scan reading if there is one,
   // otherwise the newest price you saw while browsing.
   function priceOf(id) {
@@ -311,11 +368,9 @@
 
   // ------------------------------------------------------------ tabs
   const TABS = [
-    ['overview', 'Overview', 'inv_misc_book_09'], ['character', 'Character', 'inv_chest_cloth_17'], ['bags', 'Bags & Bank', 'inv_misc_bag_08'],
-    ['talents', 'Talents & Bars', 'spell_holy_holybolt'], ['grinds', 'Grinds', 'inv_misc_coin_02'], ['runs', 'Dungeons', 'inv_misc_key_10'], ['quests', 'Quests', 'inv_misc_note_01'],
-    ['professions', 'Professions', 'trade_engraving'], ['rep', 'Reputation', 'inv_misc_tournaments_banner_human'], ['auction', 'Auction House', 'inv_misc_coin_17'],
-    ['journal', 'Journal', 'inv_misc_book_11'], ['system', 'System', 'trade_engineering'], ['gear', 'Gear', 'inv_helmet_06'],
-    ['claude', 'From Claude', 'inv_scroll_03'], ['weights', 'Stat weights', 'inv_misc_note_02'],
+    ['overview', 'Overview'], ['character', 'Character'], ['bags', 'Bags & Bank'], ['talents', 'Talents & Bars'], ['grinds', 'Grinds'],
+    ['runs', 'Dungeons'], ['quests', 'Quests'], ['professions', 'Professions'], ['rep', 'Reputation'], ['auction', 'Auction House'],
+    ['journal', 'Journal'], ['system', 'System'], ['gear', 'Gear'], ['claude', 'From Claude'], ['weights', 'Stat weights'],
   ];
   // sidebar groups (layout only)
   const NAV_GROUPS = [
@@ -878,7 +933,6 @@
   }
   // the game's skill-up colours: 0 orange, 1 yellow, 2 green, 3 grey
   const DIFF = [['optimal', 'Always gives a skill point'], ['medium', 'Usually gives a skill point'], ['easy', 'Rarely gives a skill point'], ['trivial', 'No skill points']];
-  const PROF_ICON = { Tailoring: 'trade_tailoring', Enchanting: 'trade_engraving', Cooking: 'inv_misc_food_15', Alchemy: 'trade_alchemy', Blacksmithing: 'trade_blacksmithing', Engineering: 'trade_engineering', Leatherworking: 'trade_leatherworking', 'First Aid': 'spell_holy_sealofsacrifice' };
   V.professions = function () {
     const skills = arr((CH.snap || {}).skills).filter((s, i, all) => !s.isHeader && PROFESSION.test(s.name) && all.findIndex((y) => y.name === s.name) === i);
     const profs = Object.values(CH.professions || {}).filter((p) => p.name).sort((a, b) => arr(b.recipes).length - arr(a.recipes).length);
@@ -1098,7 +1152,7 @@
     if (on('mine') && !(owned && owned.length)) h += '<div class="empty">No auctions saved. Open the AH’s Auctions tab in game, then Sync.</div>';
     if (on('mine') && owned && owned.length) {
       h += `<p class="meta">Saved ${ago(ah.owned.taken)}</p><div class="list">`;
-      owned.forEach((a) => (h += `<div class="li">${a.item ? itemIcon(a.item, { size: 'sm', count: a.qty }) : anyItemIcon(a.id, { size: 'sm', count: a.qty })}<div class="grow">${a.item ? itemName$(a.item, a.link) : esc(anyItemName(a.id))}${a.left ? `<div class="sub">${Math.round(a.left / 60)} min left when saved</div>` : ''}</div><div class="num">${money(a.buyout)}</div></div>`));
+      owned.forEach((a) => (h += `<div class="li">${a.item ? itemIcon(a.item, { size: 'sm', count: a.qty }) : anyItemIcon(a.id, { size: 'sm', count: a.qty })}<div class="grow">${a.item ? itemName$(a.item, a.link) : itemLink(a.id)}${a.left ? `<div class="sub">${Math.round(a.left / 60)} min left when saved</div>` : ''}</div><div class="num">${money(a.buyout)}</div></div>`));
       h += '</div>';
     }
     if (!on('prices')) { /* another section is shown */ }
@@ -1110,7 +1164,7 @@
         const pr = priceOf(p.id) || {};
         const hist = o.filter((x) => x.min).map((x) => x.med || x.min);
         const g = !it && gdItem(p.id);
-        h += `<div class="tr"><div class="c-main">${it ? itemIcon(it.key, { size: 'xs' }) : anyItemIcon(p.id, { size: 'xs' })}<div class="nm">${it ? itemName$(it.key) : g ? `<span class="q${g[1]}">${esc(g[0])}</span>` : esc(p.name || '#' + p.id)}</div></div>
+        h += `<div class="tr"><div class="c-main">${it ? itemIcon(it.key, { size: 'xs' }) : anyItemIcon(p.id, { size: 'xs' })}<div class="nm">${it ? itemName$(it.key) : itemLink(p.id, { name: g ? null : p.name })}</div></div>
           <div class="c-num">${pr.none ? '<span class="dim">none</span>' : pr.qty || ''}</div>
           <div class="dim">${ago(p.last)}${hist.length > 1 ? ` · ${hist.length}×` : ''}</div>
           <div>${hist.length > 2 ? spark(hist) : ''}</div>
@@ -1220,7 +1274,7 @@
     const warn = {};
     fr.forEach((f) => { if (f.tab && f.st !== 'ok') warn[f.tab] = true; });
     const tabLabel = (TABS.find((t) => t[0] === STATE.tab) || TABS[0])[1];
-    const navBtn = (k) => { const [, l, ic] = TABS.find((t) => t[0] === k); return `<button data-tab="${k}" title="${l}" class="${STATE.tab === k ? 'on' : ''}"${STATE.tab === k ? ' aria-current="page"' : ''}><img src="${ICON_URL}${ic}.jpg" alt=""><span>${l}</span>${warn[k] ? '<span class="dot old" title="Some data here is out of date"></span>' : ''}</button>`; };
+    const navBtn = (k) => { const [, l] = TABS.find((t) => t[0] === k), ic = uiIcon(k); return `<button data-tab="${k}" title="${l}" class="${STATE.tab === k ? 'on' : ''}"${STATE.tab === k ? ' aria-current="page"' : ''}><img src="${ICON_URL}${ic}.jpg" alt=""><span>${l}</span>${warn[k] ? '<span class="dot old" title="Some data here is out of date"></span>' : ''}</button>`; };
     app.innerHTML = `<aside class="side">
         <div class="me"><div class="av" title="Level ${c.level || '?'}">${c.level || '?'}</div><div class="nm">${esc(c.name && c.name !== 'World' ? c.name : 'Your character')}</div><div class="dim small">Level ${c.level || '?'} ${esc(c.race || '')} ${esc(c.class || '')}</div>
           <div class="xp" title="${c.level >= MAX_LEVEL ? 'Max level' : `${(c.xp || 0).toLocaleString()} / ${(c.xpMax || 0).toLocaleString()} XP`}"><i style="width:${xpPct}%"></i><i class="rest" style="width:${restPct}%"></i></div>
@@ -1273,7 +1327,8 @@
   window.CC = {
     load, loadText, V, reload: () => RAW && load(RAW, { live: STATE.live }),
     api: { get CH() { return CH; }, get RAW() { return RAW; }, get DB() { return DB; }, STATE, GD, esc, arr, money, icon, itemIcon, anyItemIcon, anyItemName, gdItem, gdTip,
-      gdSourceLines, itemGates, recipeLine, planPrice, priceOf, trackerStats, goldOf, lootStrip, ago, dur, fmtTime, flipsOf, cooldowns, craftCost, specTrees, specLabel, TREE_NAMES, gearIds, item, byId, render, QCOL, deOutcome },
+      gdSourceLines, itemGates, recipeLine, planPrice, priceOf, trackerStats, goldOf, lootStrip, ago, dur, fmtTime, flipsOf, cooldowns, craftCost, specTrees, specLabel, TREE_NAMES, gearIds, item, byId, render, QCOL, deOutcome,
+      itemLink, itemIconOf, itemCell, itemInline, uiIcon, UI_ICON, PROF_ICON },
   };
 
   // ------------------------------------------------------------ data sources

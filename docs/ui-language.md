@@ -93,6 +93,21 @@ or "Your pick"); the select changes it. Below, one profile at a time: its number
 then **Why these numbers**: a short paragraph, one line per stat, the guide's order, and the source.
 Built-in profiles are named after their tree, nothing else ("Holy", "Protection (survival)").
 
+## One item, one look
+
+Every page draws an item the same way (`js/app.js`): `A.itemCell(id, {...})` for a table or list row (icon,
+name in its quality colour, badges, a line under it, an amber "Needs ..." line), `A.itemLink(id)` for the
+name alone, `A.itemInline(id)` for a small icon and the name inside a line of text. Icon and name both carry
+the item's tooltip: your own copy when you have one, else the game-data pack's. No page builds its own.
+
+## The app's own icons
+
+Tabs, kinds of next step and kinds of From Claude card take their icon from one map, `UI_ICON` in
+`js/app.js` (`A.uiIcon(kind)`); professions from `PROF_ICON`, Talents & Bars from the class (`CLASS_ICON`),
+Reputation from the faction's banner. Every name there is an icon of the original client (checked by
+`test/web/icons.test.js`): nothing from a later expansion, nothing that belongs to one class or race when
+it stands for everyone. Dungeon = skull, unlock = key, quest = note, quest zone = map.
+
 ## Controls
 
 The same few controls on every page (`css/app.css`):

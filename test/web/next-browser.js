@@ -123,6 +123,18 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   const det = await text('.nx-det');
   check(/%|no drop rate/.test(det), `${d1.id}: its upgrades with boss and drop chance`);
   check(/Classic rate|Forever/.test(det), 'drop chances say whether they are Forever or Classic');
+  // every item in an opened step is the shared item row: icon and quality-coloured name, both with the tooltip
+  const itemRows = await page.$$eval('.nx-det .tr', (els) => els.map((e) => ({ ic: !!e.querySelector('.c-main > .ic'),
+    tipIc: !!e.querySelector('.c-main > .ic[data-tip], .c-main > .ic[data-item]'), tipNm: !!e.querySelector('.nm [data-tip], .nm [data-item]'), q: !!e.querySelector('.nm [class^="q"]') })));
+  check(itemRows.length > 0 && itemRows.every((r) => r.ic), `${d1.id}: every row has an icon (${itemRows.length})`);
+  const ups = itemRows.filter((r) => r.q);
+  check(ups.length > 0 && ups.every((r) => r.tipIc && r.tipNm), `${d1.id}: item rows have the tooltip on icon and name (${ups.length})`);
+  // Dire Maul: the pack's twin quests (1318/7703 Unfinished Gordok Business) count once
+  const dm = await page.evaluate(() => { const x = window.CC.next.steps().find((s) => s.id === 'dungeon:Dire Maul'); return x && x.quests.map((q) => q.name); });
+  check(dm && dm.length > 0 && new Set(dm).size === dm.length, `Dire Maul: each quest once (${dm && dm.length})`);
+  // the step icons come from the app's icon map: the Dungeons one is the skull, not a key
+  const dIc = await page.$eval(`[data-nextopen="${d1.id}"] .ic img`, (i) => i.src);
+  check(/inv_misc_bone_humanskull_01/.test(dIc), 'a dungeon step shows the dungeon icon');
 
   // ---- Claude's snapshot carries the same list
   await page.waitForTimeout(500);

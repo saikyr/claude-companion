@@ -82,7 +82,7 @@ recorded per craft.
 | Stat weights per spec, own profiles | Stat weights tab | `gear[].weightValues`, `weightProfiles[]` |
 | Quest log with every reward scored for every spec, and the chain's next quest | Quests tab | `quests[]` (`rewards[].specs[]`, `next`) |
 | Quests to keep: `keep: true` with `keepWhy` and `dungeon` when the quest or any step of its chain is a pack `Dungeon` quest, has its quest zone or objective in an instance, or is a step of a key or attunement (`rules.js` unlocks: the Skeleton Key, the Seal of Ascension...); also when it gives rep with a faction some item needs (pack `req`) and the character isn't Exalted. `rep[]`: the rep a quest gives. Never on a drop list | snapshot only | `quests[].keep`, `keepWhy`, `dungeon`, `rep`; the brief's `quests[]` |
-| Quests you can do, attunements and keys, ranked next steps | Overview (Now) | `nextSteps[]` |
+| Quests you can do, attunements and keys, ranked next steps (a quest the pack has twice, same title, zone, objective and rewards, counts once) | Overview (Now) | `nextSteps[]` |
 | Talents and action bars, both specs | Talents & Bars | save only (`specs`) |
 | Reputation | Reputation tab | `reputation[]` |
 | Professions, recipes, cooldowns (Mooncloth, transmutes) | Professions tab | `professions[]`, `cooldowns[]` |

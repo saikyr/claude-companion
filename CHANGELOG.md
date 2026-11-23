@@ -3,6 +3,14 @@
 Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 
 ## 1.5.0 (in progress: every merge to main updates itself)
+- **One way to show an item, everywhere.** A dungeon opened on the Overview (Dire Maul, say) now lists its
+  drops like the Gear page does: icon, name in its quality colour, the tooltip on both. So do quest rewards,
+  what a profession opens, Ready now, From Claude item lists, the AH and Best from what you own.
+- **Icons that mean what they say.** Dungeons show a skull instead of an odd curly key; attunements a
+  key; a profession step its own profession's icon; Talents & Bars your class's icon; Reputation your
+  faction's banner. Every icon the app picks is now from the original game (two came from later expansions).
+- **Dungeon quests counted once.** The game data has a few quests twice (Dire Maul's "Unfinished Gordok
+  Business"), so a dungeon listed them twice and counted their rewards twice in its value. Now once.
 - **The brief, sixth version.** Now that both specs' gear reaches it, the brief Claude reads first is trimmed again (10.7 to 9.4 KB on a real save): shorter reasons to keep a quest, sources cut to their first clause, mobs as "name ×kills", and the computers listed only when their builds differ. Nothing is lost: each part asked for by name is whole.
 - **Flight paths: only the ones you know.** Greyed-out flight points on the flight map were saved as known (Cenarion Hold, for one). Now only the ones you can fly to count, and a path the map no longer shows as known is dropped the next time you open a flight map on that continent.
 - **Claude for friends, in the download.** A friend's own Claude can't read the Companion's private code, so

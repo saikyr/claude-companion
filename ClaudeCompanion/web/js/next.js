@@ -199,9 +199,10 @@
     });
     const dungeonRow = (zone) => out.find((x) => x.kind === 'dungeon' && x.name === zone) || out.find((x) => x.kind === 'dungeon' && x.zone === zone);
     // ---- quests
+    const twins = twinQuests(known);
     for (const [k, q] of (known ? Object.entries(GD().quests) : [])) {
       const id = Number(k);
-      if (q.repeatable || q.type === 'Raid' || SEASONAL.test(q.cat || '') || !Q().forYou(id) || Q().isDone(id)) continue;
+      if (twins.has(id) || q.repeatable || q.type === 'Raid' || SEASONAL.test(q.cat || '') || !Q().forYou(id) || Q().isDone(id)) continue;
       if (raidQuest(q)) continue;
       const st = Q().status(id);
       if (st.state === 'done' || st.state === 'no' || st.state === 'unknown') continue;
@@ -280,6 +281,27 @@
     return steps().filter((x) => inFilter(x, f)).sort((a, b) => (a.kind === 'unlock' && a.done) - (b.kind === 'unlock' && b.done) || b.v - a.v || a.name.localeCompare(b.name));
   }
 
+  // The pack has some quests twice: a copy with no quest giver, or a second id for the same quest (Dire Maul's
+  // "Unfinished Gordok Business" 1318 and 7703). Same title, zone, objective and rewards = one quest: keep the one
+  // in your log, else the one with a quest giver, else the lower id; once any copy is done, all are.
+  function twinQuests(known) {
+    const out = new Set();
+    if (!known) return out;
+    const by = {};
+    for (const [k, q] of Object.entries(GD().quests)) {
+      const key = [q.t, q.cat || '', arr(q.obj)[0] || '', JSON.stringify(q.choice || []), JSON.stringify(q.reward || [])].join('|');
+      (by[key] = by[key] || []).push(Number(k));
+    }
+    Object.values(by).forEach((all) => {
+      const ids = all.filter((id) => Q().forYou(id));   // the other faction's copy is not a twin of yours
+      if (ids.length < 2) return;
+      if (ids.some((id) => Q().isDone(id))) { ids.forEach((id) => out.add(id)); return; }
+      const score = (id) => { const st = Q().status(id).state; return (st === 'active' || st === 'ready' ? 4 : 0) + (arr(GD().quests[id].from).length ? 2 : 0); };
+      ids.sort((a, b) => score(b) - score(a) || a - b).slice(1).forEach((id) => out.add(id));
+    });
+    return out;
+  }
+
   // ---------------------------------------------------------------- ready now
   function readyNow() {
     const out = [], s = snap(), now = Date.now() / 1000;
@@ -298,14 +320,14 @@
   // ---------------------------------------------------------------- view
   const KIND_WORD = { dungeon: 'Dungeon', quest: 'Quest', zone: 'Quests', item: 'Item', prof: 'Profession', unlock: 'Unlock' };
   const SOURCE_WORD = { ah: 'On the AH', crafted: 'Crafted', vendor: 'Vendor', world: 'World drop' };
-  const ICONS = { dungeon: 'inv_misc_key_10', quest: 'inv_misc_note_01', zone: 'inv_misc_map_01', prof: 'trade_engraving', unlock: 'inv_misc_key_13' };
+  // the app's own icons (app.js UI_ICON); a profession step shows that profession's icon, an item or quest its item
+  const kindIcon = (k) => A.icon(A.uiIcon(k), { size: 'sm' });
   function rowIcon(x) {
-    if (x.kind === 'item') return A.anyItemIcon(x.item, { size: 'sm' });
-    if (x.kind === 'quest' && x.items[0]) return A.anyItemIcon(x.items[0].id, { size: 'sm' });
-    return A.icon(ICONS[x.kind] || 'inv_misc_questionmark', { size: 'sm' });
+    if (x.kind === 'item') return A.itemIconOf(x.item);
+    if (x.kind === 'quest' && x.items[0]) return A.itemIconOf(x.items[0].id);
+    if (x.kind === 'prof' && A.PROF_ICON[x.prof]) return A.icon(A.PROF_ICON[x.prof], { size: 'sm' });
+    return kindIcon(x.kind);
   }
-  // an item's name in its quality colour, with its tooltip (pack items too)
-  const itemLink = (id, name) => { const g = A.gdItem(id); return `<span class="q${g ? g[1] : 1}" data-tip="${esc(JSON.stringify(A.gdTip(id)))}">${esc(name || (g && g[0]) || '#' + id)}</span>`; };
   const pct = (v) => `${v >= 10 ? Math.round(v) : v.toFixed(1)}% of a level`;
   function lines(x) {
     const st = x.st, why = [];
@@ -344,27 +366,35 @@
   // what one step holds, shown when it's opened
   function detail(x) {
     let h = '<div class="nx-det">';
-    const tr = (main, sub, val) => `<div class="tr"><div class="c-main"><div class="grow"><div class="nm">${main}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div></div>${val}</div>`;
+    // every row the same way: an icon, the name, a line under it (items through the shared item cell, app.js itemCell)
+    const tr = (ic, main, sub, val) => `<div class="tr"><div class="c-main">${ic}<div class="grow"><div class="nm">${main}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div></div>${val}</div>`;
+    const itemTr = (id, name, sub, val) => `<div class="tr">${A.itemCell(id, { name, subHtml: sub })}${val}</div>`;
+    const qIc = kindIcon('quest');
+    // a quest's rewards, each with its icon and tooltip
+    const rewards = (items) => items.map((i) => A.itemInline(i.id, { name: i.name })).join('');
     const gv = (g) => `<div class="c-num pos">${gainTxt(g) || '<span class="dim">–</span>'}</div>`;
     const qa = (id, t) => `<a href="https://foreverchanges.pro/quest/${id}" target="_blank" rel="noopener">${esc(t)}</a>`;
     if (x.kind === 'dungeon') {
-      x.ups.slice(0, 12).forEach((u) => { h += tr(itemLink(u.id, u.name), `${esc(u.boss)} · ${u.pct == null ? 'no drop rate' : u.forever ? `${u.pct}% (Forever, ${u.kills} kills)` : `${u.pct}% (Classic rate)`}${u.at ? ' · at ' + u.at : ''}`, gv(u.g)); });
+      if (x.ups.length) h += `<div class="tsec">Upgrades <span>${x.ups.length}, with the boss and drop chance</span></div>`;
+      x.ups.slice(0, 12).forEach((u) => { h += itemTr(u.id, u.name, `${esc(u.boss)} · ${u.pct == null ? 'no drop rate' : u.forever ? `${u.pct}% (Forever, ${u.kills} kills)` : `${u.pct}% (Classic rate)`}${u.at ? ' · at ' + u.at : ''}`, gv(u.g)); });
       if (x.ups.length > 12) h += `<p class="meta">and ${x.ups.length - 12} more upgrades</p>`;
-      x.quests.forEach((q) => { h += tr('Quest: ' + qa(q.quest, q.name), q.items.map((i) => esc(i.name)).join(', ') || (q.xp ? pct(q.xp) : ''), gv(q.gains)); });
+      if (x.quests.length) h += `<div class="tsec">Quests <span>${x.quests.length}</span></div>`;
+      x.quests.forEach((q) => { h += tr(q.items[0] ? A.itemIconOf(q.items[0].id) : qIc, qa(q.quest, q.name), q.items.length ? rewards(q.items) : (q.xp ? pct(q.xp) : ''), gv(q.gains)); });
     } else if (x.kind === 'quest') {
-      (x.st.steps || [x.quest]).forEach((s, i, all) => { const p = Q().pack(s) || {}; h += tr(`${i + 1}. ${qa(s, p.t || '#' + s)}`, `${p.cat || ''}${who(p) ? ' · from ' + esc(who(p)) : ''}`, i === all.length - 1 ? gv(x.gains) : '<div></div>'); });
-      x.items.forEach((it) => { h += tr(`${it.how === 'choose' ? 'Choose' : 'Reward'}: ${itemLink(it.id, it.name)}`, '', gv(it.g)); });
+      (x.st.steps || [x.quest]).forEach((s, i, all) => { const p = Q().pack(s) || {}; h += tr(qIc, `${i + 1}. ${qa(s, p.t || '#' + s)}`, `${p.cat || ''}${who(p) ? ' · from ' + esc(who(p)) : ''}`, i === all.length - 1 ? gv(x.gains) : '<div></div>'); });
+      x.items.forEach((it) => { h += itemTr(it.id, it.name, it.how === 'choose' ? 'Choose one' : 'Reward', gv(it.g)); });
     } else if (x.kind === 'zone') {
-      x.quests.forEach((q) => { h += tr(qa(q.quest, q.name), `level ${q.lv}${q.from ? ' · from ' + esc(q.from) : ''}`, `<div class="c-num">${pct(q.xp)}</div>`); });
+      x.quests.forEach((q) => { h += tr(qIc, qa(q.quest, q.name), `level ${q.lv}${q.from ? ' · from ' + esc(q.from) : ''}`, `<div class="c-num">${pct(q.xp)}</div>`); });
     } else if (x.kind === 'prof') {
-      x.opens.forEach((o) => { h += tr(itemLink(o.item, o.name), esc(o.where || ''), gv(o.gains)); });
+      x.opens.forEach((o) => { h += itemTr(o.item, o.name, esc(o.where || ''), gv(o.gains)); });
       const p = (A.CH.professions || {})[x.prof];
       const ups = arr(p && p.recipes).filter((r) => r.difficulty != null && r.difficulty < 2).map((r) => ({ r, c: A.craftCost ? A.craftCost(r) : null }))
         .sort((a, b) => (a.c && !a.c.missing ? a.c.cost : 1e12) - (b.c && !b.c.missing ? b.c.cost : 1e12)).slice(0, 5);
       h += `<div class="tsec">Cheapest skill-ups now <span>${p ? 'orange and yellow recipes, reagents at your AH prices' : `open ${esc(x.prof)} in game, then Sync`}</span></div>`;
-      ups.forEach(({ r, c }) => { h += tr(esc(r.name), r.difficulty === 0 ? 'always gives a point' : 'usually gives a point', `<div class="c-num">${c && !c.missing ? A.money(c.cost, { short: true }) : '<span class="dim">no price</span>'}</div>`); });
+      const recIc = (r) => (r.output && A.gdItem(r.output) ? A.itemIconOf(r.output) : A.icon(r.icon || A.PROF_ICON[x.prof], { size: 'sm' }));
+      ups.forEach(({ r, c }) => { h += tr(recIc(r), esc(r.name), r.difficulty === 0 ? 'always gives a point' : 'usually gives a point', `<div class="c-num">${c && !c.missing ? A.money(c.cost, { short: true }) : '<span class="dim">no price</span>'}</div>`); });
     } else if (x.kind === 'unlock') {
-      if (x.st && x.st.steps) x.st.steps.forEach((s, i) => { const p = Q().pack(s) || {}; h += tr(`${i + 1}. ${qa(s, p.t || '#' + s)}`, `${p.cat || ''}${who(p) ? ' · from ' + esc(who(p)) : ''}`, '<div></div>'); });
+      if (x.st && x.st.steps) x.st.steps.forEach((s, i) => { const p = Q().pack(s) || {}; h += tr(qIc, `${i + 1}. ${qa(s, p.t || '#' + s)}`, `${p.cat || ''}${who(p) ? ' · from ' + esc(who(p)) : ''}`, '<div></div>'); });
       h += `<p class="meta">Source: ${esc(x.u.src)}. ${x.u.who === 'each' ? 'Everyone in the group needs it.' : 'One holder opens it for the group.'}</p>`;
     } else if (x.kind === 'item') {
       h += `<p class="meta">${esc(x.where || '')} <a class="linkbtn" data-tab="gear">Open on the Gear page</a></p>`;
@@ -386,12 +416,14 @@
     let h = '';
     const ready = readyNow();
     if (ready.length) {
-      h += `<h2>Ready now</h2><div class="list">${ready.map((r) => `<div class="li"${r.key ? ` data-item="${esc(r.key)}"` : ''}>${r.kind === 'owned' ? A.itemIcon(r.key, { size: 'sm' }) : r.kind === 'cooldown' ? A.icon(r.icon, { size: 'sm' }) : '<span class="ic sm qmark">?</span>'}<div class="grow">${esc(r.name)}<div class="sub">${esc(r.sub)}</div></div></div>`).join('')}</div>`;
+      const readyIc = (r) => (r.kind === 'owned' ? A.itemIcon(r.key, { size: 'sm' }) : r.kind === 'cooldown' ? A.icon(r.icon || A.uiIcon('cooldown'), { size: 'sm' }) : kindIcon('quest'));
+      const readyNm = (r) => (r.kind === 'owned' ? A.itemLink(Number((/^item:(\d+)/.exec(r.key) || [])[1]), { key: r.key, name: r.name }) : esc(r.name));
+      h += `<h2>Ready now</h2><div class="list">${ready.map((r) => `<div class="li">${readyIc(r)}<div class="grow"><div>${readyNm(r)}</div><div class="sub">${esc(r.sub)}</div></div></div>`).join('')}</div>`;
     }
     if (notes.all.length) {
       const visible = list.slice(0, A.STATE.nextAll === f ? 200 : 25);
       const shown = notes.all.filter((c) => !c.step || !visible.some((x) => x.id === c.step)).slice(0, 4);
-      if (shown.length) h += `<h2>From Claude <span class="n dim small">${notes.all.length} open</span></h2><div class="list">${shown.map((c) => `<div class="li link" data-tab="claude"><div class="grow"><div>${esc(c.title)}</div>${c.summary ? `<div class="sub">${esc(c.summary)}</div>` : ''}</div></div>`).join('')}</div>`;
+      if (shown.length) h += `<h2>From Claude <span class="n dim small">${notes.all.length} open</span></h2><div class="list">${shown.map((c) => `<div class="li link" data-tab="claude">${kindIcon(['farm', 'flip', 'quest', 'gear', 'craft', 'route'].includes(c.kind) ? c.kind : 'note')}<div class="grow"><div>${esc(c.title)}</div>${c.summary ? `<div class="sub">${esc(c.summary)}</div>` : ''}</div></div>`).join('')}</div>`;
     }
     const counts = Object.fromEntries(FILTERS.map(([k]) => [k, ranked(k).length]));
     h += `<h2>Next steps</h2><div class="toolbar"><div class="chips">${FILTERS.map(([k, l]) => `<button data-nextf="${k}" class="${f === k ? 'on' : ''}">${l} <span>${counts[k]}</span></button>`).join('')}</div>
