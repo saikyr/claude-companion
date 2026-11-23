@@ -60,6 +60,7 @@ that must hold go in CI or in the database (for example `private.claude_put_sett
 
     # app logic: stat weights and item advice (node)
     node test/web/advice.test.js
+    node test/web/classes.test.js     # every class and spec: trees, weights, weapon DPS per hand, who wears what
 
     # game data: one source per domain (docs/ARCHITECTURE.md, Data sources); rebuild ~10 min first time
     pip install lupa && sh gamedata/build.sh

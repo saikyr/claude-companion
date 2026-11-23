@@ -89,8 +89,8 @@
   function measureIn(ctx, it, st, row) {
     const inv = invOf(it);
     const [name, slots] = row, worn = ctx.base.worn;
-    const s = W.score(st, ctx.w);
-    const cur = slots.map((n) => worn[n] ? { n, id: worn[n].id, s: W.score(worn[n].st, ctx.w) } : { n, id: null, s: 0 });
+    const s = W.score(st, ctx.w, name);
+    const cur = slots.map((n) => worn[n] ? { n, id: worn[n].id, s: W.score(worn[n].st, ctx.w, n) } : { n, id: null, s: 0 });
     if (cur.some((c) => c.id === it.id)) return { row: name, s, gain: 0, same: true };
     const mh = worn[16], oh = worn[17];
     const twoHandWorn = !!mh && CC.gear.wornInv(mh) === 17;
@@ -98,7 +98,7 @@
     const vs = cur.reduce((a, c) => (c.s < a.s ? c : a), cur[0]);
     // a two-hander replaces the main hand and the off hand
     const withOh = name === 'Main hand' && inv === 17 && oh;
-    const base = vs.s + (withOh ? W.score(oh.st, ctx.w) : 0);
+    const base = vs.s + (withOh ? W.score(oh.st, ctx.w, 17) : 0);
     return { row: name, s, base, gain: s - base, vs, also: withOh ? oh.id : null, target: vs.n, effect: effectOf(it.id) || (vs.id ? effectOf(vs.id) : false) };
   }
 
@@ -210,13 +210,16 @@
       if (!it || !wearable(it, C.use) || it.req > lvl) return;
       const tag = o.key + '@' + o.where + (o.bag != null ? o.bag + ':' + o.slot : o.slot);
       if (seen.has(tag)) return; seen.add(tag);
-      pool.push({ o, it, inv: invOf(it), s: W.score(statsOf(o.key), ctx.w), unique: /(?:^|\n)Unique/.test(tipText(it)) });
+      const st = statsOf(o.key);
+      // scored where it would be worn: weapon DPS counts per hand (W.dpsWeight)
+      pool.push({ o, it, inv: invOf(it), st, s: W.score(st, ctx.w), unique: /(?:^|\n)Unique/.test(tipText(it)) });
     });
     const worn = ctx.base.worn;
-    const baseScore = (n) => (worn[n] ? W.score(worn[n].st, ctx.w) : 0);
-    const pick = (invs, n) => {
+    const baseScore = (n) => (worn[n] ? W.score(worn[n].st, ctx.w, n) : 0);
+    const inSlot = (p, slot) => Object.assign({}, p, { s: W.score(p.st, ctx.w, slot) });
+    const pick = (invs, n, slot) => {
       const out = [], ids = new Set();
-      pool.filter((p) => invs.includes(p.inv)).sort((a, b) => b.s - a.s).forEach((p) => {
+      pool.filter((p) => invs.includes(p.inv)).map((p) => inSlot(p, slot)).sort((a, b) => b.s - a.s).forEach((p) => {
         if (out.length >= n || (p.unique && ids.has(p.it.id))) return;
         out.push(p); ids.add(p.it.id);
       });
@@ -225,15 +228,15 @@
     const rows = [];
     CC.gear.SLOTS.forEach(([name, slots, invs]) => {
       if (name === 'Main hand' || name === 'Off hand') return;
-      const best = pick(invs, slots.length);
+      const best = pick(invs, slots.length, name);
       const now = slots.map((n) => worn[n] ? { id: worn[n].id, s: baseScore(n) } : null);
       rows.push({ name, best, now, gain: best.reduce((a, p) => a + p.s, 0) - now.reduce((a, x) => a + (x ? x.s : 0), 0) });
     });
     // weapons: the better of a two-hander or a main hand + off hand
     // with Dual Wield the off hand can be a second one-hander (another copy, or a unique item only once)
-    const two = pick([17], 1)[0], mh = pick([13, 21], 1)[0];
+    const two = pick([17], 1, 'Main hand')[0], mh = pick([13, 21], 1, 'Main hand')[0];
     const ohInvs = C.use && C.use.dual ? [23, 14, 22, 13] : [23, 14];
-    const oh = pool.filter((p) => ohInvs.includes(p.inv) && p !== mh && !(mh && p.unique && p.it.id === mh.it.id)).sort((a, b) => b.s - a.s)[0];
+    const oh = pool.filter((p) => ohInvs.includes(p.inv) && !(mh && p.o === mh.o) && !(mh && p.unique && p.it.id === mh.it.id)).map((p) => inSlot(p, 'Off hand')).sort((a, b) => b.s - a.s)[0];
     const pair = (mh ? mh.s : 0) + (oh ? oh.s : 0);
     const best = two && two.s >= pair ? [two] : [mh, oh].filter(Boolean);
     const now = [16, 17].map((n) => worn[n] ? { id: worn[n].id, s: baseScore(n) } : null);
@@ -250,7 +253,7 @@
     const id = Number(String(x).replace(/^item:/, '').split(':')[0]);
     const g = A.gdItem(id);
     if (!g) return null;
-    return { it: { id, name: g[0], q: g[1], class: g[9], subclass: g[12], req: g[3] || 0, tip: arr(g[10]).map((l) => ({ l })) }, st: W.fromPack(g) };
+    return { it: { id, name: g[0], q: g[1], class: g[9], subclass: CC.gear && CC.gear.packSub ? CC.gear.packSub(g) : g[12], req: g[3] || 0, tip: arr(g[10]).map((l) => ({ l })) }, st: W.fromPack(g) };
   }
   function rate(x) {
     const r = asItem(x);

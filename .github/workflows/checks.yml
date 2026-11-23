@@ -48,6 +48,8 @@ jobs:
           node test/web/data.test.js
       - name: App logic (stat weights, item advice)
         run: node test/web/advice.test.js
+      - name: Gear scoring for every class and spec (trees, weights, weapon DPS per hand, shields, relics)
+        run: node test/web/classes.test.js
       - name: Quests you can do (chains, faction, class, reputation; Gear leaves out rewards you took)
         run: node test/web/quests.test.js
       - name: Spell ranks (bars below your best rank, the class trainer's list)

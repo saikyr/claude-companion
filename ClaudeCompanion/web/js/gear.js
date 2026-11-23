@@ -21,6 +21,17 @@
     8: ['Two-Handed Swords'], 10: ['Staves'], 13: ['Fist Weapons'], 15: ['Daggers'], 16: ['Thrown'], 18: ['Crossbows', 'Crossbow'], 19: ['Wands', 'Wand'] };
   const ARMOR_SKILL = { 1: ['Cloth'], 2: ['Leather'], 3: ['Mail'], 4: ['Plate Mail', 'Plate'], 6: ['Shield', 'Shields'] };
   const RELIC = { PALADIN: 7, DRUID: 8, SHAMAN: 9 };
+  // An item's armor subclass as the Forever client's tooltip names it ("Shield", "Plate", ...): where the
+  // pack's subclass (ForeverDB) disagrees, the client wins. Thrash's Trash is a shield the pack files as
+  // Miscellaneous, which anyone may wear: read that way, a Mage would be offered a shield.
+  const ARMOR_WORD = { Cloth: 1, Leather: 2, Mail: 3, Plate: 4, Shield: 6, Libram: 7, Idol: 8, Totem: 9 };
+  function packSub(g) {
+    if (!g) return null;
+    if (g[9] !== 4) return g[12];
+    if (g[4] === 14) return 6;                                   // the Off Hand "Shield" slot
+    if (g[11] === 'e') for (const l of arr(g[10]).slice(0, 5)) if (ARMOR_WORD[l] != null) return ARMOR_WORD[l];
+    return g[12];
+  }
   function canUse() {
     const skills = arr((A.CH.snap || {}).skills);
     const have = new Set(skills.filter((k) => k && (k.skillLineCategoryID === 6 || k.skillLineCategoryID === 8)).map((k) => k.name));
@@ -58,15 +69,39 @@
   const gainTxt = (d) => `${d >= 0 ? '+' : '−'}${Math.abs(d).toFixed(1)}`;
 
   // ---------------------------------------------------------------- specs and weights
-  // a spec is named by its biggest talent tree (Forever answers the spec-name call with the class)
+  // A spec is named by its biggest talent tree (Forever answers the spec-name call with the class); the
+  // rule, with no points and ties, is the weights engine's (W.pickTree). Points come from the talent trees
+  // the page draws (modern trait API), else from the classic talent tabs, matched to trees by their names.
+  function treePoints(sp, cf) {
+    const names = W.TREES[cf] || [];
+    const t = A.specTrees(sp);
+    if (t && t.length === names.length) return t.map((x) => x.points || 0);
+    // the layout found more or fewer trees (a tree with an empty column, say): split the nodes where the
+    // gaps across are widest, one split fewer than the class has trees
+    const nodes = (t || []).flatMap((g) => arr(g.nodes)).filter((n) => n.x != null);
+    const xs = [...new Set(nodes.map((n) => n.x))].sort((a, b) => a - b);
+    if (names.length && xs.length >= names.length) {
+      const cuts = xs.slice(1).map((x, i) => ({ at: x, gap: x - xs[i] })).sort((a, b) => b.gap - a.gap).slice(0, names.length - 1).map((c) => c.at).sort((a, b) => a - b);
+      const pts = names.map(() => 0);
+      nodes.forEach((n) => { pts[cuts.filter((c) => n.x >= c).length] += n.rank || 0; });
+      return pts;
+    }
+    const tabs = arr(sp && sp.talents && sp.talents.tabs);
+    if (tabs.length === names.length) {
+      const key = (x) => String(x || '').toLowerCase().replace(/[^a-z]/g, '');
+      const byName = names.map((n) => tabs.findIndex((tb) => key(tb && tb.name).startsWith(key(n))));
+      const order = byName.every((i) => i >= 0) && new Set(byName).size === names.length ? byName : names.map((n, i) => i);
+      return order.map((i) => Number((tabs[i] || {}).points) || 0);
+    }
+    return null;
+  }
   function specs() {
     const raw = (A.CH && A.CH.specs) || {};
     const cf = char().classFile;
     return Object.entries(raw).map(([k, sp]) => {
-      const t = A.specTrees(sp);
-      let tree = null;
-      if (t && t.length) { let b = 0; t.forEach((x, i) => { if (x.points > t[b].points) b = i; }); tree = (A.TREE_NAMES[cf] || [])[b]; }
-      return { i: Number(k), sp, label: A.specLabel(sp) || 'Spec ' + k, tree };
+      const pts = treePoints(sp, cf);
+      const pick = W.pickTree(cf, pts);
+      return { i: Number(k), sp, label: A.specLabel(sp) || 'Spec ' + k, tree: pick.tree, treeWhy: pick.why, points: pts };
     }).sort((a, b) => a.i - b.i);
   }
   // choices are kept per character and spec, in this browser
@@ -169,7 +204,7 @@
     const skipped = { 'quest reward you already took (or not for you)': 0, 'raid only': 0, 'PvP honor gear': 0, 'other faction only': 0, 'only Classic data says where it comes from': 0, 'no endgametools tooltip': 0, 'stats from ForeverDB only (no Forever client tooltip)': 0, 'not for your class': 0, 'no known source': 0 };
     const side = (char().faction || '')[0];            // 'A' or 'H'; vendors that only serve the other side don't count
     for (const [k, g] of Object.entries((A.GD && A.GD.items) || {})) {
-      const c = g[9], sub = g[12];
+      const c = g[9], sub = packSub(g);
       if (c !== 2 && c !== 4) continue;
       if (!use || !(use[c] || []).includes(sub)) continue;
       // stats from the Forever client (endgametools), else ForeverDB's: those items aren't known in game yet
@@ -299,16 +334,16 @@
     const listedBy = {}; listed.forEach((l) => { const k = l.c.key; if (!listedBy[k] || l.price < listedBy[k].price) listedBy[k] = l; });
     const mine = ownedCands(use);
     const at = ownedAt();
-    const offScore = worn[17] ? score(worn[17].st, w) : 0;
+    const offScore = worn[17] ? score(worn[17].st, w, 17) : 0;
     const slots = SLOTS.map(([name, nums, invs]) => {
-      const cur = nums.map((n) => worn[n] ? { n, id: worn[n].id, key: worn[n].key, st: worn[n].st, s: score(worn[n].st, w) } : { n, id: null, s: 0 });
+      const cur = nums.map((n) => worn[n] ? { n, id: worn[n].id, key: worn[n].key, st: worn[n].st, s: score(worn[n].st, w, n) } : { n, id: null, s: 0 });
       const weakest = cur.reduce((a, c) => (c.s < a.s ? c : a), cur[0]);
       const blocked = name === 'Off hand' && twoHand;
       const fitsPre = (c) => invs.includes(c.inv) && handFits(name, c.inv, use);
       const fits = (c) => fitsPre(c) && !blocked;          // usable now (a worn two-hander blocks the off hand)
       // a two-hander replaces the main hand and the off hand
       const gain = (c, s) => s - weakest.s - (name === 'Main hand' && c.inv === TWO_HAND ? offScore : 0);
-      const x = (c, extra) => { const s = score(c.st, w); return Object.assign({ c, s, d: gain(c, s) }, extra || {}); };
+      const x = (c, extra) => { const s = score(c.st, w, name); return Object.assign({ c, s, d: gain(c, s) }, extra || {}); };
       const distinct = (list) => { const seen = new Set(); return list.filter((y) => !seen.has(y.c.name) && seen.add(y.c.name)); };
       const byGain = (a, b) => b.d - a.d;
       // ---- usable now: fixed items, your own, AH listings
@@ -318,7 +353,7 @@
       cand.rolls.forEach((c) => {
         if (!fits(c) || c.req > lvl) return;
         // ranked by gain: in the main hand a two-hander also replaces the off hand
-        const s = score(c.st, w), d = gain(c, s);
+        const s = score(c.st, w, name), d = gain(c, s);
         if (!bestRoll[c.roll] || d > bestRoll[c.roll].d) bestRoll[c.roll] = { c, s, d, n: 0 };
       });
       cand.rolls.forEach((c) => { if (bestRoll[c.roll] && fits(c) && c.req <= lvl) bestRoll[c.roll].n++; });
@@ -336,7 +371,7 @@
       const search = Object.values(bestRoll).map((r) => Object.assign(r, { d: gain(r.c, r.s) })).filter((r) => r.d > 0.5).sort(byGain).slice(0, 3);
       // ---- pre-BiS: the best up to level 60, counting what you own; one random roll at most (its best base)
       const preRolls = {};
-      cand.rolls.forEach((c) => { if (fitsPre(c) && c.req <= 60) { const s = score(c.st, w); if (!preRolls[c.roll] || s > preRolls[c.roll].s) preRolls[c.roll] = { c, s }; } });
+      cand.rolls.forEach((c) => { if (fitsPre(c) && c.req <= 60) { const s = score(c.st, w, name); if (!preRolls[c.roll] || s > preRolls[c.roll].s) preRolls[c.roll] = { c, s }; } });
       const prePool = mine.filter(fitsPre).map((c) => x(c))
         .concat(cand.fixed.filter((c) => fitsPre(c) && c.req <= 60).map((c) => x(c)))
         .concat(cur.filter((y) => y.id && !cand.byId[String(y.id)] && !mine.some((m) => m.id === y.id))
@@ -586,7 +621,7 @@
     const preDone = preT.filter((t) => baseIds.has(t.c.id) && !t.c.roll).length;
     const top = Object.entries(w).filter(([k]) => !W.PCT[k]).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([k, v]) => `${W.statName(k, A.GD.stat)} ${+v.toFixed(2)}`).join(', ');
     const sel = P.slots.some((s) => s.name === A.STATE.gearSlot) ? A.STATE.gearSlot : (bigUp || P.slots[0]).name;
-    const why = pickedProfile(cur) ? 'your pick' : `default for ${cur.tree}`;
+    const why = pickedProfile(cur) ? 'your pick' : cur.treeWhy === 'none' ? `no talents yet: ${cur.tree}` : `default for ${cur.tree}`;
     h += `<div class="cards c4">
       <button class="card link" data-gearview="up" data-gearslot="${esc(bigUp ? bigUp.name : sel)}"><span class="k">Slots with an upgrade</span><span class="v">${upSlots.length} of ${P.slots.length}</span><span class="sub">${upSlots.length ? `biggest: ${esc(bigUp.name)} ${gainTxt(bigUp.ups[0].d)}` : `nothing beats ${esc(base.short)}`}</span></button>
       <button class="card link" data-gearview="ah"><span class="k">Upgrades on your AH</span><span class="v">${ahN}</span><span class="sub"${cheapest ? ` title="${esc(cheapest.c.name)}"` : ''}>${cheapest ? `cheapest from ${A.money(cheapest.ah.price, { short: true })}` : 'none listed now'}</span></button>
@@ -618,7 +653,8 @@
         const out = { spec: sp.i, label: sp.label, tree: sp.tree, active: sp.i === active, weights: w && Object.keys(w).length ? pk : null, classSets: sets };
         if (!out.weights) return out;
         out.weightsName = prof.name;
-        out.weightsChosen = pickedProfile(sp) ? 'picked' : 'default for the biggest tree';
+        out.weightsChosen = pickedProfile(sp) ? 'picked' : ({ none: 'default: no talent points yet, the class levelling tree', unknown: 'default: talents unreadable, the class levelling tree', tie: 'default: tied trees, levelling tree first' })[sp.treeWhy] || 'default for the biggest tree';
+        out.talentPoints = sp.points;
         out.weightsSource = prof.own ? 'yours' : (prof.src || {}).url || (prof.src || {}).label || null;
         out.weightValues = w;
         const base = baseline(sp, pk);
@@ -640,7 +676,7 @@
       });
     },
     // shared with the Stat weights page and the item advice (js/weights.js, js/advice.js)
-    specs, profileKey, pickedProfile, setProfile, baseline, canUse, weightsFor, SLOTS, handFits, wornInv,
+    specs, profileKey, pickedProfile, setProfile, baseline, canUse, weightsFor, SLOTS, handFits, wornInv, packSub,
     // for tests
     _plan: plan, _candidates: candidates, _listings: listings,
   };
