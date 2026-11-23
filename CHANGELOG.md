@@ -12,6 +12,10 @@ Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
   says, so Mages and Druids aren't offered it. A character with no talent points yet uses the tree its class
   levels in (a level-5 Paladin got Holy healer advice), and a tie goes to that tree. Your own Hunter profiles
   keep their weapon DPS number for the bow.
+- **Set up in one paste with Claude.** Create a project in the Claude desktop app, paste the text from
+  `claude/SETUP.md` into its instructions and say "set me up": Claude installs the Companion on Windows or a
+  Mac (or gives you one line to paste into PowerShell or Terminal), asks for your addon folder and reads your
+  character. Nothing to fill in by hand.
 - **Spell ranks on your bars.** Talents & Bars now says when a spell on a spec's bars is below the best rank in
   your spellbook (the slot is marked, and the list above the bars says which rank you know). Open your class
   trainer once and the addon reads its whole list (every rank, the level and cost), so the app also lists the

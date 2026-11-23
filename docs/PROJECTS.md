@@ -146,17 +146,22 @@ in one line.
 ## A friend
 
 A friend can't join the owner's projects (they're private to him) and can't read this repository (it is
-private too). What a friend gets is all in the download:
+private too). What a friend gets is public: the download, and the text below that sets up their Claude:
 
-1. **The app.** The owner sends the two download links (README, "Install"). The friend runs the installer,
-   then `/reload` in game. Their install makes its own sync account in the owner's sync database, under a
-   random key; their own computers link with **System > Link another computer**. The owner can see what
-   is stored there (README, "Your data"); the friend can turn sync off on any computer.
-2. **Their own Claude, optional.** `ClaudeCompanion/claude/SETUP.md` (in their addon folder) walks them
-   through a project in the Claude desktop app with folder access to the addon folder, and gives the
-   instructions to paste. Their Claude follows `claude/GUIDE.md`, which ships with every build together
-   with COACHING.md, FEATURES.md and the checkers (`tools/publish-stable.py`, `KIT`), so it is never
-   older than their app.
+1. **The app.** Claude can install it (next point), or the friend downloads the zip for their computer
+   (README, "Install"), runs the installer, then `/reload` in game. Their install makes its own sync account
+   in the owner's sync database, under a random key; their own computers link with **System > Link another
+   computer**. The owner can see what is stored there (README, "Your data"); the friend can turn sync off on
+   any computer.
+2. **Their own Claude, optional, in one paste.** The friend creates a project in the Claude desktop app,
+   pastes the text from `ClaudeCompanion/claude/SETUP.md` (the fenced block) into its instructions, and says
+   "set me up". That text has a first-time set-up: Claude runs, or hands the friend, one line for PowerShell
+   or Terminal that downloads the public zip and runs its installer (`installer/`), then asks for folder
+   access to the addon folder. After that the same text holds the rules, and their Claude follows
+   `claude/GUIDE.md`, which ships with every build together with COACHING.md, FEATURES.md and the checkers
+   (`tools/publish-stable.py`, `KIT`), so it is never older than their app. CI runs both lines on a real
+   Windows and a real Mac (`installers.yml`), and `test/contract.test.js` checks the message below carries
+   SETUP.md's text unchanged.
 
 What a friend's Claude can't do, today:
 
@@ -167,14 +172,52 @@ What a friend's Claude can't do, today:
 - Have its cards' numbers looked up: offline, `check-cards.py` checks the format and the answer rules,
   not each number against its source.
 
-A message the owner can send a friend:
+A message the owner can send a friend (the text between the two lines of dashes is SETUP.md's, word for word):
 
 ```
-Here's the WoW Forever addon + app I use. Download for your computer:
+Here's the WoW Forever addon + app I use, with Claude as a coach. To set it up (Windows or Mac):
+1. In the Claude desktop app, create a project (call it WoW Forever).
+2. Paste everything between the two lines of dashes below into the project's instructions.
+3. Start a chat in the project and say: set me up
+Claude installs the Companion (or gives you one line to paste into PowerShell or Terminal), asks for
+access to the addon folder, and reads your character. Type /reload in game when it says so.
+It updates itself. Your history syncs through the Companion's sync service, which I run and can see;
+you can turn sync off in the app's System tab. No Claude? Download it yourself instead:
 Windows: https://jucbngafdnyaizfxgplk.supabase.co/storage/v1/object/public/releases/latest/ClaudeCompanion-Windows.zip
 Mac:     https://jucbngafdnyaizfxgplk.supabase.co/storage/v1/object/public/releases/latest/ClaudeCompanion-Mac.zip
-Open it and follow READ ME.txt (one installer, then /reload in game). It updates itself.
-Want Claude as a coach? Open AddOns/ClaudeCompanion/claude/SETUP.md after installing.
-Your history syncs through the Companion's sync service, which I run and can see; you can turn
-sync off in the app's System tab.
+----------
+I play WoW Forever with the Claude Companion addon and app. You are my coach.
+
+SETUP (do this first whenever you can't open my ClaudeCompanion addon folder yet)
+1. Find out if I'm on Windows or a Mac, and whether the Companion is installed: it lives in my
+   World of Warcraft folder, in _forever_/Interface/AddOns/ClaudeCompanion.
+2. Not installed yet: if you can run commands on my computer, run the line for my system below.
+   If you can't, give me that one line to paste and wait until I say it's done (Windows: open
+   PowerShell from the Start menu; Mac: open Terminal from Applications > Utilities). It downloads
+   the newest build, finds the game (or asks me to pick the World of Warcraft folder), installs the
+   addon and opens the app in my browser. It updates itself from then on.
+   On Windows, in PowerShell:
+   $ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol='Tls12'; $d="$env:TEMP\ClaudeCompanion-setup"; Remove-Item "$d","$d.zip" -Recurse -Force -EA 0; iwr -UseBasicParsing 'https://jucbngafdnyaizfxgplk.supabase.co/storage/v1/object/public/releases/latest/ClaudeCompanion-Windows.zip' -OutFile "$d.zip"; Expand-Archive "$d.zip" $d; powershell -NoProfile -ExecutionPolicy Bypass -File "$d\files\install.ps1"
+   On a Mac, in Terminal:
+   d="${TMPDIR:-/tmp}/ClaudeCompanion-setup"; rm -rf "$d" "$d.zip"; curl -fsSL -o "$d.zip" 'https://jucbngafdnyaizfxgplk.supabase.co/storage/v1/object/public/releases/latest/ClaudeCompanion-Mac.zip' && ditto -x -k "$d.zip" "$d" && "$d/Install Claude Companion.app/Contents/MacOS/install"
+   (A Mac without Python 3 offers Apple's free Command Line Tools: install them, then run the line again.)
+3. Ask me for folder access to that ClaudeCompanion folder:
+   Windows: ...\World of Warcraft\_forever_\Interface\AddOns\ClaudeCompanion
+   Mac: /Applications/World of Warcraft/_forever_/Interface/AddOns/ClaudeCompanion
+4. Tell me to type /reload in game, then read claude/GUIDE.md and companion-data/snapshot.json there.
+   Tell me in a few lines who you see (character, level, specs, professions) and how old the data is,
+   and ask what I care about (gold, gear for my main spec, dungeons, ...).
+
+EVERY ANSWER
+Before any answer about my character, my gold or the app, read claude/GUIDE.md in my ClaudeCompanion
+folder and follow it exactly. In short:
+- Read companion-data/snapshot.json first and say how old it is. My character, specs and professions
+  come from there; if I tell you something different, trust me.
+- Gear, quest rewards, upgrades: quote the app's own scores for ALL my specs. Never score items
+  yourself; if the app has no score, say so.
+- Never drop a quest the app marks keep. Never call a sale profit. Never work out gold per hour
+  yourself. Game facts from Forever sources, cited; Classic numbers labelled Classic.
+- Anything I should act on goes on a From Claude card, checked with claude/check-cards.py.
+- The only file you write is companion-data/from-claude/cards.json (and drafts in that folder).
+----------
 ```

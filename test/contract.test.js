@@ -111,5 +111,19 @@ const named = [...new Set([...kitGuide.matchAll(/`((?:claude|companion-data)\/[A
 const notShipped = named.filter((f) => !shipped.has(f));
 check(named.length >= 5 && !notShipped.length, 'every file claude/GUIDE.md names is in the build' + (notShipped.length ? `: missing ${notShipped.join(' ')}` : ''));
 
+// 10. Install in one paste (docs/PROJECTS.md, "A friend"): the text a friend pastes into their Claude project is
+// claude/SETUP.md's fenced block, the owner's message carries it word for word, and its two install lines
+// download from the public folder publish-stable.py uploads to (installers.yml runs both lines).
+const setupMd = read(A, 'claude', 'SETUP.md');
+const paste = (/## The text to paste into the project's instructions\n\n```\n([\s\S]*?)\n```/.exec(setupMd) || [, ''])[1];
+const friendMsg = (/A message the owner can send a friend[^\n]*\n\n```\n([\s\S]*?)\n```/.exec(read(ROOT, 'docs', 'PROJECTS.md')) || [, ''])[1];
+check(paste.length > 500 && friendMsg.includes('----------\n' + paste + '\n----------'), "docs/PROJECTS.md's message to a friend carries claude/SETUP.md's paste text unchanged");
+const downloads = (/DOWNLOADS = '([^']+)'/.exec(pub) || [, '?'])[1];
+const lineAfter = (label) => { const l = paste.split('\n'); const i = l.findIndex((x) => x.includes(label)); return i >= 0 ? (l[i + 1] || '').trim() : ''; };
+const winLine = lineAfter('On Windows, in PowerShell:'), macLine = lineAfter('On a Mac, in Terminal:');
+check(winLine.includes(`'${downloads}latest/ClaudeCompanion-Windows.zip'`) && winLine.includes('files\\install.ps1') &&
+      macLine.includes(`'${downloads}latest/ClaudeCompanion-Mac.zip'`) && macLine.includes('Contents/MacOS/install'),
+      'the paste text has one install line per system, from the public download folder');
+
 console.log(failed ? `${failed} contract check(s) failed` : 'contract holds');
 process.exit(failed ? 1 : 0);
