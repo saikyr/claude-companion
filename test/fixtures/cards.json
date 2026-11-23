@@ -8,15 +8,48 @@
    "summary": "One line on what and why.",
    "created": "2026-11-22T08:00:00Z",
    "updated": "2026-11-22T09:00:00Z",
-   "where": "Burning Steppes",
-   "facts": [{ "label": "Drop rate", "value": "2.0%", "note": "Forever, 12 of 591 kills" }],
-   "items": [{ "id": 252888, "note": "Blackrock Soldier" }],
-   "track": { "grind": "example", "mobs": ["Blackrock Soldier"] },
-   "steps": ["Fly there", "Start the tracker: /cc start example"],
+   "where": "Duskwood",
+   "facts": [
+    {
+     "label": "Drop rate",
+     "value": "36.36% (220 corpses, ForeverDB players)",
+     "src": "game.drop:2378:202"
+    }
+   ],
+   "items": [
+    {
+     "id": 2378,
+     "note": "Skeletal Horror"
+    }
+   ],
+   "track": {
+    "grind": "example",
+    "mobs": [
+     "Skeletal Horror"
+    ]
+   },
+   "steps": [
+    "Fly there",
+    "Start the tracker: /cc start example"
+   ],
    "body": "Stop rule and caveats.\n\nA second paragraph.",
-   "sources": [{ "label": "Forever QuestieDB" }, { "label": "Wowhead Forever", "url": "https://www.wowhead.com/classic/item=252888" }]
+   "sources": [
+    {
+     "label": "ForeverDB players (game.drop_rates)"
+    }
+   ],
+   "risk": "Level 30s, no elites: low risk."
   },
-  { "id": "flip-example", "kind": "flip", "title": "Example flip", "status": "withdrawn" },
-  { "id": "note-example", "title": "Example note", "expires": "2026-11-23T00:00:00Z" }
+  {
+   "id": "flip-example",
+   "kind": "flip",
+   "title": "Example flip",
+   "status": "withdrawn"
+  },
+  {
+   "id": "note-example",
+   "title": "Example note",
+   "expires": "2026-11-23T00:00:00Z"
+  }
  ]
 }

@@ -3,6 +3,10 @@
 Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 
 ## 1.5.0 (in progress: every merge to main updates itself)
+- **Cards are checked by the database.** Every number on a From Claude card names where it comes from,
+  and the database looks it up before the card reaches you: a wrong gold per hour, a drop rate without its
+  sample, a Classic rate not called Classic, sales called profit, an unmeasured duo claim, a farm card with no
+  risk, or a layer or /run tip is refused. Claude's chat answers go through the same rules first.
 - **A shorter brief.** The brief Claude reads first leaves out empty fields and keeps the top 3 upgrades per
   spec, the 4 next pre-BiS pieces and the 6 newest grinds and runs (each with its total); ask for a part by
   name to get it whole.
