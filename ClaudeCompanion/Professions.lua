@@ -195,10 +195,14 @@ function ns.ReadTaxi()
     local mapID = Clean(Call(GetTaxiMapID))
     local info = mapID and C_Map and C_Map.GetMapInfo and ns.Call(C_Map.GetMapInfo, mapID)
     local continent = (type(info) == "table" and Clean(info.name)) or (mapID and ("map " .. mapID)) or nil
+    -- only nodes you know count: CURRENT (here) and REACHABLE. "DISTANT" is a node shown greyed out on
+    -- the map (on Forever, ones you haven't discovered), and "NONE" isn't shown at all.
+    local seen = {}
     for i = 1, n do
         local name = Clean(Call(TaxiNodeName, i))
         local kind = Clean(Call(TaxiNodeGetType, i))
-        if name and kind and kind ~= "NONE" and not name:find("^zzOLD") then
+        if name and (kind == "CURRENT" or kind == "REACHABLE") and not name:find("^zzOLD") then
+            seen[name] = true
             local t = c.taxi[name]
             if not t then
                 t = { first = now, last = now }
@@ -211,9 +215,13 @@ function ns.ReadTaxi()
             if kind == "CURRENT" then t.here = now end
         end
     end
-    if continent then
+    if continent and next(seen) then
         c.taxiRead = c.taxiRead or {}
         c.taxiRead[continent] = now
+        -- a path saved on this continent that this map no longer shows as known was a bad read: drop it
+        for name, t in pairs(c.taxi) do
+            if t.continent == continent and not seen[name] then c.taxi[name] = nil end
+        end
     end
     -- names the game no longer lists ("zzOLD...") are dropped
     for name in pairs(c.taxi) do if name:find("^zzOLD") then c.taxi[name] = nil end end
