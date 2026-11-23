@@ -49,20 +49,25 @@
     return [...arr(gq.reward).map(([id, n]) => rated(id, 'get', n)), ...arr(gq.choice).map(([id, n]) => rated(id, 'choose', n)), ...arr(gq.rewardAny).map(([id, n]) => rated(id, 'any', n))];
   }
 
-  // A dungeon quest (CLAUDE.md, the dungeon-quest rule): this quest or any step of its chain is a
-  // pack Dungeon quest or has its objective in an instance ('Raid' alone also marks outdoor raid-group
-  // quests, so only with an instance zone). Gives the instance's name, else null. Never drop these.
-  function dungeonOf(id) {
+  // A quest to keep (CLAUDE.md, the dungeon-quest rule): this quest or any step of its chain is a pack
+  // Dungeon quest, has its quest zone or objective in an instance (battlegrounds left out), or is a step
+  // of a key or attunement (data/rules.js unlocks: the Skeleton Key, the Seal of Ascension...). Gives
+  // { dungeon, why } or null. Never on a drop list, whatever its rewards score.
+  function keepOf(id) {
     const Q = (A.GD && A.GD.quests) || {};
     let inst = null;
     try { inst = CC.next && CC.next._dungeonIndex ? CC.next._dungeonIndex() : null; } catch (e) { inst = null; }
     const isInst = (z) => !!(z && inst && inst[z] && !inst[z].pvp);
-    const hit = (g) => {
-      if (isInst(g.cat)) return g.cat;
+    const unlockOf = {};
+    arr((window.GAMERULES || {}).unlocks).forEach((u) => arr(u.quests).forEach((q) => { unlockOf[q] = u; }));
+    const hit = (g, q) => {
+      const u = unlockOf[q];
+      if (u) return { dungeon: u.name, why: 'key or attunement: ' + u.what };
+      if (isInst(g.cat)) return { dungeon: g.cat, why: 'dungeon quest' };
       const o = arr(g.obj).join(' ');
       const named = inst && Object.keys(inst).find((z) => !inst[z].pvp && z.length > 3 && o.includes(z));
-      if (named) return named;
-      return g.type === 'Dungeon' ? (g.cat ? 'a dungeon (quest zone ' + g.cat + ')' : 'a dungeon') : null;
+      if (named) return { dungeon: named, why: 'objective in ' + named };
+      return g.type === 'Dungeon' ? { dungeon: g.cat ? 'a dungeon (quest zone ' + g.cat + ')' : 'a dungeon', why: 'dungeon quest' } : null;
     };
     // its chain: back along prev, forward along next (not the other prerequisites of a later step)
     for (const dir of ['prev', 'next']) {
@@ -74,11 +79,18 @@
         seen.add(q);
         const g = Q[q];
         if (!g) continue;
-        const h = hit(g);
-        if (h) return h;
+        const h = hit(g, q);
+        if (h) return Object.assign(h, q === id ? {} : { via: { id: q, title: g.t || null } });
         todo = todo.concat(arr(g[dir]));
       }
     }
+    // reputation toward rewards: the quest gives rep with a faction whose standing some item needs (pack
+    // req: rep-vendor gear, recipes) and the character isn't Exalted with it yet
+    const gated = new Set(Object.values((A.GD && A.GD.req) || {}).map((r) => r && r[0]).filter(Boolean));
+    const standing = {};
+    arr((A.CH && A.CH.snap || {}).reputation).forEach((r) => { if (r && r.name) standing[r.name] = r.reaction; });
+    const f = arr((Q[id] || {}).rep).find(([name, n]) => n > 0 && gated.has(name) && (standing[name] || 0) < 8);
+    if (f) return { dungeon: null, why: 'reputation toward rewards: ' + f[0] + ' +' + f[1] };
     return null;
   }
 
@@ -171,10 +183,12 @@
       quests: arr(s.quests).filter((q) => q && q.id).map((q) => {
         const gq = (A.GD && A.GD.quests[q.id]) || {};
         const to = arr(gq.to)[0];
-        const dungeon = dungeonOf(q.id);
+        const keep = keepOf(q.id);
         return { id: q.id, title: q.title, level: q.level, complete: !!(q.ready || q.complete), failed: !!q.failed,
           // keep: a dungeon or raid quest (or a step of one): never on a drop list, whatever its rewards score
-          dungeon, keep: !!dungeon,
+          dungeon: keep ? keep.dungeon : null, keep: !!keep, keepWhy: keep ? keep.why + (keep.via ? ' (step: ' + keep.via.title + ')' : '') : null,
+          // reputation the quest gives (pack), so a rep goal can be weighed: [faction, amount]
+          rep: arr(gq.rep).map(([f, n]) => ({ faction: f, amount: n })),
           objectives: arr(q.objectives).map((o) => o.text), turnIn: to ? { npc: to[1], zone: to[2], x: to[3], y: to[4] } : null,
           xp: (q.rewards || {}).xp, money: (q.rewards || {}).money,
           // every reward item scored for every spec by the app's one engine (js/advice.js rate): read
