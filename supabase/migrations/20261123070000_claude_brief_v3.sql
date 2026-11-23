@@ -3,7 +3,7 @@
 -- per-part save times (character.savedParts), upgrades to the top 3 per spec and missing pre-BiS to 4
 -- (each with its total), the 6 newest measured grinds and runs, each computer's newest snapshot only, and
 -- empty or default fields
--- (complete=false, no rewards, level 0, no zones, nothing incomplete).
+-- (complete=false, no rewards, level 0, no zones, nothing incomplete). A quest with no `complete` is not complete.
 
 create or replace function private.claude_brief(p_account uuid, p_parts text[] default null) returns jsonb
 language plpgsql stable security definer set search_path = '' as $$
@@ -26,12 +26,12 @@ begin
       'note', 'No snapshot online yet: the player opens the app once after a /reload or logout.'));
   end if;
 
-  -- each computer's newest snapshot (a computer can hold an older one under a retired or merged device id)
+  -- each computer's newest snapshot
   select coalesce(jsonb_agg(jsonb_build_object('computer', x.name, 'build', x.build, 'savedInGame', x.saved) order by x.t desc), '[]'::jsonb) into builds
-    from (select distinct on (coalesce(dv.name, r.device_id::text)) dv.name, r.data->'app'->>'build' build, r.data->>'savedInGame' saved, r.t
+    from (select distinct on (r.device_id) dv.name, r.data->'app'->>'build' build, r.data->>'savedInGame' saved, r.t
             from public.records r join public.accounts a on a.id = r.account_id left join public.devices dv on dv.id = r.device_id
            where coalesce(a.merged_into, a.id) = root and not a.retired and r.kind = 'snapshot'
-           order by coalesce(dv.name, r.device_id::text), r.t desc) x;
+           order by r.device_id, r.t desc, r.updated_at desc) x;
 
   age := greatest(0, (now_t - s_t) / 60)::int;
   out := jsonb_build_object('meta', jsonb_build_object(
@@ -39,7 +39,7 @@ begin
     'ageMinutes', age, 'stale', age > 60,
     'build', s->'app'->>'build', 'computers', builds,
     'quote', jsonb_build_array(
-      'Say how old this is (ageMinutes) in every answer that uses it.',
+      'Say how old this is (ageMinutes) in every answer that uses it. Fields left out are empty, false or 0 (a quest with no complete is not complete).',
       'Gold per hour: quote gph / gph_low / gph_high as given; never work one out. complete=false: say why (incomplete).',
       'Profit is only gold.flips; gold.sales7d is revenue.',
       'Gear and rewards: the app''s scores for every spec; quests with keep=true (dungeon, key or attunement chain, rep toward rep-gated rewards: keepWhy) never go on a drop list.',
@@ -80,8 +80,8 @@ begin
   -- rewardsNoGain = rewards that are an upgrade for no spec (asked for by name: all of them, listed)
   if 'quests' = any(parts) then
     out := out || jsonb_build_object('quests', coalesce((
-      select jsonb_agg(jsonb_build_object('id', q->'id', 'title', q->>'title', 'level', case when coalesce((q->>'level')::int, 0) > 0 then q->'level' end,
-        'complete', case when (q->>'complete')::boolean then true end,
+      select jsonb_agg(jsonb_build_object('id', q->'id', 'title', q->>'title', 'level', case when jsonb_typeof(q->'level') = 'number' and (q->>'level')::numeric > 0 then q->'level' end,
+        'complete', case when q->'complete' = 'true'::jsonb then true when jsonb_typeof(q->'complete') = 'boolean' then null else q->'complete' end,
         -- an older build wrote no keep flag: unknown, never false (false would read as "not a dungeon quest")
         'keep', coalesce(q->'keep', '"unknown"'::jsonb), 'dungeon', q->'dungeon', 'keepWhy', q->'keepWhy',
         'rep', case when jsonb_array_length(private.brief_arr(q->'rep')) > 0 then q->'rep' end,
@@ -131,7 +131,8 @@ begin
                      'gph_high', r->'gph_high', 'complete', r->'complete', 'incomplete', case when jsonb_array_length(private.brief_arr(r->'incomplete')) > 0 then r->'incomplete' end)
               from jsonb_array_elements(private.brief_arr(s->'runs')) r) u
           order by m->>'end' desc limit case when full_parts then 1000 else 6 end) z), '[]'::jsonb),
-      'measuredMore', 'more grinds and runs: private.claude_brief(<account>, array[''gold''])',
+      'measuredTotal', jsonb_array_length(private.brief_arr(s->'grind'->'recent')) + jsonb_array_length(private.brief_arr(s->'runs')) + case when jsonb_typeof(s->'grind'->'running') = 'object' then 1 else 0 end,
+      'measuredMore', 'all of them: private.claude_brief(<account>, array[''gold''])',
       'units', 'gph fields: copper per hour (10000 = 1 gold), before the 5% AH cut, loot counted sold or not'));
   end if;
 
