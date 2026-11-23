@@ -101,8 +101,8 @@ function snapshot(ageMs, extra) {
     B.query(`insert into public.records (account_id, id, device_id, char_key, kind, t, data) values (${q(account)}, 'Ana-Realm|grind|odd', null, 'Ana-Realm', 'grind', 1,
       '{"name": "cultists", "start": 1e20, "killsBy": {"X": 1}}'::jsonb), (${q(account)}, 'Ana-Realm|grind|odd2', null, 'Ana-Realm', 'grind', 2, '{"name": "cultists", "start": "soon", "killsBy": {}}'::jsonb);`);
     const mobs = brief(['gold']).gold.measured[0].mobs;
-    check(Array.isArray(mobs) && mobs.join() === 'Scarlet Cultist x50,Scarlet Monk x20,Dog x9', `and the mobs it killed, from its grind record (top 3: ${mobs})`);
-    check(!('what' in brief().gold.measured[0]) && !('end' in brief().gold.measured[0]) && brief(['gold']).gold.measured[0].end, 'default: no what on grinds, no end; asked for by name, end is there');
+    check(Array.isArray(mobs) && mobs.length === 3 && mobs[0].name === 'Scarlet Cultist' && mobs[0].kills === 50 && mobs[2].name === 'Dog', 'and the mobs it killed, from its grind record (top 3)');
+    check(brief(['gold']).gold.measured[0].what === 'grind' && !('what' in brief().gold.measured[0]) && !('end' in brief().gold.measured[0]) && brief(['gold']).gold.measured[0].end, 'default: no what on grinds, no end; asked for by name, end is there');
     check(!('deaths' in m[0]), '0 deaths are left out');
     check(m.length === 3 && m[0].name === 'cultists' && m[0].gph === 400000 && m[0].gph_low === 250000 && m[0].gph_high === 520000, "measured grinds and runs, newest first, with the app's gph range");
     check(m[1].complete === false && /under 10 minutes/.test(m[1].incomplete[0]), 'an incomplete grind says why');

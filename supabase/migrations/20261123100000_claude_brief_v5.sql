@@ -1,8 +1,8 @@
 -- The brief, fifth version (v4 in 20261123090000_ah_prices_brief_v4.sql, never edited): the default brief
 -- trimmed back toward 6 KB. Default only (a part asked for by name is whole, as before):
---   quests: unscored rewards as a list of names (unscored[]), keepWhy left out when it only says "dungeon quest" next to the dungeon, rep left out when keepWhy
---   names the reputation, upgradeFor left out when empty, scored written only when false;
---   meta.quote lines shortened; measured: mobs as "Name xN" text, no "what" on grinds (runs say what=run), no end (start and hours).
+--   quests: rewards listed only when an upgrade for some spec, the app's unscored ones by name (unscored[]), keepWhy left out when it only says "dungeon quest" next to the dungeon, rep left out when keepWhy
+--   names the reputation (and there is only one faction);
+--   meta.quote lines shortened; measured: no "what" on grinds (runs say what=run), no end (start and hours).
 
 create or replace function private.claude_brief(p_account uuid, p_parts text[] default null) returns jsonb
 language plpgsql stable security definer set search_path = '' as $$
@@ -39,7 +39,7 @@ begin
     'build', s->'app'->>'build', 'computers', builds,
     'quote', jsonb_build_array(
       'Say how old this is (ageMinutes). Left-out fields are empty, false or 0. unscored = rewards the app has no score for (say so). Full detail: ask for a part by name.',
-      'gph / gph_low / gph_high: quote as given, never work one out; complete=false: say why. Card src: grind:<name>@<start>#gph (run: for what=run).',
+      'gph / gph_low / gph_high: quote as given, never work one out; complete=false: say why. Card src: grind:<name>@<start>#gph (run: for what=run). mobs = what the grind killed.',
       'Profit is only gold.flips; gold.sales7d is revenue.',
       'Gear and rewards: the app''s scores, every spec. keep=true quests never go on a drop list.',
       'Game facts: game.item / npc / quest / instance, quoting each rate''s label. Never the web; never Classic as Forever.',
@@ -85,19 +85,19 @@ begin
         'keep', coalesce(q->'keep', '"unknown"'::jsonb), 'dungeon', q->'dungeon',
         -- trimmed: keepWhy when it only repeats the dungeon, rep when keepWhy already names it
         'keepWhy', case when full_parts or not (q->>'keepWhy' = 'dungeon quest' and q->>'dungeon' is not null) then q->'keepWhy' end,
-        'rep', case when jsonb_array_length(private.brief_arr(q->'rep')) > 0 and (full_parts or coalesce(q->>'keepWhy', '') !~* 'reputation') then q->'rep' end,
+        'rep', case when jsonb_array_length(private.brief_arr(q->'rep')) > 0 and (full_parts or jsonb_array_length(private.brief_arr(q->'rep')) > 1 or coalesce(q->>'keepWhy', '') !~* 'reputation') then q->'rep' end,
         'rewards', (select jsonb_agg(jsonb_build_object('name', r->>'name', 'how', r->>'how',
-                               'upgradeFor', (select jsonb_agg(jsonb_build_object('spec', sp->>'spec', 'gain', sp->'gain'))
+                               'upgradeFor', coalesce((select jsonb_agg(jsonb_build_object('spec', sp->>'spec', 'gain', sp->'gain'))
                                                 from jsonb_array_elements(private.brief_arr(r->'specs')) sp
-                                               where coalesce((sp->>'gain')::numeric, 0) > 0),
-                               -- scored is written only when false (the app has no score for it)
-                               'scored', case when jsonb_typeof(r->'specs') = 'array' then null else 'false'::jsonb end))
+                                               where coalesce((sp->>'gain')::numeric, 0) > 0), case when full_parts then '[]'::jsonb end),
+                               -- default: every listed reward is scored (an upgrade for some spec); asked for by name: scored true/false
+                               'scored', case when full_parts then to_jsonb(jsonb_typeof(r->'specs') = 'array') end))
                               from jsonb_array_elements(private.brief_arr(q->'rewards')) r
                              -- trimmed: only rewards that are an upgrade for some spec (unscored ones are named in unscored)
                              where full_parts
                                 or exists (select 1 from jsonb_array_elements(private.brief_arr(r->'specs')) sp where coalesce((sp->>'gain')::numeric, 0) > 0)),
         'unscored', case when full_parts then null else (select jsonb_agg(r->>'name') from jsonb_array_elements(private.brief_arr(q->'rewards')) r
-                             where jsonb_typeof(r->'specs') <> 'array') end,
+                             where jsonb_typeof(r->'specs') is distinct from 'array' and r->>'name' is not null) end,
         'rewardsNoGain', case when full_parts then null else (select nullif(count(*), 0) from jsonb_array_elements(private.brief_arr(q->'rewards')) r
                              where jsonb_typeof(r->'specs') = 'array'
                                and not exists (select 1 from jsonb_array_elements(r->'specs') sp where coalesce((sp->>'gain')::numeric, 0) > 0)) end))
@@ -124,9 +124,9 @@ begin
       'measured', coalesce((
         select jsonb_agg(case when full_parts then m else m - 'end' end order by m->>'end' desc) from (
           select m from (
-            select jsonb_build_object('name', g->>'name', 'zones', case when jsonb_array_length(private.brief_arr(g->'zones')) > 0 then g->'zones' end,
+            select jsonb_build_object('what', case when full_parts then 'grind' end, 'name', g->>'name', 'zones', case when jsonb_array_length(private.brief_arr(g->'zones')) > 0 then g->'zones' end,
                      'start', g->>'start', 'end', coalesce(g->>'finish', g->>'last'),
-                     'mobs', (select jsonb_agg((x->>'name') || ' x' || (x->>'kills')) from jsonb_array_elements(private.brief_grind_mobs(root, g)) x),
+                     'mobs', private.brief_grind_mobs(root, g),
                      'hours', g->'hours', 'kills', g->'kills', 'deaths', case when (g->>'deaths') is distinct from '0' then g->'deaths' end, 'gph', g->'gph', 'gph_low', g->'gph_low', 'gph_high', g->'gph_high',
                      'complete', g->'complete', 'incomplete', case when jsonb_array_length(private.brief_arr(g->'incomplete')) > 0 then g->'incomplete' end) m
               from jsonb_array_elements(private.brief_arr(s->'grind'->'recent') || jsonb_build_array(coalesce(s->'grind'->'running', 'null'::jsonb))) g
