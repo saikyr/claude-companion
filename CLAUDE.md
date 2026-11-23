@@ -86,7 +86,15 @@ fields. Set-up: [docs/CLAUDE-PROJECT.md](docs/CLAUDE-PROJECT.md).
 
 Claude writes nothing but **From Claude cards** (format: SCHEMA.md, "cards.json"). Check them first:
 `python3 tools/check-cards.py cards.json` must print `ok`. Write the whole list each time; keep a card's
-`id` to update it.
+`id` to update it. **Anything the player acts on goes on a card**; chat gives the short version and points
+to it. Every number in `facts[]` carries its `src` (`game.drop:<item>:<npc>`, `grind:<name>@<start>#gph`,
+`run:...`, `flips#profit`, `snapshot#<path>`), and online the database looks each one up and refuses the
+whole list if a number doesn't match, a rate lacks its corpses or Classic label, "profit" isn't flips, a
+farm card has no `risk`, a duo or solo claim isn't measured or "unknown", or a banned tip (layers, `/run`,
+Wowhead) appears. Fix what it names; never reword around it.
+
+**Chat answers: self-check first.** `python3 tools/check-answer.py draft.txt` (the same rules, line by
+line) must print `ok` before an answer with numbers, rates, gold or plans is sent.
 
 - Online (owner): `select private.claude_put_setting('<account>', 'cc.claude.cards', '<the cards.json text>');`
   Every computer of the account shows them at its next sync. Only that key can be written.

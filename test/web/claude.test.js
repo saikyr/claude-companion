@@ -32,7 +32,7 @@ const save = () => ({ items: {}, chars: { 'Ana-Realm': { lastSeen: 1795000000, j
     check(/^[0-9a-f-]{36}$/.test(account || ''), "the account id is in the computer's sync state (snapshot.json sync.account)");
 
     // Claude writes cards
-    const cards = JSON.stringify({ schema: 1, cards: [{ id: 'farm-1', kind: 'farm', title: 'Farm Felcloth', step: 'dungeon:Scholomance' }] });
+    const cards = JSON.stringify({ schema: 1, cards: [{ id: 'farm-1', kind: 'farm', title: 'Farm Felcloth', step: 'dungeon:Scholomance', risk: 'Elite packs: pull one at a time.' }] });
     const put = JSON.parse(B.query(`select private.claude_put_setting(${q(account)}, 'cc.claude.cards', ${q(cards)})::text;`));
     check(put.account === account, 'Claude stores the cards on the account');
     const rPc = await pc.client.pull(localPc), rMac = await mac.client.pull(localMac);
