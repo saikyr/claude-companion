@@ -154,5 +154,58 @@ test('quest rewards you do not own are scored per spec by the same engine', () =
   assert.strictEqual(ADV.rate('item:5').specs[0].gain > 0, true, 'an owned item by its key');
 });
 
+// ---------------------------------------------------------------- weapons: two-hander, one-hander + off hand, dual wield
+Object.assign(ITEMS, {
+  'item:30': { id: 30, name: 'Keen Sword', q: 3, ilvl: 55, req: 50, class: 2, subclass: 7, loc: 'INVTYPE_WEAPON', sell: 100, stats: { ITEM_MOD_STRENGTH_SHORT: 8 }, tip: tip('Keen Sword') },
+  'item:31': { id: 31, name: 'Spare Sword', q: 2, ilvl: 50, req: 45, class: 2, subclass: 7, loc: 'INVTYPE_WEAPON', sell: 100, stats: { ITEM_MOD_STRENGTH_SHORT: 6 }, tip: tip('Spare Sword') },
+  'item:32': { id: 32, name: 'Parry Blade', q: 2, ilvl: 50, req: 45, class: 2, subclass: 7, loc: 'INVTYPE_WEAPONOFFHAND', sell: 100, stats: { ITEM_MOD_STRENGTH_SHORT: 5 }, tip: tip('Parry Blade') },
+  'item:33': { id: 33, name: 'Tower Shield', q: 2, ilvl: 50, req: 45, class: 4, subclass: 6, loc: 'INVTYPE_SHIELD', sell: 100, stats: { ITEM_MOD_STRENGTH_SHORT: 4 }, tip: tip('Tower Shield') },
+});
+Object.entries(ITEMS).forEach(([k, it]) => (BY_ID[it.id] = Object.assign({ key: k }, it)));
+const SK = CH.snap.skills.slice();
+const setup = (n, extraSkills, equipped, bagIds) => {
+  CH.snap.taken = n;
+  CH.snap.skills = SK.concat([{ name: 'One-Handed Swords', skillLineCategoryID: 6 }, { name: 'Shield', skillLineCategoryID: 8 }], extraSkills);
+  CH.snap.equipped = equipped;
+  CH.snap.bags = [{ id: 0, slots: 16, items: bagIds.map((id, i) => ({ slot: i + 1, item: 'item:' + id, count: 1 })) }];
+};
+const G = ctx.CC.gear;
+const planFor = () => { const sp = G.specs()[0], pk = G.profileKey(sp); return G._plan(G.weightsFor(sp, pk), 58, G.baseline(sp, pk), {}, false); };
+const slot = (P, name) => P.slots.find((s) => s.name === name);
+test('a worn two-hander: a better two-hander counts, the off hand is blocked', () => {
+  setup(10, [], [{ slot: 16, slotName: 'MainHand', item: 'item:1' }], [2, 30, 33]);
+  const P = planFor();
+  assert(slot(P, 'Off hand').blocked, 'off hand blocked under a two-hander');
+  assert(slot(P, 'Main hand').ups.some((y) => y.c.id === 2), 'the better two-hander is a main-hand upgrade');
+  assert(ADV.rate('item:33').specs[0].blocked, 'a shield is measured as blocked, not as a loss');
+});
+test('one-hander + shield: a two-hander must beat both', () => {
+  setup(11, [], [{ slot: 16, slotName: 'MainHand', item: 'item:30' }, { slot: 17, slotName: 'SecondaryHand', item: 'item:33' }], [2]);
+  const sp = G.specs()[0], C = ADV.compute(), c = C.ctxs[0];
+  const m = ADV.rate('item:2').specs.find((x) => x.spec === 'Arms');
+  const s = (k) => W.score(ADV.statsOf(k), c.w);
+  assert(Math.abs(m.gain - (s('item:2') - s('item:30') - s('item:33'))) < 0.01, 'two-hander gain = its score minus main hand and off hand');
+  assert(sp);
+});
+test('without Dual Wield: no one-hander or off-hand weapon in the off hand', () => {
+  setup(12, [], [{ slot: 16, slotName: 'MainHand', item: 'item:30' }], [31, 32, 33]);
+  const oh = slot(planFor(), 'Off hand');
+  assert(!oh.pre.some((y) => y.c.id === 31 || y.c.id === 32), 'one-hander and off-hand weapon left out of the off hand');
+  assert(oh.pre.some((y) => y.c.id === 33), 'the shield counts');
+  assert(ADV.rate('item:32').specs.every((x) => !x.canWear), 'an off-hand weapon needs Dual Wield');
+  assert.strictEqual(ADV.rate('item:31').specs[0].slot, 'Main hand');
+});
+test('with Dual Wield: a second one-hander is an off-hand upgrade', () => {
+  setup(13, [{ name: 'Dual Wield', skillLineCategoryID: 6 }], [{ slot: 16, slotName: 'MainHand', item: 'item:30' }], [31, 32]);
+  const oh = slot(planFor(), 'Off hand');
+  assert(oh.ups.some((y) => y.c.id === 31), 'a one-hander in the off hand');
+  assert(oh.ups.some((y) => y.c.id === 32), 'an off-hand weapon');
+  const m = ADV.rate('item:31').specs.find((x) => x.spec === 'Arms');
+  assert.strictEqual(m.slot, 'Off hand', 'measured where it gains most: the empty off hand');
+  assert(m.gain > 0);
+  const weap = ADV.bestOwned(G.specs()[0]).rows.find((r) => r.name === 'Weapons');
+  assert.strictEqual(JSON.stringify(weap.best.map((p) => p.it.id)), '[30,31]', 'best owned: two one-handers');
+});
+
 console.log(failed ? `\n${failed} FAILED` : '\nall passed');
 process.exit(failed ? 1 : 0);
