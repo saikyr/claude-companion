@@ -40,6 +40,7 @@ that must hold go in CI or in the database (for example `private.claude_put_sett
 | `tools/make-icons.py` | Draws the app icon (PNG for the installed app, `.icns` for the Mac launcher) |
 | `tools/check-cards.py` | Checks a From Claude `cards.json` before Claude writes it: the format, then the answer rules (`tools/answer_rules.py`) |
 | `tools/check-answer.py` | The same answer rules on a chat draft, line by line (Claude's self-check before sending) |
+| `tools/audit.py` | The weekly correction audit: counts a week's correction log by cause against `docs/audit-baseline.json` ([COACHING.md](COACHING.md)) |
 | `tools/answer_rules.py` | The answer rules; the Postgres card gate (`*_card_gate.sql`) is the same, kept equal by `test/web/cards-gate.test.js` |
 | `tools/make-drops.py` | Writes `ClaudeCompanion/Drops.lua` (the pack's drop chances, for the grind panel) from `web/data/gamedata.js`; `--check` in CI |
 | `CLAUDE.md` | The agent guide: where the truth lives, reading the app's scores, writing cards, rules for changes |

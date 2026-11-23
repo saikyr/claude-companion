@@ -12,6 +12,9 @@ its CI check: [docs/INTERFACES.md](docs/INTERFACES.md).
 
 ## Before answering
 
+How to answer (read the question literally, depth, routing, tone, the weekly audit): [docs/COACHING.md](docs/COACHING.md).
+This section is where the numbers come from.
+
 0. **First read: the brief.** `select private.claude_brief('<account>');` (Supabase connector): where the
    player is now, its age, the app's gear scores for every spec, dungeon quests marked `keep`, and gold
    (flips = profit, sales = revenue, measured gold per hour per grind and run). Quote its numbers; it says

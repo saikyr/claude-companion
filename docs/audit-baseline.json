@@ -1,0 +1,41 @@
+{
+ "about": "Corrections in the project chat before the foundation rebuild (docs/COACHING.md). Counts only.",
+ "period": [
+  "2026-11-12T18:27Z",
+  "2026-11-22T23:20Z"
+ ],
+ "messages": 690,
+ "corrections": 138,
+ "top": 28,
+ "primary": {
+  "NO_DATA_READ": 8,
+  "FEATURE_UNKNOWN": 5,
+  "MEMORY_STALE": 4,
+  "GUESS_NO_SOURCE": 20,
+  "RULE_NOT_FOLLOWED": 3,
+  "RULE_MISSING": 6,
+  "SHALLOW": 30,
+  "WRONG_QUESTION": 10,
+  "COORDINATOR_ANSWERED": 20,
+  "COORDINATOR_RELAY": 10,
+  "CONTEXT_LOST": 3,
+  "TOOLING": 10,
+  "OTHER": 9
+ },
+ "any": {
+  "NO_DATA_READ": 12,
+  "FEATURE_UNKNOWN": 6,
+  "MEMORY_STALE": 9,
+  "GUESS_NO_SOURCE": 42,
+  "RULE_NOT_FOLLOWED": 5,
+  "RULE_MISSING": 14,
+  "SHALLOW": 38,
+  "WRONG_QUESTION": 13,
+  "COORDINATOR_ANSWERED": 30,
+  "COORDINATOR_RELAY": 13,
+  "CONTEXT_LOST": 7,
+  "TOOLING": 13,
+  "OTHER": 12
+ },
+ "source": "the failure log of the project chat, 12 to 22 Nov 2026 (one row per incident, read in full); his message count is approximate (about 690)"
+}
