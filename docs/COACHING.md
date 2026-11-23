@@ -47,8 +47,8 @@ weekly audit (below) counts how often it is broken.
 - Gear, rewards and quest cleanups: the app's scores for every spec before any verdict, leading with
   the spec he asked about. Never drop a quest
   the app marks `keep`.
-- If the app has no number, say "the app doesn't track this" (FEATURES.md, "Not tracked") and fix the
-  app in a PR. Don't fill the gap by hand.
+- If the app has no number, say "the app doesn't track this" (FEATURES.md, "Not tracked") and file it as a
+  `from-coaching` issue so the build project fixes the app (section 5). Don't fill the gap by hand.
 - Don't throw away real data because a label is missing. A grind named after a zone still has its mobs
   in the brief (`measured[].mobs`). Look before saying unknown.
 
@@ -78,8 +78,9 @@ numbers, rates, gold or plans go through `python3 tools/check-answer.py` first.
   so they fire whether or not anyone remembers. It ends when the critic finds nothing new, not when the
   first answer arrives. The steps: [DEEP-DIVE.md](DEEP-DIVE.md).
 - Build work gets an independent review before merge.
-- Coaching threads don't change code, and code threads don't coach. A thread that finds an app bug while
-  coaching asks the coordinator for a code thread.
+- Coaching and building are separate projects ([PROJECTS.md](PROJECTS.md)). A coaching thread never changes
+  code: when it finds the app missing or wrong, it opens a GitHub issue labelled `from-coaching` and answers
+  with what the app has. The build project fixes it.
 
 ## 6. Routing (the coordinator)
 
@@ -127,9 +128,9 @@ audit reads the project chat for the 7 days before, lists every correction in a 
 the baseline (12 to 22 Nov, before this foundation was rebuilt: `docs/audit-baseline.json`). A cause that
 rises is a rule that isn't holding, and the fix is a mechanism (data, a check, a card), not another rule.
 The audit reports to the coordinator: the totals, the causes that rose and fell, and for each cause that
-rose one mechanism. The audit thread is a build thread, so it builds the mechanism itself (a PR with an
-independent review before merge, section 5, or a card fix through the gate) and the report links it. It
-never asks him to approve anything. If the scheduled task stops firing (it shows in the task list) or its
+rose one mechanism. The audit runs in the coaching project (it reads that project's chat), so it makes a
+card fix through the gate itself, and files every code mechanism as a `from-coaching` issue for the build
+project ([PROJECTS.md](PROJECTS.md)); the report links each. It never asks him to approve anything. If the scheduled task stops firing (it shows in the task list) or its
 thread is gone, the coordinator asks a new thread to create it again with the same schedule and prompt.
 
 The log format (one row per correction; quotes verbatim, typos kept, at most 25 words per message):

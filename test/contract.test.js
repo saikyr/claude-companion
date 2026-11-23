@@ -97,5 +97,19 @@ const fns = new Set([...guide.matchAll(/private\.([a-z_]+)\(/g)].map((m) => m[1]
 const missingFn = [...fns].filter((f) => !new RegExp(`function\\s+private\\.${f}\\s*\\(`, 'i').test(sql));
 check(fns.has('claude_put_setting') && !missingFn.length, `every private.* function CLAUDE.md names exists in a migration (${[...fns].join(' ')})` + (missingFn.length ? `: missing ${missingFn.join(' ')}` : ''));
 
+// 9. The Claude kit (docs/PROJECTS.md, "A friend"): a friend's Claude can't read this private repository, so
+// its guide ships in ClaudeCompanion/claude/ and publish-stable.py adds the rules and checkers from their one
+// owner (KIT). Every source exists, nothing in git duplicates a copied file, and the guide names only files
+// the build has.
+const pub = read(ROOT, 'tools', 'publish-stable.py');
+const kit = [...((/KIT = \{([\s\S]*?)\}/.exec(pub) || [, ''])[1]).matchAll(/'(claude\/[^']+)': '([^']+)'/g)].map((m) => [m[1], m[2]]);
+check(kit.length >= 5 && kit.every(([, src]) => fs.existsSync(path.join(ROOT, src))), `every file of the Claude kit has its source (${kit.map(([d]) => d).join(' ')})`);
+check(kit.every(([dest]) => !fs.existsSync(path.join(A, dest))), 'no kit file is also kept in ClaudeCompanion/claude/ (one owner)');
+const kitGuide = read(A, 'claude', 'GUIDE.md');
+const shipped = new Set([...kit.map(([d]) => d), 'claude/GUIDE.md', 'claude/SETUP.md', 'companion-data/SCHEMA.md']);
+const named = [...new Set([...kitGuide.matchAll(/`((?:claude|companion-data)\/[A-Za-z_.-]+\.(?:md|py))`/g)].map((m) => m[1]))];
+const notShipped = named.filter((f) => !shipped.has(f));
+check(named.length >= 5 && !notShipped.length, 'every file claude/GUIDE.md names is in the build' + (notShipped.length ? `: missing ${notShipped.join(' ')}` : ''));
+
 console.log(failed ? `${failed} contract check(s) failed` : 'contract holds');
 process.exit(failed ? 1 : 0);

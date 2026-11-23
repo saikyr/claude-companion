@@ -79,7 +79,8 @@ Your saved data stays in the game's `WTF` folder until you delete it.
 ## More
 
 - What changed: [CHANGELOG.md](CHANGELOG.md)
-- Claude as your coach (optional): [docs/CLAUDE-PROJECT.md](docs/CLAUDE-PROJECT.md)
+- Claude as your coach (optional): `AddOns/ClaudeCompanion/claude/SETUP.md` after installing
+  ([source](ClaudeCompanion/claude/SETUP.md)); the owner's projects and their boundaries: [docs/PROJECTS.md](docs/PROJECTS.md)
 - How it works: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (the source code itself is private)
 - Developing, tests and releases: [docs/DEVELOP.md](docs/DEVELOP.md)
 - License: [MIT](LICENSE). Not affiliated with Blizzard Entertainment.

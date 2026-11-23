@@ -14,7 +14,7 @@ by the app itself, on the player's computer.
 **Claude is an optional advisor on top.** It reads what the app computed (the snapshot) and writes
 suggestions back (From Claude cards). It never computes a second version of something the app already
 computes: if the app's answer is missing or wrong, the fix goes into the app, so the app and Claude can
-never disagree. How to set up a Claude project: [CLAUDE-PROJECT.md](CLAUDE-PROJECT.md).
+never disagree. Which Claude project does what, and a friend's set-up: [PROJECTS.md](PROJECTS.md).
 
 ## The map
 

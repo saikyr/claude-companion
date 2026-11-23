@@ -45,7 +45,8 @@ that must hold go in CI or in the database (for example `private.claude_put_sett
 | `tools/make-drops.py` | Writes `ClaudeCompanion/Drops.lua` (the pack's drop chances, for the grind panel) from `web/data/gamedata.js`; `--check` in CI |
 | `CLAUDE.md` | The agent guide: where the truth lives, reading the app's scores, writing cards, rules for changes |
 | `docs/INTERFACES.md` | Every interface between the parts: owner, format, version, CI check |
-| `docs/CLAUDE-PROJECT.md` | Setting up an optional Claude project (owner or friend), with instructions to paste |
+| `docs/PROJECTS.md` | The Claude projects (coaching, build, a friend's): what each owns, the `from-coaching` handoff, the instructions to paste |
+| `ClaudeCompanion/claude/` | The Claude kit shipped in every build for a friend's Claude: `GUIDE.md`, `SETUP.md`; `publish-stable.py` adds COACHING.md, FEATURES.md and the checkers (`KIT`) |
 | `docs/ARCHITECTURE.md` | How it fits together, data sources |
 | `docs/ROADMAP.md` | What's next |
 | `docs/STAT-WEIGHTS.md` | Default stat weights for every spec, and where the numbers come from |
