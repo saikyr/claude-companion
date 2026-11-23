@@ -12,10 +12,16 @@ its CI check: [docs/INTERFACES.md](docs/INTERFACES.md).
 
 ## Before answering
 
+0. **First read: the brief.** `select private.claude_brief('<account>');` (Supabase connector): where the
+   player is now, its age, the app's gear scores for every spec, dungeon quests marked `keep`, and gold
+   (flips = profit, sales = revenue, measured gold per hour per grind and run). Quote its numbers; it says
+   how. More: `private.claude_brief('<account>', array['rep','bags','next','ah','runs'])`.
 1. Read [docs/FEATURES.md](docs/FEATURES.md): what the app records, where, and what it doesn't. Never say a
    feature exists or doesn't without checking it there and in the code.
 2. Query the app's own data (the snapshot and `private.history`) and say how old it is.
-3. Never call money profit without a cost basis: profit is only `ah.flips` (sales matched to recorded
+3. Never work out gold per hour yourself: quote the app's `gph` / `gph_low` / `gph_high` (brief `gold.measured[]`,
+   snapshot `grind.recent[]`, `runs[]`), and say so when `complete` is false.
+4. Never call money profit without a cost basis: profit is only `ah.flips` (sales matched to recorded
    buys). A sale alone is revenue; loot and crafts have no recorded cost.
 
 ## Where the truth lives

@@ -80,6 +80,8 @@ function saveLua(now, extra) {
   };
   if (extra && extra.snap) Object.assign(ch.snap, extra.snap);
   if (extra && extra.professions) ch.professions = extra.professions;
+  if (extra && extra.grinds) ch.grinds = extra.grinds;
+  if (extra && extra.caps) ch.caps = extra.caps;
   return 'ClaudeCompanionDB = ' + lua({ schema: 1, chars: { [ch.key]: ch }, items, spells: {}, npcs: {}, quests: {} });
 }
 module.exports = { saveLua };

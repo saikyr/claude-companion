@@ -586,7 +586,9 @@ do
   local good = c.snap                                         -- the logout above, with everything readable
   local items = 0; for _, b in ipairs(good.bags or {}) do items = items + #(b.items or {}) end
   local oldMoney, oldLink, oldInfo = GetMoney(), GetInventoryItemLink, C_Container.GetContainerItemInfo
+  local oldSkill = C_SkillInfo.GetSkillLineInfo
   SetMoney(0); GetInventoryItemLink = function() return nil end; C_Container.GetContainerItemInfo = function() return nil end
+  C_SkillInfo.GetSkillLineInfo = function() return { name = "Weapon Skills", isHeader = true } end   -- logout: headers only
   Advance(60); Fire("PLAYER_LOGOUT")
   local s = c.snap
   local items2 = 0; for _, b in ipairs(s.bags or {}) do items2 = items2 + #(b.items or {}) end
@@ -595,10 +597,29 @@ do
   check(#(good.equipped or {}) > 0 and #(s.equipped or {}) == #good.equipped, "logout keeps worn gear the game already emptied")
   check(s.character.money == good.character.money and good.character.money > 0, "logout keeps gold when the game reads 0")
   check(good.kept == nil, "a logout that reads everything keeps nothing")
+  check(kept:find("skills") and s.skills[1] and not s.skills[1].isHeader and s.skills[1].name == "Tailoring",
+    "logout keeps the skills when the game lists only their headers (gear advice and professions need them)")
   check(s.reason == "logout" and s.taken > good.taken and kept:find("bags") and kept:find("equipped") and kept:find("character.money") and s.keptFrom == good.taken,
     "logout snapshot lists what it kept and from when (" .. kept .. ")")
-  SetMoney(oldMoney); GetInventoryItemLink = oldLink; C_Container.GetContainerItemInfo = oldInfo
+  SetMoney(oldMoney); GetInventoryItemLink = oldLink; C_Container.GetContainerItemInfo = oldInfo; C_SkillInfo.GetSkillLineInfo = oldSkill
   if FAILED then error("logout checks failed") end
+end
+-- capability probes: loot sources and GUIDs in instances (read-only; they change nothing in game)
+do
+  local function check(ok, what) print((ok and "PASS " or "FAIL ") .. what); if not ok then FAILED = true end end
+  local c; for _, v in pairs(ClaudeCompanionDB.chars) do c = v end
+  check(c.caps and c.caps.api.GetLootSourceInfo and c.caps.secret.LoggingCombat, "caps lists the loot-source and combat-log functions")
+  local oldN, oldS = GetNumLootItems, GetLootSourceInfo
+  GetNumLootItems = function() return 2 end
+  GetLootSourceInfo = function(i) if i == 1 then return "Creature-0-1-2-3-6137-0000", 1 end return SECRET end
+  Fire("LOOT_OPENED")
+  check(c.caps.loot and c.caps.loot.slots == 2 and c.caps.loot.sources == 2, "a loot window records whether each slot names its corpse")
+  GetNumLootItems, GetLootSourceInfo = oldN, oldS
+  ns.ProbeInstance("Stratholme")
+  check(c.caps.instance and c.caps.instance.name == "Stratholme" and c.caps.instance.UnitGUID == "readable", "inside an instance the GUID probe runs")
+  ns.Capabilities()
+  check(c.caps.instance and c.caps.loot, "the place probes survive the next login's capability check")
+  if FAILED then error("capability checks failed") end
 end
 -- bosses from the ForeverDungeonJournal addon's run log (same shape as Gabriel's save)
 do

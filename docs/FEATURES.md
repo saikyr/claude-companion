@@ -64,9 +64,9 @@ recorded per craft.
 
 | Feature | Records | Where | Claude reads |
 | --- | --- | --- | --- |
-| **Grinds** (`/cc start <name>`, `/cc stop`) | counted time (pauses and logged-out time left out), kills (by mob), looted coin, loot, XP, deaths, rep, disenchants, zones, targets (`/cc target`, kept per grind name for the next start). Ends by itself at logout, after 30 min with nothing counted (`idle`), or `away`. Shows after the next `/reload` | kind `grind` (running one: kind `live`); Grinds tab | snapshot `grind.running`, `grind.recent[]` (5); all: `kind = 'grind'` |
+| **Grinds** (`/cc start <name>`, `/cc stop`) | counted time (pauses and logged-out time left out), kills (by mob), looted coin, loot, XP, deaths, rep, disenchants, zones, targets (`/cc target`, kept per grind name for the next start). Ends by itself at logout, after 30 min with nothing counted (`idle`), or `away`. Shows after the next `/reload` | kind `grind` (running one: kind `live`); Grinds tab | snapshot `grind.running`, `grind.recent[]` (20, with the gold-per-hour fields below); all: `kind = 'grind'` |
 | **Grind panel** (in game) | while a grind runs: time counted, gold per hour, kills per hour and total, deaths, coin per hour vs items per hour (AH median of your newest scan, else vendor), the most valuable drops with icons, and targets: dropped vs expected (your kills of each creature that drops it × the drop chance ForeverDB **measured on Forever**, with its sample size; the tooltip gives the chance of none so far). Classic rates are never used: with no Forever rate it says "rate unknown" and shows your own count (1 per N kills, with a 95% range in the tooltip). After `/cc stop` it shows the grind's summary until closed. Shift-click pause, shift-right-click stop, alt-click a drop to make it a target | `UI.lua`; drop chances `Drops.lua` (made from the pack by `tools/make-drops.py`; loads after a game restart, not a /reload) | the grind record's `targets[]` (`id`, `name`, `got`, `expected`, `kills`, `rated`, `sample`); snapshot `grind.*.targets` |
-| Grind gold per hour | `(looted coin + loot at today's AH median, else vendor price) / counted hours`. Loot value is what it would sell for, not what it sold for | Grinds tab, From Claude cards with `track` | compute from the record the same way, or quote the Grinds tab |
+| **Gold per hour** (the app's, the only one) | `gph` = (looted coin + loot at your AH median, or vendor price when it was never on the AH or a vendor pays more) / counted hours, the same number as the Grinds and Dungeons tabs; `gph_low` = coin + loot at vendor price (what it is worth for sure); `gph_high` = coin + loot at the highest median your scans saw in the 7 days before it ended. Copper per hour, before the 5% AH cut, loot counted whether sold or not. `complete: false` with `incomplete[]` reasons: still running, ended `away`, paused, under 10 minutes, rebuilt from the journal. `itemsUnpriced` = loot never seen on the AH (vendor price used) | Grinds and Dungeons tabs (`js/app.js` `goldOf`), From Claude cards with `track` | the brief's `gold.measured[]`, or snapshot `grind.recent[]` (20) and `runs[]`: **quote these fields; never work gold per hour out yourself** |
 | Sessions | the same counters from login to logout, automatic | kind `session` | `kind = 'session'` |
 | **Dungeon and raid runs** | automatic from entering an instance: time inside, kills, bosses, wipes, deaths, XP, quests, coin, loot (green+), loot value, group, loot that went to others with the rolls. Ends after 15 min outside, another instance, a reset, or away. Runs from before the addon tracked runs are rebuilt from the journal (`fromJournal: true`, no `run` row; their bosses come from the Dungeon Journal addon's log, synced to every computer) | kind `run`; Dungeons tab | snapshot `runs[]` (10); all: `kind = 'run'` plus, for `fromJournal` runs, the journal |
 
@@ -79,6 +79,7 @@ recorded per craft.
 | Gear per spec: worn, upgrades, AH upgrades, rolls to search, pre-BiS with alternatives, class sets | Gear tab | `gear[]` (one per spec), `bestOwned[]` |
 | Stat weights per spec, own profiles | Stat weights tab | `gear[].weightValues`, `weightProfiles[]` |
 | Quest log with every reward scored for every spec, and the chain's next quest | Quests tab | `quests[]` (`rewards[].specs[]`, `next`) |
+| Dungeon quests flagged: `keep: true` and `dungeon` (the instance) when the quest or any step of its chain is a pack `Dungeon` quest or has its objective in an instance. Never on a drop list | snapshot only | `quests[].keep`, `quests[].dungeon`; the brief's `quests[]` |
 | Quests you can do, attunements and keys, ranked next steps | Overview (Now) | `nextSteps[]` |
 | Talents and action bars, both specs | Talents & Bars | save only (`specs`) |
 | Reputation | Reputation tab | `reputation[]` |
@@ -91,8 +92,17 @@ scores by hand (CLAUDE.md, the scoring rule).
 
 ## Claude, sync, updates
 
+**Start here: the brief.** `select private.claude_brief('<account>');` returns a few KB built from the
+newest snapshot of any of the account's computers: `meta` (which computer, `ageMinutes`, `stale` over an
+hour, every computer's build, how to quote), `character`, `specs[]` (the app's top 5 upgrades and pre-BiS
+still missing, every spec), `quests[]` (`keep`/`dungeon`, each reward's `upgradeFor` specs), `gold`
+(`flips` = profit, `sales7d` = revenue and `buys7d`, both for every character of the account, `measured[]` = the app's gph for the last grinds and runs),
+`professions`, `cooldowns`, `caps`. More parts in full by name: `array['rep','bags','next','ah','runs']`
+(or any default part, untrimmed). It selects; it computes nothing (`supabase/migrations/*_claude_brief.sql`).
+
 | Feature | Where |
 | --- | --- |
+| What the game lets the addon read (`caps`): which APIs exist, which values are secret; at a loot window whether `GetLootSourceInfo` names the corpse of each slot (`caps.loot`); inside an instance whether GUIDs are readable (`caps.instance`); whether `LoggingCombat` can be read. Read-only probes: they change nothing in game | snapshot `caps`, the brief's `caps` |
 | From Claude cards (Claude writes, the player ticks or closes) | From Claude tab, Overview; setting `cc.claude.cards`, choices in `cc.claude.cardsState` |
 | Sync between computers (union of history, newest "now" per part); can be turned off per computer | System tab; [ARCHITECTURE.md](ARCHITECTURE.md) |
 | Self-update from `stable` within ~30 min; the app says "type /reload" when the addon is older. Each computer checks on its own clock, so for up to ~30 min after a merge two computers can show different builds | System tab; `snapshot.app.build` (and `installedAt`) |
