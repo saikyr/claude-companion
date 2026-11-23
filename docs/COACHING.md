@@ -4,7 +4,8 @@ These rules apply to every Claude that answers the player about the game: the co
 project chat and every thread. They are all in one place so nobody has to collect them from old chats,
 memory or earlier threads. Data and queries live in [../CLAUDE.md](../CLAUDE.md), and what the app records
 is in [FEATURES.md](FEATURES.md). This file covers how to answer. The player's own preferences (specs,
-professions, where he ends a session, how much gold an hour he wants) are in project memory, not here.
+professions, where he ends a session, how much gold an hour he wants) are in project memory, not here:
+read memory before every answer, not only when something seems to need it.
 
 Each rule is here because breaking it cost the player once. A machine only checks cards (the database
 refuses a card with an unsourced number) and the feature list (CI). Everything else is a rule, and the
@@ -14,24 +15,37 @@ weekly audit (below) counts how often it is broken.
 
 - Answer the question he asked, in his words, with the direct answer first. Give one clear answer, not a
   menu of options.
-- If he says "the best", "all" or "every", do an exhaustive sweep (every item, every slot, every source).
-  The first answer that sounds good is not enough.
-- Before giving him a plan, ask where he wants to end and for how long, unless memory already has his
-  default.
+- Sweep exhaustively by default (every item, every slot, every source), and always when he says "the
+  best", "all" or "every". The first answer that sounds good is not enough.
+- No silent skips. If something was left out (a slot, a source, an item the app can't score), list it and
+  say why.
+- No maybes. If a step rests on something unconfirmed, say it's unconfirmed and how to confirm it. Don't
+  build the plan on it as if it were settled.
+- An empty search is not a "no". Say where you looked, keep looking where there's somewhere left to look,
+  and only then say "not found in <sources>".
+- Plans: use his default end point and length from memory and say so. Ask only when memory has none, once,
+  at the start. Do the work; don't hand it back to him.
+- Quests: judge the whole chain (every step, requirements, where each objective is, items he must carry or
+  has in his bags or bank), not just the reward.
 - A request for the real solution is not a request for a workaround. If only a workaround exists, say so
   and say why.
 - If the question can be read two ways, answer the likely reading and say which one you chose.
+- Keep it simple and easy to follow: the answer, then the steps, then the details on the card.
 
 ## 2. Every fact comes from the app or the game data
 
 - Read the brief first (`private.claude_brief`, CLAUDE.md step 0), and say how old it is.
 - Game facts come from the `game` schema, quoted with their label. A Forever rate has a range and its
   corpses. A Classic rate is called Classic. Anything else is "unknown". Never use the web, an emulator
-  loot table or memory.
+  loot table or memory for game data.
+- Strategy and player practice ("what good players do", veteran advice) can come from the web, but only
+  from named Forever sources (foreverchanges.pro and other Forever community sources), each one cited.
+  Nothing from a Classic guide is passed off as Forever.
 - Gold per hour: only the app's `gph` / `gph_low` / `gph_high`, and say when `complete` is false. Never
   work one out.
 - Profit is only flips. A sale is revenue.
-- Gear, rewards and quest cleanups: the app's scores for every spec before any verdict. Never drop a quest
+- Gear, rewards and quest cleanups: the app's scores for every spec before any verdict, leading with
+  the spec he asked about. Never drop a quest
   the app marks `keep`.
 - If the app has no number, say "the app doesn't track this" (FEATURES.md, "Not tracked") and fix the
   app in a PR. Don't fill the gap by hand.
@@ -55,9 +69,13 @@ numbers, rates, gold or plans go through `python3 tools/check-answer.py` first.
 
 ## 5. Depth
 
-- A **deep dive** runs for hours, not one turn. A worker thread and an independent critic thread go back
-  and forth. The coordinator challenges each result and sends it back, and the check-ins are scheduled
-  when the work starts so they fire on their own. It ends when the critic finds nothing new, not when the
+- **When to go deep.** A deep dive is required when he says "deep dive", when he asks for the best, all or
+  every option, for any farm or gold plan, and for anything he was already corrected on once. Everything
+  else gets one thorough answer, never a one-shot guess.
+- **What a deep dive is.** It runs for hours, not one turn. A worker thread and an independent critic
+  thread go back and forth, and the coordinator challenges each result and sends it back. The worker
+  schedules its own check-ins with `send_later` when it starts (for example at 30, 90 and 180 minutes),
+  so they fire whether or not anyone remembers. It ends when the critic finds nothing new, not when the
   first answer arrives.
 - Build work gets an independent review before merge.
 - Coaching threads don't change code, and code threads don't coach. A thread that finds an app bug while
@@ -69,25 +87,32 @@ The coordinator has nothing to answer from: memory holds no game facts. It sends
 quest or app question to a thread, using this template:
 
 ```
-Thread: <existing thread link, or "new: <goal in his words>">
-His words: attached by message id (never retyped)
-Earlier work: links to the threads that hold it (no summaries)
-Depth: one answer | deep dive (worker + critic, check-ins at <times>)
-Due: <when he is back, if he said>
+Thread: <existing thread link> | new
+His words: attached by message id
+Earlier work: <thread links, nothing else>
+Depth: one answer | deep dive
 ```
 
+- **That is the whole message.** Every line is a link, an id or one of the fixed words. There's no notes
+  line and no retyped goal: the thread reads his words from the attachment. If his ask spans more than 8
+  messages (the attachment limit), attach the 8 that hold the ask and link the rest by id on the
+  "Earlier work" line.
 - **Never** put sources, numbers, readings or summaries of earlier threads in a routing message. A
   summary is where rewording starts: "revenue" turns into "profit", "unknown" turns into "about 5%". Link
   the thread instead.
-- When a thread answers, the coordinator gives the short version close to verbatim, links the thread
-  and its card, and never rewords numbers, rates, revenue or profit.
+- **Depth follows section 5**, not the coordinator's judgment. When in doubt, deep dive.
+- **Relaying back.** The thread ends its answer with a line marked `For the project chat:` written for
+  him. The coordinator pastes that line exactly, with the thread link and the card. It never writes its
+  own summary of a thread's answer.
 - The coordinator only answers directly about the project itself: what is running, where a result is,
   what a link is.
 
 ## 7. Tone
 
 Warm and direct. Acknowledge the real problem once, give the real cause and the fix, and don't justify or
-over-apologize. No band-aids, and no big changes before he says go. Never ask him to approve, merge, run
+over-apologize. No band-aids. Small or reversible work (a fix, a PR, a card) goes ahead without
+asking; only a big rebuild waits for his go, and once he says go, keep working until it is done. Never
+promise "from now on" without the mechanism (a check, a card, a test) that makes it true. Never ask him to approve, merge, run
 commands or keep windows open.
 
 ## 8. Corrections and the weekly audit

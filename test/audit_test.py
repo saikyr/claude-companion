@@ -39,11 +39,28 @@ cases = [
     ('no message count', good.replace('His messages: 50\n', ''), 'His messages'),
     ('no period', good.replace('Period: 2026-11-23T00:00Z to 2026-11-30T00:00Z\n', ''), 'Period'),
     ('a repeated row number', good.replace('| 6 | 11-27', '| 5 | 11-27'), 'repeat'),
+    ('an indented row', good.replace('| 6 | 11-27', '  | 6 | 11-27'), 'a row starts with'),
+    ('a date that does not exist', good.replace('11-24 02:10', '13-45 99:99'), 'not a real date'),
+    ('a row outside the period', good.replace('11-27 20:00', '12-15 20:00'), 'outside the period'),
+    ('a reversed period', good.replace('2026-11-23T00:00Z to 2026-11-30T00:00Z', '2026-11-30T00:00Z to 2026-11-23T00:00Z'), 'ends before'),
+    ('zero messages', good.replace('His messages: 50', 'His messages: 0'), 'more than 0'),
+    ('more corrections than messages', good.replace('His messages: 50', 'His messages: 3'), 'more corrections than messages'),
+    ('two periods', good.replace('His messages: 50', 'Period: 2026-11-23T00:00Z to 2026-11-30T00:00Z\nHis messages: 50'), 'second Period'),
+    ('no rows at all', good.split('| # |')[0], 'No corrections.'),
 ]
 for name, text, want in cases:
     r = run('x', text=text)
     check(r.returncode == 1 and want in r.stdout, f'refused: {name}' + ('' if want in r.stdout else f' ({r.stdout.strip()[:120]})'))
 
+r = run('x', '--json', text=good.split('| # |')[0] + 'No corrections.\n')
+check(r.returncode == 0 and json.loads(r.stdout)['corrections'] == 0, 'a week with "No corrections." is a valid log')
+r = run('x', '--json', text=good.replace('is that really the best one?', 'is A \\| B really the best?'))
+check(r.returncode == 0, 'a \\| inside a quote is part of the quote')
+r = run(week, '--baseline', '--period', 'foo', 'bar', '--messages', '690')
+check(r.returncode == 1 and 'needs --period' in r.stdout, 'a baseline with a bad period is refused, not a crash')
+r = run(week, '--baseline', '--messages', '690')
+check(r.returncode == 1, 'a baseline without --period is refused')
+check(c['COORDINATOR_ANSWERED']['baselineAnyPer100'] == round(100 * 30 / 690, 1), 'any-cause rates are compared too')
 base = json.load(open(os.path.join(ROOT, 'docs', 'audit-baseline.json')))
 import importlib.util
 spec = importlib.util.spec_from_file_location('audit', TOOL); A = importlib.util.module_from_spec(spec); spec.loader.exec_module(A)
