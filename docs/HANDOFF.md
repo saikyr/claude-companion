@@ -37,7 +37,10 @@ file is a snapshot.
   - the edge functions `publish-build` and `publish-game`, both checking the GitHub OIDC token, no stored secrets;
   - the public `releases` bucket, which installers and updaters read.
 
-  Every migration in `supabase/migrations/` has been applied live.
+  Every migration on `main` at the split had been applied live. A new migration goes live with the
+  Supabase connector's `apply_migration`, under the file's name and with the same text, right after its PR
+  merges ([supabase/README.md](../supabase/README.md)). The build project needs the Supabase connector,
+  which is on his account, so every project has it.
 - **The owner's computers:** a Windows PC and a MacBook, linked to one sync account. The account id is in
   the snapshot's `sync.account`; it is never committed. Each runs the app hidden at login and updates
   itself.
@@ -74,7 +77,7 @@ These are settled. Don't reopen them unless he does.
 
 | Item | State | What to do |
 | --- | --- | --- |
-| `from-coaching` issues | #80 (friend has no game data), #81 (flight paths show undiscovered nodes), #82 (brief is 10.7 KB, target about 6), #83 (friend cards on one computer), #85 (this handoff) | The daily task works them |
+| `from-coaching` issues | At the split: #80, #81, #82, #83, #85 (this handoff). The live list is the open issues with that label; work started in the build project since (#86 fixed #81) | The daily task works them |
 | Old backlog #4 to #23 | From the 22 Nov gap audit, before the rebuild; several are fixed | On the first run, close each fixed one with its PR and keep the rest |
 | Combat log (#77) | The dmg / resisted column layout hasn't been checked against a real Forever log | It needs `/combatlog` on in game. When snapshot `combat` fills, check the numbers. Until then empty is expected |
 | Loot by corpse (#77) | Confirmed readable on his build `0e7c4e91c449` (`caps.loot`, see #82) | Nothing; the lesson stands: check `caps` and `app.build` against the merge time before calling a Lua change broken |
