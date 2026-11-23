@@ -164,6 +164,11 @@ test('every default for every class: only known stats, positive finite numbers, 
   }
 });
 
+test('ranged attack power written only as an Equip line still counts', () => {
+  const st = W.fromPack(weapon('Muzzle Loader', 26, 3, 20).map((x, i) => (i === 10 ? x.concat(['Equip: Increases ranged attack power by 12.']) : x)));
+  assert.strictEqual(st[39], 12);
+});
+
 // ---------------------------------------------------------------- weapon DPS per hand
 test('weapon DPS: full in the main hand, half in the off hand, the ranged number in the Ranged slot', () => {
   const w = { dps: 2, rdps: 3 };
@@ -250,6 +255,9 @@ test('a Hunter\'s own profile from before: its DPS number moves to the bow once'
   const p = W2.get('u1');
   assert.strictEqual(p.w.rdps, 3); assert.strictEqual(p.w.dps, undefined, 'copied from a ranged spec: the melee weapon no longer counts');
   assert.strictEqual(W2.get('u2').w.dps, 3, 'other classes keep theirs');
+  store['cc.gear.own.Old.1'] = JSON.stringify({ dps: 2 }); store['cc.gear.profile.Old.1'] = 'own';
+  const mid = W2.migrate('Old', 1, 'HUNTER');
+  assert.strictEqual(W2.get(mid).w.rdps, 2, 'the oldest own weights get the bow number too');
   W2.set('u1', 'rdps', 0);
   assert.strictEqual(W2.get('u1').w.rdps, undefined, 'an edit after the move stays');
 });

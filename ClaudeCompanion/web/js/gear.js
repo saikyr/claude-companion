@@ -78,7 +78,9 @@
     if (t && t.length === names.length) return t.map((x) => x.points || 0);
     // the layout found more or fewer trees (a tree with an empty column, say): split the nodes where the
     // gaps across are widest, one split fewer than the class has trees
-    const nodes = (t || []).flatMap((g) => arr(g.nodes)).filter((n) => n.x != null);
+    // (only for one trait tree holding every talent tree: separate trees don't share x positions)
+    const one = arr(sp && sp.traits && sp.traits.trees).filter((x) => arr(x && x.nodes).length).length <= 1;
+    const nodes = one ? (t || []).flatMap((g) => arr(g.nodes)).filter((n) => n.x != null) : [];
     const xs = [...new Set(nodes.map((n) => n.x))].sort((a, b) => a - b);
     if (names.length && xs.length >= names.length) {
       const cuts = xs.slice(1).map((x, i) => ({ at: x, gap: x - xs[i] })).sort((a, b) => b.gap - a.gap).slice(0, names.length - 1).map((c) => c.at).sort((a, b) => a - b);

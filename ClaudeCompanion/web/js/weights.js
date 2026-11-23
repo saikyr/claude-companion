@@ -275,7 +275,7 @@
       if (!old || typeof old !== 'object') return null;
       const st = store();
       const id = 'u-migrated-' + (charName || 'x').replace(/[^A-Za-z]/g, '') + '-' + specIndex;
-      if (!st.profiles[id]) { st.profiles[id] = { id, cls, own: true, v: 2, name: `My weights (spec ${specIndex})`, w: clean(old), from: null, updated: Date.now() }; save(st); }
+      if (!st.profiles[id]) { st.profiles[id] = { id, cls, own: true, name: `My weights (spec ${specIndex})`, w: clean(old), from: null, updated: Date.now() }; save(st); }
       if (localStorage.getItem(pickKey) === 'own') localStorage.setItem(pickKey, id);
       localStorage.removeItem(oldKey);
       return id;
@@ -310,6 +310,8 @@
       const st = {};
       (g[8] || []).forEach(([k, v]) => { st[k] = (st[k] || 0) + v; });
       if (g[9] === 2) { const d = W.dpsOf(g[10]); if (d) st.dps = d; }
+      // many bows and guns say their ranged attack power only as an Equip line, which the pack doesn't count
+      if (st[S.rap] == null) for (const l of g[10] || []) { const m = /^Equip: Increases ranged attack power by (\d+)\.$/.exec(l); if (m) st[S.rap] = Number(m[1]); }
       return st;
     },
     // which hand a slot is: a Gear slot name ('Main hand', 'Off hand', 'Ranged') or a game slot number
