@@ -92,6 +92,13 @@ recorded per craft.
 Every score comes from the app (`js/advice.js`, `js/gear.js`). Claude quotes them for every spec and never
 scores by hand (CLAUDE.md, the scoring rule).
 
+Weapons: a two-hander's gain is its score minus the main hand **and** the off hand it replaces; under a
+worn two-hander the off hand shows as blocked (`blocked`) rather than as a loss, and a one-hander is
+measured against the two-hander alone. The pre-BiS plan takes a one-hander plus off hand over a two-hander
+when the pair scores higher. Shields and held-in-off-hand items go in the off hand for anyone; one-hand and
+off-hand weapons only with the Dual Wield skill (snapshot `skills`, or a Rogue), and then a one-hander is
+measured in whichever hand it gains most.
+
 ## Claude, sync, updates
 
 **Start here: the brief.** `select private.claude_brief('<account>');` returns a few KB built from the

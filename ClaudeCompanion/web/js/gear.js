@@ -22,21 +22,31 @@
   const ARMOR_SKILL = { 1: ['Cloth'], 2: ['Leather'], 3: ['Mail'], 4: ['Plate Mail', 'Plate'], 6: ['Shield', 'Shields'] };
   const RELIC = { PALADIN: 7, DRUID: 8, SHAMAN: 9 };
   function canUse() {
-    const have = new Set(arr((A.CH.snap || {}).skills).filter((k) => k && (k.skillLineCategoryID === 6 || k.skillLineCategoryID === 8)).map((k) => k.name));
+    const skills = arr((A.CH.snap || {}).skills);
+    const have = new Set(skills.filter((k) => k && (k.skillLineCategoryID === 6 || k.skillLineCategoryID === 8)).map((k) => k.name));
     if (!have.size) return null;
     const pick = (map) => Object.entries(map).filter(([, names]) => names.some((n) => have.has(n))).map(([id]) => Number(id));
     const armor = [0, null, ...pick(ARMOR_SKILL)];            // rings, necks, trinkets, cloaks: no subclass or Miscellaneous
     if (RELIC[char().classFile] != null) armor.push(RELIC[char().classFile]);
-    return { 2: pick(WEAPON_SKILL), 4: armor };
+    // Dual Wield is a skill line too (Rogues from level 1; Warriors and Hunters train it at 20)
+    const dual = skills.some((k) => k && k.name === 'Dual Wield') || char().classFile === 'ROGUE';
+    return { 2: pick(WEAPON_SKILL), 4: armor, dual };
   }
   // gear slots: game slot numbers you wear in, and the item inventory types that fit
   const SLOTS = [
     ['Head', [1], [1]], ['Neck', [2], [2]], ['Shoulder', [3], [3]], ['Back', [15], [16]], ['Chest', [5], [5, 20]],
     ['Wrist', [9], [9]], ['Hands', [10], [10]], ['Waist', [6], [6]], ['Legs', [7], [7]], ['Feet', [8], [8]],
     ['Ring', [11, 12], [11]], ['Trinket', [13, 14], [12]], ['Main hand', [16], [13, 21, 17]],
-    ['Off hand', [17], [23, 14, 22]], ['Ranged', [18], [15, 25, 26, 28]],
+    ['Off hand', [17], [23, 14, 22, 13]], ['Ranged', [18], [15, 25, 26, 28]],
   ];
   const TWO_HAND = 17;
+  // The off hand takes shields and held-in-off-hand items from anyone; off-hand weapons, and one-hand
+  // weapons in the off hand, only with Dual Wield.
+  const OFF_WEAPON = [22, 13];
+  const handFits = (name, inv, use) => name !== 'Off hand' || !OFF_WEAPON.includes(inv) || !!(use && use.dual);
+  // what kind of item is worn: the game's own slot for an item you have, else the pack's
+  const wornInv = (x) => { const it = x && x.key && A.item(x.key); return (it && CC.advice && CC.advice.invOf ? CC.advice.invOf(it) : 0) || (A.gdItem(x && x.id) || [])[4] || 0; };
+  const unique = (c) => arr(c && c.g && c.g[10]).some((l) => /^Unique/.test(l));
 
   const char = () => ((A.CH && A.CH.snap) || {}).character || {};
   const idOf = (key) => { const m = /item:(\d+)/.exec(key || ''); return m ? Number(m[1]) : null; };
@@ -270,7 +280,7 @@
     const cand = candidates(use, ch.class);
     const worn = base.worn;
     const wornIds = new Set(Object.values(worn).map((x) => x.id));
-    const twoHand = worn[16] && (A.gdItem(worn[16].id) || [])[4] === TWO_HAND;
+    const twoHand = !!worn[16] && wornInv(worn[16]) === TWO_HAND;
     const listed = listings(cand);
     const listedBy = {}; listed.forEach((l) => { const k = l.c.key; if (!listedBy[k] || l.price < listedBy[k].price) listedBy[k] = l; });
     const mine = ownedCands(use);
@@ -280,7 +290,7 @@
       const cur = nums.map((n) => worn[n] ? { n, id: worn[n].id, key: worn[n].key, st: worn[n].st, s: score(worn[n].st, w) } : { n, id: null, s: 0 });
       const weakest = cur.reduce((a, c) => (c.s < a.s ? c : a), cur[0]);
       const blocked = name === 'Off hand' && twoHand;
-      const fitsPre = (c) => invs.includes(c.inv);
+      const fitsPre = (c) => invs.includes(c.inv) && handFits(name, c.inv, use);
       const fits = (c) => fitsPre(c) && !blocked;          // usable now (a worn two-hander blocks the off hand)
       // a two-hander replaces the main hand and the off hand
       const gain = (c, s) => s - weakest.s - (name === 'Main hand' && c.inv === TWO_HAND ? offScore : 0);
@@ -316,7 +326,7 @@
       const prePool = mine.filter(fitsPre).map((c) => x(c))
         .concat(cand.fixed.filter((c) => fitsPre(c) && c.req <= 60).map((c) => x(c)))
         .concat(cur.filter((y) => y.id && !cand.byId[String(y.id)] && !mine.some((m) => m.id === y.id))
-          .map((y) => x({ id: y.id, key: y.key || String(y.id), g: A.gdItem(y.id) || [A.anyItemName(y.id), 1], name: A.anyItemName(y.id), inv: (A.gdItem(y.id) || [])[4] || invs[0], req: 0, st: y.st, kind: 'owned' })));
+          .map((y) => x({ id: y.id, key: y.key || String(y.id), g: A.gdItem(y.id) || [A.anyItemName(y.id), 1], name: A.anyItemName(y.id), inv: wornInv(y) || invs[0], req: 0, st: y.st, kind: 'owned' })));
       const topRoll = Object.values(preRolls).sort((a, b) => b.s - a.s)[0];
       if (topRoll) prePool.push(x(topRoll.c));
       // "only what you can get": no unmet reputation or profession gates (your own items always count)
@@ -340,6 +350,13 @@
         mh.targets = [Object.assign({ picked: false }, best1h)];
       }
       if (mh.targets[0].c.inv === TWO_HAND) oh.twoHander = true;
+      // dual wield: a unique one-hander can't be the target for both hands
+      const m0 = mh.targets[0].c, o0 = oh.targets[0] && oh.targets[0].c;
+      if (!oh.twoHander && o0 && o0.id === m0.id && unique(m0)) {
+        const next = oh.pre.find((y) => y.c.id !== m0.id);
+        oh.alts = oh.alts.filter((y) => y !== next);
+        oh.targets = next ? [Object.assign({ picked: false }, next)] : [];
+      }
     }
     return { slots, listed, skipped: cand.skipped, at };
   }
@@ -595,7 +612,7 @@
       });
     },
     // shared with the Stat weights page and the item advice (js/weights.js, js/advice.js)
-    specs, profileKey, pickedProfile, setProfile, baseline, canUse, weightsFor, SLOTS,
+    specs, profileKey, pickedProfile, setProfile, baseline, canUse, weightsFor, SLOTS, handFits, wornInv,
     // for tests
     _plan: plan, _candidates: candidates, _listings: listings,
   };

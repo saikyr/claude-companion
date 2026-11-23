@@ -3,6 +3,11 @@
 Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 
 ## 1.5.0 (in progress: every merge to main updates itself)
+- **Weapons for dual-wielders.** With Dual Wield (Rogues, and Warriors and Hunters once trained), the off
+  hand now offers one-handers and off-hand weapons, a one-hander is rated in whichever hand gains most, and
+  Best from what you own can pick two one-handers. Without it, off-hand weapons are no longer suggested.
+  A worn two-hander is now recognised from the game's own item data too, so the off hand under it shows as
+  blocked rather than as an upgrade.
 - **One way to show an item, everywhere.** A dungeon opened on the Overview (Dire Maul, say) now lists its
   drops like the Gear page does: icon, name in its quality colour, the tooltip on both. So do quest rewards,
   what a profession opens, Ready now, From Claude item lists, the AH and Best from what you own.
