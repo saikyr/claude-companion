@@ -33,7 +33,9 @@ function snapshot(ageMs, extra) {
     quests: [
       { id: 5089, title: "General Drakkisath's Command", level: 60, complete: false, dungeon: 'Blackrock Spire', keep: true, keepWhy: 'dungeon quest', rep: [],
         rewards: [{ name: 'Ring', how: 'choose', specs: [{ spec: 'Holy', gain: 0 }, { spec: 'Shadow', gain: 4.5 }] }] },
-      { id: 1, title: 'Kill boars', level: 55, complete: true, dungeon: null, keep: false, rewards: [{ name: 'Old reward', how: 'get', specs: null }] }],
+      { id: 1, title: 'Kill boars', level: 55, complete: true, dungeon: null, keep: false, rewards: [{ name: 'Old reward', how: 'get', specs: null }] },
+      { id: 8470, title: 'Deadwood Ritual Totem', level: 55, complete: false, dungeon: null, keep: true, keepWhy: 'reputation toward rewards: Timbermaw Hold +150', rep: [{ faction: 'Timbermaw Hold', amount: 150 }] },
+      { id: 5543, title: 'Blood Tinged Skies', level: 56, complete: false, dungeon: 'Stratholme', keep: true, keepWhy: 'dungeon quest (step: Of Love and Family)' }],
     grind: { running: null, recent: [
       { name: 'cultists', zones: ['Western Plaguelands'], start: new Date(Math.floor((NOW - 7200e3) / 1000) * 1000).toISOString(), finish: iso(3600e3), hours: 1, kills: 80, deaths: 0, gph: 400000, gph_low: 250000, gph_high: 520000, complete: true, incomplete: [] },
       { name: 'short', zones: ['Burning Steppes'], finish: iso(7200e3), hours: 0.1, kills: 5, deaths: 0, gph: 90000, gph_low: 80000, gph_high: 90000, complete: false, incomplete: ['under 10 minutes: too short to quote as a rate'] }] },
@@ -73,11 +75,21 @@ function snapshot(ageMs, extra) {
     check(b.specs.length === 2 && b.specs[0].spec === 'Holy' && b.specs[1].spec === 'Shadow', 'every spec');
     check(b.specs[0].upgrades.length === 3 && b.specs[0].upgrades[0].gain === 8 && b.specs[0].upgrades[2].gain === 6 && b.specs[0].upgradesTotal >= 5, 'top 3 upgrades by the app\'s gain, with the total');
     check(b.specs[0].preBisMissing.length === 1 && b.specs[0].preBisMissing[0].name === 'Devout Crown', 'pre-BiS still missing');
+    await mac.client.pushSnapshot(snapshot(5 * 60e3, { app: { build: 'abc123' }, gear: [{ spec: 1, label: 'Holy', upgrades: [Object.assign(up(1), { where: 'World Drop · From creatures of its level, anywhere; the fastest way is the auction house' })],
+      preBis: [{ slot: 'Back', name: 'Amplifying Cloak', status: 'missing', where: 'Boss Drop · Magister Kalendris · Dire Maul · Level 54–60 · 5 players' }] }] }));
+    const w = brief();
+    check(w.specs[0].upgrades[0].where === 'World Drop · From creatures of its level, anywhere' && w.specs[0].preBisMissing[0].where === 'Boss Drop · Magister Kalendris · Dire Maul', 'default where: its first clause');
+    check(/the fastest way/.test(brief(['specs']).specs[0].upgrades[0].where), 'asked for by name: the whole where');
+    check(!('computers' in w.meta) && w.meta.build === 'abc123' && brief(['character']).meta.computers.length === 2, 'one build on every computer: computers left out (asked for by name: listed)');
+    await mac.client.pushSnapshot(snapshot(5 * 60e3, { app: { build: 'def456' } }));
 
     // quests: keep flags and rewards per spec
     const dq = b.quests.find((x) => x.id === 5089), oq = b.quests.find((x) => x.id === 1);
     check(dq.keep === true && dq.dungeon === 'Blackrock Spire' && !('keepWhy' in dq) && oq.keep === false, 'dungeon quests keep their keep flag and dungeon (keepWhy left out when it only says dungeon quest)');
     check(brief(['quests']).quests.find((x) => x.id === 5089).keepWhy === 'dungeon quest', 'asked for by name, keepWhy is there');
+    const rq = b.quests.find((x) => x.id === 8470), sq = b.quests.find((x) => x.id === 5543);
+    check(rq.keepWhy === 'rep: Timbermaw Hold +150' && !('rep' in rq) && sq.keepWhy === 'step: Of Love and Family' && sq.dungeon === 'Stratholme', 'default keepWhy is short: rep: <faction>, step: <quest> next to its dungeon');
+    check(!('level' in rq) && brief(['quests']).quests.find((x) => x.id === 8470).level === 55 && brief(['quests']).quests.find((x) => x.id === 8470).keepWhy === 'reputation toward rewards: Timbermaw Hold +150', 'asked for by name: level and the whole keepWhy');
     check(b.meta.quote.some((x) => /game\.item/.test(x)), 'the brief points at the game schema for game facts');
     check(dq.rewards[0].upgradeFor.length === 1 && dq.rewards[0].upgradeFor[0].spec === 'Shadow', 'a reward lists the specs it is an upgrade for (Shadow, not Holy)');
     check(oq.unscored.join() === 'Old reward' && !oq.rewards, 'a reward the app did not score is named in unscored');
@@ -102,6 +114,7 @@ function snapshot(ageMs, extra) {
       '{"name": "cultists", "start": 1e20, "killsBy": {"X": 1}}'::jsonb), (${q(account)}, 'Ana-Realm|grind|odd2', null, 'Ana-Realm', 'grind', 2, '{"name": "cultists", "start": "soon", "killsBy": {}}'::jsonb);`);
     const mobs = brief(['gold']).gold.measured[0].mobs;
     check(Array.isArray(mobs) && mobs.length === 3 && mobs[0].name === 'Scarlet Cultist' && mobs[0].kills === 50 && mobs[2].name === 'Dog', 'and the mobs it killed, from its grind record (top 3)');
+    check(brief().gold.measured[0].mobs.join() === 'Scarlet Cultist ×50,Scarlet Monk ×20,Dog ×9', 'default: the mobs as "<name> ×<kills>"');
     check(brief(['gold']).gold.measured[0].what === 'grind' && !('what' in brief().gold.measured[0]) && !('end' in brief().gold.measured[0]) && brief(['gold']).gold.measured[0].end, 'default: no what on grinds, no end; asked for by name, end is there');
     check(!('deaths' in m[0]), '0 deaths are left out');
     check(m.length === 3 && m[0].name === 'cultists' && m[0].gph === 400000 && m[0].gph_low === 250000 && m[0].gph_high === 520000, "measured grinds and runs, newest first, with the app's gph range");
