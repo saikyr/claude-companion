@@ -47,8 +47,8 @@ weekly audit (below) counts how often it is broken.
 - Gear, rewards and quest cleanups: the app's scores for every spec before any verdict, leading with
   the spec he asked about. Never drop a quest
   the app marks `keep`.
-- If the app has no number, say "the app doesn't track this" (FEATURES.md, "Not tracked") and fix the
-  app in a PR. Don't fill the gap by hand.
+- If the app has no number, say "the app doesn't track this" (FEATURES.md, "Not tracked") and file it as a
+  `from-coaching` issue so the build project fixes the app (section 5). Don't fill the gap by hand.
 - Don't throw away real data because a label is missing. A grind named after a zone still has its mobs
   in the brief (`measured[].mobs`). Look before saying unknown.
 

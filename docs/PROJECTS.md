@@ -8,7 +8,7 @@ what, so no project does another's work. **The app is complete without any of th
 | --- | --- | --- | --- |
 | Job | Answers the owner about the game, his character and gold; writes From Claude cards | Builds and runs the Companion: addon, app, sync backend, game data, CI, releases | Answers one friend about their own character; writes cards on their computer |
 | Project | "wow forever" (the existing one: its memory, project files, scheduled tasks) | "Claude Companion (build)", a new project | the friend's own project in their Claude desktop app |
-| Repository | `saikyr/claude-companion` attached, **read only**: docs, the checkers | `saikyr/claude-companion`: branches, PRs, merges | none (the repository is private); reads the kit in its addon folder |
+| Repository | `saikyr/claude-companion` attached: reads docs and code, runs the checkers, opens `from-coaching` issues; never pushes | `saikyr/claude-companion`: branches, PRs, merges | none (the repository is private); reads the kit in its addon folder |
 | Database (Supabase `jucbngafdnyaizfxgplk`) | `select` on `private.*` and `game.*` for the owner's account; writes only `private.claude_put_setting(..., 'cc.claude.cards', ...)` | migrations (additive), edge functions, test SQL inside a rolled-back transaction | none |
 | Follows | [CLAUDE.md](../CLAUDE.md) (all but "Changing the code"), [COACHING.md](COACHING.md), [DEEP-DIVE.md](DEEP-DIVE.md), [FEATURES.md](FEATURES.md) (read), [SCHEMA.md](../ClaudeCompanion/companion-data/SCHEMA.md) | [CLAUDE.md](../CLAUDE.md) "Changing the code", [DEVELOP.md](DEVELOP.md), [INTERFACES.md](INTERFACES.md), [ARCHITECTURE.md](ARCHITECTURE.md), [ui-language.md](ui-language.md), [STAT-WEIGHTS.md](STAT-WEIGHTS.md); keeps FEATURES.md current | `ClaudeCompanion/claude/GUIDE.md` (shipped in every build, with COACHING.md, FEATURES.md and the checkers) |
 | Never | commits, PRs, migrations, merges; game answers from memory | coaching answers; writing cards; reading the owner's data except to test a change | anything but `from-claude/cards.json` |
@@ -50,7 +50,8 @@ This project coaches. It never builds: the app is built in the project "Claude C
   sales, flips), grinds, dungeons, gear and quests. Claude reads what the app recorded and computed,
   and writes From Claude cards. Nothing else.
 - Every agent follows the repo's CLAUDE.md (all of it except "Changing the code") and docs/COACHING.md.
-  The repo is attached read only: read docs, run tools/check-cards.py and tools/check-answer.py.
+  The repo is attached to read docs and code, run tools/check-cards.py and tools/check-answer.py,
+  and open from-coaching issues. Never push to it.
 - Before ANY answer about the app, his data or his gold: read docs/FEATURES.md, then query the app's data
   (private.claude_brief first). Never state a feature exists or doesn't, or quote a number, without
   having read it. If it isn't recorded, say so.

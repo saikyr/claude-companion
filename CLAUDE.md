@@ -47,7 +47,7 @@ player's specs (each `gear[]` entry is one spec; each `rewards[].specs[]` lists 
 them. Lead with the spec the player asked about, but check every spec before any verdict ("don't take
 it", "vendor it"): an item that is nothing for one spec can be an upgrade for the other. The app's
 numbers are the answer. If a number is missing (an item the app doesn't score, a field
-an older build doesn't write: check `data->'app'->>'build'`), say so plainly and fix the app in a PR;
+an older build doesn't write: check `data->'app'->>'build'`), say so plainly and get the app fixed (coaching: a `from-coaching` issue; building: a PR);
 don't fill the gap with a hand-made score. This rule exists because a hand-scored answer once judged a
 quest reward for Shadow only while the app already showed it as a Holy upgrade.
 

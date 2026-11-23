@@ -14,15 +14,29 @@ Mac: `/Applications/World of Warcraft/_forever_/Interface/AddOns/ClaudeCompanion
 | File | What |
 | --- | --- |
 | `claude/GUIDE.md` | This guide: where the numbers come from, and what you may write |
-| `claude/COACHING.md` | How to answer: sections 1 to 4 and 7 apply to you (read "he" as the player, and "project memory" as your project's instructions). Sections 5, 6 and 8 are for the app owner's own project |
-| `claude/FEATURES.md` | What the app records and what it doesn't. Its "Claude reads" column is SQL for the owner's database: you read the same fields in `snapshot.json` (table below) |
+| `claude/COACHING.md` | How to answer: sections 1 to 4 and 7 apply to you, read through the table below. Sections 5, 6 and 8 are for the app owner's own project |
+| `claude/FEATURES.md` | What the app records and what it doesn't. Its "Claude reads" column is SQL for the owner's database: you read the same fields in `snapshot.json` (next section) |
 | `claude/check-cards.py`, `claude/check-answer.py`, `claude/answer_rules.py` | The checkers (Python 3, no packages) |
 | `companion-data/SCHEMA.md` | Every field of `snapshot.json` and the cards format |
 | `companion-data/snapshot.json` | **The player's data.** Written by the app after every save in game |
 | `companion-data/from-claude/cards.json` | **The only file you write** |
 | `companion-data/from-claude/state.json` | What the player did with your cards. Read it, never write it |
 
-Never change anything else in this folder. The updater replaces everything outside `companion-data/`.
+Never change anything else in this folder. The updater replaces everything outside `companion-data/`, so
+keep your own files (drafts) in `companion-data/from-claude/`.
+
+COACHING.md and FEATURES.md are written for the owner's project, which has a database you don't. Where they
+name something you can't reach, use this instead; this guide wins where they differ:
+
+| They say | For you |
+| --- | --- |
+| the brief (`private.claude_brief`), `private.history`, the snapshot query | `companion-data/snapshot.json` |
+| game facts only from the `game` schema, never the web | named Forever sources on the web, each cited (below) |
+| CLAUDE.md | this guide |
+| `tools/check-cards.py`, `tools/check-answer.py` | `claude/check-cards.py`, `claude/check-answer.py` |
+| fix the app in a PR, or file a `from-coaching` issue | tell the player what is missing and why |
+| project memory | your project's instructions |
+| "he", "him" | the player |
 
 ## Before answering
 
@@ -30,7 +44,7 @@ Never change anything else in this folder. The updater replaces everything outsi
 2. Read `companion-data/snapshot.json`. Say how old it is: `savedInGame` is when the game last saved. The
    game saves only at `/reload` and logout, so anything since then isn't anywhere yet. If the player says
    something different from the snapshot, trust the player.
-3. Check [FEATURES.md](FEATURES.md) before saying the app does or doesn't do something.
+3. Check `claude/FEATURES.md` before saying the app does or doesn't do something.
 4. Never work out gold per hour yourself: quote the app's `gph`, `gph_low` and `gph_high` (snapshot
    `grind.recent[]` and `runs[]`), and say so when `complete` is false.
 5. Profit is only `ah.flips` (sales matched to recorded buys). A sale alone is revenue; loot and crafts
@@ -70,6 +84,8 @@ cards within 5 seconds.
    `id` to update it; set `status` to `withdrawn` to take one back.
 2. Every number in a card's `facts[]` carries its `src` (`snapshot#<path>` for a number from the
    snapshot, `grind:<name>@<start>#gph` for a grind's gold per hour). A farm card has a `risk` line.
+   A drop rate on a card needs a `game.drop:` src, which is the owner's database and not yours: on a card,
+   write the rate as "unknown" and give the cited rate (source and sample) in chat. Never make up a src.
 3. Check it: `python3 claude/check-cards.py <your file>` must print `ok`. Fix what it names; never reword
    around it.
 4. Write it to a temporary file in `companion-data/from-claude/`, then rename it to `cards.json`.
@@ -78,8 +94,8 @@ Cards written this way show on this computer only. The player's other computers 
 
 ## Chat answers
 
-Before sending an answer with numbers, rates, gold or plans, save the draft to a file and run
-`python3 claude/check-answer.py <draft>`. It must print `ok`. No in-game scripts (`/run`, `/script`), no
+Before sending an answer with numbers, rates, gold or plans, save the draft in
+`companion-data/from-claude/` and run `python3 claude/check-answer.py <draft>`. It must print `ok`. No in-game scripts (`/run`, `/script`), no
 layer tips, no Wowhead links.
 
 ## What you can't do
