@@ -1,20 +1,20 @@
 {
  "version": "1.5.0",
- "built": "2026-11-23T22:40:10+00:00",
+ "built": "2026-11-23T23:14:20+00:00",
  "channel": {
   "repo": "saikyr/claude-companion",
   "branch": "stable"
  },
  "from": {
   "branch": "main",
-  "commit": "00137c05968b81deaaae819ce8f56401ed17a82b"
+  "commit": "44eef161c152186e917bdb4dcc40c5d40a01ca45"
  },
- "build": "00137c05968b",
- "notes": "Gear scoring checked for every class: weapon DPS per hand, Hunter ranged stats, tank armor, shields, talentless specs",
+ "build": "44eef161c152",
+ "notes": "Friend set-up: the paste is just the set-up and a pointer to GUIDE.md",
  "files": {
   "Bindings.xml": "99dcc8984fdbcbea746275e7a8dbbc34e16c462021640ce70232478fb843fb48",
   "ClaudeCompanion.toc": "14d0dd98487ec0a4ce7faefcf2a5d1f75fecd6a6f8890ed9bf815a59269b7731",
-  "Core.lua": "ce4854df5376364cb5f77e7895fcbede28926da96f72e3398e4f1cc3fbb2a8cb",
+  "Core.lua": "15d449a0a5475e8dc066e5a1d0c3283986aa1d44ee5808e250f6a8c36d19338d",
   "Drops.lua": "31cf85151bc89bed3e80b013fe513b2d22a6b68f95c58225a71fee97c6f005f0",
   "Journal.lua": "876d26831f798a8b1091b6916d852f8b986f8997d8ebfe2d072f5ffd1daef54e",
   "Market.lua": "4165160c673093f830132d9a1a252d35e4c4aed4f62365b861f6fa303b29225c",
@@ -22,9 +22,9 @@
   "Snapshot.lua": "731461dd66e1599dc353b4c33412d4f19a246c04085860d2abdc57f334575ff1",
   "UI.lua": "57459b56162e803ecd747f8d4f8f9af74c3a284ede3c7ae357c8cc07adac9cb7",
   "claude/COACHING.md": "16896d3941f141694a538f5513ce25e253af92985389c32a7582256bbf6e1076",
-  "claude/FEATURES.md": "e49ff3a2cbce62f79654176e4bb53f2c9a2c7fd9f0c76083da30744274341e08",
-  "claude/GUIDE.md": "7ca1a6bf2bddb328ac72cb3b362e4d7899425fe5e7e4079faf0b9f07eb6c8f6e",
-  "claude/SETUP.md": "a206849508443d37a1123a13890fa0e28f972b9a8a49aa532d3e75f5b05a401f",
+  "claude/FEATURES.md": "ca8914dce24131b749b12b6e27628329f550906c35e146b245dc1bc7f43ee539",
+  "claude/GUIDE.md": "e465fed8b9a3f69237646da2b21b13e23a0d4f368d60be5447f1f0e4dcf62d09",
+  "claude/SETUP.md": "f1efa20e7450f8942b7e2d8b63b7d1f731014f4cdc86651f953829975322ebe8",
   "claude/answer_rules.py": "7b88767d4c2c3d0df1a69ede1f3fd25fd8d2751e296543d50e84094208c99f7d",
   "claude/check-answer.py": "9cd8af518bfd799e6034bcb0a13763659a621cbe451aee31c71bea03aa1edf80",
   "claude/check-cards.py": "8a4447f7060767236e2d83ba85c8615b362cfa792d2036200b58a0183abbab5a",
@@ -33,7 +33,7 @@
   "web/Claude Companion.app/Contents/MacOS/launcher": "65fe025ebb1acad0f786633f5b30f6bdcfa6b49f2912eca1f87385dcec0224c4",
   "web/Claude Companion.app/Contents/Resources/AppIcon.icns": "467ef964fdaff99ca47e80e7aff3d4db96306b984293aeb98251d68d2e4a2fdd",
   "web/Claude Companion.bat": "8f5cf6c1ff6a95ad5e0ebfc10951ef451cccf5b1e9a6d1fc7574600cfd01a2fc",
-  "web/channel.json": "a2dd74141cd3d78932127cb5f599775f09dd21346f733dd51de13a01e6cc9aa7",
+  "web/channel.json": "2f8fc45ceaf026c714493f04d9ef61eb53f62d01792e29dfa555732104c90be6",
   "web/css/app.css": "b5320767545c13543a5a30bd61cb0d6da01238bead26054541c08500b1268e01",
   "web/data/gamedata.js": "3163e358427dc39e0257a543c963b0cc4909a2871ad1455bbfb73c639a6a43d5",
   "web/data/rules.js": "d2a737cdc25b3c02b5a68fa80a615dce40810d21a2f88d026a76401a4b1aba69",
