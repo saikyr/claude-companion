@@ -242,6 +242,12 @@ Forever differs from Classic the Forever source is used, and anything that is on
 | Attunements and keys: which quest or item opens which instance, and what it opens | **Hand-kept**, sources in the file (conquestcapped Forever attunement guide, warcraft.wiki.gg WoW Forever) | `web/data/rules.js` `unlocks` | by hand; quest, item and boss ids checked against the pack in CI | Forever guides; the chains themselves come from QuestieDB Forever |
 | Stat weights | **Worked out per spec**, sources in `docs/STAT-WEIGHTS.md` | `web/js/weights.js` | by hand | Forever item budgets |
 
+**The same pack in the database.** `publish.yml` (job `game-data`) turns the pack and `rules.js` into rows
+(`tools/pack-to-rows.py`) and loads them through `supabase/functions/publish-game` (GitHub OIDC, like
+`publish-build`) into the `game` schema whenever the pack changed: Claude's look-ups (`game.item`, `game.npc`,
+`game.quest`, `game.instance`, `game.drop_rates`) read exactly what the app shows. Reads switch to a new pack
+only after every row has arrived; nothing is deleted. Test: `test/web/game.test.js` loads the real pack.
+
 Links out of the app go to Forever sites: a quest's page is ForeverChanges (`foreverchanges.pro/quest/<id>`).
 The only Wowhead address left is its icon image CDN (`wow.zamimg.com`), for pictures: icon files are the same
 in every client and no Forever site serves them by name. CI fails if any other Wowhead address appears in the app.

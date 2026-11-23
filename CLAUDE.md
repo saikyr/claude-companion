@@ -31,7 +31,7 @@ its CI check: [docs/INTERFACES.md](docs/INTERFACES.md).
 | The character now (gear, bags, quests, rep, position, professions) | the **snapshot** (below) | guess from memory or an old chat |
 | Is X an upgrade? Best in slot? Which quest reward? | the snapshot's **app scores for every spec**: `gear[]` (`upgrades`, `preBis` with `alternatives`, `worn`), `bagAdvice[]`, `bestOwned[]`, `quests[].rewards[].specs[]` and `quests[].next` | score items by hand, or for one spec only |
 | History (grinds, runs, sales, journal) | `private.history` (below) | |
-| Game data (items, drops, quests, vendors) | the pack the app uses, one source per domain: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), Data sources | Classic data without saying it is Classic |
+| Game data (items, drops, quests, NPCs, vendors, instances) | the **`game` schema**: the same pack the app uses, loaded on every merge that changes it. `select game.item('<name or id>')`, `game.npc(...)`, `game.quest(...)`, `game.instance('<zone>')`, `select * from game.drop_rates where ...`; `game.status()` says which pack. Quote each rate's `label` as given | the web; a Classic rate as Forever (`rate = 'classic'` is labelled so); `seen ÷ corpses`; a rate with no sample size |
 | Field meanings | [ClaudeCompanion/companion-data/SCHEMA.md](ClaudeCompanion/companion-data/SCHEMA.md) | |
 
 **The scoring rule.** Before any gear, quest or reward answer, read the app's scores for **all** of the
