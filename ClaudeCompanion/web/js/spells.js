@@ -11,16 +11,17 @@
 
   // what you know: by spell id, and the best rank of each spell name
   function book(snap) {
-    const byId = {}, best = {};
+    const byId = {}, best = {}, names = new Set();
     let n = 0;
     arr((snap || {}).spellbook).forEach((tab) => arr(tab && tab.spells).forEach((s) => {
       if (!s || !s.name || s.passive) return;
       n++;
+      names.add(s.name);
       const r = rankNo(s.rank);
       if (s.id != null) byId[s.id] = { name: s.name, rank: r };
       if (r != null && (!best[s.name] || r > best[s.name].rank)) best[s.name] = { rank: r, id: s.id };
     }));
-    return { byId, best, n };
+    return { byId, best, names, n };
   }
 
   // ch: one character as the app holds it (CH): snap, specs (keyed 1 and 2), trainer
@@ -30,7 +31,8 @@
     const level = Number((snap.character || {}).level) || 0;
     const B = book(snap);
     const tr = ch.trainer && arr(ch.trainer.services).length ? ch.trainer : null;
-    const known = (name, rank) => !!(B.best[name] && rank != null && B.best[name].rank >= rank);
+    // a rank you know; a spell with no rank is known when its name is in the spellbook
+    const known = (name, rank) => (rank == null ? B.names.has(name) : !!(B.best[name] && B.best[name].rank >= rank));
 
     // each spec's bars: a spell whose rank is below the best rank in your spellbook
     const specs = Object.entries(ch.specs || {}).map(([k, sp]) => ({ k: Number(k), sp }))
@@ -39,14 +41,19 @@
       .map(({ k, sp }) => {
         const outdated = [], unranked = [];
         let spells = 0;
-        arr(sp.actionBars).forEach((a) => {
-          if (!a || a.kind !== 'spell' || a.id == null) return;
+        // each bar spell's name and rank: from the spellbook by id, else the rank the addon saved with the slot
+        const onBar = arr(sp.actionBars).filter((a) => a && a.kind === 'spell' && a.id != null).map((a) => {
+          const b = B.byId[a.id];
+          return { a, name: b ? b.name : a.name, rank: b ? b.rank : rankNo(a.rank) };
+        });
+        // the best rank somewhere on this spec's bars: a lower rank kept beside it is on purpose (a cheap heal)
+        const bestOnBars = new Set(onBar.filter((x) => x.rank != null && B.best[x.name] && x.rank >= B.best[x.name].rank).map((x) => x.name));
+        onBar.forEach(({ a, name, rank }) => {
           spells++;
-          const have = B.byId[a.id];
-          if (!have) { if (a.name && B.best[a.name]) unranked.push({ slot: a.slot, name: a.name }); return; }
-          const best = B.best[have.name];
-          if (have.rank != null && best && best.rank > have.rank) {
-            outdated.push({ slot: a.slot, key: a.key || null, name: have.name, rank: have.rank, best: best.rank, bestId: best.id });
+          const best = B.best[name];
+          if (rank == null) { if (name && best) unranked.push({ slot: a.slot, name }); return; }
+          if (best && best.rank > rank && !bestOnBars.has(name)) {
+            outdated.push({ slot: a.slot, key: a.key || null, name, rank, best: best.rank, bestId: best.id });
           }
         });
         return { spec: k, active: Number(snap.activeSpec) === k, taken: sp.barsTaken || null, spells, outdated, unranked };
@@ -69,6 +76,8 @@
       book: { taken: snap.taken || null, spells: B.n },
       trainer: tr ? { taken: tr.taken || null, npc: tr.npc || null, level: tr.level != null ? Number(tr.level) : null } : null,
       specs, train, trainCost, later,
+      // the best rank of every ranked spell you know, by name
+      known: Object.keys(B.best).sort().map((name) => ({ name, rank: B.best[name].rank })),
     };
   }
 

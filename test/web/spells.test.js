@@ -46,5 +46,16 @@ check(none.trainer === null && none.train.length === 0 && none.specs.length === 
 check(S.check({}).specs.length === 0, 'an empty character gives an empty check');
 // arrays (a Lua 1..n list read as a JS array) are handled too
 check(S.check({ snap: { spellbook: [{ spells: [{ name: 'Smite', rank: 'Rank 2', id: 591 }] }] }, specs: { 1: { actionBars: [] } } }).book.spells === 1, 'spellbook as arrays');
+// a low rank kept beside the best one is on purpose (a cheap heal): not flagged
+const both = S.check({ snap: ch.snap, specs: { 1: { actionBars: [{ slot: 1, kind: 'spell', id: 10916 }, { slot: 2, kind: 'spell', id: 10917 }] } } });
+check(both.specs[0].outdated.length === 0, 'rank 6 beside rank 7 on the same bars is left alone');
+// the spellbook lists only the top rank: the slot's own saved rank still shows the old one
+const top = S.check({ snap: { spellbook: [{ spells: [{ name: 'Flash Heal', rank: 'Rank 7', id: 10917 }] }] },
+  specs: { 1: { actionBars: [{ slot: 4, kind: 'spell', id: 10916, name: 'Flash Heal', rank: 'Rank 6' }] } } });
+check(top.specs[0].outdated.length === 1 && top.specs[0].outdated[0].rank === 6, "an old rank is seen from the slot's own rank when the spellbook has only the top one");
+// a trainer service with no rank, learned since: not to train
+const fw = S.check({ snap: ch.snap, specs: {}, trainer: { level: 58, services: [{ name: 'Fear Ward', status: 'available', level: 20 }] } });
+check(fw.train.length === 0, 'an unranked service in the spellbook is not to train');
+check(R.known.some((k) => k.name === 'Flash Heal' && k.rank === 7) && !R.known.some((k) => k.name === 'Fear Ward'), 'known: the best rank of each ranked spell');
 if (failed) { console.log(failed + ' failed'); process.exit(1); }
 console.log('all spell-rank checks pass');

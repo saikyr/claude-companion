@@ -224,17 +224,15 @@
         const rk = window.CCSpells.rankNo;
         const byId = {};
         arr(s.spellbook).forEach((tab) => arr(tab && tab.spells).forEach((x) => { if (x && x.id != null) byId[x.id] = x; }));
-        const known = {};
-        Object.values(byId).forEach((x) => { const r = rk(x.rank); if (r != null && !x.passive && (!known[x.name] || r > known[x.name])) known[x.name] = r; });
         return {
           book: { taken: t(R.book.taken), spells: R.book.spells },
           trainer: R.trainer ? { taken: t(R.trainer.taken), npc: R.trainer.npc, level: R.trainer.level } : null,
           specs: R.specs.map((x) => ({ spec: x.spec, active: x.active, taken: t(x.taken), spells: x.spells, outdated: x.outdated, unranked: x.unranked,
             bars: arr((CH.specs || {})[x.spec] && CH.specs[x.spec].actionBars).filter((a) => a && a.kind)
               .map((a) => ({ slot: a.slot, key: a.key || null, kind: a.kind, name: a.name || (byId[a.id] || {}).name || null,
-                rank: a.kind === 'spell' && byId[a.id] ? rk(byId[a.id].rank) : null })) })),
+                rank: a.kind !== 'spell' ? null : byId[a.id] ? rk(byId[a.id].rank) : rk(a.rank) })) })),
           train: R.train, trainCost: R.trainCost, later: R.later.slice(0, 20), laterTotal: R.later.length,
-          known: Object.entries(known).sort((a, b) => a[0].localeCompare(b[0])).map(([name, rank]) => ({ name, rank })),
+          known: R.known,
         };
       })(),
       cooldowns: A.cooldowns ? A.cooldowns().map((c) => ({ name: c.name, profession: c.prof || null, readyAt: c.ends })) : [],

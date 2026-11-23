@@ -813,7 +813,7 @@ do -- the class trainer's list, read with every filter open, the filters put bac
   local filters = { available = 1, unavailable = nil, used = nil }
   local LIST = {
     { "Holy", "", "header" }, { "Flash Heal", "Rank 7", "used", 56, 30000 }, { "Greater Heal", "Rank 5", "available", 58, 38000 },
-    { "Power Word: Shield", "Rank 10", "unavailable", 60, 40000 } }
+    { "Power Word: Shield", "Rank 10", "unavailable", 60, 40000 }, { "Heal", "Rank 4", "used", 34, 0 } }
   local shown = function() local out = {} for _, r in ipairs(LIST) do if r[3] == "header" or filters[r[3]] then out[#out + 1] = r end end return out end
   GetTrainerServiceTypeFilter = function(k) return filters[k] end
   SetTrainerServiceTypeFilter = function(k, v) filters[k] = (v == 1 or v == true) and 1 or nil; Fire("TRAINER_UPDATE") end
@@ -827,7 +827,7 @@ do -- the class trainer's list, read with every filter open, the filters put bac
   c.trainer = nil
   Fire("TRAINER_SHOW"); RunTimers()
   local tr = c.trainer or {}
-  check(tr.services and #tr.services == 3, "every trainer service is read (headers left out), whatever the filters showed")
+  check(tr.services and #tr.services == 4, "every trainer service is read (headers left out), whatever the filters showed")
   local gh = tr.services and tr.services[2] or {}
   check(gh.name == "Greater Heal" and gh.rank == "Rank 5" and gh.status == "available" and gh.level == 58 and gh.cost == 38000, "a service keeps its rank, status, level and cost")
   check(tr.npc == "High Priestess Laurena" and tr.class == "PRIEST" and tr.level == 58 and tr.taken, "the trainer, your class and level, and when")
@@ -835,7 +835,14 @@ do -- the class trainer's list, read with every filter open, the filters put bac
   RunTimers()
   -- our own filter changes don't start another read
   Fire("TRAINER_UPDATE"); RunTimers()
-  check(c.trainer == tr or (c.trainer and #c.trainer.services == 3), "a TRAINER_UPDATE right after our read changes nothing")
+  check(c.trainer == tr or (c.trainer and #c.trainer.services == 4), "a TRAINER_UPDATE right after our read changes nothing")
+  -- a weapon master opens the same window: nothing on its list is in the spellbook
+  local keepBook = c.snap and c.snap.spellbook
+  if c.snap then c.snap.spellbook = { { name = "Holy", spells = { { name = "Flash Heal", rank = "Rank 7", id = 10917 } } } } end
+  LIST = { { "Swords", "", "available", 20, 1000 }, { "Staves", "", "used", 1, 0 } }
+  c.trainer = nil; Advance(5); Fire("TRAINER_SHOW"); RunTimers()
+  check(c.trainer == nil, "a weapon master's list is not taken for the class trainer")
+  if c.snap then c.snap.spellbook = keepBook end
   IsTradeskillTrainer = function() return true end
   c.trainer = nil; Advance(5); Fire("TRAINER_SHOW"); RunTimers()
   check(c.trainer == nil, "a profession trainer is not taken for the class trainer")
