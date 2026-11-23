@@ -7,7 +7,8 @@ Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
   Korialstrasz: raid rewards whose quests the game data doesn't mark as raid. A quest now counts as raid
   content when it, or an earlier step of its chain, is set in a raid. Raid gear, PvP gear and items not seen
   on Forever yet are no longer dropped silently: each slot lists the best of them under "Raid, PvP and not in
-  game yet", scored, with the reason, and Claude's snapshot has them too.
+  game yet", scored, with the reason, and Claude's snapshot has them too. Class sets from AQ40 and Naxxramas
+  quests are now labelled Raid (they were "Dungeon set upgrade (quests)").
 - **Weapons for dual-wielders.** With Dual Wield (Rogues, and Warriors and Hunters once trained), the off
   hand now offers one-handers and off-hand weapons, a one-hander is rated in whichever hand gains most, and
   Best from what you own can pick two one-handers. Without it, off-hand weapons are no longer suggested.

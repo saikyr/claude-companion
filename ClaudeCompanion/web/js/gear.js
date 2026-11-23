@@ -348,7 +348,7 @@
       const targets = want.concat(pre.filter((y) => !want.includes(y))).slice(0, n).map((y) => Object.assign({ picked: want.includes(y) }, y));
       const alts = pre.filter((y) => !targets.some((t) => t.c.name === y.c.name)).slice(0, PRE_ALTS);
       // ---- not in game yet, raid or PvP: the best few, scored the same way, never a target
-      const later = distinct(cand.later.filter(fitsPre).map((c) => x(c)).sort((a, b) => b.s - a.s)).slice(0, LATER_MAX);
+      const later = distinct(cand.later.filter((c) => fitsPre(c) && !wornIds.has(c.id) && !mine.some((m) => m.id === c.id)).map((c) => x(c)).sort((a, b) => b.s - a.s)).slice(0, LATER_MAX);
       return { name, nums, cur, weakest, blocked, ups, now, ahUps, search, targets, alts, pre, later };
     });
     // Main hand: a two-hander target makes the off hand target moot (and the other way round)
@@ -480,7 +480,7 @@
     }
     // ---- pre-BiS
     h += `<h3>Pre-BiS <span>· the best up to level 60, raids left out</span></h3>`;
-    if (sl.twoHander) return h + `<div class="empty">Not needed: your main-hand target is a two-hander.</div></section>`;
+    if (sl.twoHander) return h + `<div class="empty">Not needed: your main-hand target is a two-hander.</div>` + laterList(sl) + '</section>';
     const n = sl.targets.length;
     h += `<div class="toolbar"><div class="chips"><button data-gearreach="" class="${A.STATE.gearReach ? '' : 'on'}">Everything</button><button data-gearreach="1" class="${A.STATE.gearReach ? 'on' : ''}">Only what I can get now</button></div><span class="dim small">${n > 1 ? 'Your two targets are on top.' : 'Your target is on top.'} Make any other item ${n > 1 ? 'one of them' : 'your target'}.</span></div>`;
     const rest = sl.pre.filter((y) => !sl.targets.some((t) => t.c.name === y.c.name));
