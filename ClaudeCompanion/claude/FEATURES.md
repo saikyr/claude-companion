@@ -99,9 +99,21 @@ scores by hand (CLAUDE.md, the scoring rule).
 Weapons: a two-hander's gain is its score minus the main hand **and** the off hand it replaces; under a
 worn two-hander the off hand shows as blocked (`blocked`) rather than as a loss, and a one-hander is
 measured against the two-hander alone. The pre-BiS plan takes a one-hander plus off hand over a two-hander
-when the pair scores higher. Shields and held-in-off-hand items go in the off hand for anyone; one-hand and
+when the pair scores higher. Held-in-off-hand items go in the off hand for anyone, shields only with the Shield skill (an item the
+Forever client's tooltip calls a Shield counts as one, whatever subclass the pack gives it); one-hand and
 off-hand weapons only with the Dual Wield skill (snapshot `skills`, or a Rogue), and then a one-hander is
 measured in whichever hand it gains most.
+
+Weapon DPS counts where the weapon hits: in full in the main hand, half for an off-hand weapon (off-hand
+hits do half damage), and in the Ranged slot only for Hunters (profile weight `rdps`). Beast Mastery and
+Marksmanship Hunters score their melee weapon on its stats alone; Survival counts both. A wand's DPS is not
+scored. Hunters also count ranged attack power like attack power.
+
+Which tree a spec is: the one with the most talent points (`gear[].tree`, `talentPoints`). With no points yet
+(below level 10, or a second spec never set up) it is the tree the class levels in (Arms, Retribution, Beast
+Mastery, Combat, Shadow, Frost, Affliction, Enhancement, Feral), not the first tree; a tie goes to that tree
+when it is one of the tied ones. `gear[].weightsChosen` says which case applied. Every class and spec is
+checked by `test/web/classes.test.js`.
 
 ## Everything saved, online: the `now` record
 
