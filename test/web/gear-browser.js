@@ -125,6 +125,12 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   check(holy && holy.weightsName === 'Holy' && holy.weightsChosen === 'default for the biggest tree', 'snapshot: Holy weights, chosen by the biggest tree');
   check(holy && holy.ahUpgrades.some((u) => u.roll === 'of Healing' && u.ah && u.ah.price > 0), 'snapshot: AH upgrades with roll and price');
   check(holy && holy.preBis.length >= 15 && holy.preBis.every((p) => Array.isArray(p.alternatives)), 'snapshot: pre-BiS with alternatives');
+  const raidIds = new Set([22631, 21275, 21273, 21523]);
+  check(holy && !holy.preBis.some((p) => raidIds.has(p.id) || p.alternatives.some((a) => raidIds.has(a.id))), 'snapshot: no raid weapon (Atiesh, Qiraji staves, Fang of Korialstrasz) in pre-BiS');
+  check(holy && holy.notInPreBis.some((x) => x.availability === 'raid') && holy.notInPreBis.every((x) => ['raid', 'pvp', 'unseen'].includes(x.availability)), 'snapshot: raid and not-yet-seen items kept with why (notInPreBis)');
+  await page.evaluate(() => { window.CC.api.STATE.tab = 'gear'; window.CC.api.STATE.gearSlot = 'Main hand'; window.CC.api.render(); });
+  const later = await page.$$eval('.slotdet details.later', (els) => els.map((e) => e.textContent).join('\n'));
+  check(/Raid, PvP and not in game yet/.test(later) && /Raid/.test(later), 'Main hand: raid items listed under "Raid, PvP and not in game yet", not in Pre-BiS');
   const ms = await page.evaluate(() => { const t = performance.now(); window.CC.api.STATE.tab = 'gear'; window.CC.api.render(); window.CC.gear.summary(); return performance.now() - t; });
   console.log(`     (Gear page + snapshot: ${Math.round(ms)} ms)`);
   check(ms < 3000, 'the Gear page and its snapshot take under 3 s');

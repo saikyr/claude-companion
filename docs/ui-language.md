@@ -53,6 +53,8 @@ One page per spec (the switcher in the header; each spec is named by its biggest
     trinkets). "Make target" on any other row makes it your target (kept per character and spec); "use the
     best" undoes it. "Only what I can get now" leaves out items behind reputation or profession skill you
     don't have.
+  - **Raid, PvP and not in game yet** (folded): the best few items left out of Upgrades and Pre-BiS, scored
+    the same way, each with why: Raid, PvP (Honor), or Not seen on Forever yet. Never a target.
 - **Auction House**: upgrades listed on your AH now (from the newest scan, at most 3 days old), sorted by
   gain, with gain per gold; then the random-suffix rolls worth searching for, per slot.
 - **Class sets**: every item set for your class on Forever, pieces owned, bonuses active.
