@@ -27,7 +27,7 @@ $files = @{ '/api/cards' = (Join-Path $cardsDir 'cards.json'); '/api/cards-state
             # js/combatlog.js: its per-creature counts from the game's combat log
             '/api/combat' = (Join-Path $dataDir 'combat.json') }
 $logsDir = Join-Path $forever 'Logs'
-$combatLogName = '^WoWCombatLog[A-Za-z0-9_.-]*\.txt$'
+$combatLogName = '^WoWCombatLog[A-Za-z0-9_.-]*\.txt\z'
 # what the page may write (POST): the snapshot for Claude, plus the files above except Claude's cards
 $writable = @{ '/api/snapshot' = (Join-Path $dataDir 'snapshot.json') }
 foreach ($k in $files.Keys) { if ($k -ne '/api/cards') { $writable[$k] = $files[$k] } }
@@ -454,13 +454,14 @@ while ($listener.IsListening) {
                 if (Test-Path $logsDir) {
                     $list = @(Get-ChildItem -LiteralPath $logsDir -Filter 'WoWCombatLog*.txt' -File -ErrorAction SilentlyContinue |
                         Where-Object { $_.Name -cmatch $combatLogName } | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 20 |
-                        ForEach-Object { '{"name":"' + $_.Name + '","size":' + $_.Length + ',"mtime":' + [int64](($_.LastWriteTimeUtc - [DateTime]'1970-01-01').TotalSeconds) + '}' })
+                        ForEach-Object { '{"name":"' + $_.Name + '","size":' + $_.Length + ',"mtime":' + [int64][Math]::Floor(($_.LastWriteTimeUtc - [DateTime]'1970-01-01').TotalSeconds) + '}' })
                 }
                 $body = [System.Text.Encoding]::UTF8.GetBytes('{"files":[' + ($list -join ',') + ']}')
             } else {
                 $from = [int64]0
                 $full = Join-Path $logsDir $name
-                if (-not [int64]::TryParse([string]$q['from'], [ref]$from) -or $from -lt 0) { $res.StatusCode = 400; $body = [System.Text.Encoding]::UTF8.GetBytes('bad from') }
+                $fromText = if ($q.ContainsKey('from')) { [string]$q['from'] } else { '0' }
+                if (-not [int64]::TryParse($fromText, [ref]$from) -or $from -lt 0) { $res.StatusCode = 400; $body = [System.Text.Encoding]::UTF8.GetBytes('bad from') }
                 elseif ($name -cnotmatch $combatLogName -or -not (Test-Path -LiteralPath $full -PathType Leaf)) { $res.StatusCode = 404; $body = [System.Text.Encoding]::UTF8.GetBytes('no such log') }
                 else {
                     $fs = [System.IO.File]::Open($full, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)

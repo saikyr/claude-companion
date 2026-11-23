@@ -650,10 +650,33 @@ do
   GetLootSourceInfo = nil
   Fire("LOOT_OPENED")
   check(n == 1, "a client without GetLootSourceInfo records nothing and doesn't break")
+  -- pick pocket: the source is the living target; skinning: a gathering cast just before
+  local T = "Creature-0-1-2-3-6137-00000D"
+  local oldG, oldDead, oldName = UnitGUID, UnitIsDead, C_Spell.GetSpellName
+  UnitGUID = function(u) if u == "target" then return T end return oldG(u) end
+  UnitIsDead = function() return false end
+  GetLootSourceInfo = function() return T, 1 end
+  Fire("LOOT_OPENED")
+  check(b.corpses == 2 and not g.lootBy["npc 6137"], "a pick-pocketed living mob is not a corpse")
+  UnitIsDead = oldDead
+  C_Spell.GetSpellName = function() return "Skinning" end
+  Fire("UNIT_SPELLCAST_SUCCEEDED", "player", "s", 8617)
+  C_Spell.GetSpellName = oldName
+  GetLootSourceInfo = function() return "Creature-0-1-2-3-6137-00000E", 1 end
+  Fire("LOOT_OPENED")
+  check(b.corpses == 2, "skinning a corpse is not a drop")
+  Advance(5)
+  -- one corpse, no quantity from the source: the slot's stack size
+  GetLootSlotInfo = function() return 1, "Mageweave Cloth", 4 end
+  GetLootSourceInfo = function() return "Creature-0-1-2-3-6137-00000F" end
+  GetNumLootItems = function() return 2 end
+  Fire("LOOT_OPENED")
+  check(b.corpses == 3 and b.items["4338"] == 7, "a stack with no per-corpse quantity counts its size (" .. tostring(b.items["4338"]) .. ")")
+  UnitGUID = oldG; GetLootSlotInfo = nil
   GetNumLootItems, GetLootSourceInfo, GetLootSlotLink = oldN, oldS, oldL
   SlashCmdList.CLAUDECOMPANION("stop")
   local last = c.grinds[#c.grinds]
-  check(last and last.name == "lootby" and last.lootBy and last.lootBy["Son of Arkkoroc"].corpses == 2, "a finished grind keeps lootBy")
+  check(last and last.name == "lootby" and last.lootBy and last.lootBy["Son of Arkkoroc"].corpses == 3, "a finished grind keeps lootBy")
   if FAILED then error("loot-by-corpse checks failed") end
 end
 -- bosses from the ForeverDungeonJournal addon's run log (same shape as Gabriel's save)

@@ -2,8 +2,8 @@
 // The game writes _forever_/Logs/WoWCombatLog-*.txt while /combatlog is on. The local server hands the
 // page its bytes (api/combatlog, read only); this file reads them a piece at a time from where it stopped
 // and keeps only counts per creature, in companion-data/combat.json (api/combat):
-//   spells by you, your pet and your group on it, per magic school: n (hits and misses), full resists,
-//   damage done and damage resisted (partial resists); kills by you or your group (PARTY_KILL); its
+//   spells by you, your pet and your group on it, per magic school: n (casts that hit or missed; DoT and
+//   channel ticks left out), full resists, damage done and damage resisted (partial resists, ticks included); kills by you or your group (PARTY_KILL); its
 //   deaths seen at all
 // No player names, no lines, nothing else is kept. The snapshot carries the counts (combat), so a resist
 // share comes with its sample size. Respawn times aren't measured.
@@ -79,8 +79,9 @@
     if (!sch) return;
     const n = npc(st, f[6], f[5]);
     const s = n.schools[sch] || (n.schools[sch] = { n: 0, full: 0, dmg: 0, resisted: 0 });
-    s.n++;
-    if (MISSED.has(ev)) { if (f[12] === 'RESIST') s.full++; return; }
+    // n and full count casts (a hit or a miss each); the ticks of a DoT or channel add only damage
+    if (!/PERIODIC/.test(ev)) s.n++;
+    if (MISSED.has(ev)) { if (f[12] === 'RESIST' && !/PERIODIC/.test(ev)) s.full++; return; }
     const d = damage(f, adv);
     s.dmg += d.amount; s.resisted += d.resisted;
   }
@@ -99,7 +100,12 @@
       st.adv[name] = /ADVANCED_LOG_ENABLED,1/.test(ls[0]) ? 1 : 0;
       i = 1;
     }
-    for (; i < ls.length; i++) if (ls[i]) line(st, ls[i], st.adv[name]);
+    for (; i < ls.length; i++) {
+      if (!ls[i]) continue;
+      // the game writes the header again when logging restarts; advanced logging may have changed
+      if (ls[i].includes('  COMBAT_LOG_VERSION,')) { st.adv[name] = /ADVANCED_LOG_ENABLED,1/.test(ls[i]) ? 1 : 0; continue; }
+      line(st, ls[i], st.adv[name]);
+    }
     return end;
   }
 
@@ -148,7 +154,11 @@
       }
       st.files[file.name] = done;
     }
-    if (changed) { st.updated = new Date().toISOString(); await post('api/combat', JSON.stringify(st)).catch(() => {}); }
+    if (changed) {
+      st.updated = new Date().toISOString();
+      await post('api/combat', JSON.stringify(st)).catch(() => {});
+      document.dispatchEvent(new Event('cc:combat'));   // js/claude.js writes the snapshot again with the new counts
+    }
   }
   let running = null;
   document.addEventListener('cc:loaded', () => { if (!running) running = run().catch(() => {}).finally(() => { running = null; }); });

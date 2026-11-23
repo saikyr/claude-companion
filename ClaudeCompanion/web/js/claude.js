@@ -99,7 +99,8 @@
     const by = Object.entries(x.lootBy || {});
     if (!by.length) return null;
     return by.sort((a, b) => (b[1].corpses || 0) - (a[1].corpses || 0)).slice(0, 10).map(([name, b]) => ({
-      name, npc: b.npc || null, kills: (x.killsBy || {})[name] || 0, corpses: b.corpses || 0,
+      // kills seen before the creature's name was known are under "npc <id>"
+      name, npc: b.npc || null, kills: ((x.killsBy || {})[name] || 0) + (b.npc && name !== 'npc ' + b.npc ? (x.killsBy || {})['npc ' + b.npc] || 0 : 0), corpses: b.corpses || 0,
       items: Object.entries(b.items || {}).sort((p, q) => q[1] - p[1]).slice(0, 8).map(([id, n]) => ({ id: Number(id), name: A.anyItemName(Number(id)), count: n })) }));
   }
 
@@ -229,7 +230,7 @@
   }
 
   let last = '';
-  document.addEventListener('cc:loaded', () => {
+  const write = () => {
     if (location.protocol === 'file:') return;          // file mode has no server to write it
     setTimeout(async () => {
       await settingsReady; await installedReady;
@@ -247,7 +248,9 @@
       CC.lastSnapshot = snap;
       if (CC.syncNow) CC.syncNow();
     }, 500);
-  });
+  };
+  document.addEventListener('cc:loaded', write);
+  document.addEventListener('cc:combat', write);   // new combat-log counts (js/combatlog.js) read after the load
   // settings changed in the app (a gear pick, own weights) reach the hidden browser too
   if (!BACKGROUND && location.protocol.startsWith('http')) settingsReady.then(() => setInterval(saveSettings, 10000));
   CC.snapshot = build;

@@ -141,16 +141,19 @@ class Handler(BaseHTTPRequestHandler):
         logs = os.path.join(FOREVER, 'Logs')
         name = (q.get('file') or [None])[0]
         if name is None:
-            hits = [h for h in glob.glob(os.path.join(logs, 'WoWCombatLog*.txt')) if COMBATLOG_NAME.match(os.path.basename(h))]
-            hits.sort(key=os.path.getmtime, reverse=True)
-            out = [{'name': os.path.basename(h), 'size': os.path.getsize(h), 'mtime': int(os.path.getmtime(h))} for h in hits[:20]]
+            out = []
+            for h in glob.glob(os.path.join(logs, 'WoWCombatLog*.txt')):
+                if not COMBATLOG_NAME.fullmatch(os.path.basename(h)): continue
+                try: out.append({'name': os.path.basename(h), 'size': os.path.getsize(h), 'mtime': int(os.path.getmtime(h))})
+                except OSError: pass   # the game removed it meanwhile
+            out = sorted(out, key=lambda x: x['mtime'], reverse=True)[:20]
             return self.send(200, json.dumps({'files': out}), TYPES['.json'])
         try: start = max(0, int((q.get('from') or ['0'])[0]))
         except ValueError: return self.send(400, 'bad from')
         full = os.path.join(logs, name)
-        if not COMBATLOG_NAME.match(name) or not os.path.isfile(full): return self.send(404, 'no such log')
+        if not COMBATLOG_NAME.fullmatch(name) or not os.path.isfile(full): return self.send(404, 'no such log')
         with open(full, 'rb') as f:
-            f.seek(start)
+            f.seek(min(start, os.fstat(f.fileno()).st_size))
             return self.send(200, f.read(COMBATLOG_CHUNK), 'application/octet-stream')
 
     def do_POST(self):
