@@ -19,7 +19,8 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
       // BRD's Shadowforge Key done, the first Seal of Ascension done; Onyxia chain started
       completedQuests: [3801, 3802, 4742, 4182, 4183],
       quests: [{ id: 5089, title: "General Drakkisath's Command", level: 60, complete: false },
-        { id: 4184, title: 'The True Masters', level: 54, complete: true, ready: true }],
+        { id: 4184, title: 'The True Masters', level: 54, complete: true, ready: true },
+        { id: 5803, title: "Araj's Scarab", level: 60, complete: false }],
       group: [{ name: 'Friend', level: 56, class: 'MAGE', online: true }],
     },
     // a finished 1-hour grind: 10g looted, one Glowing Brightwood Staff (AH median 95g in the fixture's scan)
@@ -144,6 +145,8 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   // ---- dungeon quests are marked keep (CLAUDE.md, the dungeon-quest rule)
   const dq = (snap.quests || []).find((q) => q.id === 5089);
   check(dq && dq.keep === true && dq.dungeon === 'Blackrock Spire', "a dungeon quest is keep, with its dungeon (General Drakkisath's Command: Blackrock Spire)");
+  const aq = (snap.quests || []).find((q) => q.id === 5803);
+  check(aq && aq.keep === true && aq.dungeon === 'Scholomance' && /key or attunement/.test(aq.keepWhy) && /Key to Scholomance/.test(aq.keepWhy), `a step of a key chain is keep (Araj's Scarab: ${aq && aq.keepWhy})`);
   // ---- what the client allows addons
   check(snap.caps && snap.caps.loot && snap.caps.loot.sources === 2, 'snapshot caps: the loot-source probe');
   // ---- skills read: the gear advice is there for every spec
