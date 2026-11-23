@@ -95,7 +95,7 @@ scores by hand (CLAUDE.md, the scoring rule).
 **Start here: the brief.** `select private.claude_brief('<account>');` returns a few KB built from the
 newest snapshot of any of the account's computers: `meta` (which computer, `ageMinutes`, `stale` over an
 hour, each computer's newest build, how to quote), `character`, `specs[]` (the app's top 3 upgrades and 4 pre-BiS
-still missing, every spec, with `upgradesTotal` / `preBisMissingTotal`), `quests[]` (`keep`/`dungeon`/`keepWhy`, each reward's `upgradeFor` specs; empty fields left out), `gold`
+still missing, every spec, with `upgradesTotal` / `preBisMissingTotal`), `quests[]` (`keep`/`dungeon`/`keepWhy`, each reward's `upgradeFor` specs, `unscored[]` = rewards the app has no score for; empty fields left out), `gold`
 (`flips` = profit, `sales7d` = revenue and `buys7d`, both for every character of the account, `measured[]` = the app's gph for the 6 newest grinds and runs, each with its `start` for a card's src, and for grinds the `mobs` it killed),
 `professions`, `cooldowns`, `caps`. More parts in full by name: `array['rep','bags','next','ah','runs']`
 (or any default part, untrimmed). It selects; it computes nothing (`supabase/migrations/*_claude_brief.sql`).

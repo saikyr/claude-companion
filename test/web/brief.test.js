@@ -76,10 +76,12 @@ function snapshot(ageMs, extra) {
 
     // quests: keep flags and rewards per spec
     const dq = b.quests.find((x) => x.id === 5089), oq = b.quests.find((x) => x.id === 1);
-    check(dq.keep === true && dq.dungeon === 'Blackrock Spire' && dq.keepWhy === 'dungeon quest' && oq.keep === false, 'dungeon quests keep their keep flag, dungeon and why');
+    check(dq.keep === true && dq.dungeon === 'Blackrock Spire' && !('keepWhy' in dq) && oq.keep === false, 'dungeon quests keep their keep flag and dungeon (keepWhy left out when it only says dungeon quest)');
+    check(brief(['quests']).quests.find((x) => x.id === 5089).keepWhy === 'dungeon quest', 'asked for by name, keepWhy is there');
     check(b.meta.quote.some((x) => /game\.item/.test(x)), 'the brief points at the game schema for game facts');
     check(dq.rewards[0].upgradeFor.length === 1 && dq.rewards[0].upgradeFor[0].spec === 'Shadow', 'a reward lists the specs it is an upgrade for (Shadow, not Holy)');
-    check(oq.rewards[0].scored === false, 'a reward the app did not score says so');
+    check(oq.unscored.join() === 'Old reward' && !oq.rewards, 'a reward the app did not score is named in unscored');
+    check(brief(['quests']).quests.find((x) => x.id === 1).rewards[0].scored === false, 'asked for by name, the reward says scored false');
 
     // gold: profit only from flips, sales are revenue, gph copied
     B.query(`insert into public.records (account_id, id, device_id, char_key, kind, t, data) select ${q(account)}, 'sale' || g, null, 'Ana-Realm', 'ah_sale',
@@ -99,7 +101,8 @@ function snapshot(ageMs, extra) {
     B.query(`insert into public.records (account_id, id, device_id, char_key, kind, t, data) values (${q(account)}, 'Ana-Realm|grind|odd', null, 'Ana-Realm', 'grind', 1,
       '{"name": "cultists", "start": 1e20, "killsBy": {"X": 1}}'::jsonb), (${q(account)}, 'Ana-Realm|grind|odd2', null, 'Ana-Realm', 'grind', 2, '{"name": "cultists", "start": "soon", "killsBy": {}}'::jsonb);`);
     const mobs = brief(['gold']).gold.measured[0].mobs;
-    check(Array.isArray(mobs) && mobs.length === 3 && mobs[0].name === 'Scarlet Cultist' && mobs[0].kills === 50 && mobs[2].name === 'Dog', 'and the mobs it killed, from its grind record (top 3)');
+    check(Array.isArray(mobs) && mobs.join() === 'Scarlet Cultist x50,Scarlet Monk x20,Dog x9', `and the mobs it killed, from its grind record (top 3: ${mobs})`);
+    check(!('what' in brief().gold.measured[0]) && !('end' in brief().gold.measured[0]) && brief(['gold']).gold.measured[0].end, 'default: no what on grinds, no end; asked for by name, end is there');
     check(!('deaths' in m[0]), '0 deaths are left out');
     check(m.length === 3 && m[0].name === 'cultists' && m[0].gph === 400000 && m[0].gph_low === 250000 && m[0].gph_high === 520000, "measured grinds and runs, newest first, with the app's gph range");
     check(m[1].complete === false && /under 10 minutes/.test(m[1].incomplete[0]), 'an incomplete grind says why');
