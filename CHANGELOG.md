@@ -3,6 +3,15 @@
 Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 
 ## 1.5.0 (in progress: every merge to main updates itself)
+- **Spell ranks on your bars.** Talents & Bars now says when a spell on a spec's bars is below the best rank in
+  your spellbook (the slot is marked, and the list above the bars says which rank you know). Open your class
+  trainer once and the addon reads its whole list (every rank, the level and cost), so the app also lists the
+  ranks to train now, what they cost in all, and what comes at your next level. It's the game's own list, so
+  Forever's own spells and ranks are right. Claude's snapshot has all of it (`spells`).
+- **Nothing saved is kept from Claude.** Macros, key bindings, buffs, currencies, every bag slot, the spellbook,
+  completed quests and recipes were already synced online with the rest of your character, but Claude's guide
+  only pointed at the summary, so Claude said the app didn't record them. The guide now points Claude at the
+  full record too.
 - **More gear in "not in game yet".** 1,068 items the Forever client has no tooltip for (their stats come from
   ForeverDB) were skipped by the Gear page. They now show in each slot's "Raid, PvP and not in game yet" list.
 - **Raid gear out of pre-BiS, but still shown.** Pre-BiS listed Atiesh, the Qiraji staves and Fang of

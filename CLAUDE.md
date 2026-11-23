@@ -39,6 +39,8 @@ This section is where the numbers come from.
 | The character now (gear, bags, quests, rep, position, professions) | the **snapshot** (below) | guess from memory or an old chat |
 | Is X an upgrade? Best in slot? Which quest reward? | the snapshot's **app scores for every spec**: `gear[]` (`upgrades`, `preBis` with `alternatives`, `worn`), `bagAdvice[]`, `bestOwned[]`, `quests[].rewards[].specs[]` and `quests[].next` | score items by hand, or for one spec only |
 | History (grinds, runs, sales, journal) | `private.history` (below) | |
+| Spell ranks: are the bars at the best rank, what to train | the snapshot's `spells` (`specs[].outdated`, `train[]`, `later[]`) | rank lists from memory or Classic sites |
+| Anything else the addon saved (macros, bindings, buffs, currencies, every bag slot, spellbook, completed quests, recipes) | the **`now` record** (below; [FEATURES.md](docs/FEATURES.md), "Everything saved, online"): nothing the addon saves is withheld | say the app doesn't record it before checking there |
 | Game data (items, drops, quests, NPCs, vendors, instances) | the **`game` schema**: the same pack the app uses, loaded on every merge that changes it. `select game.item('<name or id>')`, `game.npc(...)`, `game.quest(...)`, `game.instance('<zone>')`, `select * from game.drop_rates where ...`; `game.status()` says which pack. Quote each rate's `label` as given | the web; a Classic rate as Forever (`rate = 'classic'` is labelled so); `seen ÷ corpses`; a rate with no sample size |
 | Field meanings | [ClaudeCompanion/companion-data/SCHEMA.md](ClaudeCompanion/companion-data/SCHEMA.md) | |
 
@@ -82,7 +84,12 @@ select q->>'title' quest, r->>'name' item, r->>'how' how, r->'specs' specs, q->'
   from (select data from private.history where account = '<account>' and kind = 'snapshot' order by t desc limit 1) s,
        jsonb_array_elements(s.data->'quests') q, jsonb_array_elements(coalesce(q->'rewards', '[]')) r;
 
--- history: kinds journal, session, grind, run, note, history, de, ah_obs, ah_sale, ah_buy, ah_post, live, setting
+-- everything the addon saved about the character, newest computer first (snap = last in-game read,
+-- specs = talents + action bars, trainer, bank, mail, professions): raw, no scores
+select computer, to_timestamp(t) saved, data from private.history
+ where account = '<account>' and kind = 'now' order by t desc limit 1;
+
+-- history: kinds journal, session, grind, run, note, history, de, ah_obs, ah_sale, ah_buy, ah_post, live, now, setting
 select * from private.history where account = '<account>' and kind = 'grind' order by t desc;
 ```
 

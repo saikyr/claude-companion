@@ -357,6 +357,9 @@ function ns.ActionBars()
             local a = { slot = slot, kind = kind, id = id, sub = sub, icon = Clean(Call(GetActionTexture, slot)), key = SlotKey(slot) }
             if kind == "spell" and id then
                 a.name = Clean(Call(C_Spell and C_Spell.GetSpellName or GetSpellInfo, id))
+                -- the rank of this very spell ("Rank 6"), so an old rank is seen even when the spellbook lists only the top one
+                local sub = Clean(Call(C_Spell and C_Spell.GetSpellSubtext or GetSpellSubtext, id))
+                if sub and sub ~= "" then a.rank = sub end
                 ns.NoteSpell(id)
             elseif kind == "item" and id then
                 a.name = Clean(Call(C_Item and C_Item.GetItemNameByID or GetItemInfo, id))
@@ -438,6 +441,65 @@ local function Spellbook()
     end
     return out
 end
+
+---------------------------------------------------------------- class trainer
+-- The class trainer's own list while its window is open: every spell and rank it teaches, with the
+-- level it needs, its cost and whether you can learn it now ("available"), not yet ("unavailable")
+-- or already know it ("used"). The game's own list, so Forever's own spells and ranks are right.
+-- The window's filters are opened for the read (all three kinds) and put back; every header is left expanded.
+-- Weapon masters, pet and riding trainers open the same window: a list is kept only when it teaches
+-- something your spellbook already has (a class trainer always lists spells you know as "used").
+-- Saved as c.trainer; the app compares it with the spellbook and your action bars (js/spells.js).
+local trainerReading, trainerReadAt = false, -10
+function ns.ReadTrainer()
+    local c = ns.char
+    if not c or not GetNumTrainerServices then return end
+    if Clean(Call(IsTradeskillTrainer)) then return end      -- a profession trainer: its recipes are read elsewhere
+    trainerReading = true
+    local kinds, opened = { "available", "unavailable", "used" }, {}
+    local ok, err = pcall(function()
+        if GetTrainerServiceTypeFilter and SetTrainerServiceTypeFilter then
+            for _, k in ipairs(kinds) do
+                local on = Clean(Call(GetTrainerServiceTypeFilter, k))
+                if not on or on == 0 then Call(SetTrainerServiceTypeFilter, k, 1); opened[k] = true end
+            end
+        end
+        if ExpandTrainerSkillLine then Call(ExpandTrainerSkillLine, 0) end
+        local out = {}
+        for i = 1, Clean(Call(GetNumTrainerServices)) or 0 do
+            local name, rank, kind = Call(GetTrainerServiceInfo, i)
+            name, rank, kind = Clean(name), Clean(rank), Clean(kind)
+            if name and kind and kind ~= "header" then
+                local cost = Clean(Call(GetTrainerServiceCost, i))
+                out[#out + 1] = { name = name, rank = (rank ~= "" and rank) or nil, status = kind,
+                    level = Clean(Call(GetTrainerServiceLevelReq, i)), cost = cost }
+            end
+        end
+        -- a class trainer's list shares spell names with your spellbook; a weapon master's or pet trainer's doesn't
+        local book, any = {}, false
+        for _, tab in ipairs(((c.snap or {}).spellbook) or {}) do
+            for _, sp in ipairs(tab.spells or {}) do if sp.name then book[sp.name] = true; any = true end end
+        end
+        local class = not any
+        for _, sv in ipairs(out) do if book[sv.name] then class = true; break end end
+        if #out > 0 and class then
+            local _, cls = Call(UnitClass, "player")
+            c.trainer = { taken = ns.Now(), npc = Clean(Call(UnitName, "npc")), class = Clean(cls),
+                level = Clean(Call(UnitLevel, "player")), services = out }
+        end
+    end)
+    if SetTrainerServiceTypeFilter then
+        for _, k in ipairs(kinds) do if opened[k] then Call(SetTrainerServiceTypeFilter, k, 0) end end
+    end
+    trainerReading, trainerReadAt = false, Clean(Call(GetTime)) or 0
+    if not ok then error(err, 0) end
+end
+ns.On("TRAINER_SHOW", function() if ns.char then ns.Soon("trainer", 0.5, ns.ReadTrainer) end end)
+-- after a spell is learned the list changes; our own filter changes also fire this, so those are skipped
+ns.On("TRAINER_UPDATE", function()
+    if not ns.char or trainerReading or (Clean(Call(GetTime)) or 0) - trainerReadAt < 1 then return end
+    ns.Soon("trainer", 1, ns.ReadTrainer)
+end)
 
 ---------------------------------------------------------------- skills, reputation, currencies
 local function Skills()
