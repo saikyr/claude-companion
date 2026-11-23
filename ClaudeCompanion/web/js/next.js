@@ -282,22 +282,33 @@
   }
 
   // The pack has some quests twice: a copy with no quest giver, or a second id for the same quest (Dire Maul's
-  // "Unfinished Gordok Business" 1318 and 7703). Same title, zone, objective and rewards = one quest: keep the one
-  // in your log, else the one with a quest giver, else the lower id; once any copy is done, all are.
+  // "Unfinished Gordok Business" 1318 and 7703). Twins = same title, zone, levels, objective, rewards, earlier step,
+  // and the same quest giver (or none on one of them): different givers are different quests (a chain's steps,
+  // one per race or spot). Keep the one in your log, else the one with a giver, else the lower id; once a copy
+  // is done, its twins are too.
   function twinQuests(known) {
     const out = new Set();
     if (!known) return out;
     const by = {};
     for (const [k, q] of Object.entries(GD().quests)) {
-      const key = [q.t, q.cat || '', arr(q.obj)[0] || '', JSON.stringify(q.choice || []), JSON.stringify(q.reward || [])].join('|');
+      const key = [q.t, q.cat || '', q.lv, q.min, arr(q.obj)[0] || '', JSON.stringify(q.choice || []), JSON.stringify(q.reward || []), JSON.stringify(arr(q.prev).slice().sort())].join('|');
       (by[key] = by[key] || []).push(Number(k));
     }
+    const giver = (id) => { const f = arr(GD().quests[id].from)[0]; return f ? String(f[0]) : null; };
     Object.values(by).forEach((all) => {
-      const ids = all.filter((id) => Q().forYou(id));   // the other faction's copy is not a twin of yours
-      if (ids.length < 2) return;
-      if (ids.some((id) => Q().isDone(id))) { ids.forEach((id) => out.add(id)); return; }
-      const score = (id) => { const st = Q().status(id).state; return (st === 'active' || st === 'ready' ? 4 : 0) + (arr(GD().quests[id].from).length ? 2 : 0); };
-      ids.sort((a, b) => score(b) - score(a) || a - b).slice(1).forEach((id) => out.add(id));
+      const mine = all.filter((id) => Q().forYou(id));   // the other faction's copy is not a twin of yours
+      if (mine.length < 2) return;
+      // one group per quest giver; a copy with no giver joins the giver group only when there is just one
+      const groups = {};
+      mine.filter(giver).forEach((id) => (groups[giver(id)] = groups[giver(id)] || []).push(id));
+      const keys = Object.keys(groups), loose = mine.filter((id) => !giver(id));
+      if (keys.length === 1) groups[keys[0]].push(...loose); else if (!keys.length) groups[''] = loose;
+      Object.values(groups).forEach((ids) => {
+        if (ids.length < 2) return;
+        if (ids.some((id) => Q().isDone(id))) { ids.forEach((id) => out.add(id)); return; }
+        const score = (id) => { const st = Q().status(id).state; return (st === 'active' || st === 'ready' ? 4 : 0) + (giver(id) ? 2 : 0); };
+        ids.sort((a, b) => score(b) - score(a) || a - b).slice(1).forEach((id) => out.add(id));
+      });
     });
     return out;
   }
@@ -469,5 +480,5 @@
       }));
     } finally { A.STATE.nextSpec = keep; }
   }
-  CC.next = { steps, ranked, readyNow, html, snapshot, _dungeonIndex: dungeonIndex };
+  CC.next = { steps, ranked, readyNow, html, snapshot, _dungeonIndex: dungeonIndex, _twins: () => twinQuests(true) };
 })();
