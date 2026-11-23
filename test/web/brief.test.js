@@ -35,7 +35,7 @@ function snapshot(ageMs, extra) {
         rewards: [{ name: 'Ring', how: 'choose', specs: [{ spec: 'Holy', gain: 0 }, { spec: 'Shadow', gain: 4.5 }] }] },
       { id: 1, title: 'Kill boars', level: 55, complete: true, dungeon: null, keep: false, rewards: [{ name: 'Old reward', how: 'get', specs: null }] }],
     grind: { running: null, recent: [
-      { name: 'cultists', zones: ['Western Plaguelands'], finish: iso(3600e3), hours: 1, kills: 80, deaths: 0, gph: 400000, gph_low: 250000, gph_high: 520000, complete: true, incomplete: [] },
+      { name: 'cultists', zones: ['Western Plaguelands'], start: new Date(Math.floor((NOW - 7200e3) / 1000) * 1000).toISOString(), finish: iso(3600e3), hours: 1, kills: 80, deaths: 0, gph: 400000, gph_low: 250000, gph_high: 520000, complete: true, incomplete: [] },
       { name: 'short', zones: ['Burning Steppes'], finish: iso(7200e3), hours: 0.1, kills: 5, deaths: 0, gph: 90000, gph_low: 80000, gph_high: 90000, complete: false, incomplete: ['under 10 minutes: too short to quote as a rate'] }] },
     runs: [{ name: 'Blackrock Depths', start: iso(9000e3), finish: iso(8000e3), hours: 0.8, kills: 90, bosses: ['Emperor'], gph: 300000, gph_low: 200000, gph_high: 350000, complete: true, incomplete: [] }],
     ah: { flips: { totals: { profit: 1087, flips: 1 } } },
@@ -93,6 +93,14 @@ function snapshot(ageMs, extra) {
     B.query(`insert into public.records (account_id, id, device_id, char_key, kind, t, data) select a.id, 'sale1', null, 'Ana-Realm', 'ah_sale',
       ${Math.round(NOW / 1000) - 3600}, '{"net": 5000}' from public.accounts a where a.id <> ${q(account)} limit 1;`);
     check(B.query("select count(*) from public.records where id = 'sale1';") === '2' && brief(['gold']).gold.sales7d.revenue === 15000, 'a sale held twice (both computers before they were linked) counts once');
+    check(m[0].start && !('mobs' in m[0]), 'a measured grind has its start (for a card src); no grind record yet, so no mobs');
+    B.query(`insert into public.records (account_id, id, device_id, char_key, kind, t, data) values (${q(account)}, 'Ana-Realm|grind|g1', null, 'Ana-Realm', 'grind', ${Math.floor((NOW - 7200e3) / 1000)},
+      jsonb_build_object('name', 'cultists', 'start', ${Math.floor((NOW - 7200e3) / 1000)}, 'killsBy', '{"Scarlet Cultist": 50, "Scarlet Monk": 20, "Rat": 1, "Dog": 9}'::jsonb));`);
+    B.query(`insert into public.records (account_id, id, device_id, char_key, kind, t, data) values (${q(account)}, 'Ana-Realm|grind|odd', null, 'Ana-Realm', 'grind', 1,
+      '{"name": "cultists", "start": 1e20, "killsBy": {"X": 1}}'::jsonb), (${q(account)}, 'Ana-Realm|grind|odd2', null, 'Ana-Realm', 'grind', 2, '{"name": "cultists", "start": "soon", "killsBy": {}}'::jsonb);`);
+    const mobs = brief(['gold']).gold.measured[0].mobs;
+    check(Array.isArray(mobs) && mobs.length === 3 && mobs[0].name === 'Scarlet Cultist' && mobs[0].kills === 50 && mobs[2].name === 'Dog', 'and the mobs it killed, from its grind record (top 3)');
+    check(!('deaths' in m[0]), '0 deaths are left out');
     check(m.length === 3 && m[0].name === 'cultists' && m[0].gph === 400000 && m[0].gph_low === 250000 && m[0].gph_high === 520000, "measured grinds and runs, newest first, with the app's gph range");
     check(m[1].complete === false && /under 10 minutes/.test(m[1].incomplete[0]), 'an incomplete grind says why');
     check(m.some((x) => x.what === 'run' && x.bosses === 1), 'runs are measured too');
