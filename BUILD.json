@@ -1,32 +1,32 @@
 {
  "version": "1.5.0",
- "built": "2026-11-23T03:13:49+00:00",
+ "built": "2026-11-23T03:47:30+00:00",
  "channel": {
   "repo": "saikyr/claude-companion",
   "branch": "stable"
  },
  "from": {
   "branch": "main",
-  "commit": "5d6b0612b5c1e70854dbc056731c55c5dbf68eaa"
+  "commit": "12e0337d1dcd93eb8b0cf033ad955b30185409f0"
  },
- "build": "5d6b0612b5c1",
- "notes": "Game data in the database: the app's pack as the game schema, labelled drop rates, look-ups (#71)",
+ "build": "12e0337d1dcd",
+ "notes": "The card gate: every number on a card is checked against its source (#73)",
  "files": {
   "Bindings.xml": "99dcc8984fdbcbea746275e7a8dbbc34e16c462021640ce70232478fb843fb48",
   "ClaudeCompanion.toc": "14d0dd98487ec0a4ce7faefcf2a5d1f75fecd6a6f8890ed9bf815a59269b7731",
-  "Core.lua": "1443fbb6d7e0837b48667d58cbe4b0bf82c0f5b4c856038ffaf906c9b5d19a03",
+  "Core.lua": "3c6f234051f1a7482871603c01f256eaead86f93426cd3324646db50d42f8829",
   "Drops.lua": "31cf85151bc89bed3e80b013fe513b2d22a6b68f95c58225a71fee97c6f005f0",
   "Journal.lua": "49d2c956970a51ba8d2a7eac9e884d621b3ff05f5c46d7cf8812d77fd3bea00f",
   "Market.lua": "4165160c673093f830132d9a1a252d35e4c4aed4f62365b861f6fa303b29225c",
   "Professions.lua": "2e0b23cf3ff638de846eec195e4e8b2aac57c090c41fd6a4f67cdad7f5160171",
   "Snapshot.lua": "6513baf3c03fa758181ec38a4d650a2d0d5d50775da518cf4893a2237d32835f",
   "UI.lua": "57459b56162e803ecd747f8d4f8f9af74c3a284ede3c7ae357c8cc07adac9cb7",
-  "companion-data/SCHEMA.md": "cf286d4c030f2ced7233b6916fe12cc0137984f1b58c32e6eb5a09f7c13b6b63",
+  "companion-data/SCHEMA.md": "54498c3c009d0e627e8d73a57f72b707603f95076b3c028e16dbd5d38d7e51fa",
   "web/Claude Companion.app/Contents/Info.plist": "cdf5f33d28ce203d9307b765ef33199602fa77a52b4c9b3fee9e7a00cd65a009",
   "web/Claude Companion.app/Contents/MacOS/launcher": "65fe025ebb1acad0f786633f5b30f6bdcfa6b49f2912eca1f87385dcec0224c4",
   "web/Claude Companion.app/Contents/Resources/AppIcon.icns": "467ef964fdaff99ca47e80e7aff3d4db96306b984293aeb98251d68d2e4a2fdd",
   "web/Claude Companion.bat": "8f5cf6c1ff6a95ad5e0ebfc10951ef451cccf5b1e9a6d1fc7574600cfd01a2fc",
-  "web/channel.json": "89f41bb5a1f8d7f7bf9418e644b66634a11ed7df9e0af68a2399ddb476f17b39",
+  "web/channel.json": "c057699d219cfe1839ca3bd849d4659fea071af04d719adf6effc500670f2f82",
   "web/css/app.css": "71517047400c16a91e08ad658a1bc393a508b58f11f88248c6e71b981d211a15",
   "web/data/gamedata.js": "3163e358427dc39e0257a543c963b0cc4909a2871ad1455bbfb73c639a6a43d5",
   "web/data/rules.js": "55ffd4f1371145779f4ee531bc8c6f5a20e78da96dd66da9e6c1ee93e5ecafcf",

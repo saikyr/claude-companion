@@ -88,7 +88,8 @@ Reinstalling the addon by copying the zip over the folder keeps both files; dele
 | `expires` | | ISO time after which the card closes by itself (a price or a cooldown that won't last). |
 | `character` | | Character name; the card shows only for that character. Leave out for any. |
 | `where` | | Zone or place, as text. |
-| `facts[]` | | `{label, value, note?}`, all text: the numbers that matter (rate, drops per hour, gold per hour), with the sample size or "Classic only" in `note`. |
+| `facts[]` | | `{label, value, note?, src?}`, all text: the numbers that matter (rate, drops per hour, gold per hour), with the sample size or "Classic" in the value or `note`. A value with a number needs `src`, which the database checks it against: `game.drop:<item id>:<creature id>` (a rate: quote its % and corpses, or say Classic, or unknown, as `game.drop_rates` labels it), `grind:<name>@<start>#<gph\|gph_low\|gph_high\|kills\|deaths\|hours>` and `run:<name>@<start>#<field>` (the snapshot's `grind` / `runs`; gph in gold), `flips#<profit\|sold\|paid>` (gold), `snapshot#<dot.path>`. |
+| `risk` | | Text. Required on a `farm` card: deaths, elites, patrols, PvP, what goes wrong. |
 | `items[]` | | `{id, note?}`: game item ids. The app shows the icon, tooltip and the player's own AH price. |
 | `track` | | `{grind, mobs?[]}`: the name to use with `/cc start <grind>`. The card then shows the tracked time, kills, gold per hour, kills of each listed mob and drops of the card's items, from every run with that name. |
 | `steps[]` | | Text, in order. The player ticks them off. |
@@ -97,6 +98,12 @@ Reinstalling the addon by copying the zip over the folder keeps both files; dele
 | `step` | | What the card is about, for pages that link to it: `quest:<quest id>`, `dungeon:<name>`, `item:<item id>`, `zone:<name>` or `npc:<id>`. |
 
 Unknown fields are refused by the checker, so a typo can't hide a field.
+
+The answer rules (open cards only; `tools/answer_rules.py`, and online the same in Postgres, which refuses
+the whole list): rates and gold per hour go in `facts[]`, never in the title, summary, steps or body;
+every number in a fact carries `src` and matches it (a Forever rate with its % and corpses, a Classic one
+saying Classic, an incomplete grind's gph saying so); "profit" only with a `flips#profit` fact; duo or solo
+claims need a `run:` fact or say unknown; no layer tips, `/run` scripts or Wowhead (sources included).
 
 ### state.json
 
