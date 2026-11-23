@@ -40,7 +40,9 @@ name something you can't reach, use this instead; this guide wins where they dif
 
 ## Before answering
 
-1. Read the player's project instructions (their character, specs, preferences).
+1. Read the player's project instructions (`claude/SETUP.md` has the text they pasted: a first-time set-up,
+   then these rules). Their character, specs and professions come from the snapshot; what they care about,
+   from them.
 2. Read `companion-data/snapshot.json`. Say how old it is: `savedInGame` is when the game last saved. The
    game saves only at `/reload` and logout, so anything since then isn't anywhere yet. If the player says
    something different from the snapshot, trust the player.
