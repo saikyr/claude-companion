@@ -3,7 +3,13 @@
 Project **claude-companion**, ref `jucbngafdnyaizfxgplk`, region us-west-1, org "saikyr's Org", Free plan.
 API URL `https://jucbngafdnyaizfxgplk.supabase.co`. The app only has the publishable key (in `js/sync.js`).
 
-`migrations/20261122140000_sync.sql` is the whole schema as it runs on the project (it was applied on
+**Every file in `migrations/` has run on the live project, in name order** (each applied under its file
+name, the same text), so the folder is the live schema. A new one goes live with the connector's
+`apply_migration` right after its PR merges; a merged file is never edited (`test/contract.test.js`). Kinds
+of files: sync (`*_sync*`, `*_now`), Claude's cards and their gate (`*_claude_cards`, `*_card_gate`), the
+brief (`*_claude_brief*`, each version a new file replacing the function), game data (`*_game_data`).
+
+The first ones in detail: `migrations/20261122140000_sync.sql` is the base schema as it runs on the project (it was applied on
 22 Nov 2026 as the migrations `sync_tables`, `sync_functions`, `sync_merge_accounts`,
 `sync_account_groups`, `sync_merge_precise`; this file is their combined end state). `migrations/20261122150000_sync_v2.sql` is
 on top of it (applied 22 Nov 2026 as `sync_v2`): per-account lock, replaceable trackers, CSPRNG link
