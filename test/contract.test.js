@@ -116,8 +116,8 @@ check(named.length >= 5 && !notShipped.length, 'every file claude/GUIDE.md names
 // download from the public folder publish-stable.py uploads to (installers.yml runs both lines).
 const setupMd = read(A, 'claude', 'SETUP.md');
 const paste = (/## The text to paste into the project's instructions\n\n```\n([\s\S]*?)\n```/.exec(setupMd) || [, ''])[1];
-const friendMsg = (/A message the owner can send a friend[^\n]*\n\n```\n([\s\S]*?)\n```/.exec(read(ROOT, 'docs', 'PROJECTS.md')) || [, ''])[1];
-check(paste.length > 500 && friendMsg.includes('----------\n' + paste + '\n----------'), "docs/PROJECTS.md's message to a friend carries claude/SETUP.md's paste text unchanged");
+const friendMsg = (/A message the owner can send a friend[\s\S]*?\n\n```\n([\s\S]*?)\n```/.exec(read(ROOT, 'docs', 'PROJECTS.md')) || [, ''])[1];
+check(paste.length > 500 && friendMsg.endsWith('\n\n' + paste) && friendMsg.split('\n').length <= paste.split('\n').length + 3, "docs/PROJECTS.md's message to a friend is one line plus claude/SETUP.md's paste text, unchanged");
 const downloads = (/DOWNLOADS = '([^']+)'/.exec(pub) || [, '?'])[1];
 const lineAfter = (label) => { const l = paste.split('\n'); const i = l.findIndex((x) => x.includes(label)); return i >= 0 ? (l[i + 1] || '').trim() : ''; };
 const winLine = lineAfter('On Windows, in PowerShell:'), macLine = lineAfter('On a Mac, in Terminal:');

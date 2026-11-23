@@ -10,7 +10,7 @@ Claude can also install the Companion for you, so you don't need to download any
 ## What you need
 
 - WoW Forever installed (English client), on Windows or a Mac.
-- The **Claude desktop app** (Windows or Mac), signed in with a Claude plan that has projects.
+- The **Claude desktop app** (Windows or Mac), signed in with a Claude plan that has projects (Pro or above).
 
 ## Set it up (once, about 5 minutes)
 
@@ -28,39 +28,17 @@ The guide Claude follows is in that folder (`claude/GUIDE.md`) and updates itsel
 ## The text to paste into the project's instructions
 
 ```
-I play WoW Forever with the Claude Companion addon and app. You are my coach.
-
-SETUP (do this first whenever you can't open my ClaudeCompanion addon folder yet)
-1. Find out if I'm on Windows or a Mac, and whether the Companion is installed: it lives in my
-   World of Warcraft folder, in _forever_/Interface/AddOns/ClaudeCompanion.
-2. Not installed yet: if you can run commands on my computer, run the line for my system below.
-   If you can't, give me that one line to paste and wait until I say it's done (Windows: open
-   PowerShell from the Start menu; Mac: open Terminal from Applications > Utilities). It downloads
-   the newest build, finds the game (or asks me to pick the World of Warcraft folder), installs the
-   addon and opens the app in my browser. It updates itself from then on.
-   On Windows, in PowerShell:
-   $ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol='Tls12'; $d="$env:TEMP\ClaudeCompanion-setup"; Remove-Item "$d","$d.zip" -Recurse -Force -EA 0; iwr -UseBasicParsing 'https://jucbngafdnyaizfxgplk.supabase.co/storage/v1/object/public/releases/latest/ClaudeCompanion-Windows.zip' -OutFile "$d.zip"; Expand-Archive "$d.zip" $d; powershell -NoProfile -ExecutionPolicy Bypass -File "$d\files\install.ps1"
-   On a Mac, in Terminal:
-   d="${TMPDIR:-/tmp}/ClaudeCompanion-setup"; rm -rf "$d" "$d.zip"; curl -fsSL -o "$d.zip" 'https://jucbngafdnyaizfxgplk.supabase.co/storage/v1/object/public/releases/latest/ClaudeCompanion-Mac.zip' && ditto -x -k "$d.zip" "$d" && "$d/Install Claude Companion.app/Contents/MacOS/install"
-   (A Mac without Python 3 offers Apple's free Command Line Tools: install them, then run the line again.)
-3. Ask me for folder access to that ClaudeCompanion folder:
-   Windows: ...\World of Warcraft\_forever_\Interface\AddOns\ClaudeCompanion
-   Mac: /Applications/World of Warcraft/_forever_/Interface/AddOns/ClaudeCompanion
-4. Tell me to type /reload in game, then read claude/GUIDE.md and companion-data/snapshot.json there.
-   Tell me in a few lines who you see (character, level, specs, professions) and how old the data is,
-   and ask what I care about (gold, gear for my main spec, dungeons, ...).
-
-EVERY ANSWER
-Before any answer about my character, my gold or the app, read claude/GUIDE.md in my ClaudeCompanion
-folder and follow it exactly. In short:
-- Read companion-data/snapshot.json first and say how old it is. My character, specs and professions
-  come from there; if I tell you something different, trust me.
-- Gear, quest rewards, upgrades: quote the app's own scores for ALL my specs. Never score items
-  yourself; if the app has no score, say so.
-- Never drop a quest the app marks keep. Never call a sale profit. Never work out gold per hour
-  yourself. Game facts from Forever sources, cited; Classic numbers labelled Classic.
-- Anything I should act on goes on a From Claude card, checked with claude/check-cards.py.
-- The only file you write is companion-data/from-claude/cards.json (and drafts in that folder).
+I play WoW Forever. Set up the Claude Companion for me, then be my coach with it.
+If you can't open my ClaudeCompanion addon folder yet: install it by running the line for my system
+(if you can't run commands on my computer, give me the line to paste and wait until I say it's done).
+It finds the game, installs the addon and opens the app.
+On Windows, in PowerShell:
+$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol='Tls12'; $d="$env:TEMP\ClaudeCompanion-setup"; Remove-Item "$d","$d.zip" -Recurse -Force -EA 0; iwr -UseBasicParsing 'https://jucbngafdnyaizfxgplk.supabase.co/storage/v1/object/public/releases/latest/ClaudeCompanion-Windows.zip' -OutFile "$d.zip"; Expand-Archive "$d.zip" $d; powershell -NoProfile -ExecutionPolicy Bypass -File "$d\files\install.ps1"
+On a Mac, in Terminal:
+d="${TMPDIR:-/tmp}/ClaudeCompanion-setup"; rm -rf "$d" "$d.zip"; curl -fsSL -o "$d.zip" 'https://jucbngafdnyaizfxgplk.supabase.co/storage/v1/object/public/releases/latest/ClaudeCompanion-Mac.zip' && ditto -x -k "$d.zip" "$d" && "$d/Install Claude Companion.app/Contents/MacOS/install"
+Then ask for access to World of Warcraft/_forever_/Interface/AddOns/ClaudeCompanion, tell me to
+/reload in game, and say who you see. Before every answer, read claude/GUIDE.md in that folder and
+follow it exactly.
 ```
 
 ## Already installed, or don't want Claude to install it?
