@@ -57,3 +57,5 @@ Rules:
 The owner's project uses the Supabase connector instead of folder access, so it never needs a session
 on the player's computers. The project instructions point to [../CLAUDE.md](../CLAUDE.md), which has the
 queries; the account id lives in project memory.
+How every Claude in the project answers, including how the coordinator routes a question to a thread (its
+template) and the weekly correction audit, is in [COACHING.md](COACHING.md).

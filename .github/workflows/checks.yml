@@ -64,6 +64,8 @@ jobs:
         run: node test/web/game.test.js
       - name: The answer rules, in Python and in the Postgres card gate, on the same cases
         run: node test/web/cards-gate.test.js
+      - name: The weekly correction audit (tools/audit.py, docs/COACHING.md)
+        run: python3 test/audit_test.py
       - name: Game-data loader syntax
         run: python3 -m py_compile tools/pack-to-rows.py tools/upload-game.py
       - name: History sync in the real app page (Chromium, the real backend SQL, the harness's save)
