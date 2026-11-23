@@ -26,7 +26,9 @@ jobs:
         with:
           fetch-depth: 0   # the contract check compares migrations with the branch this merges into
       - name: Contract between addon, servers, page and sync backend (docs/ARCHITECTURE.md, Contracts)
-        run: node test/contract.test.js "${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || 'HEAD~1' }}"
+        # a PR compares with its base; a push to main with the commit before; a push to any other branch with main
+        # (a later commit on a branch may change a migration an earlier commit of the same branch added)
+        run: node test/contract.test.js "${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || (github.ref == 'refs/heads/main' && 'HEAD~1' || 'origin/main') }}"
       - name: Install Lua 5.1
         run: sudo apt-get update -qq && sudo apt-get install -y -qq lua5.1
       - name: Addon harness (mock game API)
