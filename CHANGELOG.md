@@ -7,6 +7,9 @@ Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
   and the database looks it up before the card reaches you: a wrong gold per hour, a drop rate without its
   sample, a Classic rate not called Classic, sales called profit, an unmeasured duo claim, a farm card with no
   risk, or a layer or /run tip is refused. Claude's chat answers go through the same rules first.
+- **Prices from your own AH scans on cards.** A card can quote what an item cost on your AH, from the scan
+  the app synced, and the database checks the number. The brief's grinds now say which mobs they killed and
+  when they started.
 - **A shorter brief.** The brief Claude reads first leaves out empty fields and keeps the top 3 upgrades per
   spec, the 4 next pre-BiS pieces and the 6 newest grinds and runs (each with its total); ask for a part by
   name to get it whole.

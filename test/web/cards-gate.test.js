@@ -88,6 +88,10 @@ const CASES = [
   ['gold each hour', { id: 'each', title: 'Cultists', summary: 'About 120 gold each hour.' }, ['gph'], []],
   ['a duo claim, unknown said about something else', farm({ id: 'duo-other', title: 'Duo Strat Live', risk: 'Deaths unknown.' }), ['duo'], []],
   ['a yes/no snapshot field', { id: 'rest-no', title: 'Rested', facts: [{ label: 'Resting', value: 'yes', src: 'snapshot#character.resting' }] }, [], []],
+  ['an AH price from his own scan, right', { id: 'ah-ok', title: 'Destiny price', facts: [{ label: 'Destiny on your AH', value: '235g (lowest, your scan)', src: 'ah:647@1795369186#min' }] }, [], []],
+  ['an AH price, wrong number', { id: 'ah-bad', title: 'Destiny price', facts: [{ label: 'Destiny on your AH', value: '250g', src: 'ah:647@1795369186#min' }] }, [], ['value']],
+  ['an AH price from a scan that never happened', { id: 'ah-none', title: 'Destiny price', facts: [{ label: 'Destiny on your AH', value: '235g', src: 'ah:647@1795000000#min' }] }, [], ['value']],
+  ['an AH price src without the scan time', { id: 'ah-fmt', title: 'Destiny price', facts: [{ label: 'Destiny on your AH', value: '235g', src: 'ah:647#min' }] }, ['src'], []],
   ['profit with only flips#sold', { id: 'sold', title: 'Flip profit', facts: [{ label: 'Sold', value: '90g', src: 'flips#sold' }] }, ['profit'], []],
 ];
 // chat lines: [text, rules]
@@ -138,6 +142,9 @@ function pyRules(card) {
     await pc.client.pull({}); await pc.client.push(save(), {});
     await pc.client.pushSnapshot(snapshot);
     const account = JSON.parse(pc.files.state).account;
+    // one AH scan of Destiny (item 647), as the app syncs it (kind ah_obs)
+    B.query(`insert into public.records (account_id, id, device_id, char_key, kind, t, data) values ('${account}', 'Ana-Realm|ah_obs|1795369186|x', null, 'Ana-Realm', 'ah_obs', 1795369186,
+      '{"t": 1795369186, "item": 647, "key": "647", "min": 2350000, "med": 2999999, "n": 13, "qty": 13, "src": "scan"}');`);
     const pgRules = (card) => JSON.parse(B.query(`select private.check_cards('${account}', ${lit(JSON.stringify({ schema: 1, cards: [card] }))}::jsonb)::text`));
 
     for (const [name, card, both, pgOnly] of CASES) {

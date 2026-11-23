@@ -36,7 +36,8 @@ CARD_DUO_OK = r'\bunknown\b|not measured'     # on a card: on a line that names 
 SRC = (r'game\.drop:\d{1,9}:\d{1,12}'                            # item id : creature id -> game.drop_rates
        r'|(grind|run):[^@#]+@\d{4}-\d\d-\d\dT[\d:.]+Z#(gph|gph_low|gph_high|kills|hours|deaths)'  # a grind or run in the snapshot: name@start#field
        r'|flips#(profit|sold|paid)'                              # snapshot ah.flips.totals (profit = sales matched to buys)
-       r'|snapshot#[A-Za-z0-9_.]+')                              # any field of the newest snapshot, dot path, [n] as .n
+       r'|snapshot#[A-Za-z0-9_.]+'                               # any field of the newest snapshot, dot path, [n] as .n
+       r'|ah:\d{1,9}@\d{9,11}#(min|med)')                         # the player's AH scan: item id @ scan time (unix) -> ah_obs
 
 
 def has(pat, t): return re.search(pat, t, A) is not None
@@ -97,7 +98,7 @@ def card_rules(c):
         v, raw = str(f.get('value', '')), f.get('src')
         t = fact_line(f).lower()
         if raw is not None and not (isinstance(raw, str) and re.fullmatch(SRC, raw, A)):
-            out.append(('src', f'fact "{f.get("label")}": src must be game.drop:<item>:<npc>, grind:<name>@<start>#<field>, run:<name>@<start>#<field>, flips#<field> or snapshot#<path>'))
+            out.append(('src', f'fact "{f.get("label")}": src must be game.drop:<item>:<npc>, grind:<name>@<start>#<field>, run:<name>@<start>#<field>, flips#<field>, snapshot#<path> or ah:<item>@<scan time>#<min|med>'))
             continue
         if has(r'\d', v) and raw is None:
             out.append(('src', f'fact "{f.get("label")}": a number needs its src, so it can be checked'))
