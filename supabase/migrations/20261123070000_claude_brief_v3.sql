@@ -81,7 +81,7 @@ begin
   if 'quests' = any(parts) then
     out := out || jsonb_build_object('quests', coalesce((
       select jsonb_agg(jsonb_build_object('id', q->'id', 'title', q->>'title', 'level', case when jsonb_typeof(q->'level') = 'number' and (q->>'level')::numeric > 0 then q->'level' end,
-        'complete', case when q->'complete' = 'true'::jsonb then true when jsonb_typeof(q->'complete') = 'boolean' then null else q->'complete' end,
+        'complete', case when q->'complete' = 'true'::jsonb then 'true'::jsonb when jsonb_typeof(q->'complete') = 'boolean' then null else q->'complete' end,
         -- an older build wrote no keep flag: unknown, never false (false would read as "not a dungeon quest")
         'keep', coalesce(q->'keep', '"unknown"'::jsonb), 'dungeon', q->'dungeon', 'keepWhy', q->'keepWhy',
         'rep', case when jsonb_array_length(private.brief_arr(q->'rep')) > 0 then q->'rep' end,
