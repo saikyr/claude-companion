@@ -55,7 +55,7 @@ Read that only for things the snapshot leaves out (bag contents, journal, full A
 | `ah` | lastScan {t, auctions}, itemsPriced, sold[] {t, item, net}, bought[] {t, item, price}, flips {totals, done[] (purchases matched to later sales unit by unit, oldest first, using the stack size from the AH letter: units, paid, price, cut, deposit, profit = price - cut - paid), open[] (bought, not sold: units, paid, listedAt); purchases the player marked "used, not a flip" are left out}, mine[] (your auctions when last saved). Times are Unix seconds; money in copper. |
 
 Scores use the stat weights of the profile each spec uses (Stat weights page; defaults and sources in
-docs/STAT-WEIGHTS.md). Stat ids are the game-data pack's (`gamedata/build.py` STAT); `dps` = weapon DPS.
+docs/STAT-WEIGHTS.md). Stat ids are the game-data pack's (`gamedata/build.py` STAT); `dps` = melee weapon DPS (full in the main hand, half in the off hand), `rdps` = ranged weapon DPS (Ranged slot; Hunters only), 39 = ranged attack power.
 
 ## from-claude/: cards Claude writes, and what the player did with them
 

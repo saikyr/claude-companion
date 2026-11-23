@@ -3,6 +3,15 @@
 Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 
 ## 1.5.0 (in progress: every merge to main updates itself)
+- **Gear advice checked for every class.** Weapon DPS now counts where the weapon hits: in full in the main
+  hand, half for an off-hand weapon, and in the Ranged slot only for Hunters. Beast Mastery and Marksmanship
+  Hunters were offered high-DPS axes with no stats over Agility staves, and Rogues and Warriors were told a
+  faster bow was an upgrade; both are fixed. Hunters count ranged attack power. Rogues and Survival Hunters
+  count Strength for the attack power it gives. Tanks always count armor, so a cloth robe no longer beats a
+  plate chest for Protection. A shield the game data files as Miscellaneous is read as the shield its tooltip
+  says, so Mages and Druids aren't offered it. A character with no talent points yet uses the tree its class
+  levels in (a level-5 Paladin got Holy healer advice), and a tie goes to that tree. Your own Hunter profiles
+  keep their weapon DPS number for the bow.
 - **Set up in one paste with Claude.** Create a project in the Claude desktop app, paste the text from
   `claude/SETUP.md` into its instructions and say "set me up": Claude installs the Companion on Windows or a
   Mac (or gives you one line to paste into PowerShell or Terminal), asks for your addon folder and reads your

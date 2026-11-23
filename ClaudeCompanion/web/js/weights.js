@@ -20,9 +20,12 @@
 
   // ---------------------------------------------------------------- stats
   // ids are the game-data pack's stat ids (gamedata/build.py STAT); 'dps' is weapon damage per
-  // second read from the tooltip
+  // second read from the tooltip. A profile weighs it twice: 'dps' for a melee weapon (main hand; an
+  // off-hand weapon counts half, as off-hand hits do half damage) and 'rdps' for a bow, gun, crossbow
+  // or thrown weapon in the Ranged slot. Only Hunters weigh 'rdps'; nobody weighs a wand's DPS.
   const S = { agi: 3, str: 4, int: 5, spi: 6, sta: 7, def: 12, dodge: 13, parry: 14, block: 15, hit: 31, crit: 32,
-    haste: 36, exp: 37, ap: 38, heal: 41, sdmg: 42, mp5: 43, sp: 45, pen: 47, bv: 48, armor: 100 };
+    haste: 36, exp: 37, ap: 38, rap: 39, heal: 41, sdmg: 42, mp5: 43, sp: 45, pen: 47, bv: 48, armor: 100 };
+  const OFF_HAND_DPS = 0.5;
   const SCHOOL = { fire: 110, shadow: 111, frost: 112, arcane: 113, nature: 114, holy: 115 };
   // a % line is worth this many rating points (CONV)
   const PCT = { 116: [S.crit, 14], 21: [S.crit, 14], 117: [S.hit, 10], 18: [S.hit, 10], 118: [S.dodge, 12], 119: [S.parry, 15], 120: [S.block, 5] };
@@ -86,7 +89,7 @@
 
   // the starter weights for one row of SPECS (rule at the top of the file)
   function derive(row) {
-    const [cls, , , , role, order, also, schools] = row;
+    const [cls, tree, , , role, order, also, schools] = row;
     const w = {}, basis = {};
     const put = (k, v, why) => { if (v > 0) { w[k] = +v.toFixed(3); basis[k] = why; } };
     const factor = (tok) => { const i = order.indexOf(tok); return i >= 0 ? RANK[i] : also.includes(tok) ? ALSO : 0; };
@@ -97,6 +100,8 @@
     simple.forEach((tok) => { const f = factor(tok); if (f) put(S[tok], COST[S[tok]][0] * f, placed(tok) + cost(COST[S[tok]][0])); });
     if (factor('avoid')) { const f = factor('avoid'); put(S.dodge, COST[S.dodge][0] * f, `Avoidance: ${placed('avoid')}${cost(COST[S.dodge][0])}`); put(S.parry, COST[S.parry][0] * f, `Avoidance: ${placed('avoid')}${cost(COST[S.parry][0])}`); }
     if (role === 'tank' && w[S.dodge] == null && factor('agi')) put(S.dodge, COST[S.dodge][0] * ALSO, 'Tanks: some value on Dodge');
+    // a tank's armor always counts a little, so a cloth robe with the right stats doesn't beat a plate chest
+    if ((role === 'tank' || tree === 'Protection') && !factor('armor')) put(S.armor, COST[S.armor][0] * ALSO, 'Tanks: some value on armor (the guide does not rank it)');
     // spell power: damage specs count spell damage and their own schools; healers count healing
     if (role === 'heal') {
       const f = factor('heal');
@@ -118,7 +123,20 @@
       const ranked = factor('ap') ? COST[S.ap][0] * factor('ap') : 0;
       const ap = Math.max(ranked, apStr, apAgi);
       if (ap) put(S.ap, ap, ranked >= apStr && ranked >= apAgi ? placed('ap') + cost(0.5) : apStr >= apAgi ? `What Strength gives: ${per[0]} attack power per Strength` : 'What Agility gives: half its value is attack power');
-      if (order.includes('dps') || also.includes('dps')) put('dps', ap * 14, '14 attack power = 1 weapon DPS (Forever client)');
+      // weapon DPS: the weapon the spec hits with. Ranged Hunters shoot (their melee weapon is a stat stick);
+      // Survival Hunters fight in melee and still shoot; everyone else's ranged weapon only pulls.
+      const hunter = cls === 'HUNTER';
+      if (order.includes('dps') || also.includes('dps')) {
+        if (role !== 'ranged') put('dps', ap * 14, '14 attack power = 1 weapon DPS (Forever client). Counts for your main hand; an off-hand weapon counts half (off-hand hits do half damage)');
+        if (hunter) put('rdps', ap * 14, '14 attack power = 1 ranged weapon DPS (Forever client): your bow, gun or crossbow');
+      }
+      if (hunter && ap) put(S.rap, ap, 'Ranged attack power counts like attack power for your shots');
+      // a stat the guide doesn't rank still gives attack power (CONV): Strength for Rogues, for example
+      if (ap && role !== 'tank') {
+        const strAp = role === 'ranged' ? 0 : per[0];        // Strength gives no ranged attack power
+        if (!factor('str') && strAp) put(S.str, ap * strAp, `Not in the guide's order, but each Strength gives ${strAp} attack power`);
+        if (!factor('agi') && agiAp) put(S.agi, ap * agiAp, `Not in the guide's order, but each Agility gives ${agiAp} attack power`);
+      }
     }
     if (role === 'tank' && order.includes('sta')) put(S.bv, COST[S.bv][0] * ALSO, 'Tanks: some value on shield block value');
     return { w, basis };
@@ -183,13 +201,43 @@
     st = st && st.profiles ? st : { profiles: {} };
     // older saves could carry a fixed weight for a "%" line, which hid edits to its rating: drop it
     Object.values(st.profiles).forEach((p) => { if (p && p.w) PCT_KEYS.forEach((k) => delete p.w[k]); });
+    // Weapon DPS used to count in every weapon slot. Since it counts per slot (melee 'dps', ranged 'rdps'),
+    // a Hunter's own profile keeps its number for the ranged weapon, and one copied from a ranged spec
+    // stops counting the melee weapon's DPS. Done once per profile (v: 2), so later edits stay.
+    let changed = false;
+    Object.values(st.profiles).forEach((p) => {
+      if (!p || !p.w || p.v >= 2) return;
+      if (p.cls === 'HUNTER' && p.w.dps && p.w.rdps == null) { p.w.rdps = p.w.dps; if (BUILTIN[p.from] && BUILTIN[p.from].role === 'ranged') delete p.w.dps; }
+      p.v = 2; changed = true;
+    });
+    if (changed) save(st);
     return st;
   };
   const save = (st) => localStorage.setItem(KEY, JSON.stringify(st));
   const clean = (w) => { const o = {}; Object.entries(w || {}).forEach(([k, v]) => { v = Number(v); if (v > 0 && isFinite(v) && !PCT[k]) o[k] = +v.toFixed(3); }); return o; };   // "%" lines follow their rating
 
+  // ---------------------------------------------------------------- which tree a spec is
+  // A spec is its biggest talent tree. With no points yet (below level 10, or a second spec never set up)
+  // it is the tree that class levels in, not simply the first tree (a level-5 Paladin isn't a Holy healer).
+  // A tie goes to the levelling tree if it is one of the tied ones, else to the first of them.
+  const LEVELLING = { WARRIOR: 'Arms', PALADIN: 'Retribution', HUNTER: 'Beast Mastery', ROGUE: 'Combat', PRIEST: 'Shadow',
+    MAGE: 'Frost', WARLOCK: 'Affliction', SHAMAN: 'Enhancement', DRUID: 'Feral' };
+  const TREES = {};
+  SPECS.forEach(([cls, tree]) => { (TREES[cls] = TREES[cls] || []).includes(tree) || TREES[cls].push(tree); });
+  // pts: points per tree in the class's tree order (TREES), or null when the talents can't be read.
+  // -> { tree, why: 'points' | 'tie' | 'none' | 'unknown' }
+  function pickTree(cls, pts) {
+    const names = TREES[cls] || [], lev = LEVELLING[cls] || names[0] || null;
+    if (!Array.isArray(pts) || pts.length !== names.length) return { tree: lev, why: 'unknown' };
+    const max = Math.max(...pts.map((x) => Number(x) || 0));
+    if (!(max > 0)) return { tree: lev, why: 'none' };
+    const top = names.filter((t, i) => (Number(pts[i]) || 0) === max);
+    if (top.length === 1) return { tree: top[0], why: 'points' };
+    return { tree: top.includes(lev) ? lev : top[0], why: 'tie' };
+  }
+
   const W = {
-    S, PCT, COST, RANK, ALSO, AP_PER, SPECS, BUILTIN, GUIDE, WORD,
+    S, PCT, COST, RANK, ALSO, AP_PER, SPECS, BUILTIN, GUIDE, WORD, LEVELLING, TREES, pickTree,
     get: (id) => BUILTIN[id] || store().profiles[id] || null,
     custom: (cls) => Object.values(store().profiles).filter((p) => !cls || p.cls === cls),
     // every profile you can pick for a class, built-in first; a tree's own ones first
@@ -203,7 +251,7 @@
     create(cls, fromId, name) {
       const st = store(), from = fromId && W.get(fromId);
       const id = 'u' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36);
-      st.profiles[id] = { id, cls, own: true, name: (name || (from ? from.name + ' (mine)' : 'My weights')).slice(0, 60), w: clean(from ? from.w : {}), from: from ? (from.from || from.id) : null, updated: Date.now() };
+      st.profiles[id] = { id, cls, own: true, v: 2, name: (name || (from ? from.name + ' (mine)' : 'My weights')).slice(0, 60), w: clean(from ? from.w : {}), from: from ? (from.from || from.id) : null, updated: Date.now() };
       save(st);
       return id;
     },
@@ -240,7 +288,7 @@
       ITEM_MOD_STAMINA_SHORT: 7, ITEM_MOD_SPELL_HEALING_DONE_SHORT: 41, ITEM_MOD_SPELL_DAMAGE_DONE_SHORT: 42,
       ITEM_MOD_MANA_REGENERATION_SHORT: 43, ITEM_MOD_SPELL_POWER_SHORT: 45, ITEM_MOD_SHADOW_DAMAGE_DONE_SHORT: 111,
       ITEM_MOD_HIT_RATING_SHORT: 31, ITEM_MOD_CRIT_RATING_SHORT: 32, ITEM_MOD_SPELL_CRIT_RATING_SHORT: 32, ITEM_MOD_HASTE_RATING_SHORT: 36,
-      ITEM_MOD_EXPERTISE_RATING_SHORT: 37, ITEM_MOD_ATTACK_POWER_SHORT: 38, ITEM_MOD_DEFENSE_SKILL_RATING_SHORT: 12, ITEM_MOD_DODGE_RATING_SHORT: 13,
+      ITEM_MOD_EXPERTISE_RATING_SHORT: 37, ITEM_MOD_ATTACK_POWER_SHORT: 38, ITEM_MOD_RANGED_ATTACK_POWER_SHORT: 39, ITEM_MOD_DEFENSE_SKILL_RATING_SHORT: 12, ITEM_MOD_DODGE_RATING_SHORT: 13,
       ITEM_MOD_PARRY_RATING_SHORT: 14, ITEM_MOD_BLOCK_RATING_SHORT: 15, ITEM_MOD_BLOCK_VALUE_SHORT: 48, ITEM_MOD_HEALTH_REGEN_SHORT: 46,
       ITEM_MOD_SPELL_PENETRATION_SHORT: 47, RESISTANCE0_NAME: 100, ITEM_MOD_FIRE_RESISTANCE_SHORT: 101, ITEM_MOD_FROST_RESISTANCE_SHORT: 102,
       ITEM_MOD_NATURE_RESISTANCE_SHORT: 103, ITEM_MOD_SHADOW_RESISTANCE_SHORT: 104, ITEM_MOD_ARCANE_RESISTANCE_SHORT: 105,
@@ -262,22 +310,36 @@
       const st = {};
       (g[8] || []).forEach(([k, v]) => { st[k] = (st[k] || 0) + v; });
       if (g[9] === 2) { const d = W.dpsOf(g[10]); if (d) st.dps = d; }
+      // many bows and guns say their ranged attack power only as an Equip line, which the pack doesn't count
+      if (st[S.rap] == null) for (const l of g[10] || []) { const m = /^Equip: Increases ranged attack power by (\d+)\.$/.exec(l); if (m) st[S.rap] = Number(m[1]); }
       return st;
     },
-    // sum of stat x weight; % lines count as their rating (CONV) unless the profile weighs them itself
-    score(st, w) {
+    // which hand a slot is: a Gear slot name ('Main hand', 'Off hand', 'Ranged') or a game slot number
+    hand: (slot) => ({ 'Main hand': 'main', 16: 'main', 'Off hand': 'off', 17: 'off', Ranged: 'ranged', 18: 'ranged' })[slot] || null,
+    // what one point of weapon DPS is worth in a slot: melee 'dps' in the main hand, half of it in the off
+    // hand, 'rdps' in the Ranged slot. No slot given (a caller that doesn't know): the melee number.
+    dpsWeight(w, slot) {
+      const h = W.hand(slot);
+      if (h === 'ranged') return w.rdps || 0;
+      if (h === 'off') return (w.dps || 0) * OFF_HAND_DPS;
+      return w.dps || 0;
+    },
+    // sum of stat x weight; % lines count as their rating (CONV) unless the profile weighs them itself.
+    // slot: where the item is worn (see hand), which decides what its weapon DPS is worth
+    score(st, w, slot) {
       let s = 0;
       for (const [k, v] of Object.entries(st || {})) {
-        let wt = w[k];
+        let wt = k === 'dps' ? W.dpsWeight(w, slot) : w[k];
         if (wt == null && PCT[k]) wt = (w[PCT[k][0]] || 0) * PCT[k][1];
         s += (wt || 0) * v;
       }
       return s;
     },
+    OFF_HAND_DPS,
     // what the stat ids are called, for tables
-    statName(k, names) { return k === 'dps' ? 'Weapon DPS' : (names && names[k]) || ({ 36: 'Haste', 37: 'Expertise' })[k] || 'stat ' + k; },
+    statName(k, names) { return k === 'dps' ? 'Melee weapon DPS' : k === 'rdps' ? 'Ranged weapon DPS' : (names && names[k]) || ({ 36: 'Haste', 37: 'Expertise', 39: 'Ranged attack power' })[k] || 'stat ' + k; },
     // stats you can weigh in the editor, in a sensible order
-    EDITABLE: ['dps', 38, 4, 3, 7, 5, 6, 31, 32, 37, 36, 45, 42, 41, 43, 47, 110, 111, 112, 113, 114, 115, 12, 13, 14, 15, 48, 100],
+    EDITABLE: ['dps', 'rdps', 38, 39, 4, 3, 7, 5, 6, 31, 32, 37, 36, 45, 42, 41, 43, 47, 110, 111, 112, 113, 114, 115, 12, 13, 14, 15, 48, 100],
   };
   window.CCWeights = W;
 
@@ -297,7 +359,11 @@
   function reason(sp) {
     const pick = CC.gear.pickedProfile(sp);
     if (pick) return 'Your pick';
-    return sp.tree ? `Default: most of your talent points are in ${sp.tree}` : 'Default';
+    if (!sp.tree) return 'Default';
+    if (sp.treeWhy === 'none') return `Default: no talent points yet, so the tree your class levels in (${sp.tree})`;
+    if (sp.treeWhy === 'unknown') return `Default: your talent trees couldn't be read, so the tree your class levels in (${sp.tree}). Sync in game, or pick weights`;
+    if (sp.treeWhy === 'tie') return `Default: your points are tied, so ${sp.tree}. Pick other weights if you play the other tree`;
+    return `Default: most of your talent points are in ${sp.tree}`;
   }
 
   // one profile: its numbers as bars, then why

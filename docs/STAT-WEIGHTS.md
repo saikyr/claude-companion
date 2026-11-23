@@ -39,13 +39,23 @@ guide's order; 0.3 for stats the guide says are "also valued"; 0 for the rest. T
   power per Strength for Warriors, Paladins, Shamans and Druids; half of Agility's weight for Rogues
   and Hunters, the other half being its crit). Weapon DPS = 14 × attack power.
 - "%" lines (crit, hit, dodge, parry, block) count as rating with the conversions above.
+- Weapon DPS is weighed per hand: **Melee weapon DPS** (`dps`) counts in full in the main hand and half in
+  the off hand; **Ranged weapon DPS** (`rdps`) counts in the Ranged slot and only Hunters have it. Beast
+  Mastery and Marksmanship weigh the bow alone, Survival both; nobody weighs a wand's DPS. Hunters weigh
+  ranged attack power like attack power.
+- A stat the guide doesn't rank still counts for the attack power it gives (Strength for Rogues and
+  Survival Hunters: 1 attack power each).
+- Tanks (both Protection Warrior profiles, Protection Paladin, bear survival) always weigh armor a little
+  (0.03 a point when the guide doesn't rank it), so a cloth robe with the same stats never beats plate.
 
 This turns "A before B" into "a budget spent on A is worth more than the same budget on B". It is
 not a simulation. Known gaps: hit and expertise caps aren't applied (the app doesn't know your hit
 total yet); weapon skill isn't scored; Use and proc effects aren't scored (marked "+ effect").
 
 **Which weights a spec uses.** Each spec uses its biggest talent tree's profile (Holy 17/33/0 → Holy)
-until you pick another on the Stat weights page. Every built-in profile is named after its tree; trees
+until you pick another on the Stat weights page. With no talent points yet it uses the tree the class levels in (Arms,
+Retribution, Beast Mastery, Combat, Shadow, Frost, Affliction, Enhancement, Feral); a tie goes to that tree
+when it is one of the tied ones (`js/weights.js` `pickTree`). Every built-in profile is named after its tree; trees
 with two playstyles have two (Protection (threat) / (survival), Retribution (Unsealed Wrath) / (Holy
 Shock), Feral (cat, bear threat) / (bear survival)), the first being the default.
 
@@ -71,14 +81,14 @@ Moving these settings into a file next to the snapshot is issue #15.
 | --- | --- | --- | --- | --- |
 | Warrior | Arms | Weapon DPS > Hit > Expertise > Critical Strike > Strength (also: Haste, Agility, Attack Power) | Agi 0.3, Str 0.4, Hit 1.064, Crit 0.43, Haste 0.258, Exp 0.865, AP 0.2, DPS 2.8 | [link](https://www.icy-veins.com/wow-forever/arms-warrior-melee-dps-pve-stat-priority) |
 | Warrior | Fury | Weapon DPS > Hit > Expertise > Critical Strike > Strength (also: Haste, Agility, Attack Power) | Agi 0.3, Str 0.4, Hit 1.064, Crit 0.43, Haste 0.258, Exp 0.865, AP 0.2, DPS 2.8 | [link](https://www.icy-veins.com/wow-forever/fury-warrior-melee-dps-pve-stat-priority) |
-| Warrior | Protection (threat) | Expertise > Hit > Agility > Strength > Stamina | Agi 0.65, Str 0.5, Sta 0.4, Hit 1.064, Exp 1.33, AP 0.25 | [link](https://www.icy-veins.com/wow-forever/protection-warrior-tank-pve-stat-priority) |
+| Warrior | Protection (threat) | Expertise > Hit > Agility > Strength > Stamina | Agi 0.65, Str 0.5, Sta 0.4, Hit 1.064, Exp 1.33, AP 0.25, Armor 0.03 | [link](https://www.icy-veins.com/wow-forever/protection-warrior-tank-pve-stat-priority) |
 | Warrior | Protection (survival) | Stamina > Armor > Agility > Avoidance (Dodge, Parry) > Defense | Agi 0.65, Sta 1, Def 0.716, Dodge 0.54, Parry 0.54, BlockV 0.171, Armor 0.08 | [link](https://www.icy-veins.com/wow-forever/protection-warrior-tank-pve-stat-priority) |
-| Rogue | Assassination | Expertise > Hit > Agility > Weapon DPS > Critical Strike | Agi 0.65, Hit 1.064, Crit 0.344, Exp 1.33, AP 0.325, DPS 4.55 | [link](https://www.icy-veins.com/wow-forever/assassination-rogue-melee-dps-pve-stat-priority) |
-| Rogue | Combat | Expertise > Hit > Agility > Weapon DPS > Critical Strike | Agi 0.65, Hit 1.064, Crit 0.344, Exp 1.33, AP 0.325, DPS 4.55 | [link](https://www.icy-veins.com/wow-forever/combat-rogue-melee-dps-pve-stat-priority) |
-| Rogue | Subtlety | Weapon DPS > Expertise > Hit > Weapon Skill > Agility | Agi 0.4, Hit 0.865, Exp 1.064, AP 0.2, DPS 2.8 | [link](https://www.icy-veins.com/wow-forever/subtlety-rogue-melee-dps-pve-stat-priority) |
-| Hunter | Beast Mastery | Weapon DPS > Hit > Critical Strike > Agility > Attack Power | Agi 0.5, Hit 1.064, Crit 0.559, AP 0.2, DPS 2.8 | [link](https://www.icy-veins.com/wow-forever/beast-mastery-hunter-ranged-dps-pve-stat-priority) |
-| Hunter | Marksmanship | Weapon DPS > Hit > Critical Strike > Agility > Attack Power | Agi 0.5, Hit 1.064, Crit 0.559, AP 0.2, DPS 2.8 | [link](https://www.icy-veins.com/wow-forever/marksmanship-hunter-ranged-dps-pve-stat-priority) |
-| Hunter | Survival | Weapon DPS > Hit > Critical Strike > Agility > Attack Power | Agi 0.5, Hit 1.064, Crit 0.559, AP 0.2, DPS 2.8 | [link](https://www.icy-veins.com/wow-forever/survival-hunter-melee-dps-pve-stat-priority) |
+| Rogue | Assassination | Expertise > Hit > Agility > Weapon DPS > Critical Strike | Agi 0.65, Str 0.325, Hit 1.064, Crit 0.344, Exp 1.33, AP 0.325, DPS 4.55 | [link](https://www.icy-veins.com/wow-forever/assassination-rogue-melee-dps-pve-stat-priority) |
+| Rogue | Combat | Expertise > Hit > Agility > Weapon DPS > Critical Strike | Agi 0.65, Str 0.325, Hit 1.064, Crit 0.344, Exp 1.33, AP 0.325, DPS 4.55 | [link](https://www.icy-veins.com/wow-forever/combat-rogue-melee-dps-pve-stat-priority) |
+| Rogue | Subtlety | Weapon DPS > Expertise > Hit > Weapon Skill > Agility | Agi 0.4, Str 0.2, Hit 0.865, Exp 1.064, AP 0.2, DPS 2.8 | [link](https://www.icy-veins.com/wow-forever/subtlety-rogue-melee-dps-pve-stat-priority) |
+| Hunter | Beast Mastery | Weapon DPS > Hit > Critical Strike > Agility > Attack Power | Agi 0.5, Hit 1.064, Crit 0.559, AP 0.2, RAP 0.2, Ranged DPS 2.8 | [link](https://www.icy-veins.com/wow-forever/beast-mastery-hunter-ranged-dps-pve-stat-priority) |
+| Hunter | Marksmanship | Weapon DPS > Hit > Critical Strike > Agility > Attack Power | Agi 0.5, Hit 1.064, Crit 0.559, AP 0.2, RAP 0.2, Ranged DPS 2.8 | [link](https://www.icy-veins.com/wow-forever/marksmanship-hunter-ranged-dps-pve-stat-priority) |
+| Hunter | Survival | Weapon DPS > Hit > Critical Strike > Agility > Attack Power | Agi 0.5, Str 0.2, Hit 1.064, Crit 0.559, AP 0.2, RAP 0.2, DPS 2.8, Ranged DPS 2.8 | [link](https://www.icy-veins.com/wow-forever/survival-hunter-melee-dps-pve-stat-priority) |
 | Mage | Arcane | Hit > Spell Power > Critical Strike > Intellect > Spirit > MP5 | Int 0.5, Spi 0.4, Hit 1.33, Crit 0.559, Heal 0.267, SpDmg 0.8, MP5 0.746, SP 0.8, Arcane 0.8 | [link](https://www.icy-veins.com/wow-forever/arcane-mage-ranged-dps-pve-stat-priority) |
 | Mage | Fire | Hit > Spell Power > Critical Strike > Intellect > Spirit > MP5 | Int 0.5, Spi 0.4, Hit 1.33, Crit 0.559, Heal 0.267, SpDmg 0.8, MP5 0.746, SP 0.8, Fire 0.8 | [link](https://www.icy-veins.com/wow-forever/fire-mage-ranged-dps-pve-stat-priority) |
 | Mage | Frost | Hit > Spell Power > Critical Strike > Intellect > MP5 > Spirit | Int 0.5, Spi 0.32, Hit 1.33, Crit 0.559, Heal 0.267, SpDmg 0.8, MP5 0.932, SP 0.8, Frost 0.8 | [link](https://www.icy-veins.com/wow-forever/frost-mage-ranged-dps-pve-stat-priority) |
@@ -89,7 +99,7 @@ Moving these settings into a file next to the snapshot is issue #15.
 | Priest | Holy (guide order, comparison only) | Healing Power > MP5 > Spirit > Intellect > Critical Strike | Int 0.5, Spi 0.65, Crit 0.344, Heal 0.54, MP5 1.864, SP 0.54 | [link](https://www.icy-veins.com/wow-forever/holy-priest-healer-pve-stat-priority) |
 | Priest | Shadow (guide order, comparison only) | Hit > Spell Power > Critical Strike > Spell Pierce > Spirit | Spi 0.4, Hit 1.33, Crit 0.559, Heal 0.267, SpDmg 0.8, SP 0.8, Pierce 0.5, Shadow 0.8 | [link](https://www.icy-veins.com/wow-forever/shadow-priest-ranged-dps-pve-stat-priority) |
 | Paladin | Holy | Healing Power > Intellect > Spirit > MP5 > Critical Strike | Int 0.8, Spi 0.65, Crit 0.344, Heal 0.54, MP5 1.165, SP 0.54 | [link](https://www.icy-veins.com/wow-forever/holy-paladin-healer-pve-stat-priority) |
-| Paladin | Protection | Stamina > Defense > Spell Power > Intellect > Strength | Str 0.4, Int 0.5, Sta 1, Def 1.432, AP 0.2, Heal 0.217, SpDmg 0.65, SP 0.65, BlockV 0.171, Holy 0.65 | [link](https://www.icy-veins.com/wow-forever/protection-paladin-tank-pve-stat-priority) |
+| Paladin | Protection | Stamina > Defense > Spell Power > Intellect > Strength | Str 0.4, Int 0.5, Sta 1, Def 1.432, AP 0.2, Heal 0.217, SpDmg 0.65, SP 0.65, BlockV 0.171, Armor 0.03, Holy 0.65 | [link](https://www.icy-veins.com/wow-forever/protection-paladin-tank-pve-stat-priority) |
 | Paladin | Retribution (Unsealed Wrath) | Weapon DPS > Hit > Expertise > Strength > Spell Power (also: Critical Strike, Agility, Intellect) | Agi 0.3, Str 0.5, Int 0.3, Hit 1.064, Crit 0.258, Exp 0.865, AP 0.25, Heal 0.133, SpDmg 0.4, SP 0.4, Holy 0.4, DPS 3.5 | [link](https://www.icy-veins.com/wow-forever/retribution-paladin-melee-dps-pve-stat-priority) |
 | Paladin | Retribution (Holy Shock) | Weapon DPS > Hit > Spell Power > Critical Strike > Expertise (also: Strength, Agility, Intellect) | Agi 0.3, Str 0.3, Int 0.3, Hit 1.064, Crit 0.43, Exp 0.532, AP 0.15, Heal 0.217, SpDmg 0.65, SP 0.65, Holy 0.65, DPS 2.1 | [link](https://www.icy-veins.com/wow-forever/retribution-paladin-melee-dps-pve-stat-priority) |
 | Shaman | Elemental | Spell Power > Hit > Critical Strike > Intellect > MP5 | Int 0.5, Hit 1.064, Crit 0.559, Heal 0.333, SpDmg 1, MP5 0.932, SP 1, Fire 1, Frost 1, Nature 1 | [link](https://www.icy-veins.com/wow-forever/elemental-shaman-ranged-dps-pve-stat-priority) |
