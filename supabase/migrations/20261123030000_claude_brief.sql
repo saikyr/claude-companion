@@ -41,7 +41,7 @@ begin
 
   age := greatest(0, (now_t - s_t) / 60)::int;
   out := jsonb_build_object('meta', jsonb_build_object(
-    'account', root, 'computer', s_comp, 'savedInGame', s->>'savedInGame', 'snapshotArrived', s_upd,
+    'account', root, 'computer', s_comp, 'character', s->'character'->>'name', 'savedInGame', s->>'savedInGame', 'snapshotArrived', s_upd,
     'ageMinutes', age, 'stale', age > 60,
     'build', s->'app'->>'build', 'computers', builds,
     'quote', jsonb_build_array(
@@ -84,7 +84,8 @@ begin
   if 'quests' = any(parts) then
     out := out || jsonb_build_object('quests', coalesce((
       select jsonb_agg(jsonb_build_object('id', q->'id', 'title', q->>'title', 'level', q->'level', 'complete', q->'complete',
-        'keep', coalesce(q->'keep', 'false'::jsonb), 'dungeon', q->'dungeon',
+        -- an older build wrote no keep flag: unknown, never false (false would read as "not a dungeon quest")
+        'keep', coalesce(q->'keep', '"unknown"'::jsonb), 'dungeon', q->'dungeon',
         'rewards', coalesce((select jsonb_agg(jsonb_build_object('name', r->>'name', 'how', r->>'how',
                                'upgradeFor', coalesce((select jsonb_agg(jsonb_build_object('spec', sp->>'spec', 'gain', sp->'gain'))
                                                          from jsonb_array_elements(private.brief_arr(r->'specs')) sp
@@ -101,13 +102,22 @@ begin
   end if;
 
   -- gold: flips are profit, sales are revenue, measured = the app's gph for each grind and run
+  if 'quests' = any(parts) and exists (select 1 from jsonb_array_elements(private.brief_arr(s->'quests')) q where not (q ? 'keep')) then
+    out := jsonb_set(out, '{meta,quote}', (out->'meta'->'quote') || jsonb_build_array(
+      'keep is "unknown": this snapshot is from a build before dungeon quests were flagged. Treat every quest as possibly a dungeon quest; never suggest dropping one.'));
+  end if;
+
   if 'gold' = any(parts) then
     out := out || jsonb_build_object('gold', jsonb_build_object(
       'flips', s->'ah'->'flips'->'totals',
-      'sales7d', (select jsonb_build_object('revenue', coalesce(sum((r.data->>'net')::numeric), 0), 'sales', count(*), 'label', 'revenue (AH cut taken off), not profit')
-                    from private.history r where r.account = root and r.kind = 'ah_sale' and r.t > s_t - 7 * 86400),
-      'buys7d', (select jsonb_build_object('paid', coalesce(sum((r.data->>'price')::numeric), 0), 'buys', count(*))
-                    from private.history r where r.account = root and r.kind = 'ah_buy' and r.t > s_t - 7 * 86400),
+      -- one row per record id (an account merged from another can hold the same record twice); every character of the account
+      'sales7d', (select jsonb_build_object('revenue', coalesce(sum((x.data->>'net')::numeric), 0), 'sales', count(*),
+                           'label', 'revenue (AH cut taken off), not profit; every character of the account')
+                    from (select distinct on (r.id) r.data from private.history r
+                           where r.account = root and r.kind = 'ah_sale' and r.t > s_t - 7 * 86400 order by r.id, r.t desc) x),
+      'buys7d', (select jsonb_build_object('paid', coalesce(sum((x.data->>'price')::numeric), 0), 'buys', count(*), 'label', 'every character of the account')
+                    from (select distinct on (r.id) r.data from private.history r
+                           where r.account = root and r.kind = 'ah_buy' and r.t > s_t - 7 * 86400 order by r.id, r.t desc) x),
       'measured', coalesce((
         select jsonb_agg(m order by m->>'end' desc) from (
           select m from (
@@ -125,12 +135,17 @@ begin
       'units', 'gph fields: copper per hour (10000 = 1 gold), before the 5% AH cut, loot counted sold or not'));
   end if;
 
+  if 'gold' = any(parts) and exists (select 1 from jsonb_array_elements(out->'gold'->'measured') m where not (m ? 'gph') or m->'gph' = 'null'::jsonb) then
+    out := jsonb_set(out, '{meta,quote}', (out->'meta'->'quote') || jsonb_build_array(
+      'Some measured entries have no gph: their snapshot is from an older build. Say the app has no rate for them; never work one out.'));
+  end if;
+
   if 'professions' = any(parts) then out := out || jsonb_build_object('professions', coalesce(s->'professions', '[]'::jsonb)); end if;
   if 'cooldowns' = any(parts) then out := out || jsonb_build_object('cooldowns', coalesce(s->'cooldowns', '[]'::jsonb)); end if;
   if 'caps' = any(parts) then
     out := out || jsonb_build_object('caps', case when s->'caps' is null then null else jsonb_build_object(
       'checked', s->'caps'->'checked', 'build', s->'caps'->'build',
-      'GetLootSourceInfo', s->'caps'->'api'->>'GetLootSourceInfo', 'LoggingCombat', s->'caps'->'secret'->>'LoggingCombat',
+      'GetLootSourceInfo', s->'caps'->'api'->>'GetLootSourceInfo', 'LoggingCombat', coalesce(s->'caps'->>'loggingCombat', s->'caps'->'secret'->>'LoggingCombat'),
       'loot', s->'caps'->'loot', 'instance', s->'caps'->'instance') end);
   end if;
   if 'rep' = any(parts) then out := out || jsonb_build_object('rep', coalesce(s->'reputation', '[]'::jsonb)); end if;

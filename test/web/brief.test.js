@@ -89,6 +89,9 @@ function snapshot(ageMs, extra) {
     check(g.flips.profit === 1087, 'profit is the flips total');
     check(g.sales7d.revenue === 15000 && g.sales7d.sales === 3 && /revenue/.test(g.sales7d.label) && /not profit/.test(g.sales7d.label), 'sales in the last 7 days, labelled revenue not profit');
     const m = g.measured;
+    B.query(`insert into public.records (account_id, id, device_id, char_key, kind, t, data) select a.id, 'sale1', null, 'Ana-Realm', 'ah_sale',
+      ${Math.round(NOW / 1000) - 3600}, '{"net": 5000}' from public.accounts a where a.id <> ${q(account)} limit 1;`);
+    check(B.query("select count(*) from public.records where id = 'sale1';") === '2' && brief(['gold']).gold.sales7d.revenue === 15000, 'a sale held twice (both computers before they were linked) counts once');
     check(m.length === 3 && m[0].name === 'cultists' && m[0].gph === 400000 && m[0].gph_low === 250000 && m[0].gph_high === 520000, "measured grinds and runs, newest first, with the app's gph range");
     check(m[1].complete === false && /under 10 minutes/.test(m[1].incomplete[0]), 'an incomplete grind says why');
     check(m.some((x) => x.what === 'run' && x.bosses === 1), 'runs are measured too');
@@ -101,6 +104,15 @@ function snapshot(ageMs, extra) {
     // a snapshot without gear advice says so, so nobody scores gear by hand
     await mac.client.pushSnapshot(snapshot(60e3, { gear: [] }));
     check(brief().meta.quote.some((x) => /never score gear by hand/.test(x)), 'no gear advice in the snapshot: the brief says so');
+
+    // a snapshot from an older build: no keep flags, no gph. Unknown, never false, and the brief says so
+    const old = snapshot(30e3);
+    old.quests = old.quests.map(({ keep, dungeon, ...rest }) => rest);
+    old.grind.recent = old.grind.recent.map(({ gph, gph_low, gph_high, complete, incomplete, ...rest }) => rest);
+    await mac.client.pushSnapshot(old);
+    const ob = brief();
+    check(ob.quests.every((x) => x.keep === 'unknown') && ob.meta.quote.some((x) => /never suggest dropping/.test(x)), 'no keep flag in an older snapshot: keep is "unknown", with a warning');
+    check(ob.meta.quote.some((x) => /no gph/.test(x)), 'no gph in an older snapshot: the brief says so');
 
     // stale
     B.query(`update public.records set t = t - 7200 where kind = 'snapshot';`);

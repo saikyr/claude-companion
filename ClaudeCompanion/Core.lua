@@ -455,6 +455,10 @@ function ns.Capabilities()
     probe("GetManaRegen", GetManaRegen)
     probe("GetSpellBonusHealing", GetSpellBonusHealing)
     probe("LoggingCombat", LoggingCombat)               -- reading only: never turns logging on or off
+    if type(LoggingCombat) == "function" then           -- and what it said: on, off, or nothing (can't tell)
+        local ok, v = pcall(LoggingCombat)
+        caps.loggingCombat = not ok and "error" or v == nil and "nil" or ns.IsSecret(v) and "secret" or (v and "on" or "off")
+    end
     local _, build, _, toc = GetBuildInfo()
     caps.build, caps.toc = ns.Clean(build), ns.Clean(toc)
     if Enum and type(Enum.BagIndex) == "table" then

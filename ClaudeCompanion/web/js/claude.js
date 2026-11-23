@@ -57,15 +57,27 @@
     let inst = null;
     try { inst = CC.next && CC.next._dungeonIndex ? CC.next._dungeonIndex() : null; } catch (e) { inst = null; }
     const isInst = (z) => !!(z && inst && inst[z] && !inst[z].pvp);
-    const seen = new Set(), todo = [id];
-    while (todo.length && seen.size < 40) {
-      const q = todo.shift();
-      if (seen.has(q)) continue;
-      seen.add(q);
-      const g = Q[q];
-      if (!g) continue;
-      if (g.type === 'Dungeon' || isInst(g.cat)) return g.cat || 'a dungeon';
-      arr(g.prev).concat(arr(g.next)).forEach((n) => todo.push(n));
+    const hit = (g) => {
+      if (isInst(g.cat)) return g.cat;
+      const o = arr(g.obj).join(' ');
+      const named = inst && Object.keys(inst).find((z) => !inst[z].pvp && z.length > 3 && o.includes(z));
+      if (named) return named;
+      return g.type === 'Dungeon' ? (g.cat ? 'a dungeon (quest zone ' + g.cat + ')' : 'a dungeon') : null;
+    };
+    // its chain: back along prev, forward along next (not the other prerequisites of a later step)
+    for (const dir of ['prev', 'next']) {
+      const seen = new Set();
+      let todo = [id];
+      while (todo.length && seen.size < 40) {
+        const q = todo.shift();
+        if (seen.has(q)) continue;
+        seen.add(q);
+        const g = Q[q];
+        if (!g) continue;
+        const h = hit(g);
+        if (h) return h;
+        todo = todo.concat(arr(g[dir]));
+      }
     }
     return null;
   }
