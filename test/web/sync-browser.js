@@ -63,7 +63,9 @@ const check = (ok, what) => { console.log((ok ? 'ok   ' : 'FAIL ') + what); if (
   check(snap.sync && snap.sync.account === st.account && !JSON.stringify(snap).includes(st.key), 'snapshot.json has the account for Claude, never the key');
   const inst = fs.existsSync(path.join(dataDir, 'installed.json')) ? JSON.parse(fs.readFileSync(path.join(dataDir, 'installed.json'), 'utf8')) : null;
   check(inst ? snap.app && snap.app.build === inst.tag : snap.app === null, `the snapshot names the app build (${JSON.stringify(snap.app)})`);
-  const online = B.query(`select data->'character'->>'name' from public.records where kind = 'snapshot'`);
+  // the page sends it on its next sync after writing snapshot.json: wait for it (up to 15 s on a slow runner)
+  let online = '';
+  for (let i = 0; i < 30 && !online; i++) { online = B.query(`select data->'character'->>'name' from public.records where kind = 'snapshot'`); if (!online) await page.waitForTimeout(500); }
   check(online && online === (snap.character || {}).name, `the snapshot is online for Claude too (${online})`);
   check(Array.isArray(snap.quests) && snap.quests.every((q) => Array.isArray(q.rewards) && 'next' in q), 'every quest in the snapshot carries its scored rewards and the chain\'s next quest');
   // Claude writes a card online; the app shows it, and what the player does goes back online

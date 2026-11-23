@@ -132,6 +132,8 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   if (posted) { const j = JSON.parse(posted); check(Array.isArray(j.nextSteps) && j.nextSteps.length > 3, 'the snapshot sent to the server has nextSteps'); }
 
   // ---- gold per hour comes from the app, with a range and completeness (the brief copies these)
+  const snapMs = await page.evaluate(() => { const t = performance.now(); window.CC.snapshot(); return Math.round(performance.now() - t); });
+  console.log(`     (snapshot built in ${snapMs} ms)`);
   const snap = await page.evaluate(() => window.CC.snapshot());
   const g = (snap.grind.recent || [])[0] || {};
   check(g.name === 'test grind' && g.hours === 1 && g.coin === 100000, 'snapshot grind: hours and coin');
