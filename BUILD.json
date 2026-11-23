@@ -1,20 +1,20 @@
 {
  "version": "1.5.0",
- "built": "2026-11-23T08:26:20+00:00",
+ "built": "2026-11-23T08:36:13+00:00",
  "channel": {
   "repo": "saikyr/claude-companion",
   "branch": "stable"
  },
  "from": {
   "branch": "main",
-  "commit": "6a3edfe598c08fca37226fa67b8baced3a02075d"
+  "commit": "ff10a4891dcb0fd8ecfda5a2419cb9b4b9bb65b7"
  },
- "build": "6a3edfe598c0",
- "notes": "App UI: one shared item row, accurate icons, dungeon quests counted once",
+ "build": "ff10a4891dcb",
+ "notes": "Gear scoring: dual wield, off-hand weapons, worn two-hander detection",
  "files": {
   "Bindings.xml": "99dcc8984fdbcbea746275e7a8dbbc34e16c462021640ce70232478fb843fb48",
   "ClaudeCompanion.toc": "14d0dd98487ec0a4ce7faefcf2a5d1f75fecd6a6f8890ed9bf815a59269b7731",
-  "Core.lua": "479d51e08139d60597c4dcae2e9734ca9175983997c46896b8c675d958a46a23",
+  "Core.lua": "4be13773c530344170d0097b1bae1a612e0d1d66c5aefc74955d036f2a8d5ec5",
   "Drops.lua": "31cf85151bc89bed3e80b013fe513b2d22a6b68f95c58225a71fee97c6f005f0",
   "Journal.lua": "876d26831f798a8b1091b6916d852f8b986f8997d8ebfe2d072f5ffd1daef54e",
   "Market.lua": "4165160c673093f830132d9a1a252d35e4c4aed4f62365b861f6fa303b29225c",
@@ -22,7 +22,7 @@
   "Snapshot.lua": "6513baf3c03fa758181ec38a4d650a2d0d5d50775da518cf4893a2237d32835f",
   "UI.lua": "57459b56162e803ecd747f8d4f8f9af74c3a284ede3c7ae357c8cc07adac9cb7",
   "claude/COACHING.md": "16896d3941f141694a538f5513ce25e253af92985389c32a7582256bbf6e1076",
-  "claude/FEATURES.md": "0f364e38a254a3c777431a346463a40412453c1684774f0ce83e5dcf3063ff32",
+  "claude/FEATURES.md": "0f90bb3a2fe9f737ed5d096fec37cb4bf68976bd96129e015e7f01362b06b2cc",
   "claude/GUIDE.md": "4df77b612344b6422b16cd628a66b1a9b4f4ae3a259a8aa84230f6239b63329b",
   "claude/SETUP.md": "31e9fb9c57284abe31efb72aad0e9daac707a84e1b84e1aec73e78df5aeba7a6",
   "claude/answer_rules.py": "7b88767d4c2c3d0df1a69ede1f3fd25fd8d2751e296543d50e84094208c99f7d",
@@ -33,7 +33,7 @@
   "web/Claude Companion.app/Contents/MacOS/launcher": "65fe025ebb1acad0f786633f5b30f6bdcfa6b49f2912eca1f87385dcec0224c4",
   "web/Claude Companion.app/Contents/Resources/AppIcon.icns": "467ef964fdaff99ca47e80e7aff3d4db96306b984293aeb98251d68d2e4a2fdd",
   "web/Claude Companion.bat": "8f5cf6c1ff6a95ad5e0ebfc10951ef451cccf5b1e9a6d1fc7574600cfd01a2fc",
-  "web/channel.json": "0b48e3111d4b34c2dbb2185f7e94591e3dc7d2918253e37edd2f159d8efffb76",
+  "web/channel.json": "138245be7ca704e64eb1cf1ea2a784a1899fa2cc40ca0705f2636c3ad8d5a7f8",
   "web/css/app.css": "50fb5ede04b91e0185fe4c988d2c3be4b8eb1c96e402c218ba4271bb108b9dc2",
   "web/data/gamedata.js": "3163e358427dc39e0257a543c963b0cc4909a2871ad1455bbfb73c639a6a43d5",
   "web/data/rules.js": "55ffd4f1371145779f4ee531bc8c6f5a20e78da96dd66da9e6c1ee93e5ecafcf",
@@ -42,12 +42,12 @@
   "web/icons/icon-192.png": "7ba20877d554551a5378b001f9fe2a60caa7e2224e2d84c42359c069dfc33ca3",
   "web/icons/icon-512.png": "658263476e4a5ac0371ed8fe85671973603436e42e550d92b937c495ba78e567",
   "web/index.html": "286ed918e0fd73854082b052820dcdeb52f410fae63e081967c0caa5376ed3e4",
-  "web/js/advice.js": "5696efb9bbda8738cbb7ff73e909f3e327ffae43552aa9d9d567dd8c19615c99",
+  "web/js/advice.js": "9ae23b19487d8815a5e4e3c9d572a93c422dd3e1d2c815cc54b780ed38f3179d",
   "web/js/app.js": "b3378339924e1dca794f1a49608a15c45e185604e2dc0c6575be3e0796f1940f",
   "web/js/cards.js": "8bd7070d20a8410a982a1c5ac7698c1e6cb63e6162eb3b9cc958df8ac60cc2ee",
   "web/js/claude.js": "24b3a0ea73bdb8cd0b290ade1e13b875bee9e9cb01eee58996f4d2d7e9ad7435",
   "web/js/combatlog.js": "c5dee0b822404e0bf88c4189d8eafc380bf7bd8bd3370fe74de090d1068f69d2",
-  "web/js/gear.js": "455ce03f8cf90be1bdaff6cd41745fb48b2b937455fb3736255d19839e784eb3",
+  "web/js/gear.js": "bf89e2378c0095d7c672b34d6f6db2392ef1cee215bc2647aad09fff2249fe72",
   "web/js/icons.js": "3179331f23af1fd412b265a3fc170efa047375350cbb8f5d77e3eeadf39deabc",
   "web/js/lua.js": "e14c5df02bbfa98ec07196ec363d017beb4bd6ac50e075b78a3ba32b72234f77",
   "web/js/merge.js": "2728dcac8ec47aef9a0c21ef3fb8555ed6a9e6e464b25455b8257bacc827b6d2",

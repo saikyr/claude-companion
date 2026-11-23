@@ -60,6 +60,7 @@
     const inv = invOf(it);
     if (!inv || inv === 4 || inv === 19) return false;                       // shirts and tabards carry no stats
     if (!(use[it.class] || []).includes(it.subclass)) return false;
+    if (inv === 22 && !use.dual) return false;                               // an off-hand weapon needs Dual Wield
     const cls = /(?:^|\n)Classes: ([^\n]+)/.exec(tipText(it));
     if (cls && !cls[1].includes(char().class || '')) return false;
     return true;
@@ -75,16 +76,24 @@
     }).filter(Boolean);
   }
   // the slot row an item goes in, and what it is measured against there
-  function measure(ctx, it, st) {
+  // A one-hander with Dual Wield goes in either hand: measured in both, the bigger gain counts.
+  function measure(ctx, it, st, use) {
     const inv = invOf(it);
-    const row = CC.gear.SLOTS.find(([, , invs]) => invs.includes(inv));
-    if (!row) return null;
+    const rows = CC.gear.SLOTS.filter(([name, , invs]) => invs.includes(inv) && CC.gear.handFits(name, inv, use));
+    const worn = ctx.base.worn;
+    const wornIn = rows.find(([, slots]) => slots.some((n) => worn[n] && worn[n].id === it.id));
+    if (wornIn) return measureIn(ctx, it, st, wornIn);
+    const all = rows.map((row) => measureIn(ctx, it, st, row));
+    return all.filter((m) => m.gain != null).sort((a, b) => b.gain - a.gain)[0] || all[0] || null;
+  }
+  function measureIn(ctx, it, st, row) {
+    const inv = invOf(it);
     const [name, slots] = row, worn = ctx.base.worn;
     const s = W.score(st, ctx.w);
     const cur = slots.map((n) => worn[n] ? { n, id: worn[n].id, s: W.score(worn[n].st, ctx.w) } : { n, id: null, s: 0 });
     if (cur.some((c) => c.id === it.id)) return { row: name, s, gain: 0, same: true };
     const mh = worn[16], oh = worn[17];
-    const twoHandWorn = mh && (A.gdItem(mh.id) || [])[4] === 17;
+    const twoHandWorn = !!mh && CC.gear.wornInv(mh) === 17;
     if (name === 'Off hand' && twoHandWorn) return { row: name, s, gain: null, blocked: 'you use a two-hander' };
     const vs = cur.reduce((a, c) => (c.s < a.s ? c : a), cur[0]);
     // a two-hander replaces the main hand and the off hand
@@ -142,7 +151,7 @@
       const st = gear || it.class === 2 || it.class === 4 ? statsOf(o.key) : null;
       if (st) {
         ctxs.forEach((c) => {
-          const m = measure(c, it, st);
+          const m = measure(c, it, st, use);
           if (m) v.specs.push(Object.assign({ spec: c.sp.i, name: c.name, set: c.base.label, can: gear, later: gear && it.req > lvl ? it.req : null }, m));
         });
       }
@@ -221,7 +230,10 @@
       rows.push({ name, best, now, gain: best.reduce((a, p) => a + p.s, 0) - now.reduce((a, x) => a + (x ? x.s : 0), 0) });
     });
     // weapons: the better of a two-hander or a main hand + off hand
-    const two = pick([17], 1)[0], mh = pick([13, 21], 1)[0], oh = pick([23, 14, 22], 1)[0];
+    // with Dual Wield the off hand can be a second one-hander (another copy, or a unique item only once)
+    const two = pick([17], 1)[0], mh = pick([13, 21], 1)[0];
+    const ohInvs = C.use && C.use.dual ? [23, 14, 22, 13] : [23, 14];
+    const oh = pool.filter((p) => ohInvs.includes(p.inv) && p !== mh && !(mh && p.unique && p.it.id === mh.it.id)).sort((a, b) => b.s - a.s)[0];
     const pair = (mh ? mh.s : 0) + (oh ? oh.s : 0);
     const best = two && two.s >= pair ? [two] : [mh, oh].filter(Boolean);
     const now = [16, 17].map((n) => worn[n] ? { id: worn[n].id, s: baseScore(n) } : null);
@@ -245,7 +257,7 @@
     if (!r || !(r.it.class === 2 || r.it.class === 4)) return null;
     const C = compute(), can = wearable(r.it, C.use), lvl = char().level || 0;
     const out = C.ctxs.map((c) => {
-      const m = measure(c, r.it, r.st);
+      const m = measure(c, r.it, r.st, C.use);
       return m && { spec: c.name, comparedWith: c.base.label, slot: m.row, score: +m.s.toFixed(1), gain: m.gain == null ? null : +m.gain.toFixed(1),
         vs: m.vs && m.vs.id ? { id: m.vs.id, name: A.anyItemName(m.vs.id) } : null, same: !!m.same, blocked: m.blocked || null,
         canWear: can, level: can && r.it.req > lvl ? r.it.req : null, effect: !!m.effect };
@@ -326,7 +338,7 @@
         if (o.where === 'worn') return;
         const it = A.item(o.key);
         if (!it || !wearable(it, C.use) || it.req > lvl) return;
-        const m = measure(here, it, statsOf(o.key));
+        const m = measure(here, it, statsOf(o.key), C.use);
         if (m && m.gain > 0.5 && !m.effect && m.target && (!map[m.target] || m.gain > map[m.target].gain)) map[m.target] = { gain: m.gain, key: o.key, name: it.name, spec: ctx.name, where: o.where };
       });
     }
