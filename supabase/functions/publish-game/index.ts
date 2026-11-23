@@ -1,7 +1,7 @@
 // publish-game: loads the game-data pack (the same one the app ships) into the database's `game` schema
 // (supabase/migrations/*_game_data.sql), so Claude looks game facts up there. Called only by this
 // repository's publish workflow on main (tools/upload-game.py), which proves who it is with a GitHub
-// Actions OIDC token: no stored secret. Rows are upserted per pack; reads switch to a pack only once
+// Actions OIDC token: no stored secret. Rows go into the slot reads are not using; reads switch only once
 // game_finish has counted every row. Never deletes.
 // Deployed with verify_jwt off: the caller has a GitHub token, not a Supabase one; checked below.
 //   POST {action: 'status'}                         -> {pack: <loaded pack hash or null>}
