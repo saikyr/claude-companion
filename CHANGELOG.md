@@ -3,6 +3,7 @@
 Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 
 ## 1.5.0 (in progress: every merge to main updates itself)
+- **The brief, sixth version.** Now that both specs' gear reaches it, the brief Claude reads first is trimmed again (10.7 to 9.4 KB on a real save): shorter reasons to keep a quest, sources cut to their first clause, mobs as "name ×kills", and the computers listed only when their builds differ. Nothing is lost: each part asked for by name is whole.
 - **Flight paths: only the ones you know.** Greyed-out flight points on the flight map were saved as known (Cenarion Hold, for one). Now only the ones you can fly to count, and a path the map no longer shows as known is dropped the next time you open a flight map on that continent.
 - **Claude for friends, in the download.** A friend's own Claude can't read the Companion's private code, so
   what it follows now comes with the app, in `AddOns/ClaudeCompanion/claude/`: its guide, how to set up a
