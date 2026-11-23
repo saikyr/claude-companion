@@ -3,6 +3,8 @@
 Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 
 ## 1.5.0 (in progress: every merge to main updates itself)
+- **More gear in "not in game yet".** 1,068 items the Forever client has no tooltip for (their stats come from
+  ForeverDB) were skipped by the Gear page. They now show in each slot's "Raid, PvP and not in game yet" list.
 - **Raid gear out of pre-BiS, but still shown.** Pre-BiS listed Atiesh, the Qiraji staves and Fang of
   Korialstrasz: raid rewards whose quests the game data doesn't mark as raid. A quest now counts as raid
   content when it, or an earlier step of its chain, is set in a raid. Raid gear, PvP gear and items not seen

@@ -166,13 +166,15 @@
     const ck = JSON.stringify(use) + cls + (SFX ? SFX.built : '') + '|' + (((A.CH && A.CH.snap) || {}).taken || 0) + '|' + arr(((A.CH && A.CH.snap) || {}).completedQuests).length;
     if (cache && cache.ck === ck) return cache;
     const fixed = [], rolls = [], byId = {}, later = [];
-    const skipped = { 'quest reward you already took (or not for you)': 0, 'raid only': 0, 'PvP honor gear': 0, 'other faction only': 0, 'only Classic data says where it comes from': 0, 'no endgametools tooltip': 0, 'not for your class': 0, 'no known source': 0 };
+    const skipped = { 'quest reward you already took (or not for you)': 0, 'raid only': 0, 'PvP honor gear': 0, 'other faction only': 0, 'only Classic data says where it comes from': 0, 'no endgametools tooltip': 0, 'stats from ForeverDB only (no Forever client tooltip)': 0, 'not for your class': 0, 'no known source': 0 };
     const side = (char().faction || '')[0];            // 'A' or 'H'; vendors that only serve the other side don't count
     for (const [k, g] of Object.entries((A.GD && A.GD.items) || {})) {
       const c = g[9], sub = g[12];
       if (c !== 2 && c !== 4) continue;
       if (!use || !(use[c] || []).includes(sub)) continue;
-      if (g[11] !== 'e') { skipped['no endgametools tooltip']++; continue; }
+      // stats from the Forever client (endgametools), else ForeverDB's: those items aren't known in game yet
+      if (g[11] !== 'e' && g[11] !== 'f') { skipped['no endgametools tooltip']++; continue; }
+      const clientTip = g[11] === 'e';
       const only = arr(g[10]).find((l) => /^Classes: /.test(l));
       if (only && !only.includes(cls)) { skipped['not for your class']++; continue; }
       const id = Number(k), src = (A.GD.src || {})[k], vend = (A.GD.vend || {})[k];
@@ -189,13 +191,14 @@
       const fromRaid = arr(src).some((r) => r[0] === 'quest' && raidQuest(r[2]));
       // Not for now or pre-BiS, but kept and shown with why (AVAIL): raid content, PvP honor gear, and items
       // Forever isn't known to have yet (only Classic data names a source, or none does)
-      const avail = size >= 20 || fromRaid ? 'raid' : isPvp(id) ? 'pvp' : !onForever ? 'unseen' : null;
+      const seen = !!onForever && clientTip;
+      const avail = size >= 20 || fromRaid ? 'raid' : isPvp(id) ? 'pvp' : !seen ? 'unseen' : null;
       // only a quest gives it, and every such quest is done (or for the other faction or another class)
       if (Q && !vend && (!how || /^Quest/.test(how) && !/ · (Vendor|World Drop|Drop|Boss Drop|Profession|PvP reward) · /.test(' · ' + how + ' · ')) && arr(src).every((r) => r[0] === 'quest') && Q.rewardGone(id)) { skipped['quest reward you already took (or not for you)']++; continue; }
       if (avail === 'pvp' && vend && !myVend.length) { skipped['other faction only']++; continue; }
       if (avail) {
-        skipped[avail === 'raid' ? 'raid only' : avail === 'pvp' ? 'PvP honor gear' : src || vend ? 'only Classic data says where it comes from' : 'no known source']++;
-        later.push({ id, key: k, g, name: g[0], inv: g[4], req: g[3] || 0, boe, size, how, kind: kindOf(id), avail, seen: !!onForever, st: W.fromPack(g) });
+        skipped[avail === 'raid' ? 'raid only' : avail === 'pvp' ? 'PvP honor gear' : !clientTip ? 'stats from ForeverDB only (no Forever client tooltip)' : src || vend ? 'only Classic data says where it comes from' : 'no known source']++;
+        later.push({ id, key: k, g, name: g[0], inv: g[4], req: g[3] || 0, boe, size, how, kind: kindOf(id), avail, seen, st: W.fromPack(g) });
         continue;
       }
       const base = { id, g, inv: g[4], req: g[3] || 0, boe, size, how, kind: kindOf(id) };
