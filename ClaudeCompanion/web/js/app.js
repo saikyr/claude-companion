@@ -472,8 +472,21 @@
       if (fu.dataset.flipused) set.add(fu.dataset.flipused); else set.clear();
       localStorage.setItem(usedKey(), JSON.stringify([...set])); render(); return;
     }
+    const pb = e.target.closest('[data-paper]');
+    if (pb) {
+      const [t, id, rule, price] = pb.dataset.paper.split('|');
+      const list = tradeGet('paper', []), at = list.findIndex((x) => x.t === +t && x.id === +id && x.rule === rule);
+      if (at >= 0) list.splice(at, 1); else list.push({ t: +t, id: +id, rule, price: +price });
+      tradeSet('paper', list); render(); return;
+    }
     const sp = e.target.closest('[data-spec]');
     if (sp) { STATE.spec = Number(sp.dataset.spec); render(); }
+  });
+  document.addEventListener('change', (e) => {
+    const r = e.target.closest && e.target.closest('[data-traderule]');
+    if (r) { const rules = tradeGet('rules', {}), v = Number(r.value); if (v > 0) rules[r.dataset.traderule] = v; else delete rules[r.dataset.traderule]; tradeSet('rules', rules); render(); return; }
+    const fp = e.target.closest && e.target.closest('[data-flipplan]');
+    if (fp) { const plans = tradeGet('plans', {}), g = Number(fp.value); if (g > 0) plans[fp.dataset.flipplan] = Math.round(g * 10000); else delete plans[fp.dataset.flipplan]; tradeSet('plans', plans); render(); }
   });
 
   const V = {};
@@ -1173,6 +1186,10 @@
   const usedKey = () => 'cc.flips.used.' + (((CH.snap || {}).character || {}).name || '');
   const buyId = (b) => `${b.t}|${b.item}|${b.price}`;
   const usedSet = () => { try { return new Set(JSON.parse(localStorage.getItem(usedKey()) || '[]')); } catch (e) { return new Set(); } };
+  // your trading rules, planned sell prices and paper trades (#117): per character, synced between your computers
+  const tradeKey = (k) => 'cc.trade.' + k + '.' + (((CH.snap || {}).character || {}).name || '');
+  const tradeGet = (k, dflt) => { try { const v = JSON.parse(localStorage.getItem(tradeKey(k)) || 'null'); return v == null ? dflt : v; } catch (e) { return dflt; } };
+  const tradeSet = (k, v) => localStorage.setItem(tradeKey(k), JSON.stringify(v));
   function flipsOf(ah) {
     const used = usedSet();
     const buys = buysInfo(ah).list.filter((b) => b.item && !used.has(buyId(b)))
@@ -1288,6 +1305,59 @@
     BUY_CACHE = { ch: CH, prices: ah.prices, key, out };
     return out;
   }
+  // open positions, paper trades and flip profit per week (#117): the engines are in js/market.js
+  function lowestByName(ah) {
+    const ids = {};
+    Object.entries(ah.prices || {}).forEach(([k, p]) => { if (p && p.id && p.name && !k.includes(':') && ids[p.name] == null) ids[p.name] = p.id; });
+    return (name) => (ids[name] != null ? priceOf(ids[name]) : null);
+  }
+  function positionsOf(ah, now) {
+    if (!window.CCMarket) return null;
+    return window.CCMarket.positions({ open: flipsOf(ah).open, now: now || Math.floor(Date.now() / 1000), cut: 0.05, lowestOf: lowestByName(ah),
+      plans: tradeGet('plans', {}), rules: tradeGet('rules', {}), gold: (((CH.snap || {}).character || {}).money) != null ? CH.snap.character.money : null });
+  }
+  const paperOf = (ah) => (window.CCMarket ? window.CCMarket.paper(tradeGet('paper', []), ah.prices, 0.05) : null);
+  const weeklyOf = (ah) => (window.CCMarket ? window.CCMarket.weekly(flipsOf(ah).done) : []);
+  function positionsView(ah) {
+    const P = positionsOf(ah);
+    if (!P) return '';
+    const T = P.totals, R = P.rules;
+    const pct = (x) => (x == null ? '–' : (Math.round(x * 1000) / 10) + '%');
+    const sign = (v) => (v == null ? '<span class="dim">–</span>' : `<span class="${v >= 0 ? 'pos' : 'neg'}">${v < 0 ? '−' : ''}${money(Math.abs(v))}</span>`);
+    const inp = (k, label, unit) => `<label class="dim small">${label} <input type="number" min="1" step="1" class="field num-in" data-traderule="${k}" value="${R[k]}"> ${unit}</label>`;
+    let h = `<h2>Open positions</h2><div class="toolbar">${inp('holdDays', 'Sell after', 'days')} ${inp('stopPct', 'or when the lowest is', '% under what you paid')} ${inp('capItem', 'Warn above', '% of your gold in one item')} ${inp('capTotal', 'or', '% in all')}</div>`;
+    if (!P.rows.length) h += '<div class="empty">No open flips: everything you bought on the AH has sold or is set aside as used.</div>';
+    else {
+      h += `<p class="meta">${P.rows.length} open · ${money(T.capital)} paid${T.unrealised != null ? ` · ${sign(T.unrealised)} if the ${T.priced} with a price sold at today's lowest after the cut` : ''}${T.gold != null ? ` · ${pct(T.totalShare)} of the ${money(T.gold)} you carry${T.largest ? `; largest ${esc(T.largest.item)} ${pct(T.largest.share)}` : ''}` : ''}</p>`;
+      if (T.overTotal) h += `<p class="warn">More than ${R.capTotal}% of your gold is in open flips.</p>`;
+      if (T.overItem.length) h += `<p class="warn">Over ${R.capItem}% of your gold in one item: ${T.overItem.map(esc).join(', ')}.</p>`;
+      const FLAG = { sell: '<span class="neg">Sell at market now</span>', target: '<span class="pos">At your price: sell</span>', hold: '<span class="dim">Hold</span>' };
+      h += '<div class="table positions"><div class="thead"><div>Item</div><div>Now</div><div class="c-num">Paid each</div><div class="c-num">Lowest</div><div class="c-num">If sold now</div><div class="c-num">Plan to sell at (g)</div></div>';
+      P.rows.forEach((r) => (h += `<div class="tr"><div class="c-main"><div class="nm">${esc(r.item)}${r.units > 1 ? ` <span class="dim">×${r.units}</span>` : ''}</div><div class="sub">bought ${fmtTime(r.t)} · ${esc(r.why)}</div></div><div>${FLAG[r.flag]}</div><div class="c-num">${money(r.unit)}</div><div class="c-num">${r.lowest != null ? money(r.lowest) : '<span class="dim">–</span>'}</div><div class="c-num">${sign(r.unrealised)}</div><div class="c-num"><input type="number" min="0" step="0.01" class="field num-in" data-flipplan="${esc(r.id)}" value="${r.target ? (r.target / 10000).toFixed(2) : ''}" placeholder="–"></div></div>`));
+      h += '</div>';
+    }
+    const W = weeklyOf(ah);
+    if (W.length) {
+      h += '<h2>Flip profit per week</h2><div class="table weekly"><div class="thead"><div>Week of</div><div class="c-num">Flips</div><div class="c-num">Paid</div><div class="c-num">Profit</div></div>';
+      W.slice(0, 12).forEach((w) => (h += `<div class="tr"><div class="c-main">${esc(new Date(w.week * 1000).toISOString().slice(0, 10))}</div><div class="c-num">${w.flips}</div><div class="c-num">${money(w.paid)}</div><div class="c-num best">${sign(w.profit)}</div></div>`));
+      h += '</div>';
+    }
+    const B = buyListOf(ah), I = B && B.index;
+    if (I && I.prev) {
+      h += `<h2>Market index</h2><p class="meta">How the lowest price moved from your full scan ${ago(I.prevEnd)} to the one ${ago(I.scan)}, for every item listed at both, by its price before.</p>`;
+      h += '<div class="table mindex"><div class="thead"><div>Price band</div><div class="c-num">Items</div><div class="c-num">Median change</div><div class="c-num">Cheaper</div><div class="c-num">Dearer</div></div>';
+      I.bands.forEach((b) => (h += `<div class="tr"><div class="c-main"><div class="nm">${esc(b.band)}</div>${b.falling ? '<div class="sub neg">falling: buy-list rows here say don\'t hold</div>' : ''}</div><div class="c-num">${b.n}</div><div class="c-num">${b.medianChange == null ? '–' : (b.medianChange > 0 ? '+' : '') + Math.round(b.medianChange * 1000) / 10 + '%'}</div><div class="c-num">${b.cheaper}</div><div class="c-num">${b.dearer}</div></div>`));
+      h += '</div><p class="meta">A band is falling when 10 or more items moved, the median is down and 60% or more got cheaper.</p>';
+    }
+    const PP = paperOf(ah);
+    if (PP && PP.trades.length) {
+      h += '<h2>Paper trades</h2><p class="meta">Price-rule rows you marked as paper buys on the Buy list, scored like the backtest: bought at that scan\'s lowest, sold at the next full scan\'s lowest after the cut, one unit each.</p>';
+      h += '<div class="table paperrules"><div class="thead"><div>Rule</div><div class="c-num">Scored</div><div class="c-num">Waiting</div><div class="c-num">Median return</div><div class="c-num">Paper net, per unit</div></div>';
+      PP.rules.forEach((r) => (h += `<div class="tr"><div class="c-main"><div class="nm">${esc(RULE_WORDS[r.rule] || r.rule)}</div></div><div class="c-num">${r.n}</div><div class="c-num">${r.open}</div><div class="c-num">${r.medianReturn == null ? '–' : (r.medianReturn > 0 ? '+' : '') + Math.round(r.medianReturn * 100) + '%'}</div><div class="c-num">${r.n ? sign(r.net) : '–'}</div></div>`));
+      h += '</div>';
+    }
+    return h;
+  }
   const RULE_WORDS = { vendor: 'Sell to a vendor', disenchant: 'Disenchant', resell: 'Buy from a vendor, list it', dip: 'Buy, relist', thin: 'Buy the cheapest, relist' };
   function buyListView(ah) {
     const B = buyListOf(ah);
@@ -1301,17 +1371,26 @@
       h += `<div class="tr"><div class="c-main"><div class="nm">${esc(r.name)}</div></div><div class="dim">${esc(ev)}${r.id === 'disenchant' && !r.offered ? ' · needs Enchanting' : ''}</div><div class="c-num">${r.offered ? 'yes' : '<span class="dim">no</span>'}</div></div>`;
     });
     h += '</div>';
-    const rows = B.rows.filter((r) => r.offered);
-    if (!rows.length) return h + '<div class="empty">Nothing on your AH fits a shown rule at this scan.</div>';
+    const rows = B.rows.filter((r) => r.offered), paper = new Set(tradeGet('paper', []).map((x) => `${x.t}|${x.id}|${x.rule}`));
+    // paper buys are for the price rules (bought and resold on the AH); the others have a fixed buyer or value
+    const paperBtn = (r) => (r.rule === 'dip' || r.rule === 'thin' ? ` · <button class="linkbtn" data-paper="${B.scan}|${r.id}|${r.rule}|${r.lowest}">${paper.has(`${B.scan}|${r.id}|${r.rule}`) ? 'Paper buy marked (undo)' : 'Paper buy'}</button>` : '');
+    const trial = B.rows.filter((r) => !r.offered && (r.rule === 'dip' || r.rule === 'thin'));
+    const trialView = () => {
+      if (!trial.length) return '';
+      let t = `<div class="table buylist trial"><div class="tsec">Price rules not shown yet: paper trade them <span>${trial.length}</span></div><div class="thead"><div>Item</div><div>Rule</div><div class="c-num">Lowest</div><div class="c-num">Usually</div><div class="c-num">Under by</div></div>`;
+      trial.slice().sort((a, b) => a.lowest / a.usual - b.lowest / b.usual).slice(0, 30).forEach((r) => (t += `<div class="tr"><div class="c-main"><div class="nm">${anyItemIcon(r.id, { size: 'sm' })} ${itemLink(r.id)}</div><div class="sub">median lowest of ${r.earlier} earlier scans · ${r.listed} listed${paperBtn(r)}</div></div><div class="dim">${RULE_WORDS[r.rule]}</div><div class="c-num">${money(r.lowest)}</div><div class="c-num">${money(r.usual)}</div><div class="c-num">${Math.round((1 - r.lowest / r.usual) * 100)}%</div></div>`));
+      return t + '</div>';
+    };
+    if (!rows.length) return h + '<div class="empty">Nothing on your AH fits a shown rule at this scan.</div>' + trialView();
     h += '<div class="table buylist"><div class="thead"><div>Item</div><div>Then</div><div class="c-num">Lowest</div><div class="c-num">Buy under</div><div class="c-num">You make</div></div>';
     rows.slice(0, 60).forEach((r) => {
       const why = r.rule === 'vendor' ? `a vendor pays ${money(r.buyUnder + 1)}`
         : r.rule === 'disenchant' ? `disenchants into about ${money(r.deValue)} of materials (${esc(r.label)})`
         : r.rule === 'resell' ? `a vendor sells it for ${money(r.vendorPrice)}; list at ${money(r.relist)}. In ${r.held} of ${r.of} earlier scans the lowest, after the cut, was above the vendor's price`
         : `usually ${money(r.usual)} (median lowest of ${r.earlier} earlier scans)${r.falling ? '; falling lately' : ''}. Buy under is break-even if it sells at that again; you make is the backtest's median return, per unit`;
-      h += `<div class="tr"><div class="c-main"><div class="nm">${anyItemIcon(r.id, { size: 'sm' })} ${itemLink(r.id)}</div><div class="sub">${why} · ${r.listed} listed${r.sellShare != null ? ` · ${pct(r.sellShare)} of yours sold` : ''}</div></div><div class="dim">${RULE_WORDS[r.rule]}</div><div class="c-num">${money(r.lowest)}</div><div class="c-num">${money(r.buyUnder)}</div><div class="c-num best">${money(r.net)}</div></div>`;
+      h += `<div class="tr"><div class="c-main"><div class="nm">${anyItemIcon(r.id, { size: 'sm' })} ${itemLink(r.id)}</div><div class="sub">${why} · ${r.listed} listed${r.sellShare != null ? ` · ${pct(r.sellShare)} of yours sold` : ''}${r.dontHold ? ` · <span class="neg">the ${esc(r.band)} band is falling: sell at the next scan, don't hold</span>` : ''}${paperBtn(r)}</div></div><div class="dim">${RULE_WORDS[r.rule]}</div><div class="c-num">${money(r.lowest)}</div><div class="c-num">${money(r.buyUnder)}</div><div class="c-num best">${money(r.net)}</div></div>`;
     });
-    h += '</div><details class="how"><summary>How the buy list works</summary><p>Under the vendor price is certain: a vendor pays a fixed price. Disenchant values use the Classic disenchant table and your AH prices for the materials, so they are an expected value. A vendor sells it for less: how often the lowest price stayed above the vendor\'s, in this item\'s own scans. The two price rules (25% under the usual lowest, few listed far under the rest) are checked against every item\'s scan history: buy at a scan\'s lowest, sell at the next scan\'s lowest after the cut. They are shown only after 30 such cases with a median that made money, and what you make is that median return, not the gap to the usual price. Items with random rolls (of the Owl...) are left out of these two, since one price mixes every roll.</p></details>';
+    h += '</div>' + trialView() + '<details class="how"><summary>How the buy list works</summary><p>Under the vendor price is certain: a vendor pays a fixed price. Disenchant values use the Classic disenchant table and your AH prices for the materials, so they are an expected value. A vendor sells it for less: how often the lowest price stayed above the vendor\'s, in this item\'s own scans. The two price rules (25% under the usual lowest, few listed far under the rest) are checked against every item\'s scan history: buy at a scan\'s lowest, sell at the next scan\'s lowest after the cut. They are shown only after 30 such cases with a median that made money, and what you make is that median return, not the gap to the usual price. Items with random rolls (of the Owl...) are left out of these two, since one price mixes every roll.</p></details>';
     return h;
   }
 
@@ -1345,7 +1424,7 @@
     const prices = Object.entries(ah.prices || {}).map(([k, p]) => ({ k, p })).sort((a, b) => (b.p.last || 0) - (a.p.last || 0));
     const f = (STATE.ahFilter || '').toLowerCase();
     const ls = ah.lastScan;
-    const SECS = [['prices', 'Prices'], ['buy', 'Buy list'], ['sold', 'Sold'], ['flips', 'Flips'], ['mine', 'Your auctions'], ['posted', 'Posted']];
+    const SECS = [['prices', 'Prices'], ['buy', 'Buy list'], ['positions', 'Positions'], ['sold', 'Sold'], ['flips', 'Flips'], ['mine', 'Your auctions'], ['posted', 'Posted']];
     const sec = SECS.some(([k]) => k === STATE.ahSec) ? STATE.ahSec : 'prices';
     const on = (k) => sec === k;
     let h = `<div class="seg">${SECS.map(([k, l]) => `<button data-ahsec="${k}" class="${sec === k ? 'on' : ''}">${l}</button>`).join('')}</div>`;
@@ -1353,6 +1432,7 @@
     const sales = salesOf(ah).slice().reverse();
     if (on('flips')) h += flipsView(ah) + sellThroughView(ah);
     if (on('buy')) h += buyListView(ah);
+    if (on('positions')) h += positionsView(ah);
     if (on('sold') && !sales.length) h += '<div class="empty">No sales recorded yet. Sales show up after you take the gold from an AH mail.</div>';
     if (on('sold') && sales.length) {
       const shown = sales.slice(0, 50);
@@ -1604,7 +1684,7 @@
     load, loadText, V, reload: () => RAW && load(RAW, { live: STATE.live }),
     setChar, get CHARS() { return CHARS; },
     api: { get CH() { return CH; }, get RAW() { return RAW; }, get DB() { return DB; }, STATE, GD, esc, arr, money, icon, itemIcon, anyItemIcon, anyItemName, gdItem, gdTip,
-      gdSourceLines, itemGates, recipeLine, planPrice, priceOf, trackerStats, goldOf, lootStrip, ago, dur, fmtTime, flipsOf, sellThrough, buyListOf, cooldowns, craftCost, craftProfit, vendorPrice, specTrees, specLabel, TREE_NAMES, gearIds, item, byId, render, QCOL, deOutcome,
+      gdSourceLines, itemGates, recipeLine, planPrice, priceOf, trackerStats, goldOf, lootStrip, ago, dur, fmtTime, flipsOf, sellThrough, buyListOf, positionsOf, paperOf, weeklyOf, cooldowns, craftCost, craftProfit, vendorPrice, specTrees, specLabel, TREE_NAMES, gearIds, item, byId, render, QCOL, deOutcome,
       itemLink, itemIconOf, itemCell, itemInline, uiIcon, UI_ICON, PROF_ICON },
   };
 

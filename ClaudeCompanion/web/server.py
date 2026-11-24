@@ -10,7 +10,7 @@
 #                            /api/combatlog (the game's combat log, read only)  /api/combat (+ POST): js/combatlog.js's counts
 # It serves the app and reads the game's saved file (ClaudeCompanion.lua) directly.
 # The server itself only answers this computer. The page syncs history with the backend (js/sync.js).
-import glob, json, os, re, shutil, subprocess, sys, tempfile, threading, time, urllib.error, urllib.parse, urllib.request, webbrowser
+import glob, json, os, re, shutil, subprocess, sys, tempfile, threading, time, uuid, urllib.error, urllib.parse, urllib.request, webbrowser
 from datetime import datetime, timezone
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 
@@ -182,7 +182,9 @@ class Handler(BaseHTTPRequestHandler):
         body = self.rfile.read(n)
         folder, name = target
         os.makedirs(folder, exist_ok=True)
-        tmp = os.path.join(folder, name + '.tmp')
+        # one temp file per request: the server is threaded, and two writes of the same file sharing one temp
+        # name could rename a half-written copy into place (an empty snapshot.json)
+        tmp = os.path.join(folder, '%s.%d.%s.tmp' % (name, threading.get_ident(), uuid.uuid4().hex[:8]))
         with open(tmp, 'wb') as f: f.write(body)
         os.replace(tmp, os.path.join(folder, name))
         self.send(200, 'ok')
@@ -222,7 +224,7 @@ def read_json(path, default):
 
 def write_json(path, data):
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    tmp = path + '.tmp'
+    tmp = '%s.%d.%s.tmp' % (path, threading.get_ident(), uuid.uuid4().hex[:8])
     with open(tmp, 'w', encoding='utf-8') as f: json.dump(data, f, indent=1)
     os.replace(tmp, path)
 
