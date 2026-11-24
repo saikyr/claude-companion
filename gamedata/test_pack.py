@@ -83,8 +83,20 @@ check((G.get('teach') or {}).get('17015') == [[17059, 300]] and (G.get('req') or
       'Dark Iron Reaver: recipe Plans: Dark Iron Reaver (skill 300), Thorium Brotherhood Honored')
 # standings as Forever's tooltips give them (#129): 6 Honored, 7 Revered
 R = G.get('req') or {}
-check(R.get('19445') == ['Timbermaw Hold', 6] and R.get('19447') == ['Argent Dawn', 7] and all(5 <= v[1] <= 8 for v in R.values()),
-      f"rep gates: Weapon - Agility Honored, Bracer - Healing Revered, all Friendly to Exalted ({R.get('19445')}, {R.get('19447')})")
+check(R.get('19445') == ['Timbermaw Hold', 6] and R.get('19447') == ['Argent Dawn', 7] and R.get('22392') == ['Timbermaw Hold', 5]
+      and all(5 <= v[1] <= 8 for v in R.values()),
+      f"rep gates: Weapon - Agility Honored, Bracer - Healing Revered, 2H Weapon - Agility Friendly ({R.get('19445')}, {R.get('19447')}, {R.get('22392')})")
+# consumables carry what they do (#91): the Forever client's tooltip, Use: line included
+cons = [r for r in it.values() if r[9] == 0]
+cons_use = n(r for r in cons if any(str(l).startswith('Use:') for l in (r[10] or [])))
+check(cons_use > 1200, f'>1,200 consumables with their Use: tooltip (got {cons_use} of {len(cons)})')
+check(any(str(l).startswith('Use: Increases damage done by magical spells') for l in (it.get('13512') or [None] * 11)[10] or []),
+      'Flask of Supreme Power says what it does')
+# set bonuses with stats (#13): Vestments of the Devout 3 pieces +18 spell power, 6 pieces 8 mp5, 2 pieces +8 all resistances
+dev = next((v for v in (G.get('sets') or {}).values() if v[0] == 'Vestments of the Devout'), None)
+bon = {b[0]: b[2] for b in (dev or [None, None, []])[2]}
+check(dev and bon.get(3) == [[45, 18]] and bon.get(6) == [[43, 8]] and len(bon.get(2) or []) == 5 and bon.get(4) == [],
+      f'Vestments of the Devout bonuses with their stats, a proc with none ({bon})')
 check(len(G.get('teach') or {}) > 1000, f">1,000 crafted items with a recipe item (got {len(G.get('teach') or {})})")
 
 # ---------------------------------------------------------------- 4. the player's own game data

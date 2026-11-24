@@ -54,7 +54,8 @@ const lit = (s) => '$j$' + s + '$j$';
     const oddRate = odd && one(`select coalesce((select row_to_json(r)::text from game.drop_rates r where item_id = ${odd[0]} and source = ${lit(odd[1][1])} limit 1), 'null')`);
     check(odd && oddRate && oddRate.corpses === odd[1][12], `a rate uses the measured corpses, never the seen count (${odd && GD.items[odd[0]][0]}: ${odd && odd[1][12]}, not ${odd && odd[1][4]})`);
     const counts = one(`select json_object_agg(rate, n)::text from (select rate, count(*) n from game.drop_rates where kind = 'drop' group by rate) x`);
-    check(counts.forever > 700 && counts.forever < 1000 && counts.classic > 1500 && counts.unknown > 30000, `drop rows by label: ${JSON.stringify(counts)}`);
+    // ForeverDB measures more kills every week: the Forever count only has a floor (each label itself is checked row by row above)
+    check(counts.forever > 700 && counts.forever < counts.unknown && counts.classic > 1500 && counts.unknown > 30000, `drop rows by label: ${JSON.stringify(counts)}`);
     const cl = one(`select row_to_json(r)::text from game.drop_rates r where rate = 'classic' limit 1`);
     check(/^Classic rate .*never quote it as a Forever rate$/.test(cl.label) && cl.rate_pct === null && cl.classic_pct !== null, 'a Classic rate is labelled and kept out of rate_pct');
     const bad = B.query(`select count(*) from game.drop_rates where rate_pct is not null and rate <> 'forever'`);
