@@ -303,6 +303,9 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
       at('Chamber of Battle', { e: 'boss', name: 'Overlord Wyrmthalak' }),
       at('Chamber of Battle', { e: 'loot', item: 'item:12780::::::::60', count: 1 }),
       at('Chamber of Battle', { e: 'loot', item: 'item:14047::::::::60', count: 2 }),
+      at('Chamber of Battle', { e: 'loot', item: 'item:12780::::::::60', count: 1, t: 1795400100 }),
+      at('Hordemar City', { e: 'place', kind: 'object', id: 999999 }),
+      { t: 1795400002, zone: 'Elwynn Forest', sub: 'Fargodeep Mine', e: 'loot', item: 'item:12780::::::::60', count: 1 },
       { t: 1795400001, zone: 'Dire Maul', sub: '', e: 'place', kind: 'npc', id: 1, name: 'x' }]);
     s.quests = [{ id: 4742, title: 'Seal of Ascension', objectives: [{ text: "Bijou's Belongings: 0/1" }, { text: 'General Drakkisath\'s Command: 0/1' }] }];
     const all = A.placesSeen(), out = window.CC.snapshot();
@@ -311,10 +314,11 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
     function arr0(x) { return Array.isArray(x) ? x : []; }
   });
   const hc = (pl.all['Blackrock Spire'] || []).find((x) => x.sub === 'Hordemar City'), cb = (pl.all['Blackrock Spire'] || []).find((x) => x.sub === 'Chamber of Battle');
-  check(hc && hc.npcs[0].id === 10299 && hc.npcs[0].n === 2 && hc.npcs[0].last === 1795500000 && hc.objects[0].name === "Bijou's Belongings",
-    'places: a creature seen twice in Hordemar City, an object named from the pack ' + JSON.stringify(hc));
-  check(cb && cb.bosses[0] === 'Overlord Wyrmthalak' && cb.items.length === 1 && cb.items[0].id === 12780 && !pl.all['Dire Maul'],
-    'places: a boss and a quest item (not Runecloth) in Chamber of Battle; no sub-area, no place');
+  check(hc && hc.npcs[0].id === 10299 && hc.npcs[0].n === 2 && hc.npcs[0].last === 1795500000 && hc.objects[0].name === "Bijou's Belongings"
+    && hc.objects.some((o) => o.id === 999999 && o.name === null),
+    'places: a creature seen twice in Hordemar City, an object named from the pack, one the pack doesn\'t name kept by id ' + JSON.stringify(hc));
+  check(cb && cb.bosses[0] === 'Overlord Wyrmthalak' && cb.items.length === 1 && cb.items[0].id === 12780 && cb.items[0].n === 2 && !pl.all['Dire Maul'] && !pl.all['Elwynn Forest'],
+    'places: a boss and a quest item looted twice (not Runecloth) in Chamber of Battle; no sub-area, no place; quest items outside instances left out');
   check(pl.places.some((p) => p.instance === 'Blackrock Spire') && pl.where.some((w) => w.name === "Bijou's Belongings" && w.sub === 'Hordemar City' && w.kind === 'object')
     && pl.where.some((w) => w.kind === 'item' && w.sub === 'Chamber of Battle'), 'snapshot places, and a quest\'s objectives found by name: ' + JSON.stringify(pl.where));
   // #21: 10 of your own disenchants of green armor at item level 46-50 replace the table; 9 don't

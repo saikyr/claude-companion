@@ -86,7 +86,9 @@
     Object.entries(A.placesSeen ? A.placesSeen() : {}).forEach(([instance, subs]) => subs.forEach((s) => {
       [['npc', s.npcs], ['object', s.objects], ['item', s.items], ['boss', s.bosses.map((name) => ({ name }))]].forEach(([kind, list]) => list.forEach((x) => {
         const nm = String(x.name || '').toLowerCase();
-        if (nm.length > 3 && texts.some((t) => t.includes(nm))) out.push({ name: x.name, kind, instance, sub: s.sub, n: x.n || null, last: x.last || null });
+        // the whole name as words ("Thor" isn't in "Thorium")
+        const re = nm.length > 3 && new RegExp('(^|[^\\p{L}\\p{N}])' + nm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '($|[^\\p{L}\\p{N}])', 'u');
+        if (re && texts.some((t) => re.test(t))) out.push({ name: x.name, kind, instance, sub: s.sub, n: x.n || null, last: x.last || null });
       }));
     }));
     return out;

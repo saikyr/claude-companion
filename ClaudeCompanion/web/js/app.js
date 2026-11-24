@@ -1180,22 +1180,27 @@
     if (PLACES && PLACES.db === DB && PLACES.n === n) return PLACES.by;
     const objName = {};
     Object.values((GD && GD.src) || {}).forEach((rows) => arr(rows).forEach((r) => { if (r && r[0] === 'object' && r[2] && r[1]) objName[r[2]] = r[1]; }));
-    const by = {}, seen = new Set();
+    // quest items count only where they were looted inside an instance: a zone where a run started, a boss died or
+    // the addon noted a place (it notes places in party and raid instances only); loot is logged everywhere
+    const inst = new Set();
+    Object.values((DB && DB.chars) || {}).forEach((c) => arr(c && c.journal).forEach((e) => {
+      if (e && e.zone && (e.e === 'place' || e.e === 'boss' || e.e === 'runStart')) inst.add(e.zone);
+    }));
+    // each character's journal is already merged across computers (one entry once), so every entry counts
+    const by = {};
     const add = (e, list, id, name) => {
-      if (!name) return;
-      const k = JSON.stringify([e.t, e.e, list, id || name]);
-      if (seen.has(k)) return;
-      seen.add(k);
+      if (!name && !id) return;
       const z = (by[e.zone] = by[e.zone] || {}), s = (z[e.sub] = z[e.sub] || { sub: e.sub, bosses: {}, npcs: {}, objects: {}, items: {}, last: 0 });
-      const key = id || name, x = (s[list][key] = s[list][key] || { id: id || null, name, n: 0, last: 0 });
+      const key = id || name, x = (s[list][key] = s[list][key] || { id: id || null, name: name || null, n: 0, last: 0 });
+      if (!x.name && name) x.name = name;
       x.n++; x.last = Math.max(x.last, e.t || 0); s.last = Math.max(s.last, e.t || 0);
     };
     Object.values((DB && DB.chars) || {}).forEach((c) => arr(c && c.journal).forEach((e) => {
       if (!e || !e.zone || !e.sub || e.sub === e.zone) return;
       if (e.e === 'place' && e.kind === 'npc') add(e, 'npcs', e.id, e.name || (GD && GD.npcs[e.id] || [])[0]);
-      else if (e.e === 'place' && e.kind === 'object') add(e, 'objects', e.id, e.name || objName[e.id]);
-      else if (e.e === 'boss') add(e, 'bosses', null, e.name);
-      else if (e.e === 'loot' && e.item) {
+      else if (e.e === 'place' && e.kind === 'object') add(e, 'objects', e.id, e.name || objName[e.id]);   // a looted object the pack doesn't name: id only
+      else if (e.e === 'boss' && e.name) add(e, 'bosses', null, e.name);
+      else if (e.e === 'loot' && e.item && inst.has(e.zone)) {
         const id = Number(String(e.item).replace(/^item:/, '').split(':')[0]), it = GD && GD.items[id];
         if (it && it[9] === 12) add(e, 'items', id, it[0]);   // quest items: where an objective's item was found
       }
@@ -1610,7 +1615,7 @@
   };
   const EV_LABEL = { xp: 'XP', money: 'Money', coin: 'Coin', loot: 'Loot', kill: 'Kills', ahPost: 'AH posts', receive: 'Received', zone: 'Zones', group: 'Group', flightPath: 'Flight paths', equip: 'Gear', craft: 'Crafts', skill: 'Skills', login: 'Logins', logout: 'Logouts', disenchant: 'Disenchants', profession: 'Professions', death: 'Deaths', grindStart: 'Grind start', grindStop: 'Grind end', grindPause: 'Grind paused', grindResume: 'Grind resumed', runStart: 'Run start', runEnd: 'Run end', runLeft: 'Run left', runBack: 'Run back', boss: 'Bosses', wipe: 'Wipes', groupLoot: 'Group loot', ahScan: 'AH scans', spec: 'Spec', questDone: 'Quests done', questAccept: 'Quests taken', questDrop: 'Quests dropped', level: 'Levels', note: 'Notes', session: 'Sessions', ahSold: 'AH sold', ahExpired: 'AH expired', ahWon: 'AH won', ahOutbid: 'AH outbid', ahRemoved: 'AH cancelled', cooldownCraft: 'Cooldowns', learn: 'Learned', recipe: 'Recipes', rep: 'Reputation' };
   // the loot-money chat line ("You loot 1 Gold ...") is the same money as the 'money' row next to it
-  const EV_HIDDEN = { coin: true };
+  const EV_HIDDEN = { coin: true, place: true };   // place: where things are inside instances, read by placesSeen
   const evRow = (e) => `<div class="ev"><span class="t">${fmtTime(e.t)}</span><span class="what">${EV[e.e] ? EV[e.e](e) : esc(e.e)}</span><span class="where">${esc(e.sub || e.zone || '')}</span></div>`;
   V.journal = function () {
     const all = arr(CH.journal).filter((e) => e && !EV_HIDDEN[e.e]);
