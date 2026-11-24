@@ -205,6 +205,51 @@
     return { cap: HIT_RULE.cap, against: HIT_RULE.against, src: HIT_RULE.src, per1, capR: HIT_RULE.cap * per1, haveR: gearR + talPct * per1,
       gearPct: gearR / per1, talents: tal, measured: st.spellHitRating > 0 && st.spellHitBonus > 0 };
   }
+  // ---------------------------------------------------------------- what crit is worth to a healer (#99)
+  // From your own heals: each heal's average (the game's tooltip at your best rank) plus your +healing times its
+  // share (cast time / 3.5). 1% crit adds critBonus × (1 − overheal) of 1% of a heal; in points of +healing that is
+  // that amount over the share. Averaged over your heals, per crit rating (14 = 1%). null: your heals weren't read.
+  const CRIT_RULE = (window.GAMERULES || {}).critHeals || null;
+  function critModel(pk) {
+    const prof = W.get(pk) || {};
+    if (!CRIT_RULE || prof.role !== 'heal' || prof.own) return null;
+    const groups = CRIT_RULE[char().classFile];
+    const snap = A.CH.snap || {}, SP = A.SPELLS || {};
+    if (!groups) return null;
+    const known = {};
+    arr(snap.spellbook).forEach((t) => arr(t && t.spells).forEach((x) => {
+      if (!x || !x.name || x.id == null) return;
+      const r = Number((/(\d+)/.exec(String(x.rank || '')) || [])[1]) || 0;
+      if (!known[x.name] || r > known[x.name].rank) known[x.name] = { id: x.id, rank: r };
+    }));
+    const healing = Number((snap.stats || {}).healing) || 0;
+    const heals = [];
+    groups.forEach((names) => {
+      const name = names.find((n) => known[n]);
+      if (!name) return;
+      const k = known[name], tip = arr((SP[k.id] || {}).tip);
+      let lo = null, hi = null, cast = null;
+      tip.forEach((ln) => {
+        [ln && ln.l, ln && ln.r].forEach((t) => {
+          if (typeof t !== 'string') return;
+          const c = /^([\d.]+) sec cast$/.exec(t); if (c) cast = Number(c[1]);
+          const m = /\b(?:[Hh]eals?|healing)\b[^.]*?\bfor (\d+) to (\d+)/.exec(t); if (m && lo == null) { lo = Number(m[1]); hi = Number(m[2]); }
+        });
+      });
+      if (lo == null || !(cast > 0)) return;
+      const coef = Math.min(cast, 3.5) / 3.5, avg = (lo + hi) / 2, size = avg + coef * healing;
+      heals.push({ name, rank: k.rank || null, id: k.id, avg, cast, coef: +coef.toFixed(3), size: Math.round(size),
+        perPct: +(0.01 * CRIT_RULE.critBonus * (1 - CRIT_RULE.overheal) * size / coef).toFixed(2) });
+    });
+    if (!heals.length) return null;
+    const per1 = W.PCT[21][1];
+    const perPct = heals.reduce((a, h) => a + h.perPct, 0) / heals.length;
+    return { weight: +(perPct / per1).toFixed(2), perPct: +perPct.toFixed(2), per1, healing, heals, base: prof.w[W.S.crit],
+      critBonus: CRIT_RULE.critBonus, overheal: CRIT_RULE.overheal, label: CRIT_RULE.label };
+  }
+  function critLine(cm) {
+    return `<div class="meta">Crit: 1% is worth ${cm.perPct.toFixed(1)} healing on your heals (${cm.heals.map((h) => `${esc(h.name)}${h.rank ? ' R' + h.rank : ''} ${h.size}`).join(', ')}, with your ${cm.healing} +healing), so a point of crit rating counts ${cm.weight} (${cm.per1} = 1%). ${esc(cm.label)}: a crit heals 150%, a third of the extra overheals.</div>`;
+  }
   const hitSummary = (hm) => ({ havePct: +(hm.haveR / hm.per1).toFixed(2), capPct: hm.cap, gearPct: +hm.gearPct.toFixed(2),
     talents: hm.talents, ratingPer1Pct: +hm.per1.toFixed(2), ratingMeasured: hm.measured, against: hm.against, capSource: hm.src,
     overCap: hm.haveR >= hm.capR });
@@ -229,8 +274,13 @@
     const key = [pk, spec.i, (A.CH.snap || {}).taken || 0, JSON.stringify(w), readChoice(spec, 'set')].join('|');
     if (!HIT_CACHE.has(key)) {
       if (HIT_CACHE.size > 64) HIT_CACHE.clear();      // one entry per edit of the weights or sync: keep it small
-      const hm = hitModel(spec, pk, w);
-      const out = hm ? Object.defineProperty(Object.assign({}, w), 'hit', { value: hm, enumerable: false }) : w;
+      const hm = hitModel(spec, pk, w), cm = critModel(pk);
+      let out = w;
+      if (hm || cm) {
+        out = Object.assign({}, w);
+        if (cm) { out[W.S.crit] = cm.weight; Object.defineProperty(out, 'crit', { value: cm, enumerable: false }); }
+        if (hm) Object.defineProperty(out, 'hit', { value: hm, enumerable: false });
+      }
       HIT_CACHE.set(key, out);
     }
     return HIT_CACHE.get(key);
@@ -789,6 +839,7 @@
     h += `<div class="toolbar"><div class="seg">${VIEWS.map(([k, l]) => `<button data-gearview="${k}" class="${view === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>`;
     if (!w || !Object.keys(w).length) return h + `<div class="empty">No stat weights for ${esc(cur.tree || cur.label)} yet. Pick or make some on the <button class="linkbtn" data-tab="weights">Stat weights</button> page.</div>`;
     if (w.hit) h += hitLine(w.hit);
+    if (w.crit) h += critLine(w.crit);
     const lvl = ch.level || capLevel();
     const P = plan(w, lvl, base, getPicks(cur), !!A.STATE.gearReach);
     const upSlots = P.slots.filter((s) => s.ups.length && !s.blocked);
@@ -844,6 +895,10 @@
         out.weightValues = w;
         // the hit cap model (spell weights): how much hit you have, from where, and the cap it counts up to
         if (w.hit) out.hit = hitSummary(w.hit);
+        // a healer's crit weight, measured from their own heals (weightValues has it in place of the profile's)
+        if (w.crit) out.crit = { weight: w.crit.weight, profileWeight: w.crit.base, perPct: w.crit.perPct, ratingPer1Pct: w.crit.per1, healing: w.crit.healing,
+          heals: w.crit.heals.map((h) => ({ name: h.name, rank: h.rank, avg: h.avg, cast: h.cast, coefficient: h.coef, size: h.size, perPct: h.perPct })),
+          critBonus: w.crit.critBonus, overheal: +w.crit.overheal.toFixed(3), label: w.crit.label };
         const base = baseline(sp, pk);
         out.comparedWith = base.label;
         const P = plan(w, ch.level || capLevel(), base, getPicks(sp));

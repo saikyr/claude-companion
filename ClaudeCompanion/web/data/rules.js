@@ -160,6 +160,20 @@ window.GAMERULES = {
     skill: [[20, 1], [25, 25], [30, 50], [35, 75], [40, 100], [45, 125], [50, 150], [55, 175], [60, 200], [65, 225]],
     epicSkill: 225,
   },
+  // What a point of crit is worth to a healer (#99): read from your own heals. Each group is one heal you cast
+  // (the first of it you know, at your best rank: Greater Heal, else Heal, else Lesser Heal); the weight is
+  // their average. A crit heals 150% and a heal's +healing share is cast time / 3.5 (Classic rules, not
+  // checked on Forever); `overheal` is the share of a crit's extra that overheals, as the Holy weights assume.
+  critHeals: {
+    label: 'Classic rule, not checked on Forever',
+    critBonus: 0.5, overheal: 1 / 3,
+    PRIEST: [['Greater Heal', 'Heal', 'Lesser Heal'], ['Flash Heal']],
+    // direct heals only: a heal with a heal-over-time part (Regrowth) or jumps (Chain Heal) splits its share
+    // differently from cast time / 3.5
+    DRUID: [['Healing Touch']],
+    PALADIN: [['Holy Light'], ['Flash of Light']],
+    SHAMAN: [['Healing Wave'], ['Lesser Healing Wave']],
+  },
   // Buffs that don't stack (#91): Classic rules, not checked on Forever. Each group: only one of its buffs is on
   // you at a time, so a consumable in a group is wasted while another of the group is up. Matched by buff name
   // (what the game shows on you) and by item name or its tooltip (what you carry); `why` is said as given.

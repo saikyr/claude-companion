@@ -153,7 +153,7 @@
     5: '1 Intellect = 15 mana (16.5 with Mental Strength). 1 mana is worth about 0.19 healing in a pull you run out of mana (3.2 healing per mana / 17 healing per +1 healing over one mana bar). Counted for half of all pulls: 1.6.',
     43: 'MP5 gives mana all fight long: about 48 mana per point over a 2-minute bar, × 0.19 × half the pulls: 2.3. Worth more in long fights (3.5 at 4 minutes), less in short ones.',
     6: 'Spirit regen counts at 50% while casting (Meditation 3/3), and the model assumes you never leave the 5-second rule: 0.7, the lowest case. Gaps in casting make it worth more.',
-    32: '14 crit rating = 1% crit (Forever client). A crit heal adds 50%, but about a third of it overheals: 0.3.',
+    32: 'Measured from your own heals once the app has read them (the crit line on the Gear page): 1% crit adds half of 1% of each heal, a third of that overheals, and 14 crit rating = 1% (Forever client). Bigger heals make crit worth more. Until your heals are read: 0.3.',
   };
   const HEAL_NOTE = 'One point of +healing = 1. Mana stats are counted for the pulls where you run short of mana (half of them, a middle estimate), which is why Intellect and MP5 sit above what the raid guides suggest: while levelling in dungeons you run out of mana before you run out of time. If you rarely go out of mana, copy this and lower Intellect, MP5 and Spirit.';
   const HEAL_SRC = { label: 'Worked out 18 Nov 2026 from Forever priest numbers: heal coefficients (foreverchanges.pro), base heals (metabot.gg), Spirit and Meditation (conquestcapped.com), 14 crit rating = 1% (foreverdb.net/stats)', url: null };
