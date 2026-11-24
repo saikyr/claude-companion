@@ -1266,12 +1266,16 @@
 
   // The buy list (#115): what is worth buying on your AH after a full scan, each with its evidence. The rules and
   // their backtests live in js/market.js; this hands it your prices, the pack's vendor prices and your skills.
+  // kept per scan, character and Enchanting rank: the backtests read every item's history
+  let BUY_CACHE = null;
   function buyListOf(ah, now) {
     if (!window.CCMarket) return null;
     const adv = window.CC && CC.advice, ench = adv && adv.skill ? adv.skill('Enchanting') : 0;
+    const key = [(ah.lastScan || {}).t, ench, arr(ah.posts).length, arr(ah.sales).length].join('|');
+    if (BUY_CACHE && BUY_CACHE.ch === CH && BUY_CACHE.prices === ah.prices && BUY_CACHE.key === key) return BUY_CACHE.out;
     const share = {};
     arr(sellThrough(ah, now).items).forEach((r) => { if (r.posted >= 3) share[r.item] = r.share; });
-    return window.CCMarket.buyList({
+    const out = window.CCMarket.buyList({
       prices: ah.prices || {}, lastScan: ah.lastScan, cut: 0.05, now,
       vendorBuy: vendorPrice,
       vendorSell: (id) => { const g = gdItem(id); return g && g[6] > 0 ? g[6] : null; },
@@ -1281,14 +1285,16 @@
       hasEnchanting: ench > 0,
       sellShare: (name) => (share[name] == null ? null : share[name]),
     });
+    BUY_CACHE = { ch: CH, prices: ah.prices, key, out };
+    return out;
   }
-  const RULE_WORDS = { vendor: 'Sell to a vendor', disenchant: 'Disenchant', resell: 'Buy from a vendor, list it', dip: 'Buy, relist', thin: 'Buy out, relist' };
+  const RULE_WORDS = { vendor: 'Sell to a vendor', disenchant: 'Disenchant', resell: 'Buy from a vendor, list it', dip: 'Buy, relist', thin: 'Buy the cheapest, relist' };
   function buyListView(ah) {
     const B = buyListOf(ah);
     if (!B) return '';
     if (!B.scan) return '<div class="empty">No full scan yet: open the AH in game, press <b>Claude scan</b>, then Sync.</div>';
     const pct = (x) => (x == null ? '–' : Math.round(x * 100) + '%');
-    let h = `<p class="meta">From your full scan ${ago(B.scan)}. Every price is your AH's lowest at that scan, after the 5% AH cut where you sell on the AH.</p>`;
+    let h = `<p class="meta">From your full scan ${ago(B.scan)}. "Lowest" is the cheapest one listed at that scan, per unit; what you make is after the 5% AH cut wherever you sell on the AH. Disenchanting materials are valued at their usual AH price (the scan's median).</p>`;
     h += '<div class="table buyrules"><div class="thead"><div>Rule</div><div>Evidence</div><div class="c-num">Shown</div></div>';
     B.rules.forEach((r) => {
       const bt = r.backtest, ev = bt ? `backtest on your scans: ${bt.n} cases, median ${bt.medianReturn == null ? '–' : (bt.medianReturn >= 0 ? '+' : '') + Math.round(bt.medianReturn * 100) + '%'}, ${pct(bt.winShare)} made money${bt.n < window.CCMarket.MIN_BACKTEST ? ` (needs ${window.CCMarket.MIN_BACKTEST} cases)` : ''}` : r.evidence;
@@ -1301,11 +1307,11 @@
     rows.slice(0, 60).forEach((r) => {
       const why = r.rule === 'vendor' ? `a vendor pays ${money(r.buyUnder + 1)}`
         : r.rule === 'disenchant' ? `disenchants into about ${money(r.deValue)} of materials (${esc(r.label)})`
-        : r.rule === 'resell' ? `a vendor sells it for ${money(r.vendorPrice)}; list at ${money(r.relist)}. Lowest stayed above that in ${r.held} of ${r.of} scans`
-        : `usually ${money(r.usual)} (median of ${r.scans - 1} earlier scans)${r.falling ? '; falling lately' : ''}`;
+        : r.rule === 'resell' ? `a vendor sells it for ${money(r.vendorPrice)}; list at ${money(r.relist)}. In ${r.held} of ${r.of} earlier scans the lowest, after the cut, was above the vendor's price`
+        : `usually ${money(r.usual)} (median lowest of ${r.earlier} earlier scans)${r.falling ? '; falling lately' : ''}. Buy under is break-even if it sells at that again; you make is the backtest's median return, per unit`;
       h += `<div class="tr"><div class="c-main"><div class="nm">${anyItemIcon(r.id, { size: 'sm' })} ${itemLink(r.id)}</div><div class="sub">${why} · ${r.listed} listed${r.sellShare != null ? ` · ${pct(r.sellShare)} of yours sold` : ''}</div></div><div class="dim">${RULE_WORDS[r.rule]}</div><div class="c-num">${money(r.lowest)}</div><div class="c-num">${money(r.buyUnder)}</div><div class="c-num best">${money(r.net)}</div></div>`;
     });
-    h += '</div><details class="how"><summary>How the buy list works</summary><p>Under the vendor price is certain: a vendor pays a fixed price. Disenchant values use the Classic disenchant table and your AH prices for the materials, so they are an expected value. A vendor sells it for less: how often the lowest price stayed above the vendor\'s, in this item\'s own scans. The two price rules (25% under the usual lowest, few listed far under the rest) are checked against every item\'s scan history: buy at a scan\'s lowest, sell at the next scan\'s lowest after the cut. They are shown only after 30 such cases with a median that made money.</p></details>';
+    h += '</div><details class="how"><summary>How the buy list works</summary><p>Under the vendor price is certain: a vendor pays a fixed price. Disenchant values use the Classic disenchant table and your AH prices for the materials, so they are an expected value. A vendor sells it for less: how often the lowest price stayed above the vendor\'s, in this item\'s own scans. The two price rules (25% under the usual lowest, few listed far under the rest) are checked against every item\'s scan history: buy at a scan\'s lowest, sell at the next scan\'s lowest after the cut. They are shown only after 30 such cases with a median that made money, and what you make is that median return, not the gap to the usual price. Items with random rolls (of the Owl...) are left out of these two, since one price mixes every roll.</p></details>';
     return h;
   }
 

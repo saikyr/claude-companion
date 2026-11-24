@@ -21,10 +21,10 @@ const rowsOf = (B, rule) => B.rows.filter((r) => r.rule === rule);
 // nothing scanned: no rows, no rules
 check(M.buyList(ctxOf({}, {}, )).rows.length === 0 && M.buyList({ prices: {}, lastScan: null }).rules.length === 0, 'no full scan: no buy list');
 
-// history: one entry per scan; two readings within 10 min of each other are the same scan; none listed keeps qty 0
+// history: one entry per scan; two readings within 10 min of each other are the same scan (the newer counts); none listed keeps qty 0
 {
   const h = M.history({ obs: [{ src: 'scan', t: 100, min: 5, qty: 2 }, { src: 'scan', t: 300, min: 9, qty: 1 }, { src: 'browse', t: 400, min: 1, qty: 1 }, { src: 'scan', t: 5000, qty: 0 }] });
-  check(h.length === 2 && h[0].min === 5 && h[1].min === null && h[1].qty === 0, 'history: one entry per full scan, browsing ignored, none listed kept');
+  check(h.length === 2 && h[0].min === 9 && h[0].t === 100 && h[1].min === null && h[1].qty === 0, 'history: one entry per full scan (the newer reading of it), browsing ignored, none listed kept');
 }
 
 // vendor: listed under what a vendor pays
@@ -41,6 +41,12 @@ check(M.buyList(ctxOf({}, {}, )).rows.length === 0 && M.buyList({ prices: {}, la
   check(B.rows.length === 0, 'an item the newest full scan did not list gets no row');
   const B2 = M.buyList(ctxOf({ 4: rec(4, [200, 200, 200, 200, 200, null]) }, { vsell: { 4: 300 } }));
   check(B2.rows.length === 0, 'none listed at the newest scan: no row');
+}
+
+// a second scan pass stamped after the scan started still counts as the newest scan
+{
+  const p = rec(6, [200, 200, 200, 200, 200, 50]); p.obs[p.obs.length - 1].t = lastScan.t + 1500;
+  check(rowsOf(M.buyList(ctxOf({ 6: p }, { vsell: { 6: 100 } })), 'vendor').length === 1, 'a reading from the scan\'s second pass, 25 min after it started, is in the newest scan');
 }
 
 // random-roll keys (item:suffix) are left out: one key per item
@@ -64,7 +70,7 @@ check(M.buyList(ctxOf({ '5:1': rec(5, [50, 50, 50, 50, 50, 50]) }, { vsell: { 5:
 {
   const B = M.buyList(ctxOf({ 20: rec(20, [120, 80, 150, 160, 140, 200]) }, { vbuy: { 20: 100 } }));
   const r = rowsOf(B, 'resell')[0];
-  check(r && r.vendorPrice === 100 && r.relist === 199 && r.net === Math.round(199 * 0.95 - 100) && r.held === 5 && r.of === 6, 'resell: list 1c under the lowest; lowest after the cut stayed above the vendor in 5 of 6 scans');
+  check(r && r.vendorPrice === 100 && r.relist === 199 && r.net === Math.round(199 * 0.95 - 100) && r.held === 4 && r.of === 5, 'resell: list 1c under the lowest; evidence from the 5 earlier scans: 4 stayed above the vendor after the cut');
   check(rowsOf(M.buyList(ctxOf({ 21: rec(21, [100, 100, 100, 100, 100, 104]) }, { vbuy: { 21: 100 } })), 'resell').length === 0, 'resell: not when the cut eats the margin');
 }
 
@@ -97,7 +103,14 @@ check(M.buyList(ctxOf({ '5:1': rec(5, [50, 50, 50, 50, 50, 50]) }, { vsell: { 5:
   const B = M.buyList(ctxOf(up));
   const r = B.rules.find((x) => x.id === 'dip');
   check(r.backtest.n === 40 && r.backtest.medianReturn === +(0.95 / 0.7 - 1).toFixed(3) && r.backtest.winShare === 1 && r.offered, 'backtest: 40 dips that came back: offered, median +36%');
-  check(rowsOf(B, 'dip').length === 1 && rowsOf(B, 'dip')[0].offered && B.rows[0].rule === 'dip', 'backtest: the newest dip is offered');
+  const nd = rowsOf(B, 'dip')[0];
+  check(nd && nd.offered && B.rows[0].rule === 'dip', 'backtest: the newest dip is offered');
+  check(nd.net === Math.round(70 * r.backtest.medianReturn) && nd.buyUnder === 95 && nd.relist === 100 && nd.earlier === 5 && nd.unitOnly,
+    'dip: you make = the lowest × the backtest median return; buy under = break-even at the usual lowest after the cut (' + JSON.stringify(nd) + ')');
+  // an item with random rolls: its base key mixes every roll, so it is in neither the backtest nor the dip rows
+  const rolled = Object.assign({}, up, { '200:of the Owl': rec(200, [100, 100, 100, 100, 100, 100]) });
+  const R = M.buyList(ctxOf(rolled));
+  check(rowsOf(R, 'dip').length === 0 && R.rules.find((x) => x.id === 'dip').backtest.n === 40, 'dip: an item with random rolls is left out of the rows and the backtest');
   // 40 that kept falling (sold at 60): not offered, and the row is kept but marked not offered
   const down = {}; for (let i = 0; i < 40; i++) down[100 + i] = rec(100 + i, [100, 100, 100, 100, 70, 60]);
   down[200] = rec(200, [100, 100, 100, 100, 100, 70]);

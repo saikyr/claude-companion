@@ -197,9 +197,11 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
     const h = document.querySelector('main').innerHTML, snap = window.CC.snapshot().ah.buyList;
     if (keep) ch.ah.prices['14047'] = keep; else delete ch.ah.prices['14047'];
     A.STATE.tab = 'overview'; A.render();
-    return { sell: g && g[6], row: b.rows.find((r) => r.id === 14047 && r.rule === 'vendor'), rules: b.rules, html: h, snap: !!(snap && snap.rules && snap.rows) }; });
+    return { sell: g && g[6], row: b.rows.find((r) => r.id === 14047 && r.rule === 'vendor'), rules: b.rules, html: h, snap: !!(snap && snap.rules && snap.rows), snapRows: (snap && snap.rows) || [] }; });
   check(buy.sell > 1 && buy.row && buy.row.net === buy.sell - 1 && buy.row.offered, 'buy list: Runecloth listed at 1c is a vendor buy worth the vendor price − 1c (' + JSON.stringify(buy.row) + ')');
-  check(buy.rules.filter((r) => r.backtest).every((r) => r.offered === (r.backtest.n >= 30 && r.backtest.medianReturn > 0)), 'buy list: speculative rules shown only after a backtest that made money');
+  check(['dip', 'thin'].every((id) => { const r = buy.rules.find((x) => x.id === id); return r && r.backtest && typeof r.backtest.n === 'number' && !r.offered; }),
+    'buy list: the fixture has one scan, so neither price rule has a backtest to offer it (' + JSON.stringify(buy.rules.map((r) => [r.id, r.offered])) + ')');
+  check(buy.snapRows.every((r) => r.offered), 'snapshot ah.buyList lists only the rows the app shows');
   check(/buyrules/.test(buy.html) && /buylist/.test(buy.html) && /Runecloth/.test(buy.html), 'the Buy list section shows the rules and the rows');
   check(buy.snap, 'snapshot ah.buyList');
   // #118: each known recipe's margin, the Professions tab's numbers: a reagent only a vendor sells is priced at the

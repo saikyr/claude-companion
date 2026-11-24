@@ -11,8 +11,10 @@
 //   dip         the lowest price is 25% or more under the item's own median lowest price of its earlier scans,
 //               relisted at the next scan's lowest price. Backtested on every item's scan history; offered only
 //               when the backtest made money.
-//   thin        3 or fewer listed, the lowest under 70% of this scan's median and of the earlier floor: buy out and
-//               relist. Backtested the same way.
+//   thin        3 or fewer listed, the lowest under 70% of this scan's median and under 80% of the earlier floor: buy
+//               the cheapest and relist. Backtested the same way.
+// For dip and thin, "you make" is what the backtest supports: the lowest times the backtest's median return, never
+// the gap to the usual price. An item whose rolls (random suffixes) share its base key is left out of both.
 (function (root) {
   const arr = (x) => (Array.isArray(x) ? x : x && typeof x === 'object' ? Object.values(x) : []);
   const median = (xs) => { if (!xs.length) return null; const v = xs.slice().sort((a, b) => a - b), m = v.length >> 1; return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2; };
@@ -20,13 +22,14 @@
   const MIN_BACKTEST = 30;        // fired cases a speculative rule needs before it can be offered
   const SCAN_SLACK = 600;         // seconds: an observation this close to the full scan's time belongs to it
 
-  // an item's full-scan history, oldest first: one entry per scan, {t, min, med, qty} (qty 0 = none listed)
+  // an item's full-scan history, oldest first: one entry per scan, {t, min, med, qty} (qty 0 = none listed); readings
+  // within 10 min of the one before belong to the same scan, and the newest of them counts
   function history(p) {
     const out = [];
     arr(p && p.obs).filter((o) => o && o.src === 'scan' && o.t).sort((a, b) => a.t - b.t).forEach((o) => {
-      const last = out[out.length - 1];
-      if (last && o.t - last.t < SCAN_SLACK) return;
-      out.push({ t: o.t, min: o.qty ? o.min || null : null, med: o.qty ? o.med || o.min || null : null, qty: o.qty || 0 });
+      const last = out[out.length - 1], e = { t: o.t, min: o.qty ? o.min || null : null, med: o.qty ? o.med || o.min || null : null, qty: o.qty || 0 };
+      if (last && o.t - last.t < SCAN_SLACK) { e.t = last.t; out[out.length - 1] = e; return; }
+      out.push(e);
     });
     return out;
   }
@@ -40,19 +43,20 @@
       if (!(cur.min <= usual * 0.75)) return null;
       // falling: the last 3 earlier scans' median is 10% or more under the ones before
       const recent = median(prev.slice(-3).map((x) => x.min)), older = median(prev.slice(0, -3).map((x) => x.min));
-      return { usual, falling: older != null && recent <= older * 0.9 };
+      return { usual, earlier: prev.length, falling: older != null && recent <= older * 0.9 };
     },
     thin: (h, i) => {
       const cur = h[i], prev = h.slice(0, i).filter((x) => x.min);
       if (!cur.min || !cur.med || cur.qty > 3 || prev.length < MIN_HISTORY) return null;
       const floor = median(prev.map((x) => x.min));
       if (!(cur.min < cur.med * 0.7 && cur.min < floor * 0.8)) return null;
-      return { usual: floor, falling: false };
+      return { usual: floor, earlier: prev.length, falling: false };
     },
   };
 
   // the backtest of a speculative rule over every item's history: bought at the scan's lowest price, relisted at
-  // the next scan's lowest price after the AH cut; a next scan with none listed counts as sold at the old median
+  // the next scan's lowest price after the AH cut; a next scan with none listed (all bought) counts as sold at the
+  // buying scan's median. The deposit is left out: it comes back when an auction sells, which the backtest assumes
   function backtest(rule, hists, cut) {
     const ret = [];
     hists.forEach((h) => {
@@ -75,9 +79,13 @@
     const cut = ctx.cut == null ? 0.05 : ctx.cut, ls = ctx.lastScan;
     const out = { scan: ls ? ls.t : null, rules: [], rows: [] };
     if (!ls || !ls.t) return out;
-    const entries = Object.entries(ctx.prices || {}).filter(([k, p]) => p && p.id && !String(k).includes(':'));   // one key per item; random rolls apart
+    const all = Object.entries(ctx.prices || {}).filter(([, p]) => p && p.id);
+    // one key per item; random rolls have their own keys, and their base key mixes every roll's prices
+    const rolled = new Set(all.filter(([k]) => String(k).includes(':')).map(([, p]) => p.id));
+    const entries = all.filter(([k]) => !String(k).includes(':'));
     const hists = entries.map(([, p]) => history(p));
-    const bt = { dip: backtest('dip', hists, cut), thin: backtest('thin', hists, cut) };
+    const plain = hists.filter((h, ix) => !rolled.has(entries[ix][1].id));
+    const bt = { dip: backtest('dip', plain, cut), thin: backtest('thin', plain, cut) };
     const offered = (r) => bt[r].n >= MIN_BACKTEST && bt[r].medianReturn > 0;
     out.rules = [
       { id: 'vendor', name: 'Under the vendor price', evidence: 'certain: a vendor pays a fixed price', offered: true },
@@ -88,7 +96,7 @@
     ];
     entries.forEach(([key, p], ix) => {
       const h = hists[ix], cur = h[h.length - 1];
-      if (!cur || !cur.min || Math.abs(cur.t - ls.t) > SCAN_SLACK) return;   // not listed in the newest full scan
+      if (!cur || !cur.min || cur.t < ls.t - SCAN_SLACK) return;   // not listed in the newest full scan (its second pass ends later)
       const it = ctx.item(p.id) || {}, name = p.name || it.name || '#' + p.id;
       const row = (rule, buyUnder, relist, net, extra) => out.rows.push(Object.assign({ rule, id: p.id, name, listed: cur.qty, lowest: cur.min, buyUnder: Math.round(buyUnder),
         relist: relist == null ? null : Math.round(relist), net: Math.round(net), scans: h.length, sellShare: ctx.sellShare ? ctx.sellShare(name) : null }, extra || {}));
@@ -103,12 +111,14 @@
       }
       const vb = ctx.vendorBuy(p.id);
       if (vb && vb < cur.min * (1 - cut)) {
-        const listedScans = h.filter((x) => x.min), held = listedScans.filter((x) => x.min * (1 - cut) > vb).length;
+        // evidence from the earlier scans only: the newest passes by definition
+        const listedScans = h.slice(0, -1).filter((x) => x.min), held = listedScans.filter((x) => x.min * (1 - cut) > vb).length;
         row('resell', vb, cur.min - 1, (cur.min - 1) * (1 - cut) - vb, { vendorPrice: vb, held, of: listedScans.length });
       }
-      ['dip', 'thin'].forEach((r) => {
+      if (!rolled.has(p.id)) ['dip', 'thin'].forEach((r) => {
         const f = SPEC[r](h, h.length - 1);
-        if (f) row(r, cur.min, f.usual, f.usual * (1 - cut) - cur.min, { usual: Math.round(f.usual), falling: f.falling });
+        // buy under: break-even if it sells at its usual lowest; you make: the backtest's median return on this price
+        if (f) row(r, f.usual * (1 - cut), f.usual, bt[r].medianReturn == null ? 0 : cur.min * bt[r].medianReturn, { usual: Math.round(f.usual), earlier: f.earlier, falling: f.falling, unitOnly: true });
       });
     });
     out.rows.forEach((r) => { r.offered = (out.rules.find((x) => x.id === r.rule) || {}).offered; });
