@@ -95,6 +95,8 @@ function saveLua(now, extra) {
   if (extra && extra.professions) ch.professions = extra.professions;
   if (extra && extra.grinds) ch.grinds = extra.grinds;
   if (extra && extra.caps) ch.caps = extra.caps;
-  return 'ClaudeCompanionDB = ' + lua({ schema: 1, chars: { [ch.key]: ch }, items, spells: {}, npcs: {}, quests: {} });
+  const chars = { [ch.key]: ch };
+  if (extra && extra.alts) extra.alts.forEach((a) => { chars[a.key] = a; });
+  return 'ClaudeCompanionDB = ' + lua({ schema: 1, chars, items, spells: {}, npcs: {}, quests: {} });
 }
 module.exports = { saveLua };

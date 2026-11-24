@@ -79,18 +79,38 @@ end
 -- The price to plan with, the app's one rule (js/app.js planPrice, kept the same; #9): the median of the
 -- newest AH scan when it found the item listed; else the newest price seen that has one (an earlier scan's
 -- median, or the lowest seen while browsing); nil = never priced
+-- AH prices belong to the auction house (#12): every character of this save on the same realm and
+-- faction counts, so an alt prices loot with what any of them saw (js/app.js withSharedAh, the same rule)
+local function House(c)
+    local ch = c and c.snap and c.snap.character or {}
+    return (ch.realm or "") .. "|" .. (ch.faction or "")
+end
+function ns.PriceObs(id)
+    local me = ns.char
+    if not me then return nil end
+    local key, house, obs, n = tostring(id), House(me), nil, 0
+    for _, c in pairs(ClaudeCompanionDB.chars or {}) do
+        local p = (c == me or (c.snap and House(c) == house)) and c.ah and c.ah.prices and c.ah.prices[key]
+        if p and type(p.obs) == "table" then
+            obs = obs or {}
+            for _, o in ipairs(p.obs) do n = n + 1; obs[n] = o end
+        end
+    end
+    if obs then table.sort(obs, function(a, b) return (a.t or 0) < (b.t or 0) end) end
+    return obs
+end
 function ns.PlanPrice(id)
-    local p = ns.char and ns.char.ah and ns.char.ah.prices and ns.char.ah.prices[tostring(id)]
-    if not p or type(p.obs) ~= "table" then return nil end
-    for i = #p.obs, 1, -1 do
-        local o = p.obs[i]
+    local obs = ns.PriceObs(id)
+    if not obs then return nil end
+    for i = #obs, 1, -1 do
+        local o = obs[i]
         if o.src == "scan" then
             if o.qty and o.qty > 0 and (o.med or o.min) then return o.med or o.min end
             break
         end
     end
-    for i = #p.obs, 1, -1 do
-        local o = p.obs[i]
+    for i = #obs, 1, -1 do
+        local o = obs[i]
         if o.min then return o.med or o.min end
     end
     return nil
@@ -98,7 +118,6 @@ end
 
 function ns.LootValue(t)
     local vendor, ah = 0, 0
-    local prices = ns.char and ns.char.ah and ns.char.ah.prices or {}
     for id, l in pairs(t.loot or {}) do
         local item = l.item and ClaudeCompanionDB.items[l.item]
         local sell = item and item.sell or 0
