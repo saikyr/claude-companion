@@ -76,29 +76,41 @@ function ns.Session()
 end
 
 -- value of the items looted: vendor price, and AH price where you've seen one
+-- AH prices belong to the auction house (#12): every character of this save on the same realm (Forever reads
+-- none: the server id from the GUID instead) and faction counts, so an alt prices loot with what any of them saw
+-- (js/app.js withSharedAh, the same rule). A character saved before the server id was recorded shares with no one.
+local function House(c)
+    local ch = c and c.snap and c.snap.character or {}
+    local realm = (ch.realm and ch.realm ~= "") and ch.realm or (ch.server and ("server:" .. ch.server)) or nil
+    if not realm or not ch.faction or ch.faction == "" then return nil end
+    return realm .. "|" .. ch.faction
+end
 -- The price to plan with, the app's one rule (js/app.js planPrice, kept the same; #9): the median of the
 -- newest AH scan when it found the item listed; else the newest price seen that has one (an earlier scan's
--- median, or the lowest seen while browsing); nil = never priced
+-- median, or the lowest seen while browsing); nil = never priced. No copies: this runs every second for the
+-- grind panel, so it walks each character's readings once and keeps the two newest that matter.
 function ns.PlanPrice(id)
-    local p = ns.char and ns.char.ah and ns.char.ah.prices and ns.char.ah.prices[tostring(id)]
-    if not p or type(p.obs) ~= "table" then return nil end
-    for i = #p.obs, 1, -1 do
-        local o = p.obs[i]
-        if o.src == "scan" then
-            if o.qty and o.qty > 0 and (o.med or o.min) then return o.med or o.min end
-            break
+    local me = ns.char
+    if not me then return nil end
+    local key, house = tostring(id), House(me)
+    local scan, priced
+    for _, c in pairs(ClaudeCompanionDB.chars or {}) do
+        local p = (c == me or (house and House(c) == house)) and c.ah and c.ah.prices and c.ah.prices[key]
+        if p and type(p.obs) == "table" then
+            for _, o in ipairs(p.obs) do
+                local t = o.t or 0
+                if o.src == "scan" and (not scan or t > (scan.t or 0)) then scan = o end
+                if o.min and (not priced or t > (priced.t or 0)) then priced = o end
+            end
         end
     end
-    for i = #p.obs, 1, -1 do
-        local o = p.obs[i]
-        if o.min then return o.med or o.min end
-    end
+    if scan and scan.qty and scan.qty > 0 and (scan.med or scan.min) then return scan.med or scan.min end
+    if priced then return priced.med or priced.min end
     return nil
 end
 
 function ns.LootValue(t)
     local vendor, ah = 0, 0
-    local prices = ns.char and ns.char.ah and ns.char.ah.prices or {}
     for id, l in pairs(t.loot or {}) do
         local item = l.item and ClaudeCompanionDB.items[l.item]
         local sell = item and item.sell or 0
