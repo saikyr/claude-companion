@@ -28,6 +28,8 @@ local function Character()
     -- Forever reads no realm name: the server id in the GUID ("Player-<server>-<id>") tells auction houses apart (#12)
     x.server = guid and tonumber(string.match(guid, "^Player%-(%d+)%-")) or nil
     x.level = Clean(UnitLevel("player"))
+    -- the level cap, from the client (#13): the gear engine's pre-BiS goes up to it
+    x.maxLevel = Clean(Call(GetMaxPlayerLevel)) or Clean(MAX_PLAYER_LEVEL)
     x.race = Clean((UnitRace("player")))
     local className, classFile = UnitClass("player")
     x.class, x.classFile = Clean(className), Clean(classFile)

@@ -59,6 +59,41 @@
   const wornInv = (x) => { const it = x && x.key && A.item(x.key); return (it && CC.advice && CC.advice.invOf ? CC.advice.invOf(it) : 0) || (A.gdItem(x && x.id) || [])[4] || 0; };
   const unique = (c) => arr(c && c.g && c.g[10]).some((l) => /^Unique/.test(l));
 
+  // ---------------------------------------------------------------- set bonuses (#13)
+  // pack sets[sid] = [name, ids, [[pieces, text, [[stat, value], ...]], ...], class mask]. A bonus with stats
+  // (+8 All Resistances, spell power) counts in a gain when an item makes or breaks it; an effect (a proc) has
+  // no stats and isn't counted, like an item's own use and proc effects.
+  let SET_OF = null, SETS_SEEN = null;
+  const setOf = (id) => {
+    if (!SET_OF || SETS_SEEN !== (A.GD && A.GD.sets)) { SET_OF = {}; SETS_SEEN = A.GD && A.GD.sets; Object.entries((A.GD && A.GD.sets) || {}).forEach(([sid, s]) => arr(s && s[1]).forEach((i) => { SET_OF[i] = sid; })); }
+    return id != null ? SET_OF[id] || null : null;
+  };
+  // what a set's bonuses are worth with n pieces on
+  const setValue = (sid, n, w) => arr(((A.GD.sets || {})[sid] || [])[2]).filter((b) => b[0] <= n && arr(b[2]).length)
+    .reduce((a, b) => { const st = {}; b[2].forEach(([k, v]) => { st[k] = (st[k] || 0) + v; }); return a + score(st, w, null, {}); }, 0);
+  // the change in set bonuses when item inId goes on in place of outIds (what it replaces), against the gear
+  // worn[] (the set compared with): {d, sets: [{name, from, to, d}]}. A second copy of a piece adds nothing.
+  function setDelta(w, worn, inId, outIds) {
+    const outs = arr(outIds).filter((i) => i != null);
+    if (!setOf(inId) && !outs.some((i) => setOf(i))) return { d: 0, sets: [] };
+    const ids = new Set(Object.values(worn || {}).map((x) => x && x.id).filter((i) => i != null));
+    const cnt = {};
+    ids.forEach((i) => { const s = setOf(i); if (s) cnt[s] = (cnt[s] || 0) + 1; });
+    const after = Object.assign({}, cnt);
+    const gone = new Set(outs.filter((i) => ids.has(i)));
+    gone.forEach((i) => { const s = setOf(i); if (s) after[s]--; });
+    const sIn = setOf(inId);
+    if (sIn && (!ids.has(inId) || gone.has(inId))) after[sIn] = (after[sIn] || 0) + 1;
+    const sets = [];
+    new Set(Object.keys(after).concat(Object.keys(cnt))).forEach((sid) => {
+      const from = cnt[sid] || 0, to = after[sid] || 0;
+      if (from === to) return;
+      const d = setValue(sid, to, w) - setValue(sid, from, w);
+      if (Math.abs(d) > 1e-9) sets.push({ name: (A.GD.sets[sid] || [])[0] || 'a set', from, to, d });
+    });
+    return { d: sets.reduce((a, s) => a + s.d, 0), sets };
+  }
+
   const char = () => ((A.CH && A.CH.snap) || {}).character || {};
   const idOf = (key) => { const m = /item:(\d+)/.exec(key || ''); return m ? Number(m[1]) : null; };
   const score = W.score;
@@ -66,6 +101,8 @@
   // the game's own numbers for an item you have (random suffixes count), else the pack's
   const ownStats = (mine, id) => (mine && mine.stats ? W.fromGame(mine.stats, mine.tip) : packStats(id));
   const fmt1 = (v) => v.toFixed(1);
+  // a gain that includes a set bonus says so: "set +4.2" (made) or "set −3.0" (broken)
+  const setNote = (y) => (y && y.sb ? `<div class="sub" title="${esc(y.sb.sets.map((s) => `${s.name}: ${s.from} → ${s.to} pieces`).join('; '))}">set ${gainTxt(y.sb.d)}</div>` : '');
   const gainTxt = (d) => `${d >= 0 ? '+' : '−'}${Math.abs(d).toFixed(1)}`;
 
   // ---------------------------------------------------------------- specs and weights
@@ -300,7 +337,8 @@
     if (!MASKS) { MASKS = {}; Object.values(A.GD.sets || {}).forEach((s) => { if (s && s[3]) arr(s[1]).forEach((id) => { MASKS[id] = (MASKS[id] || 0) | s[3]; }); }); }
     return MASKS;
   };
-  const MAX_LEVEL = 60;
+  // the level cap from the client (character.maxLevel), else Classic's 60
+  const capLevel = () => { const m = Number(char().maxLevel); return m > 0 ? m : 60; };
   function candidates(use, cls) {
     const Q = CC.quests;
     const ah = (A.CH && A.CH.ah) || {};
@@ -346,7 +384,7 @@
       // ForeverDB lists Season of Discovery raid-token vendors the Forever client carries.
       const foreverSeen = arr(src).some((r) => r[10] === 'f' && r[0] !== 'vendor');
       // ForeverDB often has no required level for them: offered at the level cap only, not guessed lower
-      const req = g[3] || (clientTip ? 0 : MAX_LEVEL);
+      const req = g[3] || (clientTip ? 0 : capLevel());
       const seen = !!onForever && (clientTip || foreverSeen);
       const avail = fromRaid ? 'raid' : pvpSource(id) ? 'pvp' : !seen ? 'unseen' : !rr && kindOf(id) === 'world' && !onMyAh.has(id) ? 'worldAh' : null;
       // only a quest gives it, and every such quest is done (or for the other faction or another class)
@@ -443,10 +481,10 @@
   // ---------------------------------------------------------------- the plan, slot by slot
   // For one spec's weights and baseline: per slot what it has, the upgrades usable now (several, from every
   // kind of source), the AH listings that are upgrades, the rolls worth searching for, and pre-BiS targets
-  // with alternatives (best items up to level 60, raids left out).
+  // with alternatives (best items up to the level cap, raids left out).
   const NOW_MAX = 6, PRE_ALTS = 4, LATER_MAX = 8;
   function plan(w, lvl, base, picks, reach) {
-    const use = canUse(), ch = char();
+    const use = canUse(), ch = char(), cap = capLevel();
     const cand = candidates(use, ch.class);
     const worn = base.worn;
     const wornIds = new Set(Object.values(worn).map((x) => x.id));
@@ -462,8 +500,13 @@
       const blocked = name === 'Off hand' && twoHand;
       const fitsPre = (c) => invs.includes(c.inv) && handFits(name, c.inv, use);
       const fits = (c) => fitsPre(c) && !blocked;          // usable now (a worn two-hander blocks the off hand)
-      // a two-hander replaces the main hand and the off hand
-      const gain = (c, s) => s - weakest.s - (name === 'Main hand' && c.inv === TWO_HAND ? offScore : 0);
+      // a two-hander replaces the main hand and the off hand; a set bonus it makes or breaks counts too
+      const outOf = (c) => {
+        const own = cur.find((y) => y.id && y.id === c.id);
+        return [own ? own.id : weakest.id].concat(name === 'Main hand' && c.inv === TWO_HAND && worn[17] ? [worn[17].id] : []);
+      };
+      const setD = (c) => setDelta(w, worn, c.id, outOf(c));
+      const gain = (c, s) => s - weakest.s - (name === 'Main hand' && c.inv === TWO_HAND ? offScore : 0) + setD(c).d;
       // what it would replace, for the hit cap: itself when worn here, else the weaker item (and a two-hander
       // also frees the off hand's hit)
       const replOf = (c) => {
@@ -471,7 +514,7 @@
         const r = own ? own.st : weakest.st;
         return name === 'Main hand' && c.inv === TWO_HAND && worn[17] ? W.addSt(r, worn[17].st) : r;
       };
-      const x = (c, extra) => { const s = score(c.st, w, name, replOf(c)); return Object.assign({ c, s, d: gain(c, s) }, extra || {}); };
+      const x = (c, extra) => { const s = score(c.st, w, name, replOf(c)), sd = setD(c); return Object.assign({ c, s, d: gain(c, s), sb: sd.sets.length ? sd : null }, extra || {}); };
       const distinct = (list) => { const seen = new Set(); return list.filter((y) => !seen.has(y.c.name) && seen.add(y.c.name)); };
       const byGain = (a, b) => b.d - a.d;
       // ---- usable now: fixed items, your own, AH listings
@@ -497,11 +540,11 @@
       now.sort(byGain);
       const ahUps = distinct(pool.filter((y) => y.ah && y.d > 0.5).sort(byGain));
       const search = Object.values(bestRoll).map((r) => Object.assign(r, { d: gain(r.c, r.s) })).filter((r) => r.d > 0.5).sort(byGain).slice(0, 3);
-      // ---- pre-BiS: the best up to level 60, counting what you own; one random roll at most (its best base)
+      // ---- pre-BiS: the best up to the level cap, counting what you own; one random roll at most (its best base)
       const preRolls = {};
-      cand.rolls.forEach((c) => { if (fitsPre(c) && c.req <= 60) { const s = score(c.st, w, name, replOf(c)); if (!preRolls[c.roll] || s > preRolls[c.roll].s) preRolls[c.roll] = { c, s }; } });
+      cand.rolls.forEach((c) => { if (fitsPre(c) && c.req <= cap) { const s = score(c.st, w, name, replOf(c)); if (!preRolls[c.roll] || s > preRolls[c.roll].s) preRolls[c.roll] = { c, s }; } });
       const prePool = mine.filter(fitsPre).map((c) => x(c))
-        .concat(cand.fixed.filter((c) => fitsPre(c) && c.req <= 60).map((c) => x(c)))
+        .concat(cand.fixed.filter((c) => fitsPre(c) && c.req <= cap).map((c) => x(c)))
         .concat(cur.filter((y) => y.id && !cand.byId[String(y.id)] && !mine.some((m) => m.id === y.id))
           .map((y) => x({ id: y.id, key: y.key || String(y.id), g: A.gdItem(y.id) || [A.anyItemName(y.id), 1], name: A.anyItemName(y.id), inv: wornInv(y) || invs[0], req: 0, st: y.st, kind: 'owned' })));
       const topRoll = Object.values(preRolls).sort((a, b) => b.s - a.s)[0];
@@ -640,12 +683,12 @@
       const full = f === 'all' ? sl.ups : sl.ups.filter((y) => kindKey(y) === f);
       const open = A.STATE.gearUpAll === sl.name, list = open ? full : full.slice(0, UP_SHOW);
       h += `<div class="table gopt"><div class="thead"><div>Item</div><div>Source</div><div class="c-num">AH price</div><div class="c-num">Score</div><div class="c-num">Gain</div></div>`;
-      list.forEach((y) => { h += `<div class="tr">${itemCell(y.c)}${srcCell(y)}${priceCell(y)}<div class="c-num">${fmt1(y.s)}</div><div class="c-num pos">${gainTxt(y.d)}</div></div>`; });
+      list.forEach((y) => { h += `<div class="tr">${itemCell(y.c)}${srcCell(y)}${priceCell(y)}<div class="c-num">${fmt1(y.s)}</div><div class="c-num pos">${gainTxt(y.d)}${setNote(y)}</div></div>`; });
       h += '</div>';
       if (full.length > UP_SHOW) h += `<button class="linkbtn more" data-gearupall="${open ? '' : esc(sl.name)}">${open ? 'Show the best ' + UP_SHOW : `Show all ${full.length}`}</button>`;
     }
     // ---- pre-BiS
-    h += `<h3>Pre-BiS <span>· the best up to level 60, raids left out</span></h3>`;
+    h += `<h3>Pre-BiS <span>· the best up to level ${capLevel()}, raids left out</span></h3>`;
     if (sl.twoHander) return h + `<div class="empty">Not needed: your main-hand target is a two-hander.</div>` + laterList(sl) + '</section>';
     const n = sl.targets.length;
     h += `<div class="toolbar"><div class="chips"><button data-gearreach="" class="${A.STATE.gearReach ? '' : 'on'}">Everything</button><button data-gearreach="1" class="${A.STATE.gearReach ? 'on' : ''}">Only what I can get now</button></div><span class="dim small">${n > 1 ? 'Your two targets are on top.' : 'Your target is on top.'} Make any other item ${n > 1 ? 'one of them' : 'your target'}.</span></div>`;
@@ -739,7 +782,7 @@
     h += `<div class="toolbar"><div class="seg">${VIEWS.map(([k, l]) => `<button data-gearview="${k}" class="${view === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>`;
     if (!w || !Object.keys(w).length) return h + `<div class="empty">No stat weights for ${esc(cur.tree || cur.label)} yet. Pick or make some on the <button class="linkbtn" data-tab="weights">Stat weights</button> page.</div>`;
     if (w.hit) h += hitLine(w.hit);
-    const lvl = ch.level || 60;
+    const lvl = ch.level || capLevel();
     const P = plan(w, lvl, base, getPicks(cur), !!A.STATE.gearReach);
     const upSlots = P.slots.filter((s) => s.ups.length && !s.blocked);
     const bigUp = upSlots.slice().sort((a, b) => b.ups[0].d - a.ups[0].d)[0];
@@ -759,13 +802,13 @@
     if (view === 'up') h += `<div class="gearlay">${slotList(P, sel, setSel)}${slotDetail(P, P.slots.find((s) => s.name === sel), lvl, base, KIND_WORD[A.STATE.gearSrc] ? A.STATE.gearSrc : 'all')}</div>`;
     else if (view === 'ah') h += `<div class="toolbar">${setSel}</div>` + ahView(P, lvl);
     else h += setsView(classSets());
-    if (view !== 'sets') h += `<details class="how"><summary>How this works, and what's left out</summary><p>Score = each stat × its weight, added up. Gain = score minus the score of ${esc(base.short)} in that slot (rings and trinkets: the weaker one). Random greens ("of Healing") are scored from their roll's exact stats (foreverchanges.pro, confirmed in game); for each roll, the best base you can wear at your level is shown. Left out: ${Object.entries(P.skipped).map(([k, v]) => `${v.toLocaleString()} ${esc(k)}`).join(' · ')}. Use and proc effects aren't in the score. Sources follow the item tooltip: Forever data is marked, Classic-only rates say so.</p></details>`;
+    if (view !== 'sets') h += `<details class="how"><summary>How this works, and what's left out</summary><p>Score = each stat × its weight, added up. Gain = score minus the score of ${esc(base.short)} in that slot (rings and trinkets: the weaker one). Random greens ("of Healing") are scored from their roll's exact stats (foreverchanges.pro, confirmed in game); for each roll, the best base you can wear at your level is shown. Left out: ${Object.entries(P.skipped).map(([k, v]) => `${v.toLocaleString()} ${esc(k)}`).join(' · ')}. A set bonus with stats (resistances, spell power, mana per 5) counts in the gain when an item completes or breaks it (shown as "set +N"); pre-BiS ranks each item on its own. Use and proc effects, and set bonuses that are effects, aren't in the score. Sources follow the item tooltip: Forever data is marked, Classic-only rates say so.</p></details>`;
     return h;
   };
 
   // ---------------------------------------------------------------- the same advice as data, for the Claude snapshot (js/claude.js)
   CC.gear = {
-    raidSource, raidRow,
+    raidSource, raidRow, setDelta,
     kindOf,
     // why an item is kept out of upgrades and pre-BiS for this character ('raid', 'pvp', 'unseen', 'worldAh'), or null
     weightsAgainst,
@@ -775,11 +818,12 @@
       if (!A.GD || !A.GD.items || !canUse()) return [];
       const active = (A.CH.snap || {}).activeSpec;
       const opt = (sl) => (y) => ({ slot: sl.name, id: y.c.id, name: y.c.name, roll: y.c.roll || null, score: +y.s.toFixed(1), gain: +y.d.toFixed(1),
+        setBonus: y.sb ? { gain: +y.sb.d.toFixed(1), sets: y.sb.sets.map((s) => ({ name: s.name, from: s.from, to: s.to, gain: +s.d.toFixed(1) })) } : null,
         reqLevel: y.c.req, boe: !!y.c.boe, source: y.ah ? 'ah' : y.c.kind, where: y.c.kind === 'owned' ? y.c.where : whereOf(y.c), needs: needs(y.c),
         ah: y.ah ? { price: y.ah.price, listed: y.ah.qty, seen: y.ah.t } : null });
       const sets = classSets().map((s) => ({ name: s.name, kind: s.kind, owned: s.have, pieces: s.slots, worn: s.worn,
         missing: s.pieces.filter((p) => !p.at).map((p) => ({ id: p.id, name: p.g[0], slot: p.slot, where: whereOf({ id: p.id, g: p.g, how: (A.GD.how || {})[p.id] }) })),
-        bonuses: s.bonus.map(([n, t]) => ({ pieces: n, text: t, active: s.worn >= n })) }));
+        bonuses: s.bonus.map(([n, t, st]) => ({ pieces: n, text: t, active: s.worn >= n, counted: arr(st).length > 0 })) }));
       return specs().map((sp) => {
         const pk = profileKey(sp);
         const w = pk && weightsFor(sp, pk);
@@ -795,7 +839,7 @@
         if (w.hit) out.hit = hitSummary(w.hit);
         const base = baseline(sp, pk);
         out.comparedWith = base.label;
-        const P = plan(w, ch.level || 60, base, getPicks(sp));
+        const P = plan(w, ch.level || capLevel(), base, getPicks(sp));
         const baseIds = new Set(Object.values(base.worn).map((x) => x.id));
         out.worn = P.slots.map((sl) => ({ slot: sl.name, score: +sl.weakest.s.toFixed(1), items: sl.cur.filter((x) => x.id).map((x) => ({ id: x.id, name: A.anyItemName(x.id), score: +x.s.toFixed(1) })) }));
         out.upgrades = P.slots.flatMap((sl) => sl.now.map(opt(sl)));

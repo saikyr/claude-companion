@@ -68,6 +68,24 @@ def lines_of(h):
     return [html.unescape(l).strip() for l in t.split('\n') if l.strip()]
 
 
+SET_RX = re.compile(r'^\((\d+)\) Set: (.+)$')
+
+
+def set_stats(text):
+    """A set bonus line's stats (#13): "+20 Attack Power." and "Increases healing done by ... up to 44." read as
+    the same item stat lines an Equip: line or a base stat line would be; an effect (a proc, a % to Fear) gives none."""
+    t = text.rstrip('.')
+    m = re.match(r'^\+(\d+) Armor$', t)   # a bonus writes armor with a plus, an item's armor line without
+    if m: return {100: int(m[1])}
+    for rx, fn in LINE:
+        m = re.search(rx, t)
+        if m: return fn(m)
+    for rx, fn in EQUIP:
+        m = re.search(rx, 'Equip: ' + t)
+        if m: return fn(m)
+    return None
+
+
 def parse(h):
     L = lines_of(h)
     if 'Item ID' not in L or 'Copied' not in L:
@@ -118,7 +136,8 @@ def parse(h):
     return {'id': num(kv.get('Item ID')), 'tip': tip, 'q': QUAL.get(kv.get('Quality'), None),
             'slot': kv.get('Slot'), 'type': kv.get('Type'), 'il': num(kv.get('Item level')),
             'rl': num(kv.get('Requires level')), 'bind': bind, 'sell': sell, 'build': kv.get('Client build'),
-            'st': st, 'unparsed': unparsed, 'size': size, 'how': ' · '.join(src)}
+            'st': st, 'unparsed': unparsed,
+            'setst': {m[2]: g for m in map(SET_RX.match, tip) if m for g in [set_stats(m[2])] if g}, 'size': size, 'how': ' · '.join(src)}
 
 
 out, missing = {}, []

@@ -124,6 +124,28 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   check(snapQ && snapQ.rewards.length === 1 && snapQ.rewards[0].id === 18491 && Array.isArray(snapQ.rewards[0].specs), 'a complete quest the game read with no rewards: the pack\'s reward, scored for every spec');
   const sum = await page.evaluate(() => window.CC.gear.summary());
   const holy = sum.find((s) => s.tree === 'Holy');
+  // #13: a set bonus with stats counts in a gain when an item makes or breaks it
+  const setT = await page.evaluate((holyIdx) => {
+    const A = window.CC.api, G = window.CC.gear, keep = A.GD.sets;
+    const w = { 5: 1 };
+    A.GD.sets = Object.assign({}, keep, { t1: ['Test Set', [900001, 900002], [[2, '+10 Intellect.', [[5, 10]]], [3, 'a proc', []]], 16] });
+    const make = G.setDelta(w, { 1: { id: 900001 }, 5: { id: 777 } }, 900002, [777]);
+    const brk = G.setDelta(w, { 1: { id: 900001 }, 5: { id: 900002 } }, 777, [900002]);
+    const dup = G.setDelta(w, { 11: { id: 900001 }, 12: { id: 900002 } }, 900002, [123]);
+    const none = G.setDelta(w, { 1: { id: 5 } }, 6, [5]);
+    // in the plan: the best Holy upgrade and an item worn in another slot become one set
+    const before = G.summary()[holyIdx], up = before.upgrades[0];
+    const other = before.worn.find((x) => x.slot !== up.slot && x.items[0]);
+    A.GD.sets = Object.assign({}, keep, { t2: ['Test Pair', [up.id, other.items[0].id], [[2, '+20 Intellect.', [[5, 20]]]], 16] });
+    const after = G.summary()[holyIdx].upgrades.find((u) => u.id === up.id && u.slot === up.slot);
+    const wInt = (before.weightValues || {})[5] || 0;
+    A.GD.sets = keep;
+    return { make, brk, dup, none, up, after, wInt };
+  }, sum.indexOf(holy));
+  check(setT.make.d === 10 && setT.make.sets[0].from === 1 && setT.make.sets[0].to === 2, 'set bonus: the second piece makes the 2-piece bonus (+10)');
+  check(setT.brk.d === -10 && setT.dup.d === 0 && setT.none.d === 0 && setT.none.sets.length === 0, 'set bonus: taking a piece off breaks it; a second copy adds nothing; no set, nothing');
+  check(setT.after && setT.after.setBonus && Math.abs(setT.after.setBonus.gain - +(20 * setT.wInt).toFixed(1)) < 0.11 && Math.abs(setT.after.gain - (setT.up.gain + setT.after.setBonus.gain)) < 0.11,
+    `the Gear plan: an upgrade that completes a set gains its bonus (${setT.up.gain} → ${setT.after && setT.after.gain}, set ${JSON.stringify(setT.after && setT.after.setBonus)})`);
   const worldSeen = await page.evaluate(() => {
     const ah = window.CC.api.CH.ah = window.CC.api.CH.ah || {}; ah.prices = ah.prices || {};
     const before = window.CC.gear.availability(2243);

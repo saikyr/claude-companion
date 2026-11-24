@@ -104,7 +104,9 @@
     // a two-hander replaces the main hand and the off hand
     const withOh = name === 'Main hand' && inv === 17 && oh;
     const base = vs.s + (withOh ? W.score(oh.st, ctx.w, 17, oh.st) : 0);
-    return { row: name, s, base, gain: s - base, vs, also: withOh ? oh.id : null, target: vs.n, effect: effectOf(it.id) || (vs.id ? effectOf(vs.id) : false) };
+    // a set bonus it makes or breaks (the Gear tab's own rule, gear.js setDelta)
+    const sd = CC.gear.setDelta ? CC.gear.setDelta(ctx.w, worn, it.id, [vs.id].concat(withOh ? [oh.id] : [])) : { d: 0 };
+    return { row: name, s, base, gain: s - base + sd.d, setBonus: sd.d ? +sd.d.toFixed(1) : undefined, vs, also: withOh ? oh.id : null, target: vs.n, effect: effectOf(it.id) || (vs.id ? effectOf(vs.id) : false) };
   }
 
   // ---------------------------------------------------------------- values
@@ -281,7 +283,7 @@
       const m = measure(c, r.it, r.st, C.use);
       return m && { spec: c.name, comparedWith: c.base.label, slot: m.row, score: +m.s.toFixed(1), gain: m.gain == null ? null : +m.gain.toFixed(1),
         vs: m.vs && m.vs.id ? { id: m.vs.id, name: A.anyItemName(m.vs.id) } : null, same: !!m.same, blocked: m.blocked || null,
-        canWear: can, level: can && r.it.req > lvl ? r.it.req : null, effect: !!m.effect };
+        canWear: can, level: can && r.it.req > lvl ? r.it.req : null, effect: !!m.effect, setBonus: m.setBonus || null };
     }).filter(Boolean);
     return { id: r.it.id, name: r.it.name, specs: out };
   }
@@ -393,7 +395,7 @@
     snapshot() {
       const C = compute();
       return Object.values(C.byKey).filter((v) => v.flag && v.flag !== 'keep').map((v) => ({ id: v.id || null, name: v.name || null, where: [...new Set(v.where)], flag: v.flag, words: v.words, why: v.why || null,
-        value: v.amount || null, specs: v.specs.filter((s) => s.gain != null && !s.same).map((s) => ({ spec: s.name, score: +s.s.toFixed(1), gain: +s.gain.toFixed(1), canWear: s.can, level: s.later || null })) }));
+        value: v.amount || null, specs: v.specs.filter((s) => s.gain != null && !s.same).map((s) => ({ spec: s.name, score: +s.s.toFixed(1), gain: +s.gain.toFixed(1), canWear: s.can, level: s.later || null, setBonus: s.setBonus || undefined })) }));
     },
     bestOwnedSnapshot() {
       return C_specs().map((sp) => {

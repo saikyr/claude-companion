@@ -317,7 +317,8 @@ STAT = {3: 'Agility', 4: 'Strength', 5: 'Intellect', 6: 'Spirit', 7: 'Stamina', 
         112: 'Frost damage', 113: 'Arcane damage', 114: 'Nature damage', 115: 'Holy damage', 116: 'Crit %', 117: 'Hit %', 118: 'Dodge %', 119: 'Parry %', 120: 'Block %'}
 
 # ------------------------------------------------------------------ item sets
-# sets[id] = [name, [item ids], [[pieces, bonus text], ...], class mask]
+# sets[id] = [name, [item ids], [[pieces, bonus text, [[stat id, value], ...]], ...], class mask]: a bonus's stats
+# are what egt_parse read from its line (empty for an effect the score can't count, a proc say)
 SET_LINE = re.compile(r'^\((\d+)\) Set: (.+)$')
 sets = {}
 for it in FDB_ITEMS.values():
@@ -331,7 +332,8 @@ for it in FDB_ITEMS.values():
     # the tooltip with the most bonus lines names the set (pieces the client hides have no tooltip)
     if k and len([l for l in tip if SET_LINE.match(l)]) > len(s_[2]):
         s_[0] = tip[k - 1]
-        s_[2] = [[int(m.group(1)), m.group(2)] for m in map(SET_LINE.match, tip) if m]
+        sst = (EGT.get(str(it['id'])) or {}).get('setst') or {}
+        s_[2] = [[int(m.group(1)), m.group(2), [[int(k), v] for k, v in (sst.get(m.group(2)) or {}).items()]] for m in map(SET_LINE.match, tip) if m]
 # which classes a set is for: the items' own class mask (ForeverDB) or "Classes:" tooltip line, a class
 # quest that rewards a piece, or a class quest that asks for pieces by name (the dungeon set 0.5 chain)
 CLASS_BIT = {'Warrior': 1, 'Paladin': 2, 'Hunter': 4, 'Rogue': 8, 'Priest': 16, 'Shaman': 64, 'Mage': 128, 'Warlock': 256, 'Druid': 1024}

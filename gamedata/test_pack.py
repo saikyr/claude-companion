@@ -43,8 +43,12 @@ it = G['items']
 st = lambda i: dict((a, b) for a, b in it[str(i)][8])
 # endgametools 17710 (build 1.60.1.71037): +11 Int, 2 mp5, healing 116 / damage 38; game tooltip agrees
 dv = (G.get('sets') or {}).get('182') or []
-check(len(dv) == 4 and dv[0] == 'Vestments of the Devout' and len(dv[1]) == 8 and dv[3] & 16 and any(n == 6 for n, _ in dv[2]),
+check(len(dv) == 4 and dv[0] == 'Vestments of the Devout' and len(dv[1]) == 8 and dv[3] & 16 and any(b[0] == 6 for b in dv[2]),
       'item sets: Vestments of the Devout has 8 pieces, 6-piece bonus, and is a Priest set')
+# #13: a bonus carries its stats (packs built before it have only the text): 3 pieces, spell power 18; a proc, none
+b3 = next((b for b in dv[2] if b[0] == 3), [])
+b4 = next((b for b in dv[2] if b[0] == 4), [])
+check(len(b3) < 3 or (dict(map(tuple, b3[2])) == {45: 18} and b4[2] == []), f'set bonus stats: Devout (3) spell power 18, (4) a proc has none ({b3}, {b4})')
 check(st(17710).get(41) == 116 and st(17710).get(42) == 38 and st(17710).get(43) == 2 and st(17710).get(5) == 11,
       f'Charstone Dirk stats {st(17710)}')
 check(it['17710'][11] == 'e', 'Charstone Dirk tooltip comes from endgametools')
