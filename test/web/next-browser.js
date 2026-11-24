@@ -22,6 +22,8 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
         { id: 4184, title: 'The True Masters', level: 54, complete: true, ready: true },
         { id: 5803, title: "Araj's Scarab", level: 60, complete: false }],
       group: [{ name: 'Friend', level: 56, class: 'MAGE', online: true }],
+      // Hearthstone used 13 minutes ago (1-hour cooldown)
+      itemCooldowns: [{ id: 6948, icon: 134414, link: '|cffffffff|Hitem:6948::::::::59:::::::::|h[Hearthstone]|h|r', readyAt: now + 2820, duration: 3600 }],
     },
     // a finished 1-hour grind: 10g looted, one Glowing Brightwood Staff (AH median 95g in the fixture's scan)
     grinds: [{ name: 'test grind', start: now - 7200, last: now - 3600, finish: now - 3600, secs: 3600, kills: 60, deaths: 0,
@@ -30,7 +32,8 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
     professions: { Tailoring: { name: 'Tailoring', rank: 268, taken: now - 3600, recipes: [
       { name: 'Runecloth Bag', difficulty: 1, reagents: [{ id: 14048, need: 5 }] },
       { name: 'Runecloth Belt', difficulty: 0, reagents: [{ id: 14048, need: 3 }] },
-      { name: 'Bolt of Runecloth', difficulty: 3, reagents: [{ id: 14047, need: 4 }] }] } },
+      { name: 'Bolt of Runecloth', difficulty: 3, reagents: [{ id: 14047, need: 4 }] },
+      { name: 'Mooncloth', difficulty: 1, cooldownEnds: now + 2 * 86400 + 3 * 3600 + 30, reagents: [{ id: 14256, need: 2 }] }] } },
   });
   let posted = null;
   const browser = await chromium.launch();
@@ -60,6 +63,20 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   const ready = await text('main');
   check(/Ready now/.test(ready) && /The True Masters/.test(ready) && /ready to turn in/.test(ready), 'Ready now: a quest ready to turn in');
   check(/Theka's Last Breath[\s\S]*in your bags/.test(ready), 'Ready now: an upgrade already in your bags');
+
+  // ---- cooldowns: one plain list under its own heading, time left (not a clock time already past)
+  const cdRows = await page.$$eval('main .list.cds > .li', (els) => els.map((e) => e.innerText.replace(/\s+/g, ' ')));
+  check(cdRows.length === 2 && /^Hearthstone Item cooldown Ready in 47m /.test(cdRows[0]), `Overview: Hearthstone with the time left (${cdRows[0]})`);
+  check(/^Mooncloth Tailoring cooldown Ready in 2d 3h /.test(cdRows[1] || ''), `Overview: Mooncloth, days and hours left (${cdRows[1]})`);
+  check(await page.$eval('main .list.cds', (e) => e.previousElementSibling && e.previousElementSibling.tagName === 'H2' && e.previousElementSibling.innerText === 'Cooldowns'), 'Overview: cooldowns sit under a Cooldowns heading');
+  check(!(await page.$('main .cd')), 'no nested boxed cooldown rows');
+  await page.evaluate(() => { location.hash = '#professions'; });
+  await page.click('[data-tab="professions"]');
+  await page.waitForSelector('main .list.cds');
+  const profCd = await page.$$eval('main .list.cds > .li', (els) => els.map((e) => e.innerText.replace(/\s+/g, ' ')));
+  check(profCd.length === 1 && /^Mooncloth Cooldown Ready in 2d 3h /.test(profCd[0]), `Professions: the same rows, that profession only (${profCd})`);
+  await page.click('[data-tab="overview"]');
+  await page.waitForSelector('.nextsteps .tr');
 
   // ---- the ranked list
   let all = await rows();

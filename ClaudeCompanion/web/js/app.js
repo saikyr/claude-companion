@@ -489,7 +489,7 @@
     </div>`;
     // every cooldown in one list: items you carry (#16) and professions
     const cds = cooldowns();
-    if (cds.length) h += `<div class="list cds">${cds.map((c) => `<div class="cd">${icon(c.icon, { size: 'xs' })}<b>${esc(c.name)}</b><span>${c.prof ? esc(c.prof) + ' ' : ''}cooldown, ${cdWhen(c)}</span></div>`).join('')}</div>`;
+    if (cds.length) h += `<h2>Cooldowns</h2>${cdList(cds)}`;
     // what's out of date and changes the advice below (the full list is on the System tab)
     const stale = freshness().filter((f) => f.st !== 'ok' && ['snap', 'ah', 'bank', 'pack'].includes(f.key));
     if (stale.length) h += `<div class="list fresh">${stale.map((f) => `<div class="li link" data-tab="${f.tab}"><span class="dot ${f.st}"></span><div class="grow">${esc(f.label)}: ${f.t ? 'saved ' + ago(f.t) : FRESH_LABEL.never}<div class="sub">${esc(f.how)}, so the steps below use current data</div></div></div>`).join('')}</div>`;
@@ -522,7 +522,22 @@
       return { name: (m && m[1]) || ((gdItem(r.id) || [])[0]) || 'Item ' + r.id, icon: r.icon, ends: r.readyAt, prof: null, item: r.id };
     });
   }
-  const cdWhen = (c) => (c.ends > Date.now() / 1000 ? 'ready ' + fmtTime(c.ends) : '<span class="pos">ready now</span>');
+  // time left on a cooldown, rounded up to the minute: "47m", "3h 12m", "2d 4h"
+  function cdLeft(s) {
+    s = Math.ceil(s / 60) * 60;
+    return s >= 86400 ? `${Math.floor(s / 86400)}d ${Math.floor((s % 86400) / 3600)}h` : dur(s);
+  }
+  // the cooldown rows (Overview, and each profession's own on Professions): what it is, then how long is
+  // left with the clock time under it, or "Ready now". The page redraws every minute, so the count stays true.
+  function cdList(cds, showProf = true) {
+    const now = Date.now() / 1000;
+    return `<div class="list cds">${cds.map((c) => {
+      const left = c.ends - now;
+      const what = c.prof ? (showProf ? `${esc(c.prof)} cooldown` : 'Cooldown') : 'Item cooldown';
+      const when = left > 0 ? `<div>Ready in ${cdLeft(left)}</div><div class="sub">${esc(fmtTime(c.ends))}</div>` : '<span class="pos">Ready now</span>';
+      return `<div class="li">${icon(c.icon, { size: 'sm' })}<div class="grow"><div>${esc(c.name)}</div><div class="sub">${what}</div></div><div class="num">${when}</div></div>`;
+    }).join('')}</div>`;
+  }
 
   // ------------------------------------------------------------ character
   const LEFT = ['Head', 'Neck', 'Shoulder', 'Back', 'Chest', 'Shirt', 'Tabard', 'Wrist'];
@@ -1012,7 +1027,8 @@
     h += `<div class="toolbar"><input class="search" id="recsearch" placeholder="Search ${esc(p.name)} recipes or reagents" value="${esc(STATE.recFilter || '')}">
       <div class="chips">${FILTERS.map(([k, l]) => `<button data-recf="${k}" class="${flt === k ? 'on' : ''}">${l} <span>${counts[k]}</span></button>`).join('')}</div>
       <div class="sortby"><span class="dim small">Sort</span>${[['profit', 'Profit'], ['name', 'Name']].map(([k, l]) => `<button data-recsort="${k}" class="${sort === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>`;
-    cooldowns(p.name).forEach((c) => { h += `<div class="cd">${icon(c.icon, { size: 'xs' })}<b>${esc(c.name)}</b><span>cooldown, ${cdWhen(c)}</span></div>`; });
+    const pcds = cooldowns(p.name);
+    if (pcds.length) h += cdList(pcds, false);
     const reagName = (id) => { const it = byId(id), g = gdItem(id); return ((it && it.name) || (g && g[0]) || '').toLowerCase(); };
     let rows = all.filter((x) => {
       if (flt === 'profit' && !(known(x) && x.cp.profit > 0)) return false;

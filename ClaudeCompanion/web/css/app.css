@@ -170,8 +170,7 @@ span[data-item], .nm [data-tip] { font-weight: 500; }
 .li.link:hover { background: var(--hover); }
 .card.link:hover { border-color: var(--line2); }
 .reag { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp1) 0.375rem; margin-top: var(--sp1); }
-.cd { display: flex; align-items: center; gap: var(--sp2); background: var(--s1); border: 1px solid var(--acc-line); border-radius: var(--r-sm); padding: 0.375rem var(--sp3); margin-bottom: var(--sp3); font-size: var(--f-sm); }
-.cd b { font-weight: 600; } .cd > span:last-child { color: var(--t2); }
+.list.cds { margin-bottom: var(--sp4); }
 
 .table { overflow: hidden; }
 .table .thead, .table .tr { display: grid; align-items: center; gap: var(--sp3); padding: 0 var(--sp3); }
