@@ -40,7 +40,7 @@ begin
     if m is null then return jsonb_build_object('error', 'cannot read the path ' || p_path); end if;
     rest := substr(rest, length(m[1]) + coalesce(length(m[2]), 0) + length(m[5]) + 1);
     out := out || m[1];
-    cur := case when jsonb_typeof(cur) = 'array' and m[1] ~ '^\d+$' then cur->(m[1]::int) else cur->m[1] end;
+    cur := case when jsonb_typeof(cur) = 'array' and m[1] ~ '^\d{1,9}$' then cur->(m[1]::int) else cur->m[1] end;
     if m[2] is not null then
       if jsonb_typeof(cur) is distinct from 'array' then return jsonb_build_object('error', 'the snapshot''s ' || array_to_string(out, '.') || ' is not a list'); end if;
       select o - 1 into i from jsonb_array_elements(cur) with ordinality e(x, o) where x->>m[3] = m[4] order by o limit 1;
@@ -100,8 +100,11 @@ begin
    where coalesce(a.merged_into, a.id) = root and not a.retired and r.kind = 'snapshot' order by r.t desc, r.updated_at desc limit 1;
   -- each stored fact sent again unchanged whose number now fails: its problem, as check_cards words it
   if jsonb_typeof(incoming->'cards') = 'array' then
-    for c in select x from jsonb_array_elements(incoming->'cards') x where jsonb_typeof(x) = 'object' and jsonb_typeof(x->'facts') = 'array' loop
-      select x into pc from jsonb_array_elements(prev) x where jsonb_typeof(x) = 'object' and x->>'id' = c->>'id' limit 1;
+    -- only open cards, as check_cards checks only those: a fact stored on a done or withdrawn card was never checked
+    for c in select x from jsonb_array_elements(incoming->'cards') x where jsonb_typeof(x) = 'object' and jsonb_typeof(x->'facts') = 'array'
+                and coalesce(x->>'status', 'open') = 'open' and jsonb_typeof(coalesce(x->'status', '"open"')) = 'string' loop
+      select x into pc from jsonb_array_elements(prev) x where jsonb_typeof(x) = 'object' and x->>'id' = c->>'id'
+         and coalesce(x->>'status', 'open') = 'open' and jsonb_typeof(coalesce(x->'status', '"open"')) = 'string' limit 1;
       if pc is null or jsonb_typeof(pc->'facts') is distinct from 'array' then continue; end if;
       flags := '[]'::jsonb;
       for f in select x from jsonb_array_elements(c->'facts') x where jsonb_typeof(x) = 'object' and jsonb_typeof(x->'src') = 'string' loop
@@ -115,9 +118,12 @@ begin
     end loop;
   end if;
   -- refused: every problem that isn't one of those
-  select coalesce(jsonb_agg(x), '[]'::jsonb) into refused from jsonb_array_elements(problems) x
-   where not (x->>'rule' = 'value' and exists (select 1 from jsonb_array_elements(coalesce(flagged->(x->>'card'), '[]'::jsonb)) g
-                                                where g->>'problem' = x->>'msg'));
+  -- one problem excused per flagged fact (a new fact failing the same way as an old one is still refused)
+  select coalesce(jsonb_agg(x order by o), '[]'::jsonb) into refused
+    from (select x, o, row_number() over (partition by x->>'card', x->>'rule', x->>'msg' order by o) k
+            from jsonb_array_elements(problems) with ordinality e(x, o)) q
+   where not (x->>'rule' = 'value' and k <= (select count(*) from jsonb_array_elements(coalesce(flagged->(x->>'card'), '[]'::jsonb)) g
+                                              where g->>'problem' = x->>'msg'));
   if jsonb_array_length(refused) > 0 then
     raise exception 'cards refused (% problems; fix each, nothing was written): %', jsonb_array_length(refused),
       (select string_agg(coalesce(x->>'card', '-') || ' [' || (x->>'rule') || '] ' || (x->>'msg'), ' | ') from jsonb_array_elements(refused) x);

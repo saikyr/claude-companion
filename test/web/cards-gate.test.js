@@ -201,6 +201,13 @@ function pyRules(card) {
     check(/cards refused/.test(put([CASES[0][1], edited])), 'an edited fact with the wrong number is refused');
     check(/cards refused/.test(put([CASES[0][1], lvl, { id: 'new-bad', title: 'Level', facts: [{ label: 'Level', value: '59', src: 'snapshot#character.level' }] }])), 'a new card with the old number is refused');
     check(/cards refused/.test(put([CASES[0][1], Object.assign({}, lvl, { title: 'Swap layers' })])), 'an old card that breaks another rule is still refused');
+    const dup = Object.assign({}, lvl, { facts: lvl.facts.concat([{ label: 'Level', value: '42', src: 'snapshot#character.level' }]) });
+    check(/cards refused/.test(put([CASES[0][1], dup])), 'a new wrong fact with the same label and src as an old one is still refused (one excuse per old fact)');
+    const laund = { id: 'laund', title: 'Level', status: 'done', facts: [{ label: 'Level', value: '7', src: 'snapshot#character.level' }] };
+    check(put([CASES[0][1], lvl, laund]) === '', 'a done card is not checked');
+    check(/cards refused/.test(put([CASES[0][1], lvl, Object.assign({}, laund, { status: 'open' })])), 'a done card reopened: its never-checked fact is checked');
+    check(!(stored().cards.find((c) => c.id === 'laund') || {}).stale, 'a done card is not marked stale');
+    check(put([CASES[0][1], lvl]) === '', 'back to the list without it');
     await pc.client.pushSnapshot(snapshot);
     check(put([CASES[0][1], lvl]) === '' && !stored().cards.find((c) => c.id === 'lvl-card').stale, 'the number matches again: the mark goes');
 
