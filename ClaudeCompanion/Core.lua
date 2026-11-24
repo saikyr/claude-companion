@@ -434,6 +434,7 @@ local API_NAMES = { "C_AuctionHouse", "C_TooltipInfo", "C_EquipmentSet", "GetTal
     "C_Map", "C_UnitAuras", "UnitBuff", "GetAuctionItemInfo", "PostAuction", "GetInboxInvoiceInfo", "NumTaxiNodes",
     "C_Item", "GetItemInfo", "GetItemStats", "issecretvalue", "CombatLogGetCurrentEventInfo", "GetSpellBonusHealing",
     "GetManaRegen", "C_Spell", "GetMacroInfo", "GetActionInfo", "GetNumBindings", "GetBindLocation",
+    "GetCombatRating", "GetCombatRatingBonus", "GetSpellDescription", "GetInventoryItemCooldown", "GetContainerItemCooldown",
     -- for measuring Forever drop rates and resistances (docs/ROADMAP.md): which mob each loot slot came
     -- from, and whether the combat log can be read or turned on by an addon
     "GetLootSourceInfo", "GetLootSlotLink", "GetNumLootItems", "LoggingCombat", "CombatLog_Object_IsA", "UnitTokenFromGUID" }
@@ -441,6 +442,7 @@ local API_NAMES = { "C_AuctionHouse", "C_TooltipInfo", "C_EquipmentSet", "GetTal
 function ns.Capabilities()
     local caps = { api = {}, secret = {}, version = ns.VERSION, checked = ns.Now() }
     for _, name in ipairs(API_NAMES) do caps.api[name] = type(_G[name]) end
+    caps.api["C_Traits.GetTraitDescription"] = type(C_Traits and C_Traits.GetTraitDescription)
     local function probe(label, fn, ...)
         local ok, v = pcall(fn, ...)
         if not ok then caps.secret[label] = "error"

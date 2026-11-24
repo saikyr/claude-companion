@@ -83,6 +83,20 @@ test('the move points the page\'s own key (Name-Realm) at the new profile', () =
   W.remove(id); delete store['cc.gear.profile.Tank-Realm.spec1'];
 });
 
+test('hit counts only up to the cap: the room left with the rest of your gear', () => {
+  const w = Object.defineProperty({ 45: 1, 31: 1.66 }, 'hit', { value: { per1: 10, capR: 50, haveR: 40 }, enumerable: false });
+  assert.strictEqual(W.score({ 31: 20, 45: 10 }, w), 10 + 1.66 * 10, 'replacing an item with no hit: 10 rating of room');
+  assert.strictEqual(W.score({ 31: 20 }, w, null, { 31: 10 }), 1.66 * 20, 'replacing an item with 10 hit frees 10 more');
+  assert.strictEqual(W.score({ 18: 1 }, w), 1.66 * 10, 'a "+1% hit" line is 10 rating');
+  const capped = Object.defineProperty({ 45: 1, 31: 1.66 }, 'hit', { value: { per1: 10, capR: 50, haveR: 80 }, enumerable: false });
+  assert.strictEqual(W.score({ 31: 20, 45: 5 }, capped), 5, 'past the cap hit is worth nothing');
+  assert.ok(Math.abs(W.score({ 31: 20, 45: 5 }, { 45: 1, 31: 1.66 }) - 38.2) < 1e-9, 'weights with no hit model count hit flat');
+  assert.strictEqual(W.score({ 117: 2, 45: 5 }, w), 5, 'a melee "+2% hit" line is no spell hit');
+  assert.strictEqual(W.score({ 31: 30 }, Object.defineProperty({ 31: 1 }, 'hit', { value: { per1: 10, capR: 50, haveR: 50 }, enumerable: false }), 'Main hand', W.addSt({}, { 31: 30 })), 30,
+    'a two-hander replacing an off hand with 30 hit gets that room back (main hand + off hand stats)');
+  assert.deepStrictEqual(Object.keys(w), ['31', '45'], 'the model stays out of the saved weights');
+});
+
 // ---------------------------------------------------------------- the engine, a level 58 Warrior
 const tip = (...l) => l.map((x) => ({ l: x }));
 const ITEMS = {

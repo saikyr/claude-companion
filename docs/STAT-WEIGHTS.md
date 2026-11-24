@@ -49,8 +49,12 @@ guide's order; 0.3 for stats the guide says are "also valued"; 0 for the rest. T
   (0.03 a point when the guide doesn't rank it), so a cloth robe with the same stats never beats plate.
 
 This turns "A before B" into "a budget spent on A is worth more than the same budget on B". It is
-not a simulation. Known gaps: hit and expertise caps aren't applied (the app doesn't know your hit
-total yet); weapon skill isn't scored; Use and proc effects aren't scored (marked "+ effect").
+not a simulation. Spell hit has a cap: for spell weights, hit counts only up to the raid cap
+(`data/rules.js` `spellHit`, 17% against raid bosses, from the Forever guides; the owner's choice, since
+pre-raid gear is gear for raids), measured against your hit from the compared gear plus talents read
+from their text at your rank (Shadow Focus, Elemental Precision...), with the client's own rating per 1%
+(`stats.spellHitRating / spellHitBonus`); past the cap hit is worth nothing (`gear[].hit` in the snapshot).
+Known gaps: melee hit and expertise caps aren't applied; weapon skill isn't scored; Use and proc effects aren't scored (marked "+ effect").
 
 **Which weights a spec uses.** Each spec uses its biggest talent tree's profile (Holy 17/33/0 → Holy)
 until you pick another on the Stat weights page. With no talent points yet it uses the tree the class levels in (Arms,
@@ -63,7 +67,7 @@ Shock), Feral (cat, bear threat) / (bear survival)), the first being the default
 2026), because the guides give no numbers and their order is for level-60 raids: **Holy** and
 **Discipline** (Healing 1, Spell power 1, MP5 2.3, Intellect 1.6, Spirit 0.7, Crit 0.3: mana stats counted
 for the half of pulls where you run out of mana) and **Shadow** (Spell power / Shadow damage 1, MP5 0.66,
-Spirit 0.55, Intellect 0.35, Crit 0.3, Hit 0.2: built for questing with Spirit Tap). The Stat weights
+Spirit 0.55, Intellect 0.35, Crit 0.3, Hit 1.66 up to the cap and 0 past it: built for questing with Spirit Tap). The Stat weights
 page shows the reason for every number and the guide's order next to it. The guide-order Priest sets
 are no longer offered as picks.
 
