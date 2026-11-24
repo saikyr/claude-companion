@@ -71,7 +71,7 @@ are no longer offered as picks.
 
 Copy any profile, edit its numbers, rename, reset to the profile it came from, or delete it. They
 are saved in the browser (`localStorage` key `cc.weights.v1`), per class, so alts of one class share
-them. Which profile a spec uses is kept per character and spec (`cc.gear.profile.<name>.<spec>`).
+them. Which profile a spec uses is kept per character and spec (`cc.gear.profile.<Name-Realm>.spec<1|2>`, mirrored to `companion-data/settings.json` and synced).
 The old "Your own weights" list moves into a profile by itself the first time the app opens.
 Moving these settings into a file next to the snapshot is issue #15.
 

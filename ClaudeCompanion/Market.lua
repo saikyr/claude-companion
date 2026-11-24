@@ -182,9 +182,38 @@ ns.On("CHAT_MSG_SYSTEM", function(text)
 end)
 
 ---------------------------------------------------------------- mailbox
+-- One AH letter, one record (#8). A letter is its item, price, stack size, the other player and when the
+-- sale happened (worked out from the days it has left, steady to a few seconds between reads). Two letters
+-- alike in the same mailbox are two sales: the k-th such letter is recorded when fewer than k records
+-- already match. (The old id, item|price|hour of days left, counted two Mooncloth sold in one hour once,
+-- and changed every hour.)
+local SAME_LETTER = 60       -- seconds: the sale time read from days left moves by a few seconds between reads
+local function sameSale(r, x)
+    return r.item == x.item and r.price == x.price and (r.count or 1) == (x.count or 1)
+        and (r.buyer or r.seller) == x.who and math.abs((r.t or 0) - x.t) < SAME_LETTER
+end
+local function countSame(list, x)
+    local n = 0
+    for i = 1, #list do if sameSale(list[i], x) then n = n + 1 end end
+    return n
+end
+
 local function ReadMail()
     local c = ns.char
     if not c then return end
+    c.ah.sales = c.ah.sales or {}
+    c.ah.buys = c.ah.buys or {}
+    c.ah.salesSeen = nil              -- the old per-letter ids (they grew forever); the records themselves are the check now
+    local before = { sales = {}, buys = {} }
+    for i, r in ipairs(c.ah.sales) do before.sales[i] = r end
+    for i, r in ipairs(c.ah.buys) do before.buys[i] = r end
+    local thisRead = { sales = {}, buys = {} }
+    -- record a letter unless this mailbox already had as many like it as are recorded
+    local function once(kind, x)
+        local k = countSame(thisRead[kind], x) + 1
+        thisRead[kind][#thisRead[kind] + 1] = { item = x.item, price = x.price, count = x.count, buyer = x.who, t = x.t }
+        return countSame(before[kind], x) < k
+    end
     local n = Clean(Call(GetInboxNumItems)) or 0
     local list = {}
     local maxAtt = ATTACHMENTS_MAX_RECEIVE or 16
@@ -214,29 +243,20 @@ local function ReadMail()
                 for _, x in ipairs(m.items) do n = n + (x.count or 1) end
                 m.invoice.count = n
             end
-            -- record each sale once (same item + price + days left = same letter)
+            -- record each letter once (once() above: same item, price, count, player and sale time = same letter)
             -- what you paid for things you won (for flip profit)
             if m.invoice.type == "buyer" then
-                local id = table.concat({ "buy", tostring(m.invoice.item), tostring(m.invoice.bid),
-                    tostring(m.daysLeft and math.floor(m.daysLeft * 24) or "") }, "|")
-                c.ah.salesSeen = c.ah.salesSeen or {}
-                c.ah.buys = c.ah.buys or {}
-                if not c.ah.salesSeen[id] then
-                    c.ah.salesSeen[id] = true
-                    local boughtAt = m.daysLeft and (ns.Now() - math.floor((30 - m.daysLeft) * 86400)) or ns.Now()
+                local boughtAt = m.daysLeft and (ns.Now() - math.floor((30 - m.daysLeft) * 86400)) or ns.Now()
+                if once("buys", { item = m.invoice.item, price = m.invoice.bid, count = m.invoice.count, who = m.invoice.player, t = boughtAt }) then
                     ns.Push(c.ah.buys, { t = boughtAt, seenAt = ns.Now(), item = m.invoice.item, price = m.invoice.bid,
                         count = m.invoice.count, seller = m.invoice.player }, ns.LIMITS.sales)
                 end
             end
             if m.invoice.type == "seller" then
                 -- (not the letter's money: it drops to 0 once you take the gold)
-                local id = table.concat({ tostring(m.invoice.item), tostring(m.invoice.bid),
-                    tostring(m.daysLeft and math.floor(m.daysLeft * 24) or "") }, "|")
-                c.ah.salesSeen = c.ah.salesSeen or {}
-                if not c.ah.salesSeen[id] then
-                    c.ah.salesSeen[id] = true
-                    -- mail lasts 30 days: estimate when the sale happened
-                    local soldAt = m.daysLeft and (ns.Now() - math.floor((30 - m.daysLeft) * 86400)) or ns.Now()
+                -- mail lasts 30 days: estimate when the sale happened
+                local soldAt = m.daysLeft and (ns.Now() - math.floor((30 - m.daysLeft) * 86400)) or ns.Now()
+                if once("sales", { item = m.invoice.item, price = m.invoice.bid, count = m.invoice.count, who = m.invoice.player, t = soldAt }) then
                     ns.Push(c.ah.sales, { t = soldAt, seenAt = ns.Now(), item = m.invoice.item, price = m.invoice.bid,
                         count = m.invoice.count, buyer = m.invoice.player, net = (m.invoice.bid or 0) + (m.invoice.deposit or 0) - (m.invoice.cut or 0), cut = m.invoice.cut, deposit = m.invoice.deposit }, ns.LIMITS.sales)
                 end

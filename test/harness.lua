@@ -333,6 +333,28 @@ do
   check(mailOrigin, "mailed item knows it was an AH win + price")
   check(buys, "AH purchase recorded in ah.buys")
   check(c.ah.buys[1].count == 1, "AH purchase has its stack size from the letter (#2)")
+  -- #8: two letters alike (same item, price, buyer, hour) are two sales; reading them again later adds none
+  local oldN, oldH, oldI, oldL = GetInboxNumItems, GetInboxHeaderInfo, GetInboxInvoiceInfo, GetInboxItemLink
+  local sales0, left = #c.ah.sales, 20.25
+  GetInboxNumItems = function() return 3 end
+  GetInboxHeaderInfo = function(i) return nil, nil, "Stormwind Auction House", "Auction successful: Mooncloth", i < 3 and 300000 or 0, 0, left, 0, false, false end
+  GetInboxInvoiceInfo = function(i) if i < 3 then return "seller", "Mooncloth", "Buyer", 300000, 300000, 100, 15000 end end
+  GetInboxItemLink = function() return nil end
+  Fire("MAIL_INBOX_UPDATE"); RunTimers()
+  check(#c.ah.sales - sales0 == 2, "two identical Mooncloth sales in one mailbox are two sales (" .. (#c.ah.sales - sales0) .. ")")
+  Advance(3600); left = left - 1 / 24
+  Fire("MAIL_INBOX_UPDATE"); RunTimers()
+  check(#c.ah.sales - sales0 == 2, "read again an hour later: still two (" .. (#c.ah.sales - sales0) .. ")")
+  GetInboxNumItems = function() return 1 end
+  Fire("MAIL_INBOX_UPDATE"); RunTimers()
+  check(#c.ah.sales - sales0 == 2 and c.ah.salesSeen == nil, "one letter taken: nothing added, and no per-letter ids kept")
+  GetInboxNumItems, GetInboxHeaderInfo, GetInboxInvoiceInfo, GetInboxItemLink = oldN, oldH, oldI, oldL
+  -- #9: one price rule with the app's planPrice: the newest scan found none listed -> an earlier scan's median
+  c.ah.prices["99901"] = { obs = { { t = 1, src = "scan", qty = 4, min = 900, med = 1000 }, { t = 2, src = "scan", qty = 0 } } }
+  c.ah.prices["99902"] = { obs = { { t = 1, src = "browse", min = 700 } } }
+  c.ah.prices["99903"] = { obs = { { t = 1, src = "scan", qty = 3, min = 400, med = 500 } } }
+  check(ns.PlanPrice(99901) == 1000 and ns.PlanPrice(99902) == 700 and ns.PlanPrice(99903) == 500 and ns.PlanPrice(99904) == nil,
+    "ns.PlanPrice: newest scan's median, else the newest price seen (the app's rule)")
   if FAILED then error("v1.4 checks failed") end
 end
 -- #1 item cache: full cache makes room (oldest first) and keeps items in use
@@ -858,6 +880,30 @@ do -- one source for quests, NPCs and item sources: the app's pack, never a copy
   check(src == 0, "no item-source copies in the save (" .. src .. " items have one)")
   check(OLD_ITEM_KEPT, "dropping old copies keeps the item itself")
   if FAILED then error("data source checks failed") end
+end
+do -- #16: item cooldowns (Salt Shaker on 3 days, Hearthstone on 1 hour), read from the game's own timers
+  local function check(ok, what) print((ok and "PASS " or "FAIL ") .. what); if not ok then FAILED = true end end
+  local oldInfo, oldCd, oldInvCd, oldLink = C_Container.GetContainerItemInfo, C_Container.GetContainerItemCooldown, GetInventoryItemCooldown, GetInventoryItemLink
+  local shaker = true
+  C_Container.GetContainerItemInfo = function(b, s)
+    if b ~= 0 then return nil end
+    if s == 1 then return { hyperlink = "|cffffffff|Hitem:6948::|h[Hearthstone]|h|r", itemID = 6948, iconFileID = 134414 } end
+    if s == 2 and shaker then return { hyperlink = "|cffffffff|Hitem:15846::|h[Salt Shaker]|h|r", itemID = 15846, iconFileID = 133869 } end
+  end
+  local cds = { [1] = { GetTime() - 600, 3600 }, [2] = { GetTime() - 3600, 259200 } }
+  C_Container.GetContainerItemCooldown = function(b, s) local c = cds[s]; if c then return c[1], c[2], 1 end return 0, 0, 1 end
+  GetInventoryItemCooldown = function() return 0, 0, 1 end
+  local list = ns.ItemCooldowns()
+  local by = {}; for _, r in ipairs(list) do by[r.id] = r end
+  check(by[6948] and math.abs(by[6948].readyAt - (ns.Now() + 3000)) <= 1, "Hearthstone: ready in 50 minutes")
+  check(by[15846] and math.abs(by[15846].readyAt - (ns.Now() + 255600)) <= 1 and by[15846].duration == 259200, "Salt Shaker: 3-day cooldown, ready at its time")
+  ns.char.snap.itemCooldowns = list
+  cds = {}
+  local after = ns.ItemCooldowns(); by = {}; for _, r in ipairs(after) do by[r.id] = r end
+  check(by[15846] and not by[6948], "after the timers end: the Salt Shaker stays (ready now), the Hearthstone doesn't")
+  ns.char.snap.itemCooldowns = after; shaker = false
+  check(#ns.ItemCooldowns() == 0, "an item you no longer have leaves the list")
+  C_Container.GetContainerItemInfo, C_Container.GetContainerItemCooldown, GetInventoryItemCooldown, GetInventoryItemLink = oldInfo, oldCd, oldInvCd, oldLink
 end
 local f = io.open("out.lua", "w"); f:write("ClaudeCompanionDB = " .. ser(ClaudeCompanionDB)); f:close()
 print("DIAG:")

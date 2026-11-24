@@ -1,0 +1,46 @@
+name: pack
+# Weekly rebuild of the game-data pack (gamedata/build.sh, docs/DEVELOP.md), pushed to a pack/rebuild-*
+# branch. A push by this workflow doesn't start other workflows by itself, so it starts the checks on that
+# branch; the build project's scheduled task opens the PR and merges it when they pass (#20).
+on:
+  schedule:
+    - cron: '17 5 * * 1'   # Mondays 05:17 UTC
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: write
+concurrency: pack
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the pack (about 10 minutes)
+        run: |
+          pip install -q lupa
+          sh gamedata/build.sh
+      - name: Copy it in, with the in-game drop chances
+        run: |
+          cp gamedata/work/out/gamedata.js gamedata/work/out/suffixes.js ClaudeCompanion/web/data/
+          cp gamedata/work/out/icons.js ClaudeCompanion/web/js/
+          cp gamedata/work/out/COVERAGE.md gamedata/
+          python3 -I tools/make-drops.py
+      - name: The pack is complete
+        run: |
+          python3 -I gamedata/test_pack.py ClaudeCompanion/web/data/gamedata.js
+          python3 -I tools/make-drops.py --check
+          node test/web/data.test.js
+      - name: Push the branch and start its checks
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git add ClaudeCompanion/web/data/gamedata.js ClaudeCompanion/web/data/suffixes.js ClaudeCompanion/web/js/icons.js gamedata/COVERAGE.md ClaudeCompanion/Drops.lua
+          if git diff --cached --quiet; then echo "the pack hasn't changed"; exit 0; fi
+          B=pack/rebuild-$(date -u +%Y%m%d)-$GITHUB_RUN_ID
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git checkout -b "$B"
+          git commit -q -m "Weekly game-data pack rebuild ($(date -u +%Y-%m-%d))"
+          git push -q origin "$B"
+          gh workflow run checks.yml --ref "$B"

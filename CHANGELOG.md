@@ -3,6 +3,11 @@
 Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 
 ## 1.5.0 (in progress: every merge to main updates itself)
+- **The game data rebuilds itself every week** (drops, quests, items, from the same sources), and its age is on the System tab, and on Overview when it is more than two weeks old.
+- **Item cooldowns.** Salt Shaker, Hearthstone and on-use trinkets are read from the game's own timers (at every snapshot and when you use one) and listed on Overview with profession cooldowns; a long one (Salt Shaker) shows "ready now" on the Now page.
+- **Two identical AH sales are both counted.** Two Mooncloth sold for the same price in one mailbox read were recorded as one sale; each letter is now one sale, and a letter read again isn't counted twice.
+- **The in-game plan price is the app's**: the newest scan's median when that scan saw the item, else the newest price seen.
+- **Gear picks per character and realm.** Weight profile, gear set and pre-BiS picks are kept per Name-Realm, so same-named characters on two realms don't share them; the old per-index keys (that let an old pick reach another spec) are no longer read.
 - **Pre-BiS is what a 5-man group can get.** Loot from world bosses (the green dragons, Azuregos, Kazzak, the Abyssal Council), raid chests, the AQ reputation chain, battleground quartermasters (Alterac Valley, Warsong Gulch, Arathi Basin) and crafts that need raid materials (Molten Core, Onyxia, Blackwing Lair, Zul'Gurub, Naxxramas) now show under "Raid, PvP and not in game yet" with why, never as pre-BiS. World-drop epics that raid bosses also list (Maiden's Circle) stay world drops. An item's reputation need is the highest any source asks (Exalted, not Revered, for the Bronze Dragonflight ring).
 - **Rewards of a finished quest are scored.** When the game reads a complete quest back with no rewards, the app scores the game data's rewards for every spec instead of none.
 - **Claude's cards stay put.** A computer could send an old copy of the From Claude cards back over new ones a minute after Claude wrote them, so new cards never showed. Computers no longer send the cards, and the sync database ignores them from any computer.
