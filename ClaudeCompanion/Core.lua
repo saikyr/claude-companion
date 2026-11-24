@@ -27,7 +27,7 @@ ns.VERSION = "1.5.0"
 ns.SCHEMA = 1
 -- the source commit of this build: tools/publish-stable.py writes it here; "dev" in a checkout.
 -- The app compares it with the build it runs itself, to say when the game still needs a /reload.
-ns.BUILD = "dde73e2e0ebd"
+ns.BUILD = "f9d7673cc2e9"
 
 BINDING_HEADER_CLAUDECOMPANION = "Claude Companion"
 BINDING_NAME_CLAUDECOMPANION_TOGGLE = "Open or close Claude window"
@@ -175,6 +175,7 @@ local function TooltipLines(link)
     end
     return #out > 0 and out or nil
 end
+ns.TooltipLines = TooltipLines
 
 -- The cache is capped (LIMITS.items). When it is full, the items seen longest ago make room, a tenth
 -- of the cap at a time, but never one that any character wears, carries, banks, has in the mail or
@@ -434,7 +435,7 @@ local API_NAMES = { "C_AuctionHouse", "C_TooltipInfo", "C_EquipmentSet", "GetTal
     "GetFactionInfo", "C_CurrencyInfo", "C_QuestLog", "GetQuestLogTitle", "C_Container", "GetContainerItemInfo",
     "C_Map", "C_UnitAuras", "UnitBuff", "GetAuctionItemInfo", "PostAuction", "GetInboxInvoiceInfo", "NumTaxiNodes",
     "C_Item", "GetItemInfo", "GetItemStats", "issecretvalue", "CombatLogGetCurrentEventInfo", "GetSpellBonusHealing",
-    "GetManaRegen", "C_Spell", "GetMacroInfo", "GetActionInfo", "GetNumBindings", "GetBindLocation",
+    "GetManaRegen", "C_Spell", "GetMacroInfo", "C_AddOns", "GetActionInfo", "GetNumBindings", "GetBindLocation",
     "GetCombatRating", "GetCombatRatingBonus", "GetSpellDescription", "GetInventoryItemCooldown", "GetContainerItemCooldown",
     -- for measuring Forever drop rates and resistances (docs/ROADMAP.md): which mob each loot slot came
     -- from, and whether the combat log can be read or turned on by an addon

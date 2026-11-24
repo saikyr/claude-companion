@@ -94,8 +94,11 @@ Ascension, with 1 of 3 gems, and without finding Bijou's Belongings.
    `game.quest(...)->'unlocks'`): who gives it, where they stand inside, and what goes wrong (for example
    "pugs kill the Scarshield Infiltrator because he shows hostile: ask them not to").
 2. **Inside spots in walking order.** Every quest giver, quest object and boss, as landmark steps, never
-   coordinates alone. Take them from the game data when it has positions, otherwise from a named Forever
-   source. If no source has a spot, say so before the run, not after.
+   coordinates alone. First where his own visits saw them: the snapshot's `quests[].where` (an objective's
+   creature, object or item, or the hand-in NPC, with the sub-area the game named, such as "Hordemar City",
+   and how often) and `places[]` (every sub-area of each instance with its bosses, creatures, objects and quest
+   items). No source places anything inside Forever's dungeons (the game data's points stop at the door), so
+   for what he hasn't seen, a named Forever source, cited. If no source has a spot, say so before the run, not after.
 3. **Loot to reserve.** Which drops he must Need or reserve (quest items, key parts such as the gems), and
    the exact line to type in party before the first pull.
 4. **Skip list.** Quests that gate nothing and whose rewards the app scores below what he wears, for every

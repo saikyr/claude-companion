@@ -28,6 +28,8 @@ local function Character()
     -- Forever reads no realm name: the server id in the GUID ("Player-<server>-<id>") tells auction houses apart (#12)
     x.server = guid and tonumber(string.match(guid, "^Player%-(%d+)%-")) or nil
     x.level = Clean(UnitLevel("player"))
+    -- the level cap, from the client (#13): the gear engine's pre-BiS goes up to it
+    x.maxLevel = Clean(Call(GetMaxPlayerLevel)) or Clean(MAX_PLAYER_LEVEL)
     x.race = Clean((UnitRace("player")))
     local className, classFile = UnitClass("player")
     x.class, x.classFile = Clean(className), Clean(classFile)
@@ -87,6 +89,55 @@ local SLOT_NAMES = { [0] = "Ammo", "Head", "Neck", "Shoulder", "Shirt", "Chest",
     "Hands", "Finger1", "Finger2", "Trinket1", "Trinket2", "Back", "MainHand", "OffHand", "Ranged", "Tabard" }
 ns.SLOT_NAMES = SLOT_NAMES
 
+-- A weapon's enchants (#91), from the game: the permanent one is the enchant id in the link and the tooltip
+-- lines the same item without it doesn't have; the temporary one (an oil, a sharpening stone, a poison) is
+-- GetWeaponEnchantInfo's time and charges, and its name is the tooltip line that ends in "(30 min)".
+local function lineSet(lines)
+    local set = {}
+    for _, l in ipairs(lines or {}) do if l.l then set[l.l] = true end end
+    return set
+end
+local function TempLine(slot)
+    if not (C_TooltipInfo and C_TooltipInfo.GetInventoryItem) then return nil end
+    local data = Call(C_TooltipInfo.GetInventoryItem, "player", slot)
+    for _, line in ipairs(type(data) == "table" and type(data.lines) == "table" and data.lines or {}) do
+        local t = Clean(line.leftText)
+        t = type(t) == "string" and t or nil
+        local name = t and (t:match("^(.-) %(%d+ min%)") or t:match("^(.-) %(%d+ sec%)") or t:match("^(.-) %(%d+ hours?%)")
+            or t:match("^(.-) %(%d+ [Cc]harges?%)"))
+        if name then return name, t end
+    end
+end
+local function Enchants(slot, link)
+    local e = {}
+    local id = tonumber(link:match("item:%d+:(%d+)"))
+    if id and id > 0 then
+        e.id = id
+        local with, without = ns.TooltipLines and ns.TooltipLines(link), ns.TooltipLines and ns.TooltipLines((link:gsub("(item:%d+:)%d+", "%1")))
+        if with and without then
+            local base, text = lineSet(without), {}
+            for _, l in ipairs(with) do if l.l and not base[l.l] then text[#text + 1] = l.l end end
+            if #text > 0 then e.text = table.concat(text, " / ") end
+        end
+    end
+    if (slot == 16 or slot == 17) and GetWeaponEnchantInfo then
+        local r = { Call(GetWeaponEnchantInfo) }
+        local has, ms, charges, tid = r[1], r[2], r[3], r[4]
+        if slot == 17 then has, ms, charges, tid = r[5], r[6], r[7], r[8] end
+        if Clean(has) then
+            local name, line = TempLine(slot)
+            e.temp = { id = Clean(tid), left = Clean(ms) and math.floor(Clean(ms) / 1000) or nil, charges = Clean(charges) ~= 0 and Clean(charges) or nil,
+                name = name, line = line }
+        end
+    end
+    return next(e) and e or nil
+end
+-- an error reading an enchant loses only the enchant, not the worn gear
+local function EnchantsSafe(slot, link)
+    local ok, e = pcall(Enchants, slot, link)
+    return ok and e or nil
+end
+
 local function Equipped()
     local out = {}
     for slot = 0, 19 do
@@ -96,7 +147,8 @@ local function Equipped()
             out[#out + 1] = { slot = slot, slotName = SLOT_NAMES[slot], link = link, item = ns.NoteItem(link),
                 icon = Clean(Call(GetInventoryItemTexture, "player", slot)),
                 count = Clean(Call(GetInventoryItemCount, "player", slot)),
-                dur = Clean(cur), durMax = Clean(max) }
+                dur = Clean(cur), durMax = Clean(max),
+                enchant = (slot == 16 or slot == 17 or slot == 18) and EnchantsSafe(slot, link) or nil }
         end
     end
     return out
@@ -449,6 +501,32 @@ local function Macros()
     return out
 end
 
+-- the addons installed for this character (#95): a click-cast or raid-frame addon changes which macros make
+-- sense. Name and title only, never their saved settings.
+local function Addons()
+    local A = C_AddOns or {}
+    local num, info = A.GetNumAddOns or GetNumAddOns, A.GetAddOnInfo or GetAddOnInfo
+    local meta, loaded = A.GetAddOnMetadata or GetAddOnMetadata, A.IsAddOnLoaded or IsAddOnLoaded
+    local me = Clean(Call(UnitName, "player"))
+    local out = {}
+    for i = 1, Clean(Call(num)) or 0 do
+        local name, title, _, loadable, reason = Call(info, i)
+        name = Clean(name)
+        if type(name) == "string" then
+            -- C_AddOns takes (addon, character); the older global takes (character, addon)
+            local on
+            if A.GetAddOnEnableState then on = Clean(Call(A.GetAddOnEnableState, name, me))
+            elseif GetAddOnEnableState then on = Clean(Call(GetAddOnEnableState, me, name)) end
+            local enabled
+            if type(on) == "number" then enabled = on > 0 elseif type(on) == "boolean" then enabled = on end
+            out[#out + 1] = { name = name, title = type(Clean(title)) == "string" and Clean(title):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|cn[^:]*:", ""):gsub("|T.-|t", ""):gsub("|r", "") or nil,
+                version = Clean(Call(meta, name, "Version")), enabled = enabled,
+                loaded = Clean(Call(loaded, name)) and true or false, why = Clean(reason) }
+        end
+    end
+    return out
+end
+
 local function KeyBindings()
     local out = {}
     local n = Clean(Call(GetNumBindings)) or 0
@@ -490,6 +568,7 @@ local function Spellbook()
             local tab = { name = Clean(name), spells = {} }
             for i = (Clean(off) or 0) + 1, (Clean(off) or 0) + (Clean(num) or 0) do
                 local sname, rank, id = Call(GetSpellBookItemName, i, BOOKTYPE_SPELL or "spell")
+                if Clean(id) then ns.NoteSpell(Clean(id)) end
                 tab.spells[#tab.spells + 1] = { name = Clean(sname), rank = Clean(rank), id = Clean(id),
                     icon = Clean(Call(GetSpellBookItemTexture, i, BOOKTYPE_SPELL or "spell")) }
             end
@@ -746,7 +825,7 @@ end
 ---------------------------------------------------------------- the full snapshot
 local PARTS = {
     { "character", Character }, { "stats", Stats }, { "equipped", Equipped }, { "bags", Bags },
-    { "gearSets", GearSets }, { "talents", Talents }, { "macros", Macros }, { "bindings", KeyBindings },
+    { "gearSets", GearSets }, { "talents", Talents }, { "macros", Macros }, { "addons", Addons }, { "bindings", KeyBindings },
     { "spellbook", Spellbook }, { "skills", Skills }, { "reputation", Reputation }, { "currencies", Currencies },
     { "quests", QuestLog }, { "completedQuests", CompletedQuests }, { "group", ns.Group }, { "buffs", Buffs },
     { "itemCooldowns", ItemCooldowns },

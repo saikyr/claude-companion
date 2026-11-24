@@ -35,8 +35,64 @@
   const installedReady = location.protocol === 'file:' ? Promise.resolve()
     : fetch('api/update', { cache: 'no-store' }).then((r) => r.json()).then((st) => { installed = (st && st.installed) || null; }).catch(() => {});
 
+  // the consumables you carry and bank, one row per item, with what they do and what they don't stack with
+  // when a part of the snapshot was read in game: a part the logout kept from the read before carries that time
+  function readAt(s, part) {
+    const t = arr(s.kept).includes(part) && s.keptFrom ? s.keptFrom : s.taken;
+    return t ? new Date(t * 1000).toISOString() : null;
+  }
+  function consumables(s) {
+    const by = {}, groups = ((window.GAMERULES || {}).stacking || {}).groups || [], label = ((window.GAMERULES || {}).stacking || {}).label;
+    const add = (x, where) => {
+      if (!x || !x.item) return;
+      const it = A.item(x.item) || {}, id = x.id || it.id || Number((/item:(\d+)/.exec(x.item) || [])[1]), g = A.gdItem(id);
+      const cls = it.class != null ? it.class : g ? g[9] : null, name = it.name || (g && g[0]) || '#' + id;
+      // class 0 (consumables), plus the oils and stones the game files under Trade Goods (class 7)
+      if (cls !== 0 && !(cls === 7 && groups.some((gr) => arr(gr.items).some((rx) => rx.test(name))))) return;
+      const r = by[id] || (by[id] = { id, name, bags: 0, bank: 0, use: [], from: null });
+      r[where] += x.count || 1;
+      if (!r.use.length) {
+        const own = arr(it.tip).map((l) => l && l.l).filter((l) => l && /^(Use|Equip|Chance on hit):|well fed|^Requires/i.test(l));
+        const pack = g && g[11] === 'e' ? arr(g[10]).filter((l) => /^(Use|Equip):|well fed/i.test(l)) : [];
+        if (own.length) { r.use = own; r.from = 'game'; } else if (pack.length) { r.use = pack; r.from = 'pack'; }
+      }
+    };
+    arr(s.bags).forEach((b) => arr(b.items).forEach((x) => add(x, 'bags')));
+    arr(((A.CH || {}).bank || {}).bags).forEach((b) => arr(b.items).forEach((x) => add(x, 'bank')));
+    // buffs kept at logout from an older read may have run out since: only a fresh read counts for a clash
+    const buffs = arr(s.kept).includes('buffs') ? [] : arr(s.buffs).map((b) => b.name).filter(Boolean);
+    return Object.values(by).map((r) => {
+      const text = r.use.join(' ');
+      const gs = groups.filter((gr) => (gr.items && gr.items.some((rx) => rx.test(r.name))) || (gr.tip && gr.tip.test(text)));
+      const clash = [];
+      gs.forEach((gr) => arr(gr.buffs).forEach((rx) => buffs.filter((b) => rx.test(b)).forEach((b) => clash.push({ buff: b, why: gr.why, label }))));
+      // a weapon oil or stone: it replaces the one already on a weapon
+      gs.filter((gr) => gr.kind === 'weapon').forEach(() => arr(s.equipped).forEach((e) => {
+        const t = !arr(s.kept).includes('equipped') && e && e.enchant && e.enchant.temp;
+        if (t) clash.push({ weapon: e.slotName, on: t.name || null, why: 'it replaces what is on that weapon now', label });
+      }));
+      return Object.assign(r, { groups: gs.map((gr) => ({ id: gr.id, why: gr.why, label })), notWith: clash });
+    }).sort((a, b) => a.name.localeCompare(b.name));
+  }
+
   // a quest's reward items: from the game when the quest is in the log (it shows the real rolls),
   // else from the game-data pack. Each with the app's score for every spec.
+  // a quest's things found inside an instance on your visits: an objective's creature, object or item, or the
+  // NPC you hand it in to, matched by name in placesSeen ({name, kind, instance, sub, n, last}); [] when none
+  function questWhere(q, to) {
+    const texts = arr(q.objectives).map((o) => String(o.text || '').toLowerCase());
+    if (to && to[1]) texts.push(String(to[1]).toLowerCase());
+    const out = [];
+    Object.entries(A.placesSeen ? A.placesSeen() : {}).forEach(([instance, subs]) => subs.forEach((s) => {
+      [['npc', s.npcs], ['object', s.objects], ['item', s.items], ['boss', s.bosses.map((name) => ({ name }))]].forEach(([kind, list]) => list.forEach((x) => {
+        const nm = String(x.name || '').toLowerCase();
+        // the whole name as words ("Thor" isn't in "Thorium")
+        const re = nm.length > 3 && new RegExp('(^|[^\\p{L}\\p{N}])' + nm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '($|[^\\p{L}\\p{N}])', 'u');
+        if (re && texts.some((t) => re.test(t))) out.push({ name: x.name, kind, instance, sub: s.sub, n: x.n || null, last: x.last || null });
+      }));
+    }));
+    return out;
+  }
   function questRewards(rw, gq) {
     const rated = (x, how, count) => {
       const r = CC.advice && CC.advice.rate ? CC.advice.rate(x) : null;
@@ -188,7 +244,7 @@
       // your group's spells by school (n, full resists, damage and damage resisted) and kills. Counts only
       combat: CC.combat && CC.combat.state ? CC.combat.api.summary(CC.combat.state) : null,
       pack: A.GD ? { built: A.GD.built ? new Date(A.GD.built * 1000).toISOString() : null, from: A.GD.from } : null,
-      character: { name: c.name, level: c.level, xp: c.xp, xpMax: c.xpMax, rested: c.rested, class: c.class, race: c.race,
+      character: { name: c.name, level: c.level, maxLevel: c.maxLevel || null, xp: c.xp, xpMax: c.xpMax, rested: c.rested, class: c.class, race: c.race,
         faction: c.faction, money: c.money, where: c.where, hearth: c.hearth },
       gear: CC.gear ? CC.gear.summary() : [],
       // what the app says about each item you own (js/advice.js); keep-only items are left out
@@ -197,7 +253,25 @@
       nextSteps: CC.next ? CC.next.snapshot() : [],
       bestOwned: CC.advice ? CC.advice.bestOwnedSnapshot() : [],
       weightProfiles: window.CCWeights ? window.CCWeights.custom((s.character || {}).classFile).map((p) => ({ id: p.id, name: p.name, from: p.from, weights: p.w })) : [],
-      equipped: arr(s.equipped).filter((e) => e && e.item).map((e) => ({ slot: e.slotName, id: Number((/item:(\d+)/.exec(e.item) || [])[1]), name: (A.item(e.item) || {}).name })),
+      // enchant (weapons, from the game): id and the tooltip text it adds; temp = an oil, stone or poison now on it
+      // (name, seconds left, charges)
+      equipped: arr(s.equipped).filter((e) => e && e.item).map((e) => ({ slot: e.slotName, id: Number((/item:(\d+)/.exec(e.item) || [])[1]), name: (A.item(e.item) || {}).name,
+        enchant: e.enchant ? { id: e.enchant.id || null, text: e.enchant.text || null, temp: e.enchant.temp ? Object.assign({}, e.enchant.temp, { at: readAt(s, 'equipped') }) : null } : undefined })),
+      // the buffs on you at the last in-game read (left = seconds then; at = when, ISO; a part kept at logout
+      // from the read before says that read's time)
+      buffs: arr(s.buffs).map((b) => ({ name: b.name, spell: b.spell || null, stacks: b.stacks || null, left: b.left != null ? b.left : null, at: readAt(s, 'buffs') })),
+      // potions, elixirs, flasks, food, scrolls and oils you carry or bank (#91): what each does, from the game's own
+      // tooltip (else the pack's), and buffs it doesn't stack with that are on you now
+      consumables: consumables(s),
+      // your macros (#95): account-wide and this character's, with their text, at the last in-game read
+      macros: arr(s.macros).filter((m) => m && m.name).map((m) => ({ scope: m.scope || null, name: m.name, body: m.body || '' })),
+      // the addons installed for this character: enabled (for this character), loaded now, version; a click-cast or
+      // raid-frame addon replaces most mouseover macros. null = the build doesn't read them yet
+      addons: s.addons ? arr(s.addons).filter((x) => x && x.name).map((x) => ({ name: x.name, title: x.title || x.name, version: x.version || null,
+        enabled: x.enabled != null ? x.enabled : null, loaded: !!x.loaded })) : null,
+      // what your visits saw where inside each instance (app.js placesSeen): sub-area, bosses, creatures, objects,
+      // quest items, each with how often and when last (unix); the game names no sub-areas in some (Dire Maul)
+      places: Object.entries(A.placesSeen ? A.placesSeen() : {}).map(([instance, subs]) => ({ instance, subs })),
       quests: arr(s.quests).filter((q) => q && q.id).map((q) => {
         const gq = (A.GD && A.GD.quests[q.id]) || {};
         const to = arr(gq.to)[0];
@@ -208,6 +282,8 @@
           // reputation the quest gives (pack), so a rep goal can be weighed: [faction, amount]
           rep: arr(gq.rep).map(([f, n]) => ({ faction: f, amount: n })),
           objectives: arr(q.objectives).map((o) => o.text), turnIn: to ? { npc: to[1], zone: to[2], x: to[3], y: to[4] } : null,
+          // where your visits saw what this quest names (its objectives, the NPC you hand it in to) inside an instance
+          where: questWhere(q, to),
           xp: (q.rewards || {}).xp, money: (q.rewards || {}).money,
           // every reward item scored for every spec by the app's one engine (js/advice.js rate): read
           // these, never score rewards by hand. choose = pick one of the choose rewards
@@ -231,7 +307,8 @@
           specs: R.specs.map((x) => ({ spec: x.spec, active: x.active, taken: t(x.taken), spells: x.spells, outdated: x.outdated, unranked: x.unranked,
             bars: arr((CH.specs || {})[x.spec] && CH.specs[x.spec].actionBars).filter((a) => a && a.kind)
               .map((a) => ({ slot: a.slot, key: a.key || null, kind: a.kind, name: a.name || (byId[a.id] || {}).name || null,
-                rank: a.kind !== 'spell' ? null : byId[a.id] ? rk(byId[a.id].rank) : rk(a.rank) })) })),
+                rank: a.kind !== 'spell' ? null : byId[a.id] ? rk(byId[a.id].rank) : rk(a.rank),
+                body: a.kind === 'macro' ? (a.body != null ? a.body : null) : undefined })) })),
           train: R.train, trainCost: R.trainCost, later: R.later.slice(0, 20), laterTotal: R.later.length,
           known: R.known,
           // spells and ranks only a book teaches that you don't know (Prayer of Fortitude), with the book, its

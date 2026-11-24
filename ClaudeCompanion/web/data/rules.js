@@ -117,6 +117,15 @@ window.GAMERULES = {
   ],
   disenchant: {
     from: 'warcraft.wiki.gg Disenchanting tables (Classic numbers, not measured on Forever)',
+    // the materials by item id (#21), so prices and your own results match by id, never by name
+    ids: { 'Strange Dust': 10940, 'Soul Dust': 11083, 'Vision Dust': 11137, 'Dream Dust': 11176, 'Illusion Dust': 16204,
+      'Lesser Magic Essence': 10938, 'Greater Magic Essence': 10939, 'Lesser Astral Essence': 10998, 'Greater Astral Essence': 11082,
+      'Lesser Mystic Essence': 11134, 'Greater Mystic Essence': 11135, 'Lesser Nether Essence': 11174, 'Greater Nether Essence': 11175,
+      'Lesser Eternal Essence': 16202, 'Greater Eternal Essence': 16203, 'Small Glimmering Shard': 10978, 'Large Glimmering Shard': 11084,
+      'Small Glowing Shard': 11138, 'Large Glowing Shard': 11139, 'Small Radiant Shard': 11177, 'Large Radiant Shard': 11178,
+      'Small Brilliant Shard': 14343, 'Large Brilliant Shard': 14344, 'Nexus Crystal': 20725 },
+    // your own disenchants replace the table for an item level band once there are this many of that kind
+    minMeasured: 10,
     armor: [
     [5, 15, [['Strange Dust', 0.8, 1, 2], ['Lesser Magic Essence', 0.2, 1, 2]]],
     [16, 20, [['Strange Dust', 0.75, 2, 3], ['Greater Magic Essence', 0.2, 1, 2], ['Small Glimmering Shard', 0.05, 1, 1]]],
@@ -159,5 +168,45 @@ window.GAMERULES = {
     // Enchanting skill needed by item level: [highest item level, skill]; epics need 225 (warcraft.wiki.gg "Disenchanting")
     skill: [[20, 1], [25, 25], [30, 50], [35, 75], [40, 100], [45, 125], [50, 150], [55, 175], [60, 200], [65, 225]],
     epicSkill: 225,
+  },
+  // What a point of crit is worth to a healer (#99): read from your own heals. Each group is one heal you cast
+  // (the first of it you know, at your best rank: Greater Heal, else Heal, else Lesser Heal); the weight is
+  // their average. A crit heals 150% and a heal's +healing share is cast time / 3.5 (Classic rules, not
+  // checked on Forever); `overheal` is the share of a crit's extra that overheals, as the Holy weights assume.
+  critHeals: {
+    label: 'Classic rule, not checked on Forever',
+    critBonus: 0.5, overheal: 1 / 3,
+    // each heal's base cast time (the share uses it, not the tooltip's, which talents such as Divine Fury shorten),
+    // by rank where low ranks cast faster, and the level a rank is learned below 20 (its share is cut by
+    // (20 − level) × 3.75%). Classic numbers.
+    spells: {
+      'Greater Heal': { cast: 3 }, 'Heal': { cast: 3, learn: { 1: 16 } },
+      'Lesser Heal': { cast: { 1: 1.5, 2: 2, 3: 2.5 }, learn: { 1: 1, 2: 4, 3: 10 } }, 'Flash Heal': { cast: 1.5 },
+      'Healing Touch': { cast: { 1: 1.5, 2: 2, 3: 2.5, 4: 3, other: 3.5 }, learn: { 1: 1, 2: 8, 3: 14 } },
+      'Holy Light': { cast: 2.5, learn: { 1: 1, 2: 6, 3: 14 } }, 'Flash of Light': { cast: 1.5 },
+      'Healing Wave': { cast: { 1: 1.5, 2: 2, 3: 2.5, other: 3 }, learn: { 1: 1, 2: 6, 3: 12, 4: 18 } }, 'Lesser Healing Wave': { cast: 1.5 },
+    },
+    // not modelled: what a crit does beyond its size (Illumination's mana back for a Paladin, Inspiration, Ancestral Healing)
+    PRIEST: [['Greater Heal', 'Heal', 'Lesser Heal'], ['Flash Heal']],
+    // direct heals only: a heal with a heal-over-time part (Regrowth) or jumps (Chain Heal) splits its share
+    // differently from cast time / 3.5
+    DRUID: [['Healing Touch']],
+    PALADIN: [['Holy Light'], ['Flash of Light']],
+    SHAMAN: [['Healing Wave'], ['Lesser Healing Wave']],
+  },
+  // Buffs that don't stack (#91): Classic rules, not checked on Forever. Each group: only one of its buffs is on
+  // you at a time, so a consumable in a group is wasted while another of the group is up. Matched by buff name
+  // (what the game shows on you) and by item name or its tooltip (what you carry); `why` is said as given.
+  stacking: {
+    label: 'Classic rule, not checked on Forever',
+    groups: [
+      { id: 'food', why: 'one food buff at a time (Well Fed)', buffs: [/^Well Fed$/], tip: /well fed/i },
+      { id: 'flask', why: 'one flask at a time', buffs: [/^Flask of /, /^Supreme Power$/, /^Distilled Wisdom$/, /^Chromatic Resistance$/, /^Petrification$/], items: [/^Flask of (Distilled Wisdom|Supreme Power|the Titans|Chromatic Resistance|Petrification)$/] },
+      { id: 'arcane-elixir', why: 'Arcane Elixir and Greater Arcane Elixir are the same buff', buffs: [/^Arcane Elixir$/, /^Greater Arcane Elixir$/], items: [/^(Greater )?Arcane Elixir$/] },
+      { id: 'spirit', why: 'a Scroll of Spirit and a priest\'s Divine Spirit don\'t stack', buffs: [/^Spirit$/, /^Divine Spirit$/, /^Prayer of Spirit$/], items: [/^Scroll of Spirit/] },
+      { id: 'stamina', why: 'a Scroll of Stamina and Power Word: Fortitude don\'t stack', buffs: [/^Stamina$/, /^Power Word: Fortitude$/, /^Prayer of Fortitude$/], items: [/^Scroll of Stamina/] },
+      { id: 'intellect', why: 'a Scroll of Intellect and Arcane Intellect don\'t stack', buffs: [/^Intellect$/, /^Arcane Intellect$/, /^Arcane Brilliance$/], items: [/^Scroll of Intellect/] },
+      { id: 'weapon', why: 'one temporary enchant per weapon (oil, sharpening stone, weightstone, poison)', buffs: null, items: [/^(Minor |Lesser |Brilliant |Blessed )?(Wizard|Mana) Oil$/, /^(Shadow|Frost) Oil$/, /Sharpening Stone$/, /Weightstone$/, /^(Instant|Deadly|Crippling|Mind-numbing|Wound) Poison( [IVX]+)?$/], kind: 'weapon' },
+    ],
   },
 };
