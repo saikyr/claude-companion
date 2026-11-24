@@ -48,6 +48,10 @@ check(len(dv) == 4 and dv[0] == 'Vestments of the Devout' and len(dv[1]) == 8 an
 check(st(17710).get(41) == 116 and st(17710).get(42) == 38 and st(17710).get(43) == 2 and st(17710).get(5) == 11,
       f'Charstone Dirk stats {st(17710)}')
 check(it['17710'][11] == 'e', 'Charstone Dirk tooltip comes from endgametools')
+# a lower-case "+1% spell crit" line is read (#123): Eye of the Beast, "Critical Strike with Spells by 1%"
+check(st(13968).get(21) == 1, f'Eye of the Beast has 1% spell crit {st(13968)}')
+# Forever's own T0.5 pieces keep their ForeverDB stats when endgametools has no page (Virtuous Epaulets)
+check(st(226955).get(45) and st(226955).get(31), f'Virtuous Epaulets has spell power and hit {st(226955)}')
 q64 = G['quests']['64']
 check(q64['t'] == 'The Forgotten Heirloom' and q64['from'][0][1] == 'Farmer Furlbrow' and q64['from'][0][2] == 'Westfall',
       f"quest 64 giver {q64.get('from')}")
