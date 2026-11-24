@@ -94,7 +94,7 @@
     // a two-hander also frees the off hand
     const weak = cur.reduce((a, c) => (c.s < a.s ? c : a), cur[0]);
     const mh = worn[16], oh = worn[17];
-    const own = cur.find((c) => c.id && c.id === it.id);
+    const own = cur.find((c) => c.id && c.id === it.id && W.sameSt(c.st, st));
     const repl = own ? own.st : name === 'Main hand' && inv === 17 && oh ? W.addSt(weak && weak.st, oh.st) : weak && weak.st;
     const s = W.score(st, ctx.w, name, repl);
     if (own) return { row: name, s, gain: 0, same: true };
@@ -226,7 +226,7 @@
     // in place of: itself when it's worn in that slot, else the weaker worn item there (a two-hander: both hands)
     const replIn = (p, slot) => {
       const nums = slotNums[slot] || [];
-      const own = nums.find((n) => worn[n] && worn[n].id === p.it.id);
+      const own = nums.find((n) => worn[n] && worn[n].id === p.it.id && W.sameSt(worn[n].st, p.st));
       if (own != null) return worn[own].st;
       const there = nums.map((n) => worn[n]);
       const weak = there.some((x) => !x) ? null : there.reduce((a, x) => (baseScore0(x, slot) < baseScore0(a, slot) ? x : a));

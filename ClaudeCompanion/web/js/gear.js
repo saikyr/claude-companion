@@ -446,7 +446,7 @@
       // what it would replace, for the hit cap: itself when worn here, else the weaker item (and a two-hander
       // also frees the off hand's hit)
       const replOf = (c) => {
-        const own = cur.find((y) => y.id && y.id === c.id);
+        const own = cur.find((y) => y.id && y.id === c.id && W.sameSt(y.st, c.st));
         const r = own ? own.st : weakest.st;
         return name === 'Main hand' && c.inv === TWO_HAND && worn[17] ? W.addSt(r, worn[17].st) : r;
       };

@@ -351,6 +351,8 @@
       for (const [k, v] of Object.entries(st || {})) if (Number(k) === S.hit) r += v; else if (Number(k) === SPELL_HIT_PCT) r += v * ((hm && hm.per1) || PCT[k][1]);
       return r;
     },
+    // the same stats (an item is "itself" only when id and stats match: another roll of a random-suffix base isn't)
+    sameSt(a, b) { const ka = Object.keys(a || {}), kb = Object.keys(b || {}); return ka.length === kb.length && ka.every((k) => (b || {})[k] === a[k]); },
     // two items' stats together (a two-hander replaces the main hand and the off hand)
     addSt(a, b) { const o = Object.assign({}, a || {}); Object.entries(b || {}).forEach(([k, v]) => { o[k] = (o[k] || 0) + v; }); return o; },
     // rating that still counts: the cap, less what you have without the replaced item
