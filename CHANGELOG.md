@@ -3,6 +3,8 @@
 Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 
 ## 1.5.0 (in progress: every merge to main updates itself)
+- **World drops count once your AH has seen one.** A world drop (Hand of Edward the Odd) comes from any creature of its level, so in practice from the AH: it's a pre-BiS pick or an upgrade only once your own AH scan or browsing has listed one, or you own it. Until then it's listed under "Raid, PvP and not in game yet" with why.
+- **Character stats survive logout.** The game reads every stat as 0 while logging out, so the saved stats (Intellect, spell hit, crit...) were all zeros; the last good reading is kept instead, marked as kept.
 - **The game data rebuilds itself every week** (drops, quests, items, from the same sources), and its age is on the System tab, and on Overview when it is more than two weeks old.
 - **Item cooldowns.** Salt Shaker, Hearthstone and on-use trinkets are read from the game's own timers (at every snapshot and when you use one) and listed on Overview with profession cooldowns; a long one (Salt Shaker) shows "ready now" on the Now page.
 - **Two identical AH sales are both counted.** Two Mooncloth sold for the same price in one mailbox read were recorded as one sale; each letter is now one sale, and a letter read again isn't counted twice.

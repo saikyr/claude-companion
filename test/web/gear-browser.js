@@ -124,12 +124,25 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   check(snapQ && snapQ.rewards.length === 1 && snapQ.rewards[0].id === 18491 && Array.isArray(snapQ.rewards[0].specs), 'a complete quest the game read with no rewards: the pack\'s reward, scored for every spec');
   const sum = await page.evaluate(() => window.CC.gear.summary());
   const holy = sum.find((s) => s.tree === 'Holy');
+  const worldSeen = await page.evaluate(() => {
+    const ah = window.CC.api.CH.ah = window.CC.api.CH.ah || {}; ah.prices = ah.prices || {};
+    const before = window.CC.gear.availability(2243);
+    ah.prices['2243'] = { id: 2243, obs: [{ t: 1, min: 500000, qty: 1, src: 'scan' }] };
+    const after = window.CC.gear.availability(2243);
+    delete ah.prices['2243'];
+    return { before, after };
+  });
+  check(worldSeen.before === 'worldAh' && worldSeen.after === null, `a world drop your AH once listed is a target again (Hand of Edward the Odd: ${JSON.stringify(worldSeen)})`);
   check(holy && holy.weightsName === 'Holy' && holy.weightsChosen === 'default for the biggest tree', 'snapshot: Holy weights, chosen by the biggest tree');
   check(holy && holy.ahUpgrades.some((u) => u.roll === 'of Healing' && u.ah && u.ah.price > 0), 'snapshot: AH upgrades with roll and price');
   check(holy && holy.preBis.length >= 15 && holy.preBis.every((p) => Array.isArray(p.alternatives)), 'snapshot: pre-BiS with alternatives');
   const raidIds = new Set([22631, 21275, 21273, 21523]);
   check(holy && !holy.preBis.some((p) => raidIds.has(p.id) || p.alternatives.some((a) => raidIds.has(a.id))), 'snapshot: no raid weapon (Atiesh, Qiraji staves, Fang of Korialstrasz) in pre-BiS');
-  check(holy && holy.notInPreBis.some((x) => x.availability === 'raid') && holy.notInPreBis.every((x) => ['raid', 'pvp', 'unseen'].includes(x.availability)), 'snapshot: raid and not-yet-seen items kept with why (notInPreBis)');
+  check(holy && holy.notInPreBis.some((x) => x.availability === 'raid') && holy.notInPreBis.every((x) => ['raid', 'pvp', 'unseen', 'worldAh'].includes(x.availability)), 'snapshot: raid and not-yet-seen items kept with why (notInPreBis)');
+  // a world drop is a target only once the player's own AH has listed one (the fixture's AH has none of them)
+  const arr0 = (x) => x || [];
+  const worldIn = (sp) => sp.preBis.flatMap((p) => [p, ...p.alternatives]).filter((x) => x.source === 'world');
+  check(sum.every((sp) => !sp.preBis || worldIn(sp).length === 0) && sum.some((sp) => arr0(sp.notInPreBis).some((x) => x.availability === 'worldAh')), `pre-BiS: no world drop your AH hasn't listed; they are kept with why (${sum.map((sp) => sp.preBis ? worldIn(sp).map((x) => x.name) : []).flat().join(', ')})`);
   // #110: raid, world-boss, battleground and raid-material sources are raid / PvP; dungeon and world drops aren't
   const kinds = await page.evaluate(() => Object.fromEntries([23025, 20632, 20682, 20580, 19140, 21210, 19165, 19682, 17193, 22669, 19309, 19315, 22747, 22752, 2243, 13001, 13133, 13075, 18510]
     .map((id) => [id, window.CC.gear.kindOf(id)])));

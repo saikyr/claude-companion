@@ -48,7 +48,7 @@ function world(cls, { level = 60, specs = { 1: [0, 0, 0] }, pack = {}, worn = {}
   Object.entries(worn).forEach(([, id]) => { const g = pack[id]; ITEMS['item:' + id] = { id: Number(id), name: g[0], q: g[1], req: g[3], class: g[9], subclass: g[12], tip: arr(g[10]).map((l) => ({ l })) }; });
   ctx.CC = { V: {}, api: {
     get CH() { return CH; }, STATE: {}, esc: String, arr,
-    GD: { items: pack, src: {}, vend: {}, quests: {}, how: Object.fromEntries(Object.keys(pack).map((k) => [k, 'World Drop'])), stat: {}, size: {} },
+    GD: { items: pack, src: {}, vend: {}, quests: {}, how: Object.fromEntries(Object.keys(pack).map((k) => [k, 'Boss Drop · Test Boss · Test Dungeon · 5 players'])), stat: {}, size: {} },
     item: (k) => ITEMS[k] || null, byId: (id) => ITEMS['item:' + id] || null, gdItem: (id) => pack[id] || null, gdSourceLines: () => [], itemGates: () => [], recipeLine: () => null,
     planPrice: () => null, anyItemName: (id) => (pack[id] || ['#' + id])[0], money: String, render() {}, deOutcome: () => null,
     specTrees: (sp) => (sp.pts ? sp.pts.map((points) => ({ points, nodes: [] })) : null), specLabel: () => null, TREE_NAMES: TREES,
