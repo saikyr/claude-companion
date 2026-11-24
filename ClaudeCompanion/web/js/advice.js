@@ -386,6 +386,8 @@
     owned, wearable, statsOf, effectOf, invOf,
     // any item, owned or from the pack: quest rewards (Quest log, Claude snapshot)
     rate, rewardLine,
+    // the disenchanting skill an item needs, and your rank in a skill (the AH buy list, js/market.js)
+    deSkill, skill,
     of: (key) => compute().byKey[key] || null,
     // for the Claude snapshot
     snapshot() {

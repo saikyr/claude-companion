@@ -1264,6 +1264,51 @@
     return h;
   }
 
+  // The buy list (#115): what is worth buying on your AH after a full scan, each with its evidence. The rules and
+  // their backtests live in js/market.js; this hands it your prices, the pack's vendor prices and your skills.
+  function buyListOf(ah, now) {
+    if (!window.CCMarket) return null;
+    const adv = window.CC && CC.advice, ench = adv && adv.skill ? adv.skill('Enchanting') : 0;
+    const share = {};
+    arr(sellThrough(ah, now).items).forEach((r) => { if (r.posted >= 3) share[r.item] = r.share; });
+    return window.CCMarket.buyList({
+      prices: ah.prices || {}, lastScan: ah.lastScan, cut: 0.05, now,
+      vendorBuy: vendorPrice,
+      vendorSell: (id) => { const g = gdItem(id); return g && g[6] > 0 ? g[6] : null; },
+      item: (id) => { const g = gdItem(id); return g ? { name: g[0], q: g[1], ilvl: g[2], bind: g[7], cls: g[9] } : null; },
+      // only what you can disenchant now: Enchanting at the skill the item needs
+      deValue: (it) => { if (!ench || !adv.deSkill || ench < adv.deSkill(it)) return null; return deOutcome({ q: it.q, ilvl: it.ilvl, class: it.cls }); },
+      hasEnchanting: ench > 0,
+      sellShare: (name) => (share[name] == null ? null : share[name]),
+    });
+  }
+  const RULE_WORDS = { vendor: 'Sell to a vendor', disenchant: 'Disenchant', resell: 'Buy from a vendor, list it', dip: 'Buy, relist', thin: 'Buy out, relist' };
+  function buyListView(ah) {
+    const B = buyListOf(ah);
+    if (!B) return '';
+    if (!B.scan) return '<div class="empty">No full scan yet: open the AH in game, press <b>Claude scan</b>, then Sync.</div>';
+    const pct = (x) => (x == null ? '–' : Math.round(x * 100) + '%');
+    let h = `<p class="meta">From your full scan ${ago(B.scan)}. Every price is your AH's lowest at that scan, after the 5% AH cut where you sell on the AH.</p>`;
+    h += '<div class="table buyrules"><div class="thead"><div>Rule</div><div>Evidence</div><div class="c-num">Shown</div></div>';
+    B.rules.forEach((r) => {
+      const bt = r.backtest, ev = bt ? `backtest on your scans: ${bt.n} cases, median ${bt.medianReturn == null ? '–' : (bt.medianReturn >= 0 ? '+' : '') + Math.round(bt.medianReturn * 100) + '%'}, ${pct(bt.winShare)} made money${bt.n < window.CCMarket.MIN_BACKTEST ? ` (needs ${window.CCMarket.MIN_BACKTEST} cases)` : ''}` : r.evidence;
+      h += `<div class="tr"><div class="c-main"><div class="nm">${esc(r.name)}</div></div><div class="dim">${esc(ev)}${r.id === 'disenchant' && !r.offered ? ' · needs Enchanting' : ''}</div><div class="c-num">${r.offered ? 'yes' : '<span class="dim">no</span>'}</div></div>`;
+    });
+    h += '</div>';
+    const rows = B.rows.filter((r) => r.offered);
+    if (!rows.length) return h + '<div class="empty">Nothing on your AH fits a shown rule at this scan.</div>';
+    h += '<div class="table buylist"><div class="thead"><div>Item</div><div>Then</div><div class="c-num">Lowest</div><div class="c-num">Buy under</div><div class="c-num">You make</div></div>';
+    rows.slice(0, 60).forEach((r) => {
+      const why = r.rule === 'vendor' ? `a vendor pays ${money(r.buyUnder + 1)}`
+        : r.rule === 'disenchant' ? `disenchants into about ${money(r.deValue)} of materials (${esc(r.label)})`
+        : r.rule === 'resell' ? `a vendor sells it for ${money(r.vendorPrice)}; list at ${money(r.relist)}. Lowest stayed above that in ${r.held} of ${r.of} scans`
+        : `usually ${money(r.usual)} (median of ${r.scans - 1} earlier scans)${r.falling ? '; falling lately' : ''}`;
+      h += `<div class="tr"><div class="c-main"><div class="nm">${anyItemIcon(r.id, { size: 'sm' })} ${itemLink(r.id)}</div><div class="sub">${why} · ${r.listed} listed${r.sellShare != null ? ` · ${pct(r.sellShare)} of yours sold` : ''}</div></div><div class="dim">${RULE_WORDS[r.rule]}</div><div class="c-num">${money(r.lowest)}</div><div class="c-num">${money(r.buyUnder)}</div><div class="c-num best">${money(r.net)}</div></div>`;
+    });
+    h += '</div><details class="how"><summary>How the buy list works</summary><p>Under the vendor price is certain: a vendor pays a fixed price. Disenchant values use the Classic disenchant table and your AH prices for the materials, so they are an expected value. A vendor sells it for less: how often the lowest price stayed above the vendor\'s, in this item\'s own scans. The two price rules (25% under the usual lowest, few listed far under the rest) are checked against every item\'s scan history: buy at a scan\'s lowest, sell at the next scan\'s lowest after the cut. They are shown only after 30 such cases with a median that made money.</p></details>';
+    return h;
+  }
+
   function flipsView(ah) {
     const F = flipsOf(ah), T = F.totals;
     if (!arr(ah.buys).length) return '<div class="empty">No AH purchases recorded yet. A purchase is saved when you open the mailbox with its "Auction won" letter in it.</div>';
@@ -1294,13 +1339,14 @@
     const prices = Object.entries(ah.prices || {}).map(([k, p]) => ({ k, p })).sort((a, b) => (b.p.last || 0) - (a.p.last || 0));
     const f = (STATE.ahFilter || '').toLowerCase();
     const ls = ah.lastScan;
-    const SECS = [['prices', 'Prices'], ['sold', 'Sold'], ['flips', 'Flips'], ['mine', 'Your auctions'], ['posted', 'Posted']];
+    const SECS = [['prices', 'Prices'], ['buy', 'Buy list'], ['sold', 'Sold'], ['flips', 'Flips'], ['mine', 'Your auctions'], ['posted', 'Posted']];
     const sec = SECS.some(([k]) => k === STATE.ahSec) ? STATE.ahSec : 'prices';
     const on = (k) => sec === k;
     let h = `<div class="seg">${SECS.map(([k, l]) => `<button data-ahsec="${k}" class="${sec === k ? 'on' : ''}">${l}</button>`).join('')}</div>`;
     h += `<div class="toolbar">${on('prices') ? `<input class="search" id="ahsearch" placeholder="Search prices" value="${esc(STATE.ahFilter || '')}">` : ''}<span class="dim small">${prices.length.toLocaleString()} items priced · ${ls ? `last full scan ${ago(ls.t)} (${ls.auctions.toLocaleString()} auctions)` : 'no full scan yet: open the AH and press <b>Claude scan</b>'}</span></div>`;
     const sales = salesOf(ah).slice().reverse();
     if (on('flips')) h += flipsView(ah) + sellThroughView(ah);
+    if (on('buy')) h += buyListView(ah);
     if (on('sold') && !sales.length) h += '<div class="empty">No sales recorded yet. Sales show up after you take the gold from an AH mail.</div>';
     if (on('sold') && sales.length) {
       const shown = sales.slice(0, 50);
@@ -1552,7 +1598,7 @@
     load, loadText, V, reload: () => RAW && load(RAW, { live: STATE.live }),
     setChar, get CHARS() { return CHARS; },
     api: { get CH() { return CH; }, get RAW() { return RAW; }, get DB() { return DB; }, STATE, GD, esc, arr, money, icon, itemIcon, anyItemIcon, anyItemName, gdItem, gdTip,
-      gdSourceLines, itemGates, recipeLine, planPrice, priceOf, trackerStats, goldOf, lootStrip, ago, dur, fmtTime, flipsOf, sellThrough, cooldowns, craftCost, craftProfit, vendorPrice, specTrees, specLabel, TREE_NAMES, gearIds, item, byId, render, QCOL, deOutcome,
+      gdSourceLines, itemGates, recipeLine, planPrice, priceOf, trackerStats, goldOf, lootStrip, ago, dur, fmtTime, flipsOf, sellThrough, buyListOf, cooldowns, craftCost, craftProfit, vendorPrice, specTrees, specLabel, TREE_NAMES, gearIds, item, byId, render, QCOL, deOutcome,
       itemLink, itemIconOf, itemCell, itemInline, uiIcon, UI_ICON, PROF_ICON },
   };
 
