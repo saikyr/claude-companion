@@ -122,7 +122,9 @@
     if (st.off) return '<p class="meta">Sync is off on this computer: the cards Claude wrote here show on this computer only.</p>';
     if (!r) return '<p class="meta dim">The cards Claude wrote on this computer go to your other computers at the next sync.</p>';
     if (r.ok) return `<p class="meta">The cards Claude wrote on this computer were sent to your other computers ${A.ago(Date.parse(r.at) / 1000)}.${r.stale ? ` ${r.stale} number${r.stale > 1 ? 's have' : ' has'} changed since Claude wrote ${r.stale > 1 ? 'them' : 'it'}.` : ''}</p>`;
-    return `<p class="meta neg">The cards Claude wrote on this computer were not sent to your other computers: ${esc(r.error || 'unknown error')}. They show here only until Claude fixes them.</p>`;
+    // refused by the gate (Claude fixes the file) or not sent (no connection: the app tries again)
+    if (/^cards refused|cards\.json/.test(r.error || '')) return `<p class="meta neg">The cards Claude wrote on this computer were not sent to your other computers: ${esc(r.error)}. They show here only until Claude fixes them.</p>`;
+    return `<p class="meta dim">The cards Claude wrote on this computer haven't reached your other computers yet (${esc(r.error || 'not sent')}); the app tries again at the next sync.</p>`;
   }
 
   // ------------------------------------------------------------ one card
