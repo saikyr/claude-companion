@@ -58,6 +58,22 @@ try:
     r = run(os.path.join(kit, 'check-cards.py'), bad, env=nonode)
     check(r.returncode == 1 and 'quote the rate as written there' in r.stdout, f'kit check-cards.py refuses a drop rate the pack doesn\'t have ({r.stdout.strip()[:200]})')
 
+    # the same answer in every run (Python orders sets differently each run): a quest whose objective names two instances
+    multi = [out(kit, 'quest', '96075', env=dict(nonode, PYTHONHASHSEED=str(i)))[1] for i in (1, 2, 3)]
+    check(len(set(multi)) == 1 and json.loads(multi[0]), 'game.py quest gives the same keep in every run')
+    # a Forever rate quoted rounded by 0.05 passes, as in Postgres (exact numbers, not floats)
+    five = next((k, r) for k, rows in gd['src'].items() for r in rows
+                if r[0] == 'drop' and r[10] == 'f' and r[11] == 'm' and r[12] > 0 and len(str(r[3]).split('.')[-1]) == 2 and str(r[3]).endswith('5'))
+    up = format(round(float(five[1][3]) + 0.05, 1), '.1f')
+    edge = [{'label': 'Drop rate', 'value': f'{up}% ({five[1][12]} corpses)', 'src': f'game.drop:{five[0]}:{five[1][2]}'}]
+    odd = [{'label': 'Drop rate', 'value': f'{five[1][3]}% ({five[1][12]} corpses)', 'note': 5, 'src': f'game.drop:{five[0]}:{five[1][2]}'},
+           {'label': 'Num', 'value': 36.2, 'src': 'game.drop:2378:202'}]
+    for name, facts, want in (('rounded by 0.05', edge, 'ok'), ('a number where text belongs', odd, 'value must be')):
+        with open(bad, 'w') as f: json.dump({'schema': 1, 'cards': [{'id': 'x', 'kind': 'farm', 'title': 'Farm', 'risk': 'low', 'facts': facts}]}, f)
+        r = run(os.path.join(kit, 'check-cards.py'), bad, env=nonode)
+        check(not r.stderr and (r.stdout.startswith('ok') if want == 'ok' else 'label and value (text)' in r.stdout),
+              f'check-cards.py, {name} ({five[1][3]}% quoted {up}%): {(r.stdout + r.stderr).strip()[:200]}')
+
     rules = os.path.join(work, 'ClaudeCompanion', 'web', 'data', 'rules.js')
     with open(rules, 'a', encoding='utf-8') as f: f.write('\n// changed\n')
     k = out(kit, 'quest', '5803', env=nonode)

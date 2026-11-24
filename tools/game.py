@@ -12,7 +12,8 @@ test/web/game.test.js compares every drop row's label and every look-up below wi
     python3 claude/game.py instance <zone>          bosses, the best 300 drops (bosses first), its rules
     python3 claude/game.py drop <item id> <npc id>  one drop's rate and label: what a card's src game.drop:<item>:<npc> means
     python3 claude/game.py status                   which pack
-Output is JSON, the same fields as the database's game.item / game.npc / game.quest / game.instance / game.status.
+Output is JSON, the same fields as the database's game.item / game.npc / game.quest / game.instance / game.status
+(status has no loadedAt: nothing is loaded here).
 """
 import importlib.util, json, os, re, sys
 from decimal import Decimal, ROUND_HALF_UP, getcontext
@@ -164,7 +165,7 @@ class Game:
         return best[1] if best else None
 
     def quest(self, p):
-        inst, unl = set(self._instances()), self.rules.get('unlocks') or []
+        inst, unl = self._instances(), self.rules.get('unlocks') or []   # sorted: the first instance an objective names is the same every run
         def named(lst):
             return [{'id': int(e[0]), 'name': (self.items.get(int(e[0])) or {}).get('name'), 'count': e[1] if len(e) > 1 else None} for e in lst or []]
         out = []
@@ -193,7 +194,11 @@ class Game:
                 'drops': [{'item': r['item_name'], 'id': r['item_id'], 'from': r['source'], 'boss': r['boss'], 'label': r['label']} for r in src[:300]]}
 
     def status(self):
-        return {'pack': self.hash, 'built': self.gd.get('built'), 'from': self.gd.get('from'), 'counts': self.counts}
+        """game.status's fields, but loadedAt: nothing is loaded, the pack is read where the app has it"""
+        from datetime import datetime, timezone
+        b = self.gd.get('built')
+        built = datetime.fromtimestamp(int(b), timezone.utc).isoformat() if isinstance(b, (int, Decimal)) else b
+        return {'pack': self.hash, 'built': built, 'from': self.gd.get('from'), 'counts': dict(self.counts, rules=len(self.rules))}
 
 
 def jsonable(o):
@@ -205,8 +210,11 @@ def main(argv):
     cmds = {'item': 1, 'npc': 1, 'quest': 1, 'instance': 1, 'drop': 2, 'status': 0}
     if len(argv) < 1 or argv[0] not in cmds or len(argv) - 1 < cmds[argv[0]]:
         print(__doc__.split('\n\n')[1] if '\n\n' in __doc__ else __doc__); return 2
-    g = Game()
     cmd, args = argv[0], argv[1:]
+    if cmd == 'drop' and not all(re.fullmatch(r'\d{1,12}', a) for a in args[:2]):
+        print('drop takes an item id and a creature id (numbers): game.py drop 2378 202', file=sys.stderr); return 2
+    try: g = Game()
+    except OSError as e: print(f'no game data to read ({e}): is this the app\'s own folder?', file=sys.stderr); return 1
     if cmd == 'drop': res = g.drop(args[0], args[1])
     elif cmd == 'status': res = g.status()
     else: res = getattr(g, cmd)(' '.join(args))

@@ -8,6 +8,7 @@
 # a list that fails).
 #   python3 tools/check-cards.py path/to/cards.json      -> "ok, N cards" or the problems, exit 1
 import json, os, re, sys
+from decimal import Decimal
 from datetime import datetime
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from answer_rules import card_rules
@@ -82,10 +83,10 @@ def drop_problem(f):
     item, npc = f['src'].split(':')[1:]
     r = g.drop(item, npc)
     if r is None: return f'no such drop in the game data (item {item} from creature {npc})'
-    txt = (f.get('value') or '') + ' ' + (f.get('note') or '')
-    nums = [float(x) for x in re.findall(r'(\d+(?:\.\d+)?)', txt.replace(',', ''), re.ASCII)]
+    txt = ' '.join('' if f.get(k) is None else str(f.get(k)) for k in ('value', 'note'))   # as Postgres ->> reads them
+    nums = [Decimal(x) for x in re.findall(r'(\d+(?:\.\d+)?)', txt.replace(',', ''), re.ASCII)]   # exact, as numeric compares
     if r['rate'] == 'forever':
-        if not any(abs(n - float(r['rate_pct'])) <= 0.05 for n in nums) or not any(n == r['corpses'] for n in nums):
+        if not any(abs(n - Decimal(r['rate_pct'])) <= Decimal('0.05') for n in nums) or not any(n == r['corpses'] for n in nums):
             return f"the game data says {r['label']}: quote the rate as written there, with the corpses"
     elif r['rate'] == 'classic':
         if not re.search(r'\bclassic\b', txt.lower(), re.ASCII): return f"the game data has only a Classic rate ({r['label']}): say Classic"

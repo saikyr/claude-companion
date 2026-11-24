@@ -113,7 +113,9 @@ print(json.dumps(out, ensure_ascii=False, default=jsonable))`;
     const ps = py.strat, ds = one(`select game.instance('Stratholme')::text`);
     same('instance (bosses, rules, unlocks, total)', [ps.bosses, ps.rules, ps.unlocks, ps.dropsTotal], [ds.bosses, ds.rules, ds.unlocks, ds.dropsTotal]);
     same('instance drops (as a set)', ps.drops.map((d) => JSON.stringify(canon(d))).sort(), ds.drops.map((d) => JSON.stringify(canon(d))).sort());
-    check(py.status.pack === meta.hash, 'game.py status names the pack the database loaded');
+    const dbst = one('select game.status()::text');
+    check(py.status.pack === meta.hash && JSON.stringify(canon(py.status.counts)) === JSON.stringify(canon(dbst.counts)) && Date.parse(py.status.built) === Date.parse(dbst.built),
+      `game.py status: the pack the database loaded, its counts and build time (${JSON.stringify(py.status.counts)})`);
 
     // reads stay whole while a new pack loads, and after a load that fails half-way (a slot of its own)
     const live = () => B.query('select count(*) from game.drop_rates') + '/' + B.query(`select count(*) from game.items i join game.live l on i.slot = l.slot and i.pack = l.hash`);
