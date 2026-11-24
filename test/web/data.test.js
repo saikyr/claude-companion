@@ -112,6 +112,20 @@ test('rules: every attunement and key names quests, items, bosses and zones the 
   RULES.instances.raids.slice(0, 7).forEach((r) => assert.ok(zones.has(r), `raid ${r} is a zone in the pack`));
 });
 
+test('instance wings (#105): each creature is in the pack, in one wing only, and its zone drops are listed', () => {
+  const zones = new Set();
+  for (const rows of Object.values(GD.src)) for (const r of rows) if (r[0] === 'drop' && r[7]) zones.add(r[7]);
+  for (const [zone, wings] of Object.entries(RULES.instances.wings)) {
+    assert.ok(zones.has(zone), `${zone} is a zone in the pack`);
+    const all = Object.values(wings).flat();
+    all.forEach((n) => assert.ok(GD.npcs[n], `${zone}: creature ${n} in the pack`));
+    assert.strictEqual(new Set(all).size, all.length, `${zone}: no creature in two wings`);
+  }
+  // the Upper Blackrock Spire key's bosses are all in the Upper wing
+  const ubrs = RULES.unlocks.find((u) => u.id === 'ubrs');
+  ubrs.value.npcs.forEach((n) => assert.ok(RULES.instances.wings['Blackrock Spire'][ubrs.value.wing].includes(n), `UBRS boss ${n} is in the Upper wing`));
+});
+
 // ---------------------------------------------------------------- no Wowhead data or links
 test('the app links to Forever sites, never Wowhead (only its icon image CDN)', () => {
   const files = ['index.html', ...fs.readdirSync(path.join(WEB, 'js')).filter((f) => f.endsWith('.js') && f !== 'icons.js').map((f) => 'js/' + f),
