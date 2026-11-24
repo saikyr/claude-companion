@@ -91,7 +91,7 @@ recorded per craft.
 | Reputation | Reputation tab | `reputation[]` |
 | Professions, recipes, cooldowns (Mooncloth, transmutes) | Professions tab | `professions[]`, `cooldowns[]` |
 | Game-data pack age (rebuilt every Monday by `pack.yml`, merged by the build project when its checks pass) | System tab, and Overview when older than 14 days | `pack.built` |
-| Item cooldowns (Salt Shaker, Hearthstone, on-use trinkets), read from the game's timers at each snapshot and when an item is used | Overview (with profession cooldowns), Now when ready | `cooldowns[]` (`item`); raw: `now` → `snap.itemCooldowns` |
+| Item cooldowns (Salt Shaker, Hearthstone, on-use trinkets), read from the game's timers at each snapshot and when an item is used | Overview, Cooldowns list (with profession cooldowns; time left and the clock time, or "Ready now"), Now when ready | `cooldowns[]` (`item`); raw: `now` → `snap.itemCooldowns` |
 | Flight paths per continent | Character tab | `flightPaths` |
 | Journal: every event (loot, kills, XP, quests, zones, deaths, rep, skills, money, group, notes) | Journal tab | kind `journal` (`data->>'e'` = event) |
 
