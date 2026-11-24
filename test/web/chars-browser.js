@@ -52,7 +52,8 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
     'the picker lists every character, the one played last first: ' + opts.join(' | '));
   check(await name() === 'Testpriest', 'the character played last is shown by default');
   check(!(await page.$('aside .me .sub.need')), 'no "not the character you played last" note when showing it');
-  await page.waitForTimeout(1200);
+  // the snapshot is written a moment after the page loads (slower on CI): wait for it, up to 15 s
+  for (let i = 0; i < 75 && !snaps.includes('Testpriest'); i++) await page.waitForTimeout(200);
   check(snaps.includes('Testpriest'), "Claude's snapshot is of the character played last");
   check(await ch(() => !!CC.api.CH.ah.prices['2589']), "Testpriest sees Altmage's Linen Cloth price (same realm and faction)");
   check(await ch(() => !CC.api.CH.ah.prices['2592']), "Testpriest doesn't see Hordie's Wool Cloth price (the other faction's AH)");
@@ -67,7 +68,7 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   check(await ch(() => !!CC.api.CH.ah.prices['812'] && !!CC.api.CH.ah.prices['2589'] && !CC.api.CH.ah.prices['2592']),
     "Altmage prices with Testpriest's scan and its own, not Hordie's");
   check(await ch(() => (CC.api.CH.ah.lastScan || {}).auctions === 31000), "Altmage's newest full scan is Testpriest's (the same AH)");
-  await page.waitForTimeout(1200);
+  await page.waitForTimeout(3000);
   check(!snaps.includes('Altmage'), "looking at Altmage doesn't write Claude's snapshot for it (" + snaps.join(',') + ')');
 
   await page.reload();
