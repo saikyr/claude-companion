@@ -130,7 +130,73 @@
   const profileKey = (spec) => pickedProfile(spec) || W.defaultFor(char().classFile, spec.tree);
   // clearing a pick stores '' so an older pick under the legacy key doesn't come back
   const setProfile = (spec, id) => localStorage.setItem(store(spec, 'profile'), id || '');
-  const weightsFor = (spec, pk) => (W.get(pk) || {}).w || null;
+  // A spell profile's weights carry the hit model (non-enumerable `hit`, read by W.score): the cap, the hit the
+  // compared gear and your talents give, and the rating per 1% the client reports. Without it hit counts flat.
+  const HIT_RULE = (window.GAMERULES || {}).spellHit || null;
+  const SCHOOL_NAME = { 110: 'fire', 111: 'shadow', 112: 'frost', 113: 'arcane', 114: 'nature', 115: 'holy' };
+  const TREE_SCHOOL = { shadow: ['affliction'], fire: ['destruction'] };   // talent trees whose spells are that school
+  // talents you have that add spell hit, read from their text at your rank: "chance to hit with spells by 3%",
+  // or "...chance to resist your Shadow spells by 8%" (counted when it names a school these weights use)
+  function talentHit(spec, schools) {
+    const out = [];
+    arr(spec && spec.sp && spec.sp.traits && spec.sp.traits.trees).forEach((t) => arr(t.nodes).forEach((n) => {
+      const d = String((n && n.rank > 0 && n.desc) || '');
+      let m = /chance to hit with (?:all )?(?:your )?(?:melee attacks and |attacks and )?spells(?: and attacks)? by (\d+(?:\.\d+)?)%/i.exec(d);
+      if (!m) {
+        const r = /chance (?:that )?(?:targets?|enemies|your target)?[^.]*?resist (?:your )?([A-Za-z, ]+?) spells by (\d+(?:\.\d+)?)%/i.exec(d);
+        // a talent may name a tree instead of a school (Suppression: "your Affliction spells")
+        const words = (sc) => [sc].concat(TREE_SCHOOL[sc] || []);
+        if (r && schools.some((sc) => words(sc).some((x) => new RegExp('\\b' + x + '\\b', 'i').test(r[1])))) m = [r[0], r[2]];
+      }
+      if (m) out.push({ name: n.name || 'talent', pct: Number(m[1]) });
+    }));
+    return out;
+  }
+  const HIT_CACHE = new Map();
+  function hitModel(spec, pk, w) {
+    const prof = W.get(pk) || {};
+    if (!HIT_RULE || prof.role !== 'spell' || !(w[W.S.hit] > 0)) return null;
+    const schools = Object.keys(w).map((k) => SCHOOL_NAME[k]).filter(Boolean);
+    const st = (A.CH.snap || {}).stats || {};
+    // rating per 1%: measured from the client when it says both, else the Forever client's 10 (weights.js PCT)
+    const per1 = st.spellHitRating > 0 && st.spellHitBonus > 0 ? st.spellHitRating / st.spellHitBonus : W.PCT[18][1];
+    const tal = talentHit(spec, schools.length ? schools : ['shadow', 'fire', 'frost', 'arcane', 'nature', 'holy']);
+    const talPct = tal.reduce((a, t) => a + t.pct, 0);
+    const base = baseline(spec, pk);
+    const gearR = Object.values(base.worn).reduce((a, x) => a + W.hitRating(x.st, { per1 }), 0);
+    return { cap: HIT_RULE.cap, against: HIT_RULE.against, src: HIT_RULE.src, per1, capR: HIT_RULE.cap * per1, haveR: gearR + talPct * per1,
+      gearPct: gearR / per1, talents: tal, measured: st.spellHitRating > 0 && st.spellHitBonus > 0 };
+  }
+  const hitSummary = (hm) => ({ havePct: +(hm.haveR / hm.per1).toFixed(2), capPct: hm.cap, gearPct: +hm.gearPct.toFixed(2),
+    talents: hm.talents, ratingPer1Pct: +hm.per1.toFixed(2), ratingMeasured: hm.measured, against: hm.against, capSource: hm.src,
+    overCap: hm.haveR >= hm.capR });
+  // one line for the Gear page: your hit against the cap, and what that means for hit on items
+  function hitLine(hm) {
+    const h = hitSummary(hm), parts = [`${h.gearPct.toFixed(1)}% from gear`].concat(h.talents.map((t) => `${t.pct}% ${esc(t.name)}`));
+    const tail = h.overCap ? 'hit on items counts for nothing until you lose some' : `items count hit up to ${(h.capPct - h.havePct).toFixed(1)}% more`;
+    return `<div class="meta">Hit: ${h.havePct.toFixed(1)}% (${parts.join(' + ')}) of the ${h.capPct}% that counts against ${esc(h.against)}: ${tail}.${h.ratingMeasured ? '' : ' Rating per 1% not read from the game yet: using 10.'}</div>`;
+  }
+  // the same weights with the hit model measured against other gear (the character sheet compares with what
+  // you wear, not the spec's set)
+  const weightsAgainst = (w, worn) => {
+    const hm = w && w.hit;
+    if (!hm) return w;
+    const gearR = Object.values(worn || {}).reduce((a, x) => a + W.hitRating(x && x.st, hm), 0);
+    const talR = hm.talents.reduce((a, t) => a + t.pct, 0) * hm.per1;
+    return Object.defineProperty(Object.assign({}, w), 'hit', { value: Object.assign({}, hm, { haveR: gearR + talR, gearPct: gearR / hm.per1 }), enumerable: false });
+  };
+  const weightsFor = (spec, pk) => {
+    const w = (W.get(pk) || {}).w || null;
+    if (!w || !spec || !spec.sp) return w;
+    const key = [pk, spec.i, (A.CH.snap || {}).taken || 0, JSON.stringify(w), readChoice(spec, 'set')].join('|');
+    if (!HIT_CACHE.has(key)) {
+      if (HIT_CACHE.size > 64) HIT_CACHE.clear();      // one entry per edit of the weights or sync: keep it small
+      const hm = hitModel(spec, pk, w);
+      const out = hm ? Object.defineProperty(Object.assign({}, w), 'hit', { value: hm, enumerable: false }) : w;
+      HIT_CACHE.set(key, out);
+    }
+    return HIT_CACHE.get(key);
+  };
 
   // What a spec's upgrades are measured against: the gear set for that spec, else what you wear now.
   // A set is linked by your pick, else the game's own spec link, else a name that matches the spec or its
@@ -368,16 +434,23 @@
     const listedBy = {}; listed.forEach((l) => { const k = l.c.key; if (!listedBy[k] || l.price < listedBy[k].price) listedBy[k] = l; });
     const mine = ownedCands(use);
     const at = ownedAt();
-    const offScore = worn[17] ? score(worn[17].st, w, 17) : 0;
+    const offScore = worn[17] ? score(worn[17].st, w, 17, worn[17].st) : 0;
     const slots = SLOTS.map(([name, nums, invs]) => {
-      const cur = nums.map((n) => worn[n] ? { n, id: worn[n].id, key: worn[n].key, st: worn[n].st, s: score(worn[n].st, w, n) } : { n, id: null, s: 0 });
+      const cur = nums.map((n) => worn[n] ? { n, id: worn[n].id, key: worn[n].key, st: worn[n].st, s: score(worn[n].st, w, n, worn[n].st) } : { n, id: null, s: 0 });
       const weakest = cur.reduce((a, c) => (c.s < a.s ? c : a), cur[0]);
       const blocked = name === 'Off hand' && twoHand;
       const fitsPre = (c) => invs.includes(c.inv) && handFits(name, c.inv, use);
       const fits = (c) => fitsPre(c) && !blocked;          // usable now (a worn two-hander blocks the off hand)
       // a two-hander replaces the main hand and the off hand
       const gain = (c, s) => s - weakest.s - (name === 'Main hand' && c.inv === TWO_HAND ? offScore : 0);
-      const x = (c, extra) => { const s = score(c.st, w, name); return Object.assign({ c, s, d: gain(c, s) }, extra || {}); };
+      // what it would replace, for the hit cap: itself when worn here, else the weaker item (and a two-hander
+      // also frees the off hand's hit)
+      const replOf = (c) => {
+        const own = cur.find((y) => y.id && y.id === c.id && W.sameSt(y.st, c.st));
+        const r = own ? own.st : weakest.st;
+        return name === 'Main hand' && c.inv === TWO_HAND && worn[17] ? W.addSt(r, worn[17].st) : r;
+      };
+      const x = (c, extra) => { const s = score(c.st, w, name, replOf(c)); return Object.assign({ c, s, d: gain(c, s) }, extra || {}); };
       const distinct = (list) => { const seen = new Set(); return list.filter((y) => !seen.has(y.c.name) && seen.add(y.c.name)); };
       const byGain = (a, b) => b.d - a.d;
       // ---- usable now: fixed items, your own, AH listings
@@ -387,7 +460,7 @@
       cand.rolls.forEach((c) => {
         if (!fits(c) || c.req > lvl) return;
         // ranked by gain: in the main hand a two-hander also replaces the off hand
-        const s = score(c.st, w, name), d = gain(c, s);
+        const s = score(c.st, w, name, replOf(c)), d = gain(c, s);
         if (!bestRoll[c.roll] || d > bestRoll[c.roll].d) bestRoll[c.roll] = { c, s, d, n: 0 };
       });
       cand.rolls.forEach((c) => { if (bestRoll[c.roll] && fits(c) && c.req <= lvl) bestRoll[c.roll].n++; });
@@ -405,7 +478,7 @@
       const search = Object.values(bestRoll).map((r) => Object.assign(r, { d: gain(r.c, r.s) })).filter((r) => r.d > 0.5).sort(byGain).slice(0, 3);
       // ---- pre-BiS: the best up to level 60, counting what you own; one random roll at most (its best base)
       const preRolls = {};
-      cand.rolls.forEach((c) => { if (fitsPre(c) && c.req <= 60) { const s = score(c.st, w, name); if (!preRolls[c.roll] || s > preRolls[c.roll].s) preRolls[c.roll] = { c, s }; } });
+      cand.rolls.forEach((c) => { if (fitsPre(c) && c.req <= 60) { const s = score(c.st, w, name, replOf(c)); if (!preRolls[c.roll] || s > preRolls[c.roll].s) preRolls[c.roll] = { c, s }; } });
       const prePool = mine.filter(fitsPre).map((c) => x(c))
         .concat(cand.fixed.filter((c) => fitsPre(c) && c.req <= 60).map((c) => x(c)))
         .concat(cur.filter((y) => y.id && !cand.byId[String(y.id)] && !mine.some((m) => m.id === y.id))
@@ -644,6 +717,7 @@
     const setSel = `<label class="sel"><span class="k">Compare with</span>${sets.length ? `<select data-gearset>${[['worn', 'What you wear'], ...sets.map((g) => [String(g.id), `“${g.name}” set`])].map(([k, l]) => `<option value="${esc(k)}"${base.key === k ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>` : '<span>What you wear</span>'}</label>`;
     h += `<div class="toolbar"><div class="seg">${VIEWS.map(([k, l]) => `<button data-gearview="${k}" class="${view === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>`;
     if (!w || !Object.keys(w).length) return h + `<div class="empty">No stat weights for ${esc(cur.tree || cur.label)} yet. Pick or make some on the <button class="linkbtn" data-tab="weights">Stat weights</button> page.</div>`;
+    if (w.hit) h += hitLine(w.hit);
     const lvl = ch.level || 60;
     const P = plan(w, lvl, base, getPicks(cur), !!A.STATE.gearReach);
     const upSlots = P.slots.filter((s) => s.ups.length && !s.blocked);
@@ -672,6 +746,7 @@
   CC.gear = {
     kindOf,
     // why an item is kept out of upgrades and pre-BiS for this character ('raid', 'pvp', 'unseen', 'worldAh'), or null
+    weightsAgainst,
     availability(id) { const c = canUse() && candidates(canUse(), char().class); const l = c && c.later.find((x) => x.id === Number(id)); return l ? l.avail : null; },
     summary() {
       const ch = char();
@@ -694,6 +769,8 @@
         out.talentPoints = sp.points;
         out.weightsSource = prof.own ? 'yours' : (prof.src || {}).url || (prof.src || {}).label || null;
         out.weightValues = w;
+        // the hit cap model (spell weights): how much hit you have, from where, and the cap it counts up to
+        if (w.hit) out.hit = hitSummary(w.hit);
         const base = baseline(sp, pk);
         out.comparedWith = base.label;
         const P = plan(w, ch.level || 60, base, getPicks(sp));

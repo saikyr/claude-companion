@@ -26,7 +26,7 @@ ns.VERSION = "1.5.0"
 ns.SCHEMA = 1
 -- the source commit of this build: tools/publish-stable.py writes it here; "dev" in a checkout.
 -- The app compares it with the build it runs itself, to say when the game still needs a /reload.
-ns.BUILD = "7e953bac494d"
+ns.BUILD = "83ea170c551b"
 
 BINDING_HEADER_CLAUDECOMPANION = "Claude Companion"
 BINDING_NAME_CLAUDECOMPANION_TOGGLE = "Open or close Claude window"
@@ -434,6 +434,7 @@ local API_NAMES = { "C_AuctionHouse", "C_TooltipInfo", "C_EquipmentSet", "GetTal
     "C_Map", "C_UnitAuras", "UnitBuff", "GetAuctionItemInfo", "PostAuction", "GetInboxInvoiceInfo", "NumTaxiNodes",
     "C_Item", "GetItemInfo", "GetItemStats", "issecretvalue", "CombatLogGetCurrentEventInfo", "GetSpellBonusHealing",
     "GetManaRegen", "C_Spell", "GetMacroInfo", "GetActionInfo", "GetNumBindings", "GetBindLocation",
+    "GetCombatRating", "GetCombatRatingBonus", "GetSpellDescription", "GetInventoryItemCooldown", "GetContainerItemCooldown",
     -- for measuring Forever drop rates and resistances (docs/ROADMAP.md): which mob each loot slot came
     -- from, and whether the combat log can be read or turned on by an addon
     "GetLootSourceInfo", "GetLootSlotLink", "GetNumLootItems", "LoggingCombat", "CombatLog_Object_IsA", "UnitTokenFromGUID" }
@@ -441,6 +442,7 @@ local API_NAMES = { "C_AuctionHouse", "C_TooltipInfo", "C_EquipmentSet", "GetTal
 function ns.Capabilities()
     local caps = { api = {}, secret = {}, version = ns.VERSION, checked = ns.Now() }
     for _, name in ipairs(API_NAMES) do caps.api[name] = type(_G[name]) end
+    caps.api["C_Traits.GetTraitDescription"] = type(C_Traits and C_Traits.GetTraitDescription)
     local function probe(label, fn, ...)
         local ok, v = pcall(fn, ...)
         if not ok then caps.secret[label] = "error"

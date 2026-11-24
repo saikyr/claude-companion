@@ -9,6 +9,12 @@ window.GAMERULES = {
   repFloor: [null, -42000, -6000, -3000, 0, 3000, 9000, 21000, 42000],
   // the Auction House keeps 5% of a sale (checked on Gabriel's own sales, 22 Nov 2026); the deposit comes back on a sale
   ahCut: 0.05,
+  // Spell hit for gear advice: the hit that still counts against raid bosses (3 levels above you), as every
+  // Forever pre-raid list builds toward (the owner's choice, 24 Nov 2026; 5-man bosses need far less). The
+  // Forever guides give 17% with talents: Shadow Focus 5/5 gives 5%, gear the other 12%. Talents that lower the
+  // chance to resist your spells (Shadow Focus, Elemental Precision, Suppression...) count as hit for the
+  // schools they name.
+  spellHit: { cap: 17, against: 'raid bosses (3 levels above you)', src: 'Forever Shadow guides: conquestcapped.com (22 Nov 2026) and wow.gg (4 Nov 2026), 17% with talents' },
   // Instances that are raids or battlegrounds (zone names as the pack writes them). Raids: warcraft.wiki.gg "Raid"
   // (Classic) plus Forever's own, warcraft.wiki.gg/wiki/WoW_Forever (Barrow Deeps, Hyjal Summit). Item group sizes
   // in the pack can't tell them apart (most raid trash drops say nothing).
