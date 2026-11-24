@@ -247,6 +247,12 @@
       // potions, elixirs, flasks, food, scrolls and oils you carry or bank (#91): what each does, from the game's own
       // tooltip (else the pack's), and buffs it doesn't stack with that are on you now
       consumables: consumables(s),
+      // your macros (#95): account-wide and this character's, with their text, at the last in-game read
+      macros: arr(s.macros).filter((m) => m && m.name).map((m) => ({ scope: m.scope || null, name: m.name, body: m.body || '' })),
+      // the addons installed for this character: enabled (for this character), loaded now, version; a click-cast or
+      // raid-frame addon replaces most mouseover macros. null = the build doesn't read them yet
+      addons: s.addons ? arr(s.addons).filter((x) => x && x.name).map((x) => ({ name: x.name, title: x.title || x.name, version: x.version || null,
+        enabled: x.enabled != null ? x.enabled : null, loaded: !!x.loaded })) : null,
       quests: arr(s.quests).filter((q) => q && q.id).map((q) => {
         const gq = (A.GD && A.GD.quests[q.id]) || {};
         const to = arr(gq.to)[0];
@@ -280,7 +286,8 @@
           specs: R.specs.map((x) => ({ spec: x.spec, active: x.active, taken: t(x.taken), spells: x.spells, outdated: x.outdated, unranked: x.unranked,
             bars: arr((CH.specs || {})[x.spec] && CH.specs[x.spec].actionBars).filter((a) => a && a.kind)
               .map((a) => ({ slot: a.slot, key: a.key || null, kind: a.kind, name: a.name || (byId[a.id] || {}).name || null,
-                rank: a.kind !== 'spell' ? null : byId[a.id] ? rk(byId[a.id].rank) : rk(a.rank) })) })),
+                rank: a.kind !== 'spell' ? null : byId[a.id] ? rk(byId[a.id].rank) : rk(a.rank),
+                body: a.kind === 'macro' ? (a.body != null ? a.body : null) : undefined })) })),
           train: R.train, trainCost: R.trainCost, later: R.later.slice(0, 20), laterTotal: R.later.length,
           known: R.known,
           // spells and ranks only a book teaches that you don't know (Prayer of Fortitude), with the book, its

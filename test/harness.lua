@@ -1066,6 +1066,23 @@ do -- #91: weapon enchants, from the game: the permanent one's id and the text i
   GetInventoryItemLink, C_TooltipInfo.GetHyperlink, C_TooltipInfo.GetInventoryItem, GetWeaponEnchantInfo = oldLink, oldTip, oldInv, oldWE
   ns.Snapshot("manual")
 end
+do -- #95: the addons installed, enabled for this character or not, with version; macros with their text
+  local function check(ok, what) print((ok and "PASS " or "FAIL ") .. what); if not ok then FAILED = true end end
+  local list = { { "ClaudeCompanion", "Claude Companion", 2, "1.5.0", true }, { "Clique", "|cff00ff00Clique|r", 0, "v1.2", false }, { "Grid2", "Grid2", 2, SECRET, true } }
+  C_AddOns = { GetNumAddOns = function() return #list end,
+    GetAddOnInfo = function(i) local a = list[i]; return a[1], a[2], "notes", true, a[3] == 0 and "DISABLED" or nil, "INSECURE" end,
+    GetAddOnEnableState = function(name, who) assert(type(name) == "string" and who ~= nil); for _, a in ipairs(list) do if a[1] == name then return a[3] end end return 0 end,
+    GetAddOnMetadata = function(name, k) for _, a in ipairs(list) do if a[1] == name then return a[4] end end end,
+    IsAddOnLoaded = function(name) for _, a in ipairs(list) do if a[1] == name then return a[5] end end end }
+  ns.Snapshot("manual")
+  local by = {}; for _, a in ipairs(ns.char.snap.addons or {}) do by[a.name] = a end
+  check(by.Clique and by.Clique.enabled == false and by.Clique.title == "Clique" and by.Clique.version == "v1.2" and by.Clique.loaded == false and by.Clique.why == "DISABLED",
+    "addons: Clique turned off for this character, its title without colour codes")
+  check(by.Grid2 and by.Grid2.enabled == true and by.Grid2.loaded == true and by.Grid2.version == nil, "addons: Grid2 on and loaded (a hidden version is left out)")
+  local m = ns.char.snap.macros or {}
+  check(m[1] and m[1].scope == "account" and m[1].body == "/cast Shadow Word: Pain" and m[2] and m[2].scope == "character", "macros: account and character ones with their text")
+  C_AddOns = nil
+end
 local f = io.open("out.lua", "w"); f:write("ClaudeCompanionDB = " .. ser(ClaudeCompanionDB)); f:close()
 print("DIAG:")
 for k, d in pairs(ClaudeCompanionDB.chars["Gabriel-Atlas"].diag) do if d.err > 0 then print(k, d.err, d.lastErr) end end

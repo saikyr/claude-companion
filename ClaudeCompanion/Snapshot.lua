@@ -499,6 +499,32 @@ local function Macros()
     return out
 end
 
+-- the addons installed for this character (#95): a click-cast or raid-frame addon changes which macros make
+-- sense. Name and title only, never their saved settings.
+local function Addons()
+    local A = C_AddOns or {}
+    local num, info = A.GetNumAddOns or GetNumAddOns, A.GetAddOnInfo or GetAddOnInfo
+    local meta, loaded = A.GetAddOnMetadata or GetAddOnMetadata, A.IsAddOnLoaded or IsAddOnLoaded
+    local me = Clean(Call(UnitName, "player"))
+    local out = {}
+    for i = 1, Clean(Call(num)) or 0 do
+        local name, title, _, loadable, reason = Call(info, i)
+        name = Clean(name)
+        if type(name) == "string" then
+            -- C_AddOns takes (addon, character); the older global takes (character, addon)
+            local on
+            if A.GetAddOnEnableState then on = Clean(Call(A.GetAddOnEnableState, name, me))
+            elseif GetAddOnEnableState then on = Clean(Call(GetAddOnEnableState, me, name)) end
+            local enabled
+            if type(on) == "number" then enabled = on > 0 elseif type(on) == "boolean" then enabled = on end
+            out[#out + 1] = { name = name, title = type(Clean(title)) == "string" and Clean(title):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "") or nil,
+                version = Clean(Call(meta, name, "Version")), enabled = enabled,
+                loaded = Clean(Call(loaded, name)) and true or false, why = Clean(reason) }
+        end
+    end
+    return out
+end
+
 local function KeyBindings()
     local out = {}
     local n = Clean(Call(GetNumBindings)) or 0
@@ -796,7 +822,7 @@ end
 ---------------------------------------------------------------- the full snapshot
 local PARTS = {
     { "character", Character }, { "stats", Stats }, { "equipped", Equipped }, { "bags", Bags },
-    { "gearSets", GearSets }, { "talents", Talents }, { "macros", Macros }, { "bindings", KeyBindings },
+    { "gearSets", GearSets }, { "talents", Talents }, { "macros", Macros }, { "addons", Addons }, { "bindings", KeyBindings },
     { "spellbook", Spellbook }, { "skills", Skills }, { "reputation", Reputation }, { "currencies", Currencies },
     { "quests", QuestLog }, { "completedQuests", CompletedQuests }, { "group", ns.Group }, { "buffs", Buffs },
     { "itemCooldowns", ItemCooldowns },

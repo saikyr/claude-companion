@@ -827,6 +827,12 @@
     const macros = arr((CH.snap || {}).macros);
     h += '</section><section>';
     h += macros.length ? `<h2>Macros</h2><div class="list macros">${macros.map((m) => `<div class="li">${icon(m.icon, { size: 'sm' })}<div class="grow"><div>${esc(m.name)}</div><pre>${esc(m.body)}</pre></div></div>`).join('')}</div>` : '<h2>Macros</h2><div class="empty">No macros saved.</div>';
+    // the addons installed for this character (#95), enabled ones first
+    const addons = (CH.snap || {}).addons;
+    if (addons) {
+      const list = arr(addons).slice().sort((a, b) => (b.enabled === true) - (a.enabled === true) || String(a.title || a.name).localeCompare(String(b.title || b.name)));
+      h += `<h2>Addons</h2>${list.length ? `<div class="list addons">${list.map((x) => `<div class="li"><div class="grow"><div>${esc(x.title || x.name)}</div><div class="sub">${esc([x.version, x.enabled === false ? 'turned off' : x.loaded ? 'on' : x.enabled ? 'on, not loaded' : null].filter(Boolean).join(' · '))}</div></div></div>`).join('')}</div>` : '<div class="empty">None read.</div>'}`;
+    }
     return h + '</section></div>';
   };
 

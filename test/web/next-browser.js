@@ -278,6 +278,20 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
     ['t:flask', 't:oil', 't:cloth', 't:port', 't:fish'].forEach((k) => delete D[k]);
     return { c: out.consumables, b: out.buffs, e: out.equipped, old, taken: s.taken };
   });
+  // #95: macros with their text, and the addons installed (with the Talents & Bars list)
+  const mac = await page.evaluate(() => {
+    const A = window.CC.api, s = A.CH.snap, keep = { macros: s.macros, addons: s.addons };
+    s.macros = [{ index: 1, scope: 'account', name: 'Tag', body: '/cast [@mouseover] Renew' }];
+    s.addons = [{ name: 'Clique', title: 'Clique', version: 'v1.2', enabled: false, loaded: false }, { name: 'ClaudeCompanion', title: 'Claude Companion', version: '1.5.0', enabled: true, loaded: true }];
+    const out = window.CC.snapshot();
+    const tab = A.STATE.tab; A.STATE.tab = 'talents'; A.render(); const h = document.querySelector('main').innerHTML; A.STATE.tab = tab;
+    s.addons = undefined; const none = window.CC.snapshot().addons;
+    Object.assign(s, keep); A.render();
+    return { m: out.macros, a: out.addons, h, none };
+  });
+  check(mac.m[0] && mac.m[0].body === '/cast [@mouseover] Renew' && mac.m[0].scope === 'account', 'snapshot macros: name, scope and text');
+  check(mac.a && mac.a.length === 2 && mac.a[0].name === 'Clique' && mac.a[0].enabled === false && mac.none === null, 'snapshot addons: enabled or not, null when the build doesn\'t read them');
+  check(/Addons/.test(mac.h) && /Clique/.test(mac.h) && /turned off/.test(mac.h), 'Talents & Bars lists the addons, a turned-off one says so');
   const fl = cons.c.find((x) => x.id === 13512), oil = cons.c.find((x) => x.id === 20749);
   check(fl && fl.bags === 2 && fl.bank === 3 && fl.from === 'game' && fl.use.some((l) => /^Use: Increases damage/.test(l)) && !cons.c.some((x) => x.id === 14047),
     'consumables: a flask in bags and bank, what it does from the game, cloth left out (' + JSON.stringify(fl) + ')');
