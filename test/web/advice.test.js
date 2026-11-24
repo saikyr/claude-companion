@@ -91,6 +91,9 @@ test('hit counts only up to the cap: the room left with the rest of your gear', 
   const capped = Object.defineProperty({ 45: 1, 31: 1.66 }, 'hit', { value: { per1: 10, capR: 50, haveR: 80 }, enumerable: false });
   assert.strictEqual(W.score({ 31: 20, 45: 5 }, capped), 5, 'past the cap hit is worth nothing');
   assert.ok(Math.abs(W.score({ 31: 20, 45: 5 }, { 45: 1, 31: 1.66 }) - 38.2) < 1e-9, 'weights with no hit model count hit flat');
+  assert.strictEqual(W.score({ 117: 2, 45: 5 }, w), 5, 'a melee "+2% hit" line is no spell hit');
+  assert.strictEqual(W.score({ 31: 30 }, Object.defineProperty({ 31: 1 }, 'hit', { value: { per1: 10, capR: 50, haveR: 50 }, enumerable: false }), 'Main hand', W.addSt({}, { 31: 30 })), 30,
+    'a two-hander replacing an off hand with 30 hit gets that room back (main hand + off hand stats)');
   assert.deepStrictEqual(Object.keys(w), ['31', '45'], 'the model stays out of the saved weights');
 });
 

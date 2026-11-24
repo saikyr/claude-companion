@@ -21,7 +21,7 @@ function tree(id, points) {
     const rank = Math.max(0, Math.min(5, points - i * 5));
     const n = { node: id * 100 + i, x: 300 + (i % 4) * 600, y: 300 + Math.floor(i / 4) * 600, rank, max: 5, name: 'Talent ' + i, spell: 1000 + i, icon: 136223 };
     // the Shadow tree's Shadow Focus, with its text at the rank taken (the addon saves it for talents you have)
-    if (id === 3 && i === 1) { n.name = 'Shadow Focus'; if (n.rank) n.desc = `Reduces your target's chance to resist your Shadow spells by ${2 * n.rank}%.`; }
+    if (id === 3 && i === 1) { n.name = 'Shadow Focus'; if (n.rank) n.desc = `Reduces your target's chance to resist your Shadow spells by ${n.rank}%.`; }
     nodes.push(n);
   }
   return { id, nodes };

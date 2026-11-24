@@ -49,8 +49,9 @@ guide's order; 0.3 for stats the guide says are "also valued"; 0 for the rest. T
   (0.03 a point when the guide doesn't rank it), so a cloth robe with the same stats never beats plate.
 
 This turns "A before B" into "a budget spent on A is worth more than the same budget on B". It is
-not a simulation. Spell hit has a cap: for spell weights, hit counts only up to the 5-man cap
-(`data/rules.js` `spellHit`, 5%), measured against your hit from the compared gear plus talents read
+not a simulation. Spell hit has a cap: for spell weights, hit counts only up to the raid cap
+(`data/rules.js` `spellHit`, 17% against raid bosses, from the Forever guides; the owner's choice, since
+pre-raid gear is gear for raids), measured against your hit from the compared gear plus talents read
 from their text at your rank (Shadow Focus, Elemental Precision...), with the client's own rating per 1%
 (`stats.spellHitRating / spellHitBonus`); past the cap hit is worth nothing (`gear[].hit` in the snapshot).
 Known gaps: melee hit and expertise caps aren't applied; weapon skill isn't scored; Use and proc effects aren't scored (marked "+ effect").

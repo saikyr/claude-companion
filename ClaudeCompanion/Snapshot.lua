@@ -281,8 +281,10 @@ local function TraitTree(configID)
                     if spellID then ns.NoteSpell(spellID) end
                     -- a talent you have: its text at your rank ("...chance to resist your Shadow spells by 8%"),
                     -- the only place the client says what a rank gives on Forever (gear advice reads hit from it)
+                    -- (the rank's own text where the client has it; the spell's text is often rank 1's)
                     if spellID and rank > 0 then
-                        n.desc = Clean(Call(C_Spell and C_Spell.GetSpellDescription or GetSpellDescription, spellID))
+                        n.desc = (entryID and C_Traits.GetTraitDescription and Clean(Call(C_Traits.GetTraitDescription, entryID, rank)))
+                            or Clean(Call(C_Spell and C_Spell.GetSpellDescription or GetSpellDescription, spellID))
                     end
                     if type(node.visibleEdges) == "table" then
                         for _, e in ipairs(node.visibleEdges) do

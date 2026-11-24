@@ -90,11 +90,14 @@
     const inv = invOf(it);
     const [name, slots] = row, worn = ctx.base.worn;
     const cur = slots.map((n) => worn[n] ? { n, id: worn[n].id, st: worn[n].st, s: W.score(worn[n].st, ctx.w, n, worn[n].st) } : { n, id: null, s: 0 });
-    // what it would replace: the weaker of the slot's items (its hit leaves room under the hit cap)
+    // what it would replace, for the hit cap: itself when worn here, else the weaker of the slot's items;
+    // a two-hander also frees the off hand
     const weak = cur.reduce((a, c) => (c.s < a.s ? c : a), cur[0]);
-    const s = W.score(st, ctx.w, name, weak && weak.st);
-    if (cur.some((c) => c.id === it.id)) return { row: name, s, gain: 0, same: true };
     const mh = worn[16], oh = worn[17];
+    const own = cur.find((c) => c.id && c.id === it.id);
+    const repl = own ? own.st : name === 'Main hand' && inv === 17 && oh ? W.addSt(weak && weak.st, oh.st) : weak && weak.st;
+    const s = W.score(st, ctx.w, name, repl);
+    if (own) return { row: name, s, gain: 0, same: true };
     const twoHandWorn = !!mh && CC.gear.wornInv(mh) === 17;
     if (name === 'Off hand' && twoHandWorn) return { row: name, s, gain: null, blocked: 'you use a two-hander' };
     const vs = cur.reduce((a, c) => (c.s < a.s ? c : a), cur[0]);
@@ -220,7 +223,18 @@
     const baseScore = (n) => (worn[n] ? W.score(worn[n].st, ctx.w, n, worn[n].st) : 0);
     // scored in place of what the compared gear has there (the first of a pair), so hit counts up to the cap
     const slotNums = Object.fromEntries(CC.gear.SLOTS.map(([name, nums]) => [name, nums]));
-    const inSlot = (p, slot) => Object.assign({}, p, { s: W.score(p.st, ctx.w, slot, ((worn[(slotNums[slot] || [])[0]] || {}).st)) });
+    // in place of: itself when it's worn in that slot, else the weaker worn item there (a two-hander: both hands)
+    const replIn = (p, slot) => {
+      const nums = slotNums[slot] || [];
+      const own = nums.find((n) => worn[n] && worn[n].id === p.it.id);
+      if (own != null) return worn[own].st;
+      const there = nums.map((n) => worn[n]);
+      const weak = there.some((x) => !x) ? null : there.reduce((a, x) => (baseScore0(x, slot) < baseScore0(a, slot) ? x : a));
+      const st = weak ? weak.st : null;
+      return slot === 'Main hand' && p.inv === 17 && worn[17] ? W.addSt(st, worn[17].st) : st;
+    };
+    const baseScore0 = (x, slot) => W.score(x.st, ctx.w, slot, x.st);
+    const inSlot = (p, slot) => Object.assign({}, p, { s: W.score(p.st, ctx.w, slot, replIn(p, slot)) });
     const pick = (invs, n, slot) => {
       const out = [], ids = new Set();
       pool.filter((p) => invs.includes(p.inv)).map((p) => inSlot(p, slot)).sort((a, b) => b.s - a.s).forEach((p) => {
@@ -340,7 +354,7 @@
     const ctx = C.ctxs.slice().sort((a, b) => overlap(b) - overlap(a) || (b.sp.i === active) - (a.sp.i === active))[0];
     const map = {};
     if (ctx) {
-      const lvl = char().level || 0, here = Object.assign({}, ctx, { base: { worn } });
+      const lvl = char().level || 0, here = Object.assign({}, ctx, { base: { worn }, w: CC.gear.weightsAgainst(ctx.w, worn) });
       C.list.forEach((o) => {
         if (o.where === 'worn') return;
         const it = A.item(o.key);

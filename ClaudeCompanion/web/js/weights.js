@@ -30,6 +30,7 @@
   // a % line is worth this many rating points (CONV)
   const PCT = { 116: [S.crit, 14], 21: [S.crit, 14], 117: [S.hit, 10], 18: [S.hit, 10], 118: [S.dodge, 12], 119: [S.parry, 15], 120: [S.block, 5] };
   const PCT_KEYS = Object.keys(PCT);
+  const SPELL_HIT_PCT = 18, MELEE_HIT_PCT = 117;
   // COST per point, Stamina = 1. n = items the cost was measured on; 'assumed' = no clean sample
   const COST = {
     [S.str]: [1, 'measured, 31 item groups'], [S.agi]: [1, 'measured, 30'], [S.int]: [1, 'measured, 30'], [S.spi]: [1, 'measured, 35'],
@@ -170,7 +171,7 @@
         32: '14 crit rating = 1% crit; crits add 50% (100% in Shadowform) to Mind Blast and Mind Flay only: 0.3.',
         31: 'Until you reach the hit cap a hit point is worth 1.66 (the Icy Veins Forever order, spell power = 1); past the cap it is worth nothing. Your hit (gear and talents such as Shadow Focus) and the cap are read from the game: see the hit line on the Gear page.',
       },
-      note: 'One point of shadow spell power = 1. Built for questing and dungeons: kill, regen with Spirit Tap, next pull. Hit counts up to the 5-man cap (data/rules.js gear.spellHit).',
+      note: 'One point of shadow spell power = 1. Built for questing and dungeons: kill, regen with Spirit Tap, next pull. Hit counts up to the raid cap, 17% (data/rules.js spellHit).',
       src: { label: 'Worked out 18 Nov 2026 from Forever shadow ranks (metabot.gg), talents (foreverchanges.pro talents), 14 crit / 10 hit rating = 1% (foreverdb.net/stats); coefficients are Classic rules', url: null } },
   ];
 
@@ -333,7 +334,8 @@
       let s = 0;
       const hm = w && w.hit;
       for (const [k, v] of Object.entries(st || {})) {
-        if (hm && W.isHit(k)) continue;
+        // with the hit model, hit counts below; "+N% hit" without "with spells" (117) is melee and ranged only
+        if (hm && (W.isHit(k) || Number(k) === MELEE_HIT_PCT)) continue;
         let wt = k === 'dps' ? W.dpsWeight(w, slot) : w[k];
         if (wt == null && PCT[k]) wt = (w[PCT[k][0]] || 0) * PCT[k][1];
         s += (wt || 0) * v;
@@ -342,12 +344,15 @@
       return s;
     },
     // hit as rating: the rating line, plus "+N% hit" lines at the rating the client gives for 1%
-    isHit: (k) => Number(k) === S.hit || (PCT[k] && PCT[k][0] === S.hit),
+    // spell hit: the hit rating line (Forever's rating counts for spells and attacks) and "+N% hit with spells"
+    isHit: (k) => Number(k) === S.hit || Number(k) === SPELL_HIT_PCT,
     hitRating(st, hm) {
       let r = 0;
-      for (const [k, v] of Object.entries(st || {})) if (Number(k) === S.hit) r += v; else if (PCT[k] && PCT[k][0] === S.hit) r += v * ((hm && hm.per1) || PCT[k][1]);
+      for (const [k, v] of Object.entries(st || {})) if (Number(k) === S.hit) r += v; else if (Number(k) === SPELL_HIT_PCT) r += v * ((hm && hm.per1) || PCT[k][1]);
       return r;
     },
+    // two items' stats together (a two-hander replaces the main hand and the off hand)
+    addSt(a, b) { const o = Object.assign({}, a || {}); Object.entries(b || {}).forEach(([k, v]) => { o[k] = (o[k] || 0) + v; }); return o; },
     // rating that still counts: the cap, less what you have without the replaced item
     hitRoom: (hm, replaced) => Math.max(0, hm.capR - (hm.haveR - W.hitRating(replaced, hm))),
     OFF_HAND_DPS,

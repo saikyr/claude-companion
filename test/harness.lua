@@ -104,7 +104,8 @@ C_ClassTalents = { GetActiveConfigID = function() return 77 end }
 C_Traits = { GetConfigInfo = function() return { name = "Shadow", treeIDs = { 1 } } end, GenerateImportString = function() return "ABC" end,
   GetTreeNodes = function() local t={} for g=0,2 do for r=0,6 do for c=0,3 do if (r+c+g)%2==0 then t[#t+1]=1000+g*100+r*10+c end end end end return t end,
   GetNodeInfo = function(cfg, id) local g=math.floor((id-1000)/100); local r=math.floor((id-1000)%100/10); local c=(id-1000)%10; return { ID = id, posX = g*4200 + c*600 + 300, posY = r*600+300, activeRank = (g==2 and r<5) and 2 or 0, maxRanks = (c%2==0) and 5 or 2, isVisible = true, activeEntry = { entryID = id + 1000 } } end,
-  GetEntryInfo = function(cfg, e) return { definitionID = e } end, GetDefinitionInfo = function(d) return { spellID = 15259 } end }
+  GetEntryInfo = function(cfg, e) return { definitionID = e } end, GetDefinitionInfo = function(d) return { spellID = 15259 } end,
+  GetTraitDescription = function(e, rank) return "Reduces your target's chance to resist your Shadow spells by " .. rank .. "%." end }
 C_TooltipInfo.GetSpellByID = function() return { lines = { { leftText = "Darkness", leftColor = { r = 1, g = 1, b = 1 } }, { leftText = "Increases shadow damage by 10%.", leftColor = { r = 1, g = 0.82, b = 0 } } } } end
 function GetNumTalentTabs_unused() return 3 end
 function GetTalentTabInfo(t) return 200+t, ({"Discipline","Holy","Shadow"})[t], "desc", 1234, 0 end
@@ -895,10 +896,10 @@ do -- spell hit for gear advice: the rating and its %, and each talent you have 
   check(st.spellHitRating == 30 and st.spellHitBonus == 3, "spell hit rating and the % it gives are saved")
   local withRank, withDesc = 0, 0
   for _, sp in pairs(c.specs) do for _, t in ipairs((sp.traits or {}).trees or {}) do for _, n in ipairs(t.nodes) do
-    if (n.rank or 0) > 0 then withRank = withRank + 1; if n.desc and n.desc:find("8%%") then withDesc = withDesc + 1 end
+    if (n.rank or 0) > 0 then withRank = withRank + 1; if n.desc and n.desc:find("by " .. n.rank .. "%%") then withDesc = withDesc + 1 end
     elseif n.desc then withDesc = -1000 end
   end end end
-  check(withRank > 0 and withDesc == withRank, "talents you have carry their text at your rank, others don't (" .. withDesc .. "/" .. withRank .. ")")
+  check(withRank > 0 and withDesc == withRank, "talents you have carry their text at your rank (the rank's own text, not the spell's), others don't (" .. withDesc .. "/" .. withRank .. ")")
 end
 do -- #16: item cooldowns (Salt Shaker on 3 days, Hearthstone on 1 hour), read from the game's own timers
   local function check(ok, what) print((ok and "PASS " or "FAIL ") .. what); if not ok then FAILED = true end end
