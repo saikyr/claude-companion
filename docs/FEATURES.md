@@ -90,7 +90,7 @@ recorded per craft.
 | Macros (name and text), key bindings, buffs, currencies, gear sets, completed quests, weapon skills | Talents & Bars (macros), Character | raw only: the `now` record's `snap` (below) |
 | Reputation | Reputation tab | `reputation[]` |
 | Professions, recipes, cooldowns (Mooncloth, transmutes) | Professions tab | `professions[]`, `cooldowns[]` |
-| Game-data pack age (rebuilt every Monday by `pack.yml`, merged when its checks pass) | System tab, and Overview when older than 14 days | `pack.built` |
+| Game-data pack age (rebuilt every Monday by `pack.yml`, merged by the build project when its checks pass) | System tab, and Overview when older than 14 days | `pack.built` |
 | Item cooldowns (Salt Shaker, Hearthstone, on-use trinkets), read from the game's timers at each snapshot and when an item is used | Overview (with profession cooldowns), Now when ready | `cooldowns[]` (`item`); raw: `now` → `snap.itemCooldowns` |
 | Flight paths per continent | Character tab | `flightPaths` |
 | Journal: every event (loot, kills, XP, quests, zones, deaths, rep, skills, money, group, notes) | Journal tab | kind `journal` (`data->>'e'` = event) |

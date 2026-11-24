@@ -187,14 +187,14 @@ end)
 -- alike in the same mailbox are two sales: the k-th such letter is recorded when fewer than k records
 -- already match. (The old id, item|price|hour of days left, counted two Mooncloth sold in one hour once,
 -- and changed every hour.)
-local SAME_LETTER = 300
+local SAME_LETTER = 60       -- seconds: the sale time read from days left moves by a few seconds between reads
 local function sameSale(r, x)
     return r.item == x.item and r.price == x.price and (r.count or 1) == (x.count or 1)
         and (r.buyer or r.seller) == x.who and math.abs((r.t or 0) - x.t) < SAME_LETTER
 end
-local function countSame(list, x, upto)
+local function countSame(list, x)
     local n = 0
-    for i = 1, math.min(#list, upto or #list) do if sameSale(list[i], x) then n = n + 1 end end
+    for i = 1, #list do if sameSale(list[i], x) then n = n + 1 end end
     return n
 end
 

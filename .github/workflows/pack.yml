@@ -1,14 +1,13 @@
 name: pack
-# Weekly rebuild of the game-data pack (gamedata/build.sh, docs/DEVELOP.md), opened as a PR. A PR the
-# workflow opens doesn't start other workflows by itself, so this one starts the checks on its branch;
-# the build project's scheduled task merges the PR when they pass (#20).
+# Weekly rebuild of the game-data pack (gamedata/build.sh, docs/DEVELOP.md), pushed to a pack/rebuild-*
+# branch. A push by this workflow doesn't start other workflows by itself, so it starts the checks on that
+# branch; the build project's scheduled task opens the PR and merges it when they pass (#20).
 on:
   schedule:
     - cron: '17 5 * * 1'   # Mondays 05:17 UTC
   workflow_dispatch:
 permissions:
   contents: write
-  pull-requests: write
   actions: write
 concurrency: pack
 jobs:
@@ -32,18 +31,16 @@ jobs:
           python3 -I gamedata/test_pack.py ClaudeCompanion/web/data/gamedata.js
           python3 -I tools/make-drops.py --check
           node test/web/data.test.js
-      - name: Open the PR and start its checks
+      - name: Push the branch and start its checks
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           git add ClaudeCompanion/web/data/gamedata.js ClaudeCompanion/web/data/suffixes.js ClaudeCompanion/web/js/icons.js gamedata/COVERAGE.md ClaudeCompanion/Drops.lua
           if git diff --cached --quiet; then echo "the pack hasn't changed"; exit 0; fi
-          B=pack/rebuild-$(date -u +%Y%m%d)
+          B=pack/rebuild-$(date -u +%Y%m%d)-$GITHUB_RUN_ID
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git checkout -b "$B"
           git commit -q -m "Weekly game-data pack rebuild ($(date -u +%Y-%m-%d))"
           git push -q origin "$B"
-          gh pr create --base main --head "$B" --title "Weekly game-data pack rebuild ($(date -u +%Y-%m-%d))" \
-            --body "Rebuilt by .github/workflows/pack.yml from the sources in gamedata/build.sh. The pack's own tests passed in the build; the full checks run on this branch. Coverage: gamedata/COVERAGE.md."
           gh workflow run checks.yml --ref "$B"

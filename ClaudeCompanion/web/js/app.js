@@ -515,7 +515,9 @@
   // Items on cooldown (Salt Shaker, Hearthstone, on-use trinkets), from the game's timers in the snapshot
   // (#16): prof null, item = its id. A long one stays after it ends while you have the item ("ready now").
   function itemCooldowns() {
-    return arr((CH.snap || {}).itemCooldowns).filter((r) => r && r.id && r.readyAt).map((r) => {
+    // a short one (Hearthstone, a potion) that has ended is just ready: only a long one says "ready now"
+    const now = Date.now() / 1000;
+    return arr((CH.snap || {}).itemCooldowns).filter((r) => r && r.id && r.readyAt && (r.readyAt > now || (r.duration || 0) >= 7200)).map((r) => {
       const m = /\[([^\]]+)\]/.exec(r.link || '');
       return { name: (m && m[1]) || ((gdItem(r.id) || [])[0]) || 'Item ' + r.id, icon: r.icon, ends: r.readyAt, prof: null, item: r.id };
     });

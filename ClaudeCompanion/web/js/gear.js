@@ -108,14 +108,16 @@
   }
   // choices are kept per character (Name-Realm, so same-named characters on two realms don't share) and
   // spec (the game's talent group, spec1 / spec2); the page mirrors them to companion-data/settings.json
-  // and they sync between computers. Choices saved before the realm was in the key (name only) are read
-  // from there until something new is saved.
+  // and they sync between computers. Choices saved before the realm was in the key (name only, or older still
+  // by index) are read from there until something new is saved.
   const who = () => { const c = char(); return (c.name || '') + (c.realm ? '-' + c.realm : ''); };
   const store = (spec, what) => `cc.gear.${what}.${who()}.spec${spec.i}`;
   const byName = (spec, what) => `cc.gear.${what}.${char().name || ''}.spec${spec.i}`;
+  // the oldest picks: under the reader's array index (0 = group 1, 1 = group 2; a lone group 2 under 2)
+  const legacy = (spec, what) => (spec.i === 1 ? [0] : [1, 2]).map((n) => `cc.gear.${what}.${char().name || ''}.${n}`);
   const readChoice = (spec, what) => {
-    const v = localStorage.getItem(store(spec, what));
-    return v != null ? v : localStorage.getItem(byName(spec, what));
+    for (const k of [store(spec, what), byName(spec, what), ...legacy(spec, what)]) { const v = localStorage.getItem(k); if (v != null) return v; }
+    return null;
   };
   // the profile you picked for a spec (null: the default for its biggest tree)
   function pickedProfile(spec) {
