@@ -2,15 +2,13 @@ name: installers
 # The first-install downloads (tools/make-release.py + installer/) on a real Windows and a real Mac:
 # build the zips, unzip them like a person would, run each installer into a made-up game folder twice
 # (install, then reinstall over it), and check the addon is complete, an older install's files are
-# gone, and companion-data (the person's own files) is untouched. Then the one-paste install: the exact
-# PowerShell and Terminal lines in ClaudeCompanion/claude/SETUP.md, run as pasted, against those zips served
-# from this machine instead of the public download folder.
+# gone, and companion-data (the person's own files) is untouched.
 on:
   pull_request:
-    paths: ['installer/**', 'ClaudeCompanion/claude/SETUP.md', 'tools/make-release.py', 'tools/publish-stable.py', '.github/workflows/installers.yml']
+    paths: ['installer/**', 'tools/make-release.py', 'tools/publish-stable.py', '.github/workflows/installers.yml']
   push:
     branches: [main]
-    paths: ['installer/**', 'ClaudeCompanion/claude/SETUP.md', 'tools/make-release.py', 'tools/publish-stable.py', '.github/workflows/installers.yml']
+    paths: ['installer/**', 'tools/make-release.py', 'tools/publish-stable.py', '.github/workflows/installers.yml']
   workflow_dispatch:
 jobs:
   install:
@@ -62,53 +60,3 @@ jobs:
           test -x "$d/web/Claude Companion.app/Contents/MacOS/launcher"
           /usr/bin/python3 -c "import plistlib; plistlib.load(open('$app/Contents/Info.plist', 'rb'))"
           echo 'Mac installer: ok'
-      - name: The one-paste install lines, from SETUP.md
-        shell: bash
-        run: |
-          python - <<'EOF'
-          lines = open('ClaudeCompanion/claude/SETUP.md', encoding='utf-8').read().split('\n')
-          def after(label): return lines[next(i for i, x in enumerate(lines) if label in x) + 1].strip()
-          base = 'https://jucbngafdnyaizfxgplk.supabase.co/storage/v1/object/public/releases/latest/'
-          for label, out in (('On Windows, in PowerShell:', 'dist/setup-win.ps1'), ('On a Mac, in Terminal:', 'dist/setup-mac.sh')):
-              line = after(label)
-              assert base in line, label
-              open(out, 'w', encoding='utf-8', newline='\n').write(line.replace(base, 'http://127.0.0.1:8765/'))
-          EOF
-      - name: Paste the line into Windows PowerShell
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $srv = Start-Process python -ArgumentList '-m', 'http.server', '8765', '--bind', '127.0.0.1', '--directory', 'dist' -PassThru -WindowStyle Hidden
-          Start-Sleep 3
-          $g = "$env:RUNNER_TEMP\p\World of Warcraft"
-          New-Item -ItemType Directory -Force "$g\_forever_\WTF" | Out-Null
-          $env:CC_GAME_DIR = $g; $env:CC_NO_OPEN = '1'
-          $line = Get-Content dist\setup-win.ps1 -Raw
-          # Windows PowerShell 5.1, the one a person opens from the Start menu; the line exactly as pasted
-          powershell.exe -NoProfile -EncodedCommand ([Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($line)))
-          $code = $LASTEXITCODE
-          Stop-Process -Id $srv.Id -Force
-          if ($code) { throw "the pasted line failed ($code)" }
-          $d = "$g\_forever_\Interface\AddOns\ClaudeCompanion"
-          $want = Get-Content "$env:TEMP\ClaudeCompanion-setup\files\FILES.txt" | Where-Object { $_ -and $_ -notlike 'companion-data/*' } | Sort-Object
-          $have = Get-ChildItem -LiteralPath $d -Recurse -File | ForEach-Object { $_.FullName.Substring($d.Length + 1) -replace '\\', '/' } | Where-Object { $_ -notlike 'companion-data/*' } | Sort-Object
-          if (Compare-Object $want $have) { Compare-Object $want $have; throw 'installed files differ from the build' }
-          if (-not (Test-Path "$d\claude\GUIDE.md")) { throw 'claude/GUIDE.md missing' }
-          'Windows one-paste install: ok'
-      - name: Paste the line into a Mac's Terminal
-        if: runner.os == 'macOS'
-        run: |
-          python3 -m http.server 8765 --bind 127.0.0.1 --directory dist >/dev/null 2>&1 & srv=$!
-          sleep 3
-          g="$RUNNER_TEMP/p/World of Warcraft"; mkdir -p "$g/_forever_/WTF"
-          # zsh, the Terminal's own shell; the line exactly as pasted
-          CC_GAME_DIR="$g" CC_NO_OPEN=1 zsh -c "$(cat dist/setup-mac.sh)"; code=$?
-          kill $srv
-          [ $code -eq 0 ] || { echo "the pasted line failed ($code)"; exit 1; }
-          d="$g/_forever_/Interface/AddOns/ClaudeCompanion"
-          app="${TMPDIR:-/tmp}/ClaudeCompanion-setup/Install Claude Companion.app"
-          diff <(grep -v '^companion-data/' "$app/Contents/Resources/payload/FILES.txt" | sort) \
-               <(cd "$d" && find . -type f ! -path './companion-data/*' | sed 's|^\./||' | sort)
-          test -f "$d/claude/GUIDE.md"
-          test -x "$d/web/Claude Companion.app/Contents/MacOS/launcher"
-          echo 'Mac one-paste install: ok'

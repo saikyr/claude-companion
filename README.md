@@ -11,11 +11,6 @@ Works for any class and spec. English game client only, for now.
 
 ## Install
 
-**With Claude (Windows or Mac):** create a project in the Claude desktop app, paste the text from
-[SETUP.md](ClaudeCompanion/claude/SETUP.md) (the fenced block; whoever gave you the Companion can send it)
-into **What do you want to work on?** (leave Context empty), and create it (say **set me up** if it doesn't start). Claude installs it, or gives you one line to
-paste into PowerShell or Terminal, then reads your character. Or install it yourself:
-
 1. Download the newest build for your computer (no account needed):
    **[ClaudeCompanion-Windows.zip](https://jucbngafdnyaizfxgplk.supabase.co/storage/v1/object/public/releases/latest/ClaudeCompanion-Windows.zip)** or **[ClaudeCompanion-Mac.zip](https://jucbngafdnyaizfxgplk.supabase.co/storage/v1/object/public/releases/latest/ClaudeCompanion-Mac.zip)**.
 2. Open it:
@@ -84,7 +79,7 @@ Your saved data stays in the game's `WTF` folder until you delete it.
 ## More
 
 - What changed: [CHANGELOG.md](CHANGELOG.md)
-- Claude as your coach (optional, and it can install the app too): `AddOns/ClaudeCompanion/claude/SETUP.md`
+- Claude as your coach (optional): `AddOns/ClaudeCompanion/claude/SETUP.md`
   ([source](ClaudeCompanion/claude/SETUP.md)); the owner's projects and their boundaries: [docs/PROJECTS.md](docs/PROJECTS.md)
 - How it works: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (the source code itself is private)
 - Developing, tests and releases: [docs/DEVELOP.md](docs/DEVELOP.md)
