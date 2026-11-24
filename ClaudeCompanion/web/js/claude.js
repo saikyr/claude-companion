@@ -236,7 +236,7 @@
           known: R.known,
         };
       })(),
-      cooldowns: A.cooldowns ? A.cooldowns().map((c) => ({ name: c.name, profession: c.prof || null, readyAt: c.ends })) : [],
+      cooldowns: A.cooldowns ? A.cooldowns().map((c) => ({ name: c.name, profession: c.prof || null, readyAt: c.ends, item: c.item || null })) : [],
       professions: arr(s.skills).filter((k, i, all) => k && k.maxRank > 1 && k.skillLineCategoryID === 11 && all.findIndex((y) => y && y.name === k.name) === i)
         .map((k) => ({ name: k.name, rank: k.rank, max: k.maxRank })),
       reputation: arr(s.reputation).filter((r) => r && !r.isHeader).map((r) => ({ name: r.name, standing: r.reaction, value: r.currentStanding })),

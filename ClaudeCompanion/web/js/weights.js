@@ -193,7 +193,7 @@
 
   // ---------------------------------------------------------------- your own profiles
   // Saved in this browser (localStorage 'cc.weights.v1'), per class so alts of the same class share
-  // them. Which profile a spec uses is kept per character and spec ('cc.gear.profile.<name>.spec<1|2>',
+  // them. Which profile a spec uses is kept per character and spec ('cc.gear.profile.<Name-Realm>.spec<1|2>',
   // the key the Gear tab always used).
   const KEY = 'cc.weights.v1';
   const store = () => {
@@ -267,8 +267,8 @@
     reset(id) { const st = store(), p = st.profiles[id]; const from = p && p.from && BUILTIN[p.from]; if (!from) return false; p.w = clean(from.w); p.updated = Date.now(); save(st); return true; },
     remove(id) { const st = store(); if (!st.profiles[id]) return false; delete st.profiles[id]; save(st); return true; },
     // The old Gear tab kept one "Your own weights" list per character and spec. Move it into a
-    // profile once, and point that spec at it.
-    migrate(charName, specIndex, cls) {
+    // profile once, and point that spec at it (under `toKey`, the page's key for that spec's pick).
+    migrate(charName, specIndex, cls, toKey) {
       const oldKey = `cc.gear.own.${charName || ''}.${specIndex}`, pickKey = `cc.gear.profile.${charName || ''}.${specIndex}`;
       let old = null;
       try { old = JSON.parse(localStorage.getItem(oldKey) || 'null'); } catch (e) { old = null; }
@@ -276,7 +276,7 @@
       const st = store();
       const id = 'u-migrated-' + (charName || 'x').replace(/[^A-Za-z]/g, '') + '-' + specIndex;
       if (!st.profiles[id]) { st.profiles[id] = { id, cls, own: true, name: `My weights (spec ${specIndex})`, w: clean(old), from: null, updated: Date.now() }; save(st); }
-      if (localStorage.getItem(pickKey) === 'own') localStorage.setItem(pickKey, id);
+      if (localStorage.getItem(pickKey) === 'own') { localStorage.setItem(toKey || pickKey, id); if (toKey) localStorage.removeItem(pickKey); }
       localStorage.removeItem(oldKey);
       return id;
     },

@@ -76,17 +76,24 @@ function ns.Session()
 end
 
 -- value of the items looted: vendor price, and AH price where you've seen one
--- what an item really sells for: median of the newest full AH scan,
--- else the lowest price seen while browsing; nil = never priced
+-- The price to plan with, the app's one rule (js/app.js planPrice, kept the same; #9): the median of the
+-- newest AH scan when it found the item listed; else the newest price seen that has one (an earlier scan's
+-- median, or the lowest seen while browsing); nil = never priced
 function ns.PlanPrice(id)
     local p = ns.char and ns.char.ah and ns.char.ah.prices and ns.char.ah.prices[tostring(id)]
     if not p or type(p.obs) ~= "table" then return nil end
     for i = #p.obs, 1, -1 do
         local o = p.obs[i]
-        if o.src == "scan" then return o.qty and o.qty > 0 and (o.med or o.min) or nil end
+        if o.src == "scan" then
+            if o.qty and o.qty > 0 and (o.med or o.min) then return o.med or o.min end
+            break
+        end
     end
-    local o = p.obs[#p.obs]
-    return o and o.min
+    for i = #p.obs, 1, -1 do
+        local o = p.obs[i]
+        if o.min then return o.med or o.min end
+    end
+    return nil
 end
 
 function ns.LootValue(t)

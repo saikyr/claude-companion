@@ -62,7 +62,9 @@ that must hold go in CI or in the database (for example `private.claude_put_sett
     node test/web/advice.test.js
     node test/web/classes.test.js     # every class and spec: trees, weights, weapon DPS per hand, who wears what
 
-    # game data: one source per domain (docs/ARCHITECTURE.md, Data sources); rebuild ~10 min first time
+    # game data: one source per domain (docs/ARCHITECTURE.md, Data sources); rebuild ~10 min first time.
+    # .github/workflows/pack.yml does all of this every Monday and opens a PR (it starts checks.yml on its branch);
+    # the build project's scheduled task merges it when the checks pass. By hand:
     pip install lupa && sh gamedata/build.sh
     cp gamedata/work/out/{gamedata,suffixes}.js ClaudeCompanion/web/data/ && cp gamedata/work/out/icons.js ClaudeCompanion/web/js/
     cp gamedata/work/out/COVERAGE.md gamedata/

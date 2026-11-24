@@ -106,22 +106,21 @@
       return { i: Number(k), sp, label: A.specLabel(sp) || 'Spec ' + k, tree: pick.tree, treeWhy: pick.why, points: pts };
     }).sort((a, b) => a.i - b.i);
   }
-  // choices are kept per character and spec, in this browser
-  // Keys use the game's talent group (spec1 / spec2). Choices made before that were saved under the
-  // reader's array index (0 = group 1, 1 = group 2; a lone group 2 under 2) and are read from there
-  // until something new is saved.
-  const store = (spec, what) => `cc.gear.${what}.${char().name || ''}.spec${spec.i}`;
-  const legacy = (spec, what) => (spec.i === 1 ? [0] : [1, 2]).map((n) => `cc.gear.${what}.${char().name || ''}.${n}`);
+  // choices are kept per character (Name-Realm, so same-named characters on two realms don't share) and
+  // spec (the game's talent group, spec1 / spec2); the page mirrors them to companion-data/settings.json
+  // and they sync between computers. Choices saved before the realm was in the key (name only) are read
+  // from there until something new is saved.
+  const who = () => { const c = char(); return (c.name || '') + (c.realm ? '-' + c.realm : ''); };
+  const store = (spec, what) => `cc.gear.${what}.${who()}.spec${spec.i}`;
+  const byName = (spec, what) => `cc.gear.${what}.${char().name || ''}.spec${spec.i}`;
   const readChoice = (spec, what) => {
     const v = localStorage.getItem(store(spec, what));
-    if (v != null) return v;
-    for (const k of legacy(spec, what)) { const o = localStorage.getItem(k); if (o != null) return o; }
-    return null;
+    return v != null ? v : localStorage.getItem(byName(spec, what));
   };
   // the profile you picked for a spec (null: the default for its biggest tree)
   function pickedProfile(spec) {
     const cls = char().classFile;
-    W.migrate(char().name, spec.i - 1, cls);
+    W.migrate(char().name, spec.i - 1, cls, store(spec, 'profile'));
     const pick = readChoice(spec, 'profile');
     const p = pick && W.get(pick);
     return p && p.cls === cls ? pick : null;

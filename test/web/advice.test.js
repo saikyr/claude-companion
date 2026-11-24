@@ -74,6 +74,14 @@ test('the old "Your own weights" move into a profile once', () => {
   assert.strictEqual(store['cc.gear.own.Tank.1'], undefined);
   W.remove(id); delete store['cc.gear.profile.Tank.1'];
 });
+test('the move points the page\'s own key (Name-Realm) at the new profile', () => {
+  store['cc.gear.own.Tank.0'] = JSON.stringify({ 4: 1 });
+  store['cc.gear.profile.Tank.0'] = 'own';
+  const id = W.migrate('Tank', 0, 'WARRIOR', 'cc.gear.profile.Tank-Realm.spec1');
+  assert.strictEqual(store['cc.gear.profile.Tank-Realm.spec1'], id);
+  assert.strictEqual(store['cc.gear.profile.Tank.0'], undefined, 'the old per-index key is gone');
+  W.remove(id); delete store['cc.gear.profile.Tank-Realm.spec1'];
+});
 
 // ---------------------------------------------------------------- the engine, a level 58 Warrior
 const tip = (...l) => l.map((x) => ({ l: x }));
