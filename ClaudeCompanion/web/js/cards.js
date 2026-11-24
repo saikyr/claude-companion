@@ -6,6 +6,8 @@
 //   - on one computer: companion-data/from-claude/cards.json (folder access)
 // What you do with them (done, dismissed, ticked steps) is saved to from-claude/state.json and to the
 // synced setting cc.claude.cardsState, which Claude reads back. Each place has one writer.
+// A cards.json on this computer is also sent to the account (js/sync.js pushCards, through the card gate), so
+// the other computers get it too (#83); state.json's `upload` says how the last send went.
 (function () {
   const CC = window.CC;
   if (!CC || !CC.api || !CC.V) return;
@@ -17,7 +19,7 @@
   const KINDS = Object.fromEntries(Object.entries(KIND_WORD).map(([k, w]) => [k, [w, A.uiIcon(k)]]));
   const kindOf = (c) => (KINDS[c.kind] ? c.kind : 'note');
   const server = location.protocol.startsWith('http');
-  const S = { cards: [], error: null, have: false, state: { schema: 1, cards: {} }, raw: '', rawState: '', kind: null, view: 'open' };
+  const S = { cards: [], error: null, have: false, state: { schema: 1, cards: {} }, raw: '', rawState: '', kind: null, view: 'open', file: undefined, sent: null };
   // the synced copies (js/sync.js keeps every cc.* setting the same on all your computers)
   const SYNC_CARDS = 'cc.claude.cards', SYNC_STATE = 'cc.claude.cardsState';
   const synced = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
@@ -64,6 +66,7 @@
     S.rawState = JSON.stringify([file, online]);
     const read = (t) => { try { const d = t ? JSON.parse(t) : null; return d && d.cards ? d.cards : {}; } catch (e) { return {}; } };
     const a = read(file), b = read(online), all = {};
+    if (!S.sent) { try { S.sent = (JSON.parse(file || 'null') || {}).upload || null; } catch (e) { /* unreadable: no upload */ } }
     new Set([...Object.keys(a), ...Object.keys(b)]).forEach((id) => {
       const x = a[id], y = b[id];
       all[id] = !x ? y : !y ? x : ((secs(y.at) || 0) >= (secs(x.at) || 0) ? y : x);
@@ -80,6 +83,8 @@
       const rc = JSON.stringify([c, oc]), rst = JSON.stringify([st, ost]);
       if (rc === S.raw && rst === S.rawState) return;
       if (rc !== S.raw) setCards(c, oc);
+      // Claude wrote a new cards.json: send it to the account now, not at the next save in game
+      if (c !== S.file) { const was = S.file; S.file = c; if (was !== undefined && c != null && CC.syncNow) CC.syncNow(); }
       if (rst !== S.rawState) setState(st, ost);
       if (A.CH && !document.querySelector('input:focus')) A.render();
     } catch (e) { /* server gone: keep what we have */ }
@@ -93,12 +98,31 @@
     all[id] = rec;
     S.state.schema = 1;
     S.state.written = rec.at;
-    const body = JSON.stringify(S.state, null, 1);
+    const body = stateBody();
     // the account copy: your other computers and Claude see it after the next sync
     try { localStorage.setItem(SYNC_STATE, JSON.stringify(S.state)); } catch (e) { /* private mode: the file still has it */ }
     S.rawState = JSON.stringify([body, synced(SYNC_STATE)]);
     A.render();
     fetch('api/cards-state', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CC': '1' }, body }).catch(() => {});
+  }
+
+  // state.json: your choices, and how this computer's cards.json was last sent (`upload`, for Claude to read)
+  const stateBody = () => JSON.stringify(Object.assign({}, S.state, S.sent ? { upload: S.sent } : {}), null, 1);
+  CC.cardsSent = async (r) => {
+    S.sent = r;
+    try { const st = await get('api/cards-state'); setState(st, synced(SYNC_STATE)); } catch (e) { /* offline: save what we have */ }
+    S.sent = r;
+    fetch('api/cards-state', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CC': '1' }, body: stateBody() }).catch(() => {});
+    if (A.CH && A.STATE.tab === 'claude') A.render();
+  };
+  // where this computer's cards.json stands with your other computers
+  function sentLine() {
+    if (S.file == null) return '';
+    const st = (CC.sync && CC.sync.status) || {}, r = S.sent;
+    if (st.off) return '<p class="meta">Sync is off on this computer: the cards Claude wrote here show on this computer only.</p>';
+    if (!r) return '<p class="meta dim">The cards Claude wrote on this computer go to your other computers at the next sync.</p>';
+    if (r.ok) return `<p class="meta">The cards Claude wrote on this computer were sent to your other computers ${A.ago(Date.parse(r.at) / 1000)}.${r.stale ? ` ${r.stale} number${r.stale > 1 ? 's have' : ' has'} changed since Claude wrote ${r.stale > 1 ? 'them' : 'it'}.` : ''}</p>`;
+    return `<p class="meta neg">The cards Claude wrote on this computer were not sent to your other computers: ${esc(r.error || 'unknown error')}. They show here only until Claude fixes them.</p>`;
   }
 
   // ------------------------------------------------------------ one card
@@ -167,6 +191,7 @@
     const all = visible();
     let h = '';
     if (S.error) h += `<div class="empty bad">${esc(S.error)}</div>`;
+    h += sentLine();
     if (!all.length) return h + '<div class="empty">Nothing from Claude yet. When Claude suggests a farm, a flip, a quest route or a gear change, it lands here as a card you can tick off, finish or dismiss.</div>';
     const openList = all.filter((c) => standing(c) === 'open'), closed = all.filter((c) => standing(c) !== 'open');
     const kinds = {};

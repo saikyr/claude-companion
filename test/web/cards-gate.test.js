@@ -218,6 +218,37 @@ function pyRules(card) {
     check(exPg.length === 0, 'test/fixtures/cards.json passes the Postgres gate' + (exPg.length ? ': ' + JSON.stringify(exPg) : ''));
     const exPy = example.cards.flatMap(pyRules);
     check(exPy.length === 0, 'and check-cards.py, its game.drop facts against the pack' + (exPy.length ? ': ' + exPy.join(' ') : ''));
+
+    // #83: a computer sends its from-claude/cards.json (a friend's Claude, no database) through the same gate,
+    // merged into the stored list card by card (the newer updated wins), written as Claude's (no device)
+    const before = stored().cards.map((c) => c.id).sort();
+    const T = (h) => new Date(Date.UTC(2026, 10, 24, h)).toISOString();
+    const fileCard = { id: 'friend-1', title: 'Level', updated: T(10), facts: [{ label: 'Level', value: '59', src: 'snapshot#character.level' }] };
+    const file = (cards) => JSON.stringify({ schema: 1, cards });
+    const s1 = await pc.client.pushCards(file([fileCard]));
+    const after1 = stored();
+    check(s1 && s1.ok && after1.cards.some((c) => c.id === 'friend-1') && before.every((id) => after1.cards.some((c) => c.id === id)),
+      `a computer's cards.json is sent and merged in: the stored cards stay (${JSON.stringify(s1)})`);
+    check(B.query(`select coalesce(device_id::text, 'none') from public.records where id = 'setting|cc.claude.cards' and account_id = '${account}'`) === 'none', 'and written as Claude\'s, with no device (the one-writer rule holds)');
+    check(await pc.client.pushCards(file([fileCard])) === null, 'the same file again is not sent again');
+    const older = Object.assign({}, fileCard, { title: 'Older', updated: T(8) });
+    await pc.client.pushCards(file([older]));
+    check(stored().cards.find((c) => c.id === 'friend-1').title === 'Level', 'an older copy of a card (another computer\'s file) does not replace the newer one');
+    const newer = Object.assign({}, fileCard, { title: 'Newer', updated: T(12) });
+    await pc.client.pushCards(file([newer]));
+    check(stored().cards.find((c) => c.id === 'friend-1').title === 'Newer', 'a newer one does');
+    const wrongCard = { id: 'friend-2', title: 'Level', updated: T(13), facts: [{ label: 'Level', value: '42', src: 'snapshot#character.level' }] };
+    const keep = JSON.stringify(stored());
+    const s2 = await pc.client.pushCards(file([newer, wrongCard]));
+    check(s2 && s2.ok === false && /cards refused/.test(s2.error) && /friend-2/.test(s2.error) && JSON.stringify(stored()) === keep,
+      `a file with a fact that doesn't match is refused, saying why, and nothing is written (${s2 && String(s2.error).slice(0, 100)})`);
+    check(pc.client.state.cards.ok === false && pc.client.state.live.cards, 'the refusal is kept for the app to show');
+    const s3 = await pc.client.pushCards(file([newer, wrongCard]));
+    check(s3 && s3.ok === false, 'a refused file is tried again at the next sync (a newer snapshot can make it match)');
+    const s4 = await pc.client.pushCards('not json');
+    check(s4 && s4.ok === false && /not JSON/.test(s4.error), 'a file that is not JSON is refused, not an error');
+    const fails = (sql) => { try { B.query(sql); return ''; } catch (e) { return e.message; } };
+    check(/unknown device/.test(fails(`select public.cc_put_cards('${'x'.repeat(40)}', '{"schema":1,"cards":[]}')`)), 'an unknown computer key writes nothing');
   } finally { B.drop(); fs.rmSync(out, { recursive: true, force: true }); }
   console.log(failed ? `\n${failed} failed` : '\nall passed');
   process.exit(failed ? 1 : 0);

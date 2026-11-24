@@ -93,7 +93,11 @@ cards within 5 seconds.
    the game data. Fix what it names; never reword around it.
 4. Write it to a temporary file in `companion-data/from-claude/`, then rename it to `cards.json`.
 
-Cards written this way show on this computer only. The player's other computers don't get them.
+With sync on, the app sends the file to the player's account at the next sync (within seconds while the app is open),
+through the same gate as the owner's cards, and their other linked computers show them too. The gate also checks
+every number against the newest snapshot; if it refuses, nothing is sent and `from-claude/state.json` `upload`
+says why (`ok` false, `error`): fix what it names. A card you leave out of the file stays on the other computers,
+so take one back with `status` `withdrawn`, never by deleting it.
 
 ## Chat answers
 
