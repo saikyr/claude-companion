@@ -35,7 +35,8 @@ never runs anything on your computer; it only reads your addon folder, and write
 I play WoW Forever with the Claude Companion addon and app. I install it myself; you are my coach.
 1. Ask for access to my ClaudeCompanion addon folder. It is in my World of Warcraft folder, in
    _forever_/Interface/AddOns/ClaudeCompanion (Windows: usually C:\Program Files (x86)\World of Warcraft,
-   Mac: /Applications/World of Warcraft). Use folder access only: never run, download or install anything.
+   Mac: /Applications/World of Warcraft). Use folder access only: never download or install anything, and
+   run nothing on my computer (the Python tools in claude/ run in your own workspace, on the folder).
 2. If that folder isn't there yet, the Companion isn't installed: tell me to install it from the download
    I was given, type /reload in game, and tell you when it's done.
 3. Then read claude/GUIDE.md and companion-data/snapshot.json in that folder, and tell me in a few lines
