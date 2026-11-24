@@ -24,6 +24,38 @@ window.GAMERULES = {
     // Zul'Gurub boss, is written "Zul'Farrak") is still a raid by its map: MC, Onyxia, BWL, ZG, AQ20, AQ40, Naxx
     raidMaps: [409, 249, 469, 309, 509, 531, 533],
     battlegrounds: ['Alterac Valley', 'Warsong Gulch', 'Arathi Basin'],
+    // Wings of instances the pack keeps as one zone (#105), by creature id (pack npc ids; the bosses and the trash
+    // families that live in one wing only). A creature not listed has no wing: the app says "wing not known"
+    // rather than guess. Bosses: warcraft.wiki.gg "Lower Blackrock Spire", "Upper Blackrock Spire", "Dire Maul",
+    // "Stratholme" (Classic layouts; Forever keeps them).
+    wings: {
+      'Blackrock Spire': {
+        Lower: [9196, 9236, 9237, 9568, 9736, 10220, 10268, 10584, 10596, 9596, 9718, 10376,          // Omokk, Vosh'gajin, Voone, Wyrmthalak, Zigris, Halycon, Gizrul, Urok, Smolderweb, Bannok, Ghok, Crystal Fang
+          9197, 9198, 9199, 9200, 9201, 9216, 9217, 9218, 9219,                                    // Spirestone ogres
+          9240, 9265, 9266, 9268,                                                            // Smolderthorn trolls
+          9045, 9097, 9098, 9257, 9258, 9416,                                                            // Scarshield
+          9259, 9260, 9262, 9264,                                                            // Firebrand
+          9692,                                                                                          // Bloodaxe Raider
+          9701, 10374, 10375],                                                                           // Spire scorpids and spiders
+        Upper: [9816, 10264, 10509, 10899, 10339, 10429, 10430, 10363, 16042,                            // Emberseer, Solakar, Jed, Goraluk, Gyth, Rend, The Beast, Drakkisath, Lord Valthalak
+          9817, 9819, 10317, 10319,                                                                      // Blackhand Dreadweaver, Veteran, Elite, Iron Guard
+          9096, 10083, 10366, 10814],                                                                    // Rage Talon Dragonspawn, Flamescale, Dragon Guard; Chromatic Elite Guard
+      },
+      'Dire Maul': {
+        East: [11492, 13280, 14327, 14354, 11490, 14349,                                                 // Alzzin, Hydrospawn, Lethtendris, Pusillin, Zevrim, Pimgib
+          11459, 11462, 11465, 13021, 11451, 11452, 11453, 11454, 11455, 11456],                         // Ironbark Protector, Warpwood treants, Wildspawn satyrs
+        West: [11488, 11496, 11487, 11486, 11489, 11467, 14506,                                          // Illyanna, Immol'thar, Kalendris, Tortheldrin, Tendris, Tsu'zee, Hel'nurath
+          11480, 14399, 14400, 11483, 11484, 11458, 14303, 11470, 11471, 11472, 11473, 11475, 14398],     // arcane elementals, Petrified treants, Highborne (Eldreth) ghosts
+        North: [14325, 14324, 14321, 14326, 14323, 11501, 14322,                                         // Kromcrush, Cho'Rush, the three guards, King Gordok, Stomper Kreeg
+          11441, 11444, 11448, 11450, 13036],                                                            // Gordok ogres, Gordok Mastiff
+      },
+      Stratholme: {
+        Live: [10811, 10813, 10997, 10558, 11032, 10393, 10808, 10516, 11120,                            // Galford, Balnazzar, Willey, Forresten, Malor, Skul, Timmy, The Unforgiven, Crimson Hammersmith
+          10418, 10419, 10421, 10422, 10424, 11043],                                                     // Scarlet (Crimson) trash
+        Undead: [10440, 10436, 10435, 10438, 10437, 10439, 10809, 11121,                                 // Rivendare, Anastari, Barthilas, Maleki, Nerub'enkan, Ramstein, Stonespine, Black Guard Swordsmith
+          10398, 10390, 10412, 10413],                                                                   // Thuzadin Shadowcaster, Skeletal Guardian, crypt beasts
+      },
+    },
     // QuestieDB quest sorts that are raid content though no raid zone is named (Atiesh, Thunderfury)
     raidQuestSorts: ['Legendary'],
     // 40-man world bosses and summoned group bosses outside instances (NPC ids in the pack, each with its
@@ -54,7 +86,7 @@ window.GAMERULES = {
   unlocks: [
     { id: 'ubrs', name: 'Upper Blackrock Spire', kind: 'dungeon', who: 'one', quests: [4743], items: [12344],
       what: 'Seal of Ascension opens the door to Upper Blackrock Spire for your group',
-      value: { npcs: [9816, 10264, 10509, 10899, 10339, 10429, 10430, 10363] }, src: 'warcraft.wiki.gg/wiki/WoW_Forever' },
+      value: { npcs: [9816, 10264, 10509, 10899, 10339, 10429, 10430, 10363], wing: 'Upper' }, src: 'warcraft.wiki.gg/wiki/WoW_Forever' },
     { id: 'scholo', name: 'Scholomance', kind: 'dungeon', who: 'one', quests: [5505, 5511], items: [13704],
       what: 'The Skeleton Key opens the front gate', value: { zone: 'Scholomance' }, src: 'conquestcapped.com/guides/wow-forever/wow-forever-attunements' },
     { id: 'dalaran', name: 'City of Dalaran', kind: 'dungeon', who: 'one', quests: [92458, 96984], items: [277507],
