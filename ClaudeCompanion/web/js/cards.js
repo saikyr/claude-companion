@@ -147,7 +147,10 @@
     if (c.summary) body += `<p class="sum">${esc(c.summary)}</p>`;
     // what can go wrong (required on a farm card by the card gate): shown before the numbers, so it is read
     if (c.risk) body += `<p class="crisk"><b>Risk</b> ${esc(c.risk)}</p>`;
-    if (arr(c.facts).length) body += `<dl class="facts">${arr(c.facts).map((f) => `<div><dt>${esc(f.label)}</dt><dd>${esc(f.value)}${f.note ? `<span class="sub">${esc(f.note)}</span>` : ''}</dd></div>`).join('')}</dl>`;
+    // a fact the database found changed since Claude wrote it (stale, private.claude_put_setting): kept, marked
+    const stale = {};
+    arr(c.stale).forEach((x) => { if (x && x.label) stale[x.label] = x; });
+    if (arr(c.facts).length) body += `<dl class="facts">${arr(c.facts).map((f) => `<div><dt>${esc(f.label)}</dt><dd>${esc(f.value)}${f.note ? `<span class="sub">${esc(f.note)}</span>` : ''}${stale[f.label] ? `<span class="sub need">Changed since Claude wrote it: ${esc(stale[f.label].msg || '')}</span>` : ''}</dd></div>`).join('')}</dl>`;
     if (arr(c.items).length) body += `<div class="list citems">${arr(c.items).map(itemRow).join('')}</div>`;
     body += trackLine(c);
     if (steps.length) body += `<ol class="steps">${steps.map((s, i) => `<li class="${ticks.has(i) ? 'done' : ''}"><label><input type="checkbox" data-cstep="${esc(c.id)}" data-i="${i}"${ticks.has(i) ? ' checked' : ''}${st === 'open' ? '' : ' disabled'}><span>${esc(s)}</span></label></li>`).join('')}</ol>`;

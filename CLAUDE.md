@@ -104,9 +104,10 @@ Claude writes nothing but **From Claude cards** (format: SCHEMA.md, "cards.json"
 `python3 tools/check-cards.py cards.json` must print `ok`. Write the whole list each time; keep a card's
 `id` to update it. **Anything the player acts on goes on a card**; chat gives the short version and points
 to it. Every number in `facts[]` carries its `src` (`game.drop:<item>:<npc>`, `grind:<name>@<start>#gph`,
-`run:...`, `flips#profit`, `snapshot#<path>`, `ah:<item>@<scan t>#min` for a price from the player's own AH scan:
+`run:...`, `flips#profit`, `snapshot#<path>` (pick list entries by a field, `gear[label=Holy].upgrades[name=X].gain`, not by position), `ah:<item>@<scan t>#min` for a price from the player's own AH scan:
 `kind = 'ah_obs' and data->>'item' = '<id>'` in `private.history`), and online the database looks each one up and refuses the
-whole list if a number doesn't match, a rate lacks its corpses or Classic label, "profit" isn't flips, a
+whole list if a number in a new or edited fact doesn't match (a fact you wrote before that has since changed
+is kept and marked `stale` on its card instead), a rate lacks its corpses or Classic label, "profit" isn't flips, a
 farm card has no `risk`, a duo or solo claim isn't measured or "unknown", or a banned tip (layers, `/run`,
 Wowhead) appears. Fix what it names; never reword around it.
 

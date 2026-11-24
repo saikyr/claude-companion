@@ -36,7 +36,8 @@ CARD_DUO_OK = r'\bunknown\b|not measured'     # on a card: on a line that names 
 SRC = (r'game\.drop:\d{1,9}:\d{1,12}'                            # item id : creature id -> game.drop_rates
        r'|(grind|run):[^@#]+@\d{4}-\d\d-\d\dT[\d:.]+Z#(gph|gph_low|gph_high|kills|hours|deaths)'  # a grind or run in the snapshot: name@start#field
        r'|flips#(profit|sold|paid)'                              # snapshot ah.flips.totals (profit = sales matched to buys)
-       r'|snapshot#[A-Za-z0-9_.]+'                               # any field of the newest snapshot, dot path, [n] as .n
+       r'|snapshot#[A-Za-z0-9_]+(\[[A-Za-z0-9_]+=[^\]]+\])?(\.[A-Za-z0-9_]+(\[[A-Za-z0-9_]+=[^\]]+\])?)*'  # any field of the newest snapshot: dot path,
+                                                                 # a position as .n, or an entry by a field: gear[label=Holy].upgrades[name=X].gain
        r'|ah:[1-9]\d{0,8}@\d{9,11}#(min|med)')                         # the player's AH scan: item id @ scan time (unix) -> ah_obs
 
 

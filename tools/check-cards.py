@@ -13,7 +13,8 @@ from answer_rules import card_rules
 KINDS = {'farm', 'flip', 'quest', 'gear', 'craft', 'route', 'note'}
 STATUS = {'open', 'done', 'withdrawn'}
 KEYS = {'id', 'kind', 'title', 'summary', 'status', 'created', 'updated', 'expires', 'character', 'where',
-        'facts', 'items', 'steps', 'track', 'body', 'sources', 'step', 'risk'}
+        'facts', 'items', 'steps', 'track', 'body', 'sources', 'step', 'risk',
+        'stale'}   # the database's marks on facts that changed since Claude wrote them (private.claude_put_setting); dropped when sent
 
 
 def iso(v):
