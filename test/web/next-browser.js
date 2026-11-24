@@ -261,16 +261,22 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
     const A = window.CC.api, ch = A.CH, s = ch.snap, D = A.DB.items;
     const keep = { bags: s.bags, buffs: s.buffs, equipped: s.equipped, bank: ch.bank };
     D['t:flask'] = { id: 13512, name: 'Flask of Supreme Power', class: 0, tip: [{ l: 'Flask of Supreme Power' }, { l: 'Requires Level 50' }, { l: 'Use: Increases damage done by magical spells and effects by up to 150 for 2 hrs.' }] };
-    D['t:oil'] = { id: 20749, name: 'Brilliant Wizard Oil', class: 0, tip: [{ l: 'Brilliant Wizard Oil' }, { l: 'Use: While applied to target weapon it increases spell damage by up to 36 for 30 minutes.' }] };
+    D['t:oil'] = { id: 20749, name: 'Brilliant Wizard Oil', class: 7, tip: [{ l: 'Brilliant Wizard Oil' }, { l: 'Use: While applied to target weapon it increases spell damage by up to 36 for 30 minutes.' }] };
     D['t:cloth'] = { id: 14047, name: 'Runecloth', class: 7 };
-    s.bags = [{ id: 0, items: [{ item: 't:flask', count: 2 }, { item: 't:oil', count: 1 }, { item: 't:cloth', count: 20 }] }];
+    D['t:port'] = { id: 2593, name: 'Flask of Port', class: 0 };
+    D['t:fish'] = { id: 3825, name: 'Fishliver Oil', class: 0 };
+    s.bags = [{ id: 0, items: [{ item: 't:flask', count: 2 }, { item: 't:oil', count: 1 }, { item: 't:cloth', count: 20 }, { item: 't:port', count: 1 }, { item: 't:fish', count: 1 }] }];
     ch.bank = Object.assign({}, ch.bank, { bags: [{ id: -1, items: [{ item: 't:flask', count: 3 }] }] });
     s.buffs = [{ name: 'Distilled Wisdom', spell: 17627, left: 3000 }];
     s.equipped = [{ slot: 16, slotName: 'MainHand', item: 't:staff', enchant: { id: 2504, text: 'Spell Power +30', temp: { name: 'Brilliant Wizard Oil', left: 900 } } }];
     const out = window.CC.snapshot();
+    // at logout the game read no buffs: the snapshot kept the read before's, which may have run out since
+    s.kept = ['buffs', 'equipped']; s.keptFrom = s.taken - 7200;
+    const old = window.CC.snapshot();
+    delete s.kept; delete s.keptFrom;
     Object.assign(s, { bags: keep.bags, buffs: keep.buffs, equipped: keep.equipped }); ch.bank = keep.bank;
-    delete D['t:flask']; delete D['t:oil']; delete D['t:cloth'];
-    return { c: out.consumables, b: out.buffs, e: out.equipped };
+    ['t:flask', 't:oil', 't:cloth', 't:port', 't:fish'].forEach((k) => delete D[k]);
+    return { c: out.consumables, b: out.buffs, e: out.equipped, old, taken: s.taken };
   });
   const fl = cons.c.find((x) => x.id === 13512), oil = cons.c.find((x) => x.id === 20749);
   check(fl && fl.bags === 2 && fl.bank === 3 && fl.from === 'game' && fl.use.some((l) => /^Use: Increases damage/.test(l)) && !cons.c.some((x) => x.id === 14047),
@@ -278,7 +284,13 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   check(fl && fl.groups.some((g) => g.id === 'flask') && fl.notWith.some((n) => n.buff === 'Distilled Wisdom' && /not checked on Forever/.test(n.label)),
     'consumables: a flask doesn\'t stack with the flask on you now, labelled as a Classic rule');
   check(oil && oil.notWith.some((n) => n.weapon === 'MainHand' && n.on === 'Brilliant Wizard Oil'), 'consumables: an oil replaces the one on the main hand');
-  check(cons.b[0] && cons.b[0].name === 'Distilled Wisdom' && cons.b[0].left === 3000 && cons.b[0].at, 'snapshot buffs: name, seconds left and when read');
+  const port = cons.c.find((x) => x.id === 2593), fish = cons.c.find((x) => x.id === 3825);
+  check(port && !port.groups.length && !port.notWith.length && fish && !fish.groups.length && !fish.notWith.length,
+    'consumables: Flask of Port is no flask and Fishliver Oil no weapon oil');
+  const oFl = cons.old.consumables.find((x) => x.id === 13512), oOil = cons.old.consumables.find((x) => x.id === 20749);
+  check(oFl && !oFl.notWith.length && oOil && !oOil.notWith.length && cons.old.buffs[0].at === new Date((cons.taken - 7200) * 1000).toISOString(),
+    'buffs and weapon oils kept at logout from an older read: dated by that read, and no clash from them');
+  check(cons.b[0] && cons.b[0].name === 'Distilled Wisdom' && cons.b[0].left === 3000 && cons.b[0].at === new Date(cons.taken * 1000).toISOString(), 'snapshot buffs: name, seconds left and when read');
   check(cons.e[0] && cons.e[0].enchant && cons.e[0].enchant.id === 2504 && cons.e[0].enchant.temp.name === 'Brilliant Wizard Oil' && cons.e[0].enchant.temp.at,
     'snapshot equipped: the enchant and the oil on the weapon');
   const g = (snap.grind.recent || [])[0] || {};

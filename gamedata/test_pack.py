@@ -67,7 +67,7 @@ check((npc.get('9019') or [''])[0] == 'Emperor Dagran Thaurissan', 'npc 9019 is 
 
 # ---------------------------------------------------------------- 3. coverage floors
 n = lambda c: sum(1 for x in c)
-gear_e = n(r for r in it.values() if r[11] == 'e')
+gear_e = n(r for r in it.values() if r[11] == 'e' and r[9] in (2, 4))
 check(gear_e > 10000, f'endgametools tooltips for >10,000 items (got {gear_e})')
 check(len(G['quests']) > 6000, f'>6,000 quests (got {len(G["quests"])})')
 check(len(G['src']) > 15000, f'>15,000 items with sources (got {len(G["src"])})')

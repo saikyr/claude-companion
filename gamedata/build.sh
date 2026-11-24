@@ -27,8 +27,11 @@ python3 -I - "$W" <<'EOF'
 import json, os, sys, time
 w = sys.argv[1]
 items = json.load(open(os.path.join(w, 'out', 'questie_item.json')))
-ids = {k for k, v in items.items() if len(v) > 11 and v[11] in (0, 2, 4)}
-ids |= {str(it['id']) for it in json.load(open(os.path.join(w, 'raw', 'fdb', 'items.json'))) if it.get('c') in (0, 2, 4)}
+import re
+oil = re.compile(r'((Wizard|Mana|Shadow|Frost) Oil|Sharpening Stone|Weightstone)$')   # Trade Goods (class 7) used on a weapon
+ids = {k for k, v in items.items() if len(v) > 11 and (v[11] in (0, 2, 4) or (v[11] == 7 and oil.search(str(v[0] or ''))))}
+ids |= {str(it['id']) for it in json.load(open(os.path.join(w, 'raw', 'fdb', 'items.json')))
+        if it.get('c') in (0, 2, 4) or (it.get('c') == 7 and oil.search(str(it.get('n') or '')))}
 old = time.time() - 30 * 86400
 with open(os.path.join(w, 'raw', 'egt', 'list.txt'), 'w') as f:
     n = 0

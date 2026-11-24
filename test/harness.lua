@@ -1045,7 +1045,7 @@ do -- #91: weapon enchants, from the game: the permanent one's id and the text i
     if link:find("item:873:2504") then lines[#lines + 1] = { leftText = "Spell Power +30" } end
     return { lines = lines }
   end
-  C_TooltipInfo.GetInventoryItem = function(u, slot) return { lines = { { leftText = "Staff of Jordan" }, { leftText = "Brilliant Wizard Oil (30 min)" } } } end
+  C_TooltipInfo.GetInventoryItem = function(u, slot) return { lines = { { leftText = "Staff of Jordan" }, { leftText = 7 }, { leftText = "Brilliant Wizard Oil (30 min) (5 charges)" } } } end
   GetWeaponEnchantInfo = function() return true, 1500000, 0, 2628, false, 0, 0, 0 end
   ns.Snapshot("manual")
   local by = {}; for _, e in ipairs(ns.char.snap.equipped or {}) do by[e.slot] = e end
@@ -1058,6 +1058,11 @@ do -- #91: weapon enchants, from the game: the permanent one's id and the text i
   ns.Snapshot("manual")
   by = {}; for _, e2 in ipairs(ns.char.snap.equipped or {}) do by[e2.slot] = e2 end
   check(by[16].enchant and by[16].enchant.temp == nil and by[16].enchant.id == 2504, "no oil: only the permanent enchant")
+  local oldTL = ns.TooltipLines; ns.TooltipLines = function() error("tooltip broke") end
+  ns.Snapshot("manual")
+  ns.TooltipLines = oldTL
+  by = {}; for _, e2 in ipairs(ns.char.snap.equipped or {}) do by[e2.slot] = e2 end
+  check(by[16] and by[16].enchant == nil and by[1], "an error reading an enchant loses only the enchant, not the worn gear")
   GetInventoryItemLink, C_TooltipInfo.GetHyperlink, C_TooltipInfo.GetInventoryItem, GetWeaponEnchantInfo = oldLink, oldTip, oldInv, oldWE
   ns.Snapshot("manual")
 end

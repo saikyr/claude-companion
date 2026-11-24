@@ -36,14 +36,20 @@
     : fetch('api/update', { cache: 'no-store' }).then((r) => r.json()).then((st) => { installed = (st && st.installed) || null; }).catch(() => {});
 
   // the consumables you carry and bank, one row per item, with what they do and what they don't stack with
+  // when a part of the snapshot was read in game: a part the logout kept from the read before carries that time
+  function readAt(s, part) {
+    const t = arr(s.kept).includes(part) && s.keptFrom ? s.keptFrom : s.taken;
+    return t ? new Date(t * 1000).toISOString() : null;
+  }
   function consumables(s) {
     const by = {}, groups = ((window.GAMERULES || {}).stacking || {}).groups || [], label = ((window.GAMERULES || {}).stacking || {}).label;
     const add = (x, where) => {
       if (!x || !x.item) return;
       const it = A.item(x.item) || {}, id = x.id || it.id || Number((/item:(\d+)/.exec(x.item) || [])[1]), g = A.gdItem(id);
-      const cls = it.class != null ? it.class : g ? g[9] : null;
-      if (cls !== 0) return;
-      const r = by[id] || (by[id] = { id, name: it.name || (g && g[0]) || '#' + id, bags: 0, bank: 0, use: [], from: null });
+      const cls = it.class != null ? it.class : g ? g[9] : null, name = it.name || (g && g[0]) || '#' + id;
+      // class 0 (consumables), plus the oils and stones the game files under Trade Goods (class 7)
+      if (cls !== 0 && !(cls === 7 && groups.some((gr) => arr(gr.items).some((rx) => rx.test(name))))) return;
+      const r = by[id] || (by[id] = { id, name, bags: 0, bank: 0, use: [], from: null });
       r[where] += x.count || 1;
       if (!r.use.length) {
         const own = arr(it.tip).map((l) => l && l.l).filter((l) => l && /^(Use|Equip|Chance on hit):|well fed|^Requires/i.test(l));
@@ -53,7 +59,8 @@
     };
     arr(s.bags).forEach((b) => arr(b.items).forEach((x) => add(x, 'bags')));
     arr(((A.CH || {}).bank || {}).bags).forEach((b) => arr(b.items).forEach((x) => add(x, 'bank')));
-    const buffs = arr(s.buffs).map((b) => b.name).filter(Boolean);
+    // buffs kept at logout from an older read may have run out since: only a fresh read counts for a clash
+    const buffs = arr(s.kept).includes('buffs') ? [] : arr(s.buffs).map((b) => b.name).filter(Boolean);
     return Object.values(by).map((r) => {
       const text = r.use.join(' ');
       const gs = groups.filter((gr) => (gr.items && gr.items.some((rx) => rx.test(r.name))) || (gr.tip && gr.tip.test(text)));
@@ -61,7 +68,7 @@
       gs.forEach((gr) => arr(gr.buffs).forEach((rx) => buffs.filter((b) => rx.test(b)).forEach((b) => clash.push({ buff: b, why: gr.why, label }))));
       // a weapon oil or stone: it replaces the one already on a weapon
       gs.filter((gr) => gr.kind === 'weapon').forEach(() => arr(s.equipped).forEach((e) => {
-        const t = e && e.enchant && e.enchant.temp;
+        const t = !arr(s.kept).includes('equipped') && e && e.enchant && e.enchant.temp;
         if (t) clash.push({ weapon: e.slotName, on: t.name || null, why: 'it replaces what is on that weapon now', label });
       }));
       return Object.assign(r, { groups: gs.map((gr) => ({ id: gr.id, why: gr.why, label })), notWith: clash });
@@ -233,9 +240,10 @@
       // enchant (weapons, from the game): id and the tooltip text it adds; temp = an oil, stone or poison now on it
       // (name, seconds left, charges)
       equipped: arr(s.equipped).filter((e) => e && e.item).map((e) => ({ slot: e.slotName, id: Number((/item:(\d+)/.exec(e.item) || [])[1]), name: (A.item(e.item) || {}).name,
-        enchant: e.enchant ? { id: e.enchant.id || null, text: e.enchant.text || null, temp: e.enchant.temp ? Object.assign({}, e.enchant.temp, { at: s.taken }) : null } : undefined })),
-      // the buffs on you at the last in-game read (left = seconds then; at = when)
-      buffs: arr(s.buffs).map((b) => ({ name: b.name, spell: b.spell || null, stacks: b.stacks || null, left: b.left != null ? b.left : null, at: s.taken })),
+        enchant: e.enchant ? { id: e.enchant.id || null, text: e.enchant.text || null, temp: e.enchant.temp ? Object.assign({}, e.enchant.temp, { at: readAt(s, 'equipped') }) : null } : undefined })),
+      // the buffs on you at the last in-game read (left = seconds then; at = when, ISO; a part kept at logout
+      // from the read before says that read's time)
+      buffs: arr(s.buffs).map((b) => ({ name: b.name, spell: b.spell || null, stacks: b.stacks || null, left: b.left != null ? b.left : null, at: readAt(s, 'buffs') })),
       // potions, elixirs, flasks, food, scrolls and oils you carry or bank (#91): what each does, from the game's own
       // tooltip (else the pack's), and buffs it doesn't stack with that are on you now
       consumables: consumables(s),

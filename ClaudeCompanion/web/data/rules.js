@@ -167,12 +167,12 @@ window.GAMERULES = {
     label: 'Classic rule, not checked on Forever',
     groups: [
       { id: 'food', why: 'one food buff at a time (Well Fed)', buffs: [/^Well Fed$/], tip: /well fed/i },
-      { id: 'flask', why: 'one flask at a time', buffs: [/^Flask of /, /^Supreme Power$/, /^Distilled Wisdom$/, /^Chromatic Resistance$/, /^Petrification$/], items: [/^Flask of /] },
+      { id: 'flask', why: 'one flask at a time', buffs: [/^Flask of /, /^Supreme Power$/, /^Distilled Wisdom$/, /^Chromatic Resistance$/, /^Petrification$/], items: [/^Flask of (Distilled Wisdom|Supreme Power|the Titans|Chromatic Resistance|Petrification)$/] },
       { id: 'arcane-elixir', why: 'Arcane Elixir and Greater Arcane Elixir are the same buff', buffs: [/^Arcane Elixir$/, /^Greater Arcane Elixir$/], items: [/^(Greater )?Arcane Elixir$/] },
       { id: 'spirit', why: 'a Scroll of Spirit and a priest\'s Divine Spirit don\'t stack', buffs: [/^Spirit$/, /^Divine Spirit$/, /^Prayer of Spirit$/], items: [/^Scroll of Spirit/] },
       { id: 'stamina', why: 'a Scroll of Stamina and Power Word: Fortitude don\'t stack', buffs: [/^Stamina$/, /^Power Word: Fortitude$/, /^Prayer of Fortitude$/], items: [/^Scroll of Stamina/] },
       { id: 'intellect', why: 'a Scroll of Intellect and Arcane Intellect don\'t stack', buffs: [/^Intellect$/, /^Arcane Intellect$/, /^Arcane Brilliance$/], items: [/^Scroll of Intellect/] },
-      { id: 'weapon', why: 'one temporary enchant per weapon (oil, sharpening stone, weightstone, poison)', buffs: null, items: [/ (Mana |Wizard )?Oil$/, /Sharpening Stone$/, /Weightstone$/, / Poison( [IVX]+)?$/], kind: 'weapon' },
+      { id: 'weapon', why: 'one temporary enchant per weapon (oil, sharpening stone, weightstone, poison)', buffs: null, items: [/^(Minor |Lesser |Brilliant |Blessed )?(Wizard|Mana) Oil$/, /^(Shadow|Frost) Oil$/, /Sharpening Stone$/, /Weightstone$/, /^(Instant|Deadly|Crippling|Mind-numbing|Wound) Poison( [IVX]+)?$/], kind: 'weapon' },
     ],
   },
 };

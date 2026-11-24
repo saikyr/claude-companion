@@ -100,8 +100,9 @@ local function TempLine(slot)
     local data = Call(C_TooltipInfo.GetInventoryItem, "player", slot)
     for _, line in ipairs(type(data) == "table" and type(data.lines) == "table" and data.lines or {}) do
         local t = Clean(line.leftText)
-        local name = t and (t:match("^(.-) %(%d+ min%)$") or t:match("^(.-) %(%d+ sec%)$") or t:match("^(.-) %(%d+ hours?%)$")
-            or t:match("^(.-) %(%d+ [Cc]harges?%)$"))
+        t = type(t) == "string" and t or nil
+        local name = t and (t:match("^(.-) %(%d+ min%)") or t:match("^(.-) %(%d+ sec%)") or t:match("^(.-) %(%d+ hours?%)")
+            or t:match("^(.-) %(%d+ [Cc]harges?%)"))
         if name then return name, t end
     end
 end
@@ -129,6 +130,11 @@ local function Enchants(slot, link)
     end
     return next(e) and e or nil
 end
+-- an error reading an enchant loses only the enchant, not the worn gear
+local function EnchantsSafe(slot, link)
+    local ok, e = pcall(Enchants, slot, link)
+    return ok and e or nil
+end
 
 local function Equipped()
     local out = {}
@@ -140,7 +146,7 @@ local function Equipped()
                 icon = Clean(Call(GetInventoryItemTexture, "player", slot)),
                 count = Clean(Call(GetInventoryItemCount, "player", slot)),
                 dur = Clean(cur), durMax = Clean(max),
-                enchant = (slot == 16 or slot == 17 or slot == 18) and Enchants(slot, link) or nil }
+                enchant = (slot == 16 or slot == 17 or slot == 18) and EnchantsSafe(slot, link) or nil }
         end
     end
     return out
