@@ -221,7 +221,7 @@
       spells: (() => {
         if (!window.CCSpells) return null;
         const t = (x) => (x ? new Date(x * 1000).toISOString() : null);
-        const R = window.CCSpells.check(CH, A.GD);
+        const R = window.CCSpells.check(CH, A.GD, CC.gear ? { source: CC.gear.raidSource, row: CC.gear.raidRow } : null);
         const rk = window.CCSpells.rankNo;
         const byId = {};
         arr(s.spellbook).forEach((tab) => arr(tab && tab.spells).forEach((x) => { if (x && x.id != null) byId[x.id] = x; }));

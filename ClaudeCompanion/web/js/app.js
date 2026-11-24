@@ -768,7 +768,7 @@
     }
     const bars = arr(sp.actionBars);
     // spell ranks (js/spells.js, the one check): bars below your best rank, ranks the trainer has for you
-    const R = window.CCSpells ? window.CCSpells.check(CH, GD) : null;
+    const R = window.CCSpells ? window.CCSpells.check(CH, GD, window.CC && CC.gear ? { source: CC.gear.raidSource, row: CC.gear.raidRow } : null) : null;
     const RS = R && R.specs.find((x) => x.spec === cur);
     const old = {};
     if (RS) RS.outdated.forEach((o) => { old[o.slot] = o; });

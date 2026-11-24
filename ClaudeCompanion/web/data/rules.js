@@ -20,6 +20,9 @@ window.GAMERULES = {
   // in the pack can't tell them apart (most raid trash drops say nothing).
   instances: {
     raids: ['Molten Core', "Onyxia's Lair", 'Blackwing Lair', "Zul'Gurub", "Ruins of Ahn'Qiraj", "Temple of Ahn'Qiraj", 'Naxxramas', 'Barrow Deeps', 'Hyjal Summit'],
+    // the same raids by map id (a pack source row's inst field): a row whose zone name is wrong (Gahz'ranka, a
+    // Zul'Gurub boss, is written "Zul'Farrak") is still a raid by its map: MC, Onyxia, BWL, ZG, AQ20, AQ40, Naxx
+    raidMaps: [409, 249, 469, 309, 509, 531, 533],
     battlegrounds: ['Alterac Valley', 'Warsong Gulch', 'Arathi Basin'],
     // QuestieDB quest sorts that are raid content though no raid zone is named (Atiesh, Thunderfury)
     raidQuestSorts: ['Legendary'],

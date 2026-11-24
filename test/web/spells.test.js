@@ -81,14 +81,26 @@ check(RG.length === 1 && RG[0].spell === 'Prayer of Fortitude' && RG[0].have ===
 pr.snap.bags = [{ id: 0, items: [{ slot: 1, item: 'item:17029::::::::60', count: 7 }] }];
 check(S.check(pr, gd).reagents[0].have === 7, 'and counted when you carry some');
 check(S.check(ch).books.now.length === 0 && Array.isArray(S.check(ch).reagents), 'no pack, no class: no books, no crash');
-// raid-only books are kept apart; a book with a raid and a dungeon source shows the dungeon first
-globalThis.GAMERULES = Object.assign({}, globalThis.GAMERULES, { instances: { raids: ['Molten Core', 'Scholomance'] } });
+// raid-only books are kept apart (the gear engine's rule is passed in; a stub here: Molten Core and Scholomance
+// rows are raid); a book with a raid and a dungeon source shows the dungeon first
+const RZ = new Set(['Molten Core', 'Scholomance']);
+const stub = { row: (r) => RZ.has(r[7]), source: (id) => arr(gd.src[id]).length > 0 && arr(gd.src[id]).every((r) => RZ.has(r[7])) };
+function arr(x) { return Array.isArray(x) ? x : []; }
 gd.src[17414].unshift(['drop', 'Raider', 9, 0, 0, 0, 0, 'Molten Core', null, null, 'f']);
-const RB = S.check(pr, gd).books;
+const RB = S.check(pr, gd, stub).books;
 check(RB.raid.map((b) => b.item).join() === '22393' && !RB.now.some((b) => b.item === 22393), `a book only a raid gives is under raid (${JSON.stringify(RB.raid.map((b) => b.item))})`);
 const pf2 = RB.now.find((b) => b.item === 17414);
 check(pf2 && !pf2.raid && pf2.sources[0].name === 'Warpwood Tangler' && pf2.sources[1].raid === true, 'a book with a dungeon source too: not raid, dungeon source first');
-globalThis.GAMERULES = { buffReagents: globalThis.GAMERULES.buffReagents };
+check(S.check(pr, gd).books.raid.length === 0, 'without the raid rule nothing is called raid');
+// a Manual of counts for whoever knows a lower rank; a warlock's pet grimoire never, his own grimoire does
+const gd2 = Object.assign({}, gd, { items: Object.assign({}, gd.items), src: Object.assign({}, gd.src) });
+Object.assign(gd2.items, { 24102: book('Manual of Eviscerate IX', 58), 21297: book('Manual of Heroic Strike IX', 60), 22891: book('Grimoire of Shadow Ward IV', 60), 16302: book('Grimoire of Firebolt (Rank 2)', 8) });
+Object.assign(gd2.src, { 24102: [['drop', 'Blackhand Assassin', 1, 0, 0, 229, 0, 'Blackrock Spire', null, null, 'c']], 21297: [['drop', 'q', 1, 0, 0, 0, 0, 'X', null, null, 'c']],
+  22891: [['drop', 'Malor the Zealous', 1, 0, 0, 329, 1, 'Stratholme', null, null, 'c']], 16302: [['drop', 'Imp', 1, 0, 0, 0, 0, 'X', null, null, 'c']] });
+const rogue = { snap: { character: { level: 60, classFile: 'ROGUE' }, spellbook: [{ spells: [{ name: 'Eviscerate', rank: 'Rank 8', id: 2 }] }] } };
+check(S.check(rogue, gd2).books.now.map((b) => b.item).join() === '24102', 'a rogue with Eviscerate 8 is told about Manual of Eviscerate IX, not the warrior\'s manual');
+const lock = { snap: { character: { level: 60, classFile: 'WARLOCK' }, spellbook: [{ spells: [{ name: 'Shadow Ward', rank: 'Rank 3', id: 3 }] }] } };
+check(S.check(lock, gd2).books.now.map((b) => b.item).join() === '22891', "a warlock's own grimoire (Shadow Ward IV) counts, the imp's Firebolt doesn't");
 // the real pack: the three priest books the issue names are found by their names
 const fs = require('fs'), vm = require('vm'), path = require('path');
 const dc = {}; dc.window = dc; vm.createContext(dc);
