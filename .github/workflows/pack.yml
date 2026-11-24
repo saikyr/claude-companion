@@ -16,9 +16,15 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+      # the build runs python3 -I (isolated: no user site-packages), so lupa must go into the interpreter's
+      # own site-packages: a set-up Python, not the runner's system one (where pip installs per user)
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - name: Build the pack (about 10 minutes)
         run: |
-          pip install -q lupa
+          python3 -m pip install -q lupa
+          python3 -I -c 'import lupa.lua51'
           sh gamedata/build.sh
       - name: Copy it in, with the in-game drop chances
         run: |
