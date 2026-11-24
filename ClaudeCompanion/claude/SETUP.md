@@ -14,9 +14,10 @@ Claude can also install the Companion for you, so you don't need to download any
 
 ## Set it up (once, about 5 minutes)
 
-1. In the Claude desktop app, create a project, for example "WoW Forever".
-2. Paste the whole text below into the project's **instructions**. Nothing to fill in.
-3. Start a chat in that project and say **set me up**.
+1. In the Claude desktop app, click **New project**. Name it **Claude Companion**.
+2. Paste the whole text below into **What do you want to work on?**. Nothing to fill in.
+3. Leave **Context** empty (no folder to create or add: Claude asks for the one it needs), and click
+   **Create project**. If Claude doesn't start on its own, say **set me up**.
 
 Claude then checks whether the Companion is installed. If it isn't, it runs the installer for you or gives
 you one line to paste into PowerShell (Windows) or Terminal (Mac). Then it asks for access to your

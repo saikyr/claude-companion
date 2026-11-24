@@ -154,8 +154,8 @@ private too). What a friend gets is public: the download, and the text below tha
    computer**. The owner can see what is stored there (README, "Your data"); the friend can turn sync off on
    any computer.
 2. **Their own Claude, optional, in one paste.** The friend creates a project in the Claude desktop app,
-   pastes the short text from `ClaudeCompanion/claude/SETUP.md` (the fenced block) into its instructions, and
-   says "set me up". That text is the set-up: Claude runs, or hands the friend, one line for PowerShell
+   pastes the short text from `ClaudeCompanion/claude/SETUP.md` (the fenced block) into "What do you want to work on?" in the
+   New project dialog, leaves Context empty (Claude asks for folder access itself) and creates it. That text is the set-up: Claude runs, or hands the friend, one line for PowerShell
    or Terminal that downloads the public zip and runs its installer (`installer/`), then asks for folder
    access to the addon folder. Every rule is in `claude/GUIDE.md`, which the text sends Claude to before every
    answer and, which ships with every build together with COACHING.md, FEATURES.md and the checkers
@@ -178,7 +178,8 @@ projects (Pro or above). Nothing else: the installer finds the game folder (or a
 without Python 3 is offered Apple's free Command Line Tools.
 
 ```
-In the Claude desktop app: new project, paste everything below into its instructions, then say "set me up".
+In the Claude desktop app: New project, name it Claude Companion, paste everything below into "What do you want to work on?",
+leave Context empty, click Create project. If Claude doesn't start on its own, say: set me up
 
 I play WoW Forever. Set up the Claude Companion for me, then be my coach with it.
 If you can't open my ClaudeCompanion addon folder yet: install it by running the line for my system
