@@ -111,19 +111,17 @@ const named = [...new Set([...kitGuide.matchAll(/`((?:claude|companion-data)\/[A
 const notShipped = named.filter((f) => !shipped.has(f));
 check(named.length >= 5 && !notShipped.length, 'every file claude/GUIDE.md names is in the build' + (notShipped.length ? `: missing ${notShipped.join(' ')}` : ''));
 
-// 10. Install in one paste (docs/PROJECTS.md, "A friend"): the text a friend pastes into their Claude project is
-// claude/SETUP.md's fenced block, the owner's message carries it word for word, and its two install lines
-// download from the public folder publish-stable.py uploads to (installers.yml runs both lines).
+// 10. A friend's set-up (docs/PROJECTS.md, "A friend"): claude/SETUP.md has two blocks, the install steps (the
+// friend downloads and runs the installer; Claude never runs anything) and the text pasted into the Claude
+// project. The owner's message to a friend is those two blocks word for word, and the downloads are the public
+// folder publish-stable.py uploads to.
 const setupMd = read(A, 'claude', 'SETUP.md');
-const paste = (/## The text to paste into the project's instructions\n\n```\n([\s\S]*?)\n```/.exec(setupMd) || [, ''])[1];
+const [steps = '', paste = ''] = [...setupMd.matchAll(/\n```\n([\s\S]*?)\n```/g)].map((m) => m[1]);
 const friendMsg = (/A message the owner can send a friend[\s\S]*?\n\n```\n([\s\S]*?)\n```/.exec(read(ROOT, 'docs', 'PROJECTS.md')) || [, ''])[1];
-check(paste.length > 500 && friendMsg.endsWith('\n\n' + paste) && friendMsg.split('\n').length <= paste.split('\n').length + 3, "docs/PROJECTS.md's message to a friend is one line plus claude/SETUP.md's paste text, unchanged");
+check(paste.includes('claude/GUIDE.md') && friendMsg === steps + '\n\n' + paste, "docs/PROJECTS.md's message to a friend is claude/SETUP.md's two blocks, unchanged");
 const downloads = (/DOWNLOADS = '([^']+)'/.exec(pub) || [, '?'])[1];
-const lineAfter = (label) => { const l = paste.split('\n'); const i = l.findIndex((x) => x.includes(label)); return i >= 0 ? (l[i + 1] || '').trim() : ''; };
-const winLine = lineAfter('On Windows, in PowerShell:'), macLine = lineAfter('On a Mac, in Terminal:');
-check(winLine.includes(`'${downloads}latest/ClaudeCompanion-Windows.zip'`) && winLine.includes('files\\install.ps1') &&
-      macLine.includes(`'${downloads}latest/ClaudeCompanion-Mac.zip'`) && macLine.includes('Contents/MacOS/install'),
-      'the paste text has one install line per system, from the public download folder');
+check(steps.includes(downloads + 'latest/ClaudeCompanion-Windows.zip') && steps.includes(downloads + 'latest/ClaudeCompanion-Mac.zip') &&
+      !/powershell|curl |iwr /i.test(paste + steps), 'the friend downloads both zips from the public folder, and no command is pasted anywhere');
 
 console.log(failed ? `${failed} contract check(s) failed` : 'contract holds');
 process.exit(failed ? 1 : 0);
