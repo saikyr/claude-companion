@@ -72,6 +72,8 @@ function saveLua(now, extra) {
       bags: [{ id: 0, items: [{ slot: 1, item: item(274641), count: 1 }] }],
       skills: [{ name: 'Cloth', rank: 1, skillLineCategoryID: 8 }, { name: 'Daggers', rank: 295, skillLineCategoryID: 6 }, { name: 'Maces', rank: 280, skillLineCategoryID: 6 },
         { name: 'Staves', rank: 290, skillLineCategoryID: 6 }, { name: 'Wands', rank: 295, skillLineCategoryID: 6 }, { name: 'Tailoring', rank: 268 }, { name: 'Enchanting', rank: 276 }],
+      // a complete quest whose rewards the game read back empty (#98): the pack's rewards are scored
+      quests: [{ id: 7488, title: "Lethtendris's Web", level: 57, complete: 1, rewards: { items: [], choices: [], money: 17000 } }],
       reputation: [{ name: 'Stormwind', reaction: 7 }, { name: 'Timbermaw Hold', reaction: 3 }, { name: 'Argent Dawn', reaction: 4 }],
       // spell ranks (js/spells.js): Flash Heal rank 6 sits on spec 1's bar while rank 7 is known
       spellbook: [{ name: 'Holy', spells: [{ name: 'Flash Heal', rank: 'Rank 6', id: 10916, icon: 135907 }, { name: 'Flash Heal', rank: 'Rank 7', id: 10917, icon: 135907 },
