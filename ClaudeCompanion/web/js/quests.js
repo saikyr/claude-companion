@@ -119,7 +119,8 @@
   const INST = (window.GAMERULES || {}).instances || {};
   const RAID_ZONES = new Set(arr(INST.raids)), RAID_SORTS = new Set(arr(INST.raidQuestSorts));
   const raidZone = (z) => !!z && RAID_ZONES.has(z);
-  const inRaid = (q) => raidZone(q.cat) || RAID_SORTS.has(q.cat) || arr(q.starter_item).some((it) => arr(((A.GD && A.GD.src) || {})[it]).some((r) => raidZone(r[7])));
+  const RAID_REP = new Set(arr(INST.raidFactions));
+  const inRaid = (q) => raidZone(q.cat) || RAID_SORTS.has(q.cat) || arr(q.repReq).some((r) => RAID_REP.has(r[0])) || arr(q.starter_item).some((it) => arr(((A.GD && A.GD.src) || {})[it]).some((r) => raidZone(r[7])));
   let RAID = new Map(), RAID_GD = null;
   function raid(id) {
     id = Number(id);

@@ -122,8 +122,14 @@
     return mm ? { prof: mm[1], skill: Number(mm[2] || 0) } : null;
   }
   function itemGates(id) {
-    const out = [], seen = new Set();
-    const rep = (faction, standing, via) => { const k = 'r' + faction; if (!faction || seen.has(k)) return; seen.add(k); out.push({ kind: 'rep', faction, standing, via, have: myStanding(faction) }); };
+    const out = [];
+    // one gate per faction, the highest standing any source asks (the pack can say Revered where the tooltip says Exalted, #110)
+    const rep = (faction, standing, via) => {
+      if (!faction) return;
+      const had = out.find((x) => x.kind === 'rep' && x.faction === faction);
+      if (had) { if (standing > had.standing) { had.standing = standing; had.via = via; } return; }
+      out.push({ kind: 'rep', faction, standing, via, have: myStanding(faction) });
+    };
     const own = (GD && GD.req || {})[id];
     if (own) rep(own[0], own[1], '');
     const g = gdItem(id);
