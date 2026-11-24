@@ -1203,6 +1203,67 @@
       unsold: open.length, listed: tied.length, tiedUp: sum(tied, 'paid'), notListed: open.length - tied.length, setAside: used.size } };
   }
 
+  // Your own sell-through (#116): what you posted against what then sold, per item, unit by unit, oldest post first.
+  // A post is settled once it sold or its longest auction time (48 h) has passed; until then it is pending and
+  // left out of the share. Posts carry the item and stack size from the game's post call; sales come from the
+  // "Auction successful" letters (salesOf), matched by item name. What didn't sell: the game's own chat lines
+  // ("Your auction of X has expired", "...cancelled"), which the addon keeps in the Journal (ahExpired, ahRemoved),
+  // counted per auction since the first post.
+  const SELL_WINDOW = 48 * 3600;
+  function sellThrough(ah, now, journal) {
+    now = now || Math.floor(Date.now() / 1000);
+    journal = journal || (CH && CH.journal);
+    const nameOfPost = (p) => (p.item && ITEMS[p.item] && ITEMS[p.item].name) || (p.id ? anyItemName(p.id, null) : null) || p.name || null;
+    const lots = arr(ah.posts).filter((p) => p && p.t).map((p) => ({ name: nameOfPost(p), t: p.t, left: p.qty || 1, qty: p.qty || 1, unit: p.unit || 0, sold: 0, hours: [] }))
+      .filter((l) => l.name).sort((a, b) => a.t - b.t);
+    salesOf(ah).slice().sort((a, b) => a.t - b.t).forEach((x) => {
+      let need = x.count || 1;
+      for (const l of lots) {
+        if (!need) break;
+        if (l.name !== x.item || l.t > x.t || !l.left || x.t - l.t > SELL_WINDOW) continue;
+        const k = Math.min(need, l.left);
+        l.left -= k; l.sold += k; need -= k;
+        for (let i = 0; i < k; i++) l.hours.push((x.t - l.t) / 3600);
+      }
+    });
+    const med = (xs) => { if (!xs.length) return null; const v = xs.slice().sort((a, b) => a - b), m = v.length >> 1; return +(v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2).toFixed(1); };
+    const by = {};
+    const tot = { posts: 0, units: 0, sold: 0, pending: 0, hours: [], worth10g: { units: 0, sold: 0 } };
+    lots.forEach((l) => {
+      const settled = l.left === 0 || now - l.t > SELL_WINDOW;
+      const r = by[l.name] || (by[l.name] = { item: l.name, posts: 0, units: 0, sold: 0, pending: 0, hours: [], lastPost: 0, unit: 0 });
+      r.lastPost = Math.max(r.lastPost, l.t); if (l.t === r.lastPost) r.unit = l.unit;
+      if (!settled) { r.pending += l.left; tot.pending += l.left; r.sold += l.sold; r.hours.push(...l.hours); tot.sold += l.sold; tot.units += l.sold; r.units += l.sold; tot.hours.push(...l.hours); return; }
+      r.posts++; r.units += l.qty; r.sold += l.sold; r.hours.push(...l.hours);
+      tot.posts++; tot.units += l.qty; tot.sold += l.sold; tot.hours.push(...l.hours);
+      if (l.unit >= 100000) { tot.worth10g.units += l.qty; tot.worth10g.sold += l.sold; }
+    });
+    const since = lots.length ? lots[0].t : null, ended = { expired: 0, cancelled: 0 };
+    arr(journal).forEach((e) => {
+      if (!e || !since || e.t < since || (e.e !== 'ahExpired' && e.e !== 'ahRemoved')) return;
+      const k = e.e === 'ahExpired' ? 'expired' : 'cancelled';
+      ended[k]++;
+      if (by[e.name]) by[e.name][k] = (by[e.name][k] || 0) + 1;
+    });
+    const share = (a, b) => (b ? +(a / b).toFixed(2) : null);
+    const items = Object.values(by).map((r) => ({ item: r.item, posted: r.units, sold: r.sold, pending: r.pending, share: share(r.sold, r.units), medianHours: med(r.hours),
+      expired: r.expired || 0, cancelled: r.cancelled || 0, lastPost: r.lastPost, unit: r.unit }))
+      .sort((a, b) => b.posted - a.posted || b.lastPost - a.lastPost);
+    return { since, windowHours: SELL_WINDOW / 3600,
+      totals: { posted: tot.units, sold: tot.sold, pending: tot.pending, share: share(tot.sold, tot.units), medianHours: med(tot.hours), expired: ended.expired, cancelled: ended.cancelled,
+        worth10g: { posted: tot.worth10g.units, sold: tot.worth10g.sold, share: share(tot.worth10g.sold, tot.worth10g.units) } }, items };
+  }
+  function sellThroughView(ah) {
+    const S = sellThrough(ah), T = S.totals;
+    if (!S.items.length) return '';
+    const pct = (x) => (x == null ? '–' : Math.round(x * 100) + '%');
+    let h = `<h2>Sell-through</h2><p class="meta">Of ${T.posted} units you posted (since ${fmtTime(S.since)}), ${T.sold} sold within ${S.windowHours} h: ${pct(T.share)}${T.medianHours != null ? `, typically ${T.medianHours} h after posting` : ''}${T.worth10g.posted ? ` · posted at 10g or more each: ${T.worth10g.sold} of ${T.worth10g.posted} sold (${pct(T.worth10g.share)})` : ''}${T.pending ? ` · ${T.pending} still listed, not counted yet` : ''}${T.expired || T.cancelled ? ` · auctions ended unsold: ${T.expired} expired, ${T.cancelled} cancelled` : ''}</p>`;
+    h += `<div class="table sellthru"><div class="thead"><div>Item</div><div class="c-num">Posted</div><div class="c-num">Sold</div><div class="c-num">Share</div><div class="c-num">Hours to sell</div></div>`;
+    S.items.slice(0, 40).forEach((r) => (h += `<div class="tr"><div class="c-main"><div class="nm">${esc(r.item)}</div><div class="sub">last posted ${fmtTime(r.lastPost)} at ${money(r.unit)} each${r.pending ? ` · ${r.pending} still listed` : ''}${r.expired ? ` · ${r.expired} expired` : ''}${r.cancelled ? ` · ${r.cancelled} cancelled` : ''}</div></div><div class="c-num">${r.posted}</div><div class="c-num">${r.sold}</div><div class="c-num">${pct(r.share)}</div><div class="c-num dim">${r.medianHours == null ? '–' : r.medianHours}</div></div>`));
+    h += '</div><p class="meta">A post counts once it sold or 48 hours (the longest auction) have passed. Expired and cancelled are the game\'s own messages, counted per auction.</p>';
+    return h;
+  }
+
   function flipsView(ah) {
     const F = flipsOf(ah), T = F.totals;
     if (!arr(ah.buys).length) return '<div class="empty">No AH purchases recorded yet. A purchase is saved when you open the mailbox with its "Auction won" letter in it.</div>';
@@ -1239,7 +1300,7 @@
     let h = `<div class="seg">${SECS.map(([k, l]) => `<button data-ahsec="${k}" class="${sec === k ? 'on' : ''}">${l}</button>`).join('')}</div>`;
     h += `<div class="toolbar">${on('prices') ? `<input class="search" id="ahsearch" placeholder="Search prices" value="${esc(STATE.ahFilter || '')}">` : ''}<span class="dim small">${prices.length.toLocaleString()} items priced · ${ls ? `last full scan ${ago(ls.t)} (${ls.auctions.toLocaleString()} auctions)` : 'no full scan yet: open the AH and press <b>Claude scan</b>'}</span></div>`;
     const sales = salesOf(ah).slice().reverse();
-    if (on('flips')) h += flipsView(ah);
+    if (on('flips')) h += flipsView(ah) + sellThroughView(ah);
     if (on('sold') && !sales.length) h += '<div class="empty">No sales recorded yet. Sales show up after you take the gold from an AH mail.</div>';
     if (on('sold') && sales.length) {
       const shown = sales.slice(0, 50);
@@ -1491,7 +1552,7 @@
     load, loadText, V, reload: () => RAW && load(RAW, { live: STATE.live }),
     setChar, get CHARS() { return CHARS; },
     api: { get CH() { return CH; }, get RAW() { return RAW; }, get DB() { return DB; }, STATE, GD, esc, arr, money, icon, itemIcon, anyItemIcon, anyItemName, gdItem, gdTip,
-      gdSourceLines, itemGates, recipeLine, planPrice, priceOf, trackerStats, goldOf, lootStrip, ago, dur, fmtTime, flipsOf, cooldowns, craftCost, craftProfit, vendorPrice, specTrees, specLabel, TREE_NAMES, gearIds, item, byId, render, QCOL, deOutcome,
+      gdSourceLines, itemGates, recipeLine, planPrice, priceOf, trackerStats, goldOf, lootStrip, ago, dur, fmtTime, flipsOf, sellThrough, cooldowns, craftCost, craftProfit, vendorPrice, specTrees, specLabel, TREE_NAMES, gearIds, item, byId, render, QCOL, deOutcome,
       itemLink, itemIconOf, itemCell, itemInline, uiIcon, UI_ICON, PROF_ICON },
   };
 
