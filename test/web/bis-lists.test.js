@@ -80,5 +80,22 @@ for (const cls of Object.keys(TREES)) for (const level of [30, 60]) {
   if (!ok) failed++;
   console.log(`${ok ? 'ok  ' : 'FAIL'} ${cls} ${level}: no other class's set piece${level < 60 ? ', nothing above your level usable now' : ''}${ok ? '' : ': ' + other.concat(above).slice(0, 4).map((c) => c.name).join(', ')}`);
 }
+// books (js/spells.js) with the gear engine's raid rule, on the real pack: what a level-60 class can go and get
+// now, and what only raids give (#122)
+{
+  const { G } = world('PRIEST', 'Shadow', 60);
+  const S = require(path.join(WEB, 'js/spells.js'));
+  const books = (cls) => S.check({ snap: { character: { level: 60, classFile: cls }, spellbook: [{ spells: [{ name: 'x', rank: 'Rank 1', id: 1 }] }] } }, GD,
+    { source: G.raidSource, row: G.raidRow }).books;
+  const pb = books('PRIEST'), mb = books('MAGE');
+  const ids = (l) => l.map((b) => b.item);
+  const ok1 = [17413, 17414, 22393].every((id) => ids(pb.now).includes(id)) && [21284, 21285, 21287].every((id) => ids(pb.raid).includes(id));
+  const ok2 = ids(mb.raid).includes(22739) && !ids(mb.now).includes(22739);
+  const fw = mb.now.find((b) => b.item === 22890), ok3 = !!fw && !fw.sources[0].raid;
+  [ok1, ok2, ok3].forEach((ok) => { if (!ok) failed++; });
+  console.log(`${ok1 ? 'ok  ' : 'FAIL'} priest books: the three Prayer codexes now, the AQ codexes under raid (now ${ids(pb.now)}; raid ${ids(pb.raid)})`);
+  console.log(`${ok2 ? 'ok  ' : 'FAIL'} Tome of Polymorph: Turtle is raid (Gahz'ranka, Zul'Gurub by its map, though the row says Zul'Farrak)`);
+  console.log(`${ok3 ? 'ok  ' : 'FAIL'} Tome of Frost Ward V: a dungeon source first, not a world boss (${fw ? fw.sources.map((x) => x.name).join(', ') : 'missing'})`);
+}
 console.log(failed ? `\n${failed} failed` : '\nall passed');
 process.exit(failed ? 1 : 0);

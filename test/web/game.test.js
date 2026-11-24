@@ -38,13 +38,21 @@ const lit = (s) => '$j$' + s + '$j$';
     check(st.pack === meta.hash && Object.keys(meta.counts).every((k) => st.counts[k] === meta.counts[k]), `every row of the pack arrived (${JSON.stringify(st.counts)})`);
     check(B.query(`set role service_role; select public.game_pack();`) === meta.hash, 'the loaded pack hash is what the workflow compares with');
 
-    // drop-rate labels
+    // drop-rate labels, against the pack's own rows (the rates change with every weekly rebuild): a Forever
+    // row is [kind, npc, id, pct, seen, ..., origin 'f', 'm', corpses]
+    const vm = require('vm'), dc = {}; dc.window = dc; vm.createContext(dc);
+    vm.runInContext(fs.readFileSync(path.join(__dirname, '../../ClaudeCompanion/web/data/gamedata.js'), 'utf8'), dc);
+    const GD = dc.GAMEDATA;
+    const shRow = (GD.src[2378] || []).find((r) => r[1] === 'Skeletal Horror' && r[10] === 'f' && r[12] > 0);
     const sh = one(`select row_to_json(r)::text from game.drop_rates r where item_name = 'Skeleton Finger' and source = 'Skeletal Horror'`);
-    check(sh.rate === 'forever' && Number(sh.rate_pct) === 36.36 && sh.corpses === 220 && Number(sh.rate_low) < 36.36 && Number(sh.rate_high) > 36.36,
-      `a Forever rate with its range and sample (${sh.label})`);
-    check(/^36\.36% \(95% range 30\.\d+-42\.\d+%, 220 corpses, ForeverDB players\)$/.test(sh.label), 'the label says Forever range, corpses and who measured it');
-    const silk = one(`select row_to_json(r)::text from game.drop_rates r where item_name = 'Silk Cloth' and source = 'Skeletal Horror'`);
-    check(silk.corpses === 47 && Number(silk.rate_pct) === 2.13, 'a rate uses the measured corpses, never the seen count (Silk Cloth: 47, not 158)');
+    check(shRow && sh.rate === 'forever' && Number(sh.rate_pct) === shRow[3] && sh.corpses === shRow[12] && Number(sh.rate_low) < shRow[3] && Number(sh.rate_high) > shRow[3],
+      `a Forever rate with its range and sample (${sh.label}; pack ${shRow && shRow[3]}% of ${shRow && shRow[12]})`);
+    check(new RegExp(`^${String(shRow[3]).replace('.', '\\.')}% \\(95% range [0-9.]+-[0-9.]+%, ${shRow[12]} corpses, ForeverDB players\\)$`).test(sh.label), 'the label says Forever range, corpses and who measured it');
+    // a Forever row whose seen count differs from its corpses: the rate uses the corpses
+    let odd = null;
+    for (const [id, rows] of Object.entries(GD.src)) { const r = (rows || []).find((x) => x[0] === 'drop' && x[10] === 'f' && x[12] > 0 && x[4] > 0 && x[4] !== x[12]); if (r && GD.items[id]) { odd = [id, r]; break; } }
+    const oddRate = odd && one(`select coalesce((select row_to_json(r)::text from game.drop_rates r where item_id = ${odd[0]} and source = ${lit(odd[1][1])} limit 1), 'null')`);
+    check(odd && oddRate && oddRate.corpses === odd[1][12], `a rate uses the measured corpses, never the seen count (${odd && GD.items[odd[0]][0]}: ${odd && odd[1][12]}, not ${odd && odd[1][4]})`);
     const counts = one(`select json_object_agg(rate, n)::text from (select rate, count(*) n from game.drop_rates where kind = 'drop' group by rate) x`);
     check(counts.forever > 700 && counts.forever < 1000 && counts.classic > 1500 && counts.unknown > 30000, `drop rows by label: ${JSON.stringify(counts)}`);
     const cl = one(`select row_to_json(r)::text from game.drop_rates r where rate = 'classic' limit 1`);

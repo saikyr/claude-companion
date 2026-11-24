@@ -121,6 +121,22 @@ function snapshot(ageMs, extra) {
     check(m[1].complete === false && /under 10 minutes/.test(m[1].incomplete[0]), 'an incomplete grind says why');
     check(m.some((x) => x.what === 'run' && x.bosses === 1), 'runs are measured too');
 
+    // spells (#122): what the class still lacks, in the default brief
+    await mac.client.pushSnapshot(snapshot(5 * 60e3, { app: { build: 'def456' }, spells: { train: [{ name: 'Renew', rank: 'Rank 9', level: 56, cost: 30000 }], trainCost: 30000,
+      books: { now: [{ item: 17413, book: 'Codex: Prayer of Fortitude', spell: 'Prayer of Fortitude', rank: 1, req: 48, ah: 25000,
+        sources: [{ kind: 'drop', name: 'Anvilrage Warden', zone: 'Blackrock Depths', forever: false }, { kind: 'drop', name: 'X', zone: 'Y', forever: true }] }],
+        later: [], raid: [{ item: 1, book: 'Codex of Renew X' }, { item: 2, book: 'Codex of Greater Heal V' }] },
+      reagents: [{ spell: 'Prayer of Fortitude', item: 17029, name: 'Sacred Candle', have: 0 }, { spell: 'Prayer of Shadow Protection', item: 17029, name: 'Sacred Candle', have: 5 }] } }));
+    const sp = brief().spells;
+    check(sp.train === 1 && sp.trainCost === 30000 && sp.books.length === 1 && sp.books[0].item === 17413 && sp.books[0].ah === 25000 && !('rank' in sp.books[0]),
+      `the default brief has the spells to train and the books to get (${JSON.stringify(sp)})`);
+    check(sp.books[0].from === 'Anvilrage Warden, Blackrock Depths (Classic data)' && sp.booksRaid === 2 && !('booksLater' in sp), 'a book\'s first source, labelled Classic when not seen on Forever; raid books counted');
+    check(sp.noReagent.length === 1 && sp.noReagent[0].spell === 'Prayer of Fortitude', 'a group buff with no reagent in the bags');
+    check(brief(['spells']).spells.books.now[0].sources.length === 2, 'asked for by name: the whole spells block');
+    check(JSON.stringify(brief()).length < 6144, 'still small with spells');
+    await mac.client.pushSnapshot(snapshot(5 * 60e3, { app: { build: 'def456' } }));
+    check(!('spells' in brief()), 'an older snapshot without spells: left out');
+
     // parts by name, in full
     const p = brief(['specs', 'rep']);
     check(p.specs[0].upgrades.length === 8 && p.rep.length === 1 && !p.quests, 'parts asked for come in full, and only those');

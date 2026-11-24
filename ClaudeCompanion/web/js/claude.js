@@ -221,7 +221,7 @@
       spells: (() => {
         if (!window.CCSpells) return null;
         const t = (x) => (x ? new Date(x * 1000).toISOString() : null);
-        const R = window.CCSpells.check(CH);
+        const R = window.CCSpells.check(CH, A.GD, CC.gear ? { source: CC.gear.raidSource, row: CC.gear.raidRow } : null);
         const rk = window.CCSpells.rankNo;
         const byId = {};
         arr(s.spellbook).forEach((tab) => arr(tab && tab.spells).forEach((x) => { if (x && x.id != null) byId[x.id] = x; }));
@@ -234,6 +234,12 @@
                 rank: a.kind !== 'spell' ? null : byId[a.id] ? rk(byId[a.id].rank) : rk(a.rank) })) })),
           train: R.train, trainCost: R.trainCost, later: R.later.slice(0, 20), laterTotal: R.later.length,
           known: R.known,
+          // spells and ranks only a book teaches that you don't know (Prayer of Fortitude), with the book, its
+          // sources (forever: seen on Forever, else Classic data) and what your AH asks (copper, newest scan);
+          // raid = books only raids give
+          reagents: R.reagents,
+          books: ['now', 'later', 'raid'].reduce((o, k) => Object.assign(o, { [k]: R.books[k].slice(0, k === 'now' ? 20 : 8)
+            .map((b) => Object.assign({}, b, { ah: A.planPrice ? A.planPrice(b.item) : null })) }), {}),
         };
       })(),
       cooldowns: A.cooldowns ? A.cooldowns().map((c) => ({ name: c.name, profession: c.prof || null, readyAt: c.ends, item: c.item || null })) : [],

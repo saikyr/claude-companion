@@ -20,6 +20,9 @@ window.GAMERULES = {
   // in the pack can't tell them apart (most raid trash drops say nothing).
   instances: {
     raids: ['Molten Core', "Onyxia's Lair", 'Blackwing Lair', "Zul'Gurub", "Ruins of Ahn'Qiraj", "Temple of Ahn'Qiraj", 'Naxxramas', 'Barrow Deeps', 'Hyjal Summit'],
+    // the same raids by map id (a pack source row's inst field): a row whose zone name is wrong (Gahz'ranka, a
+    // Zul'Gurub boss, is written "Zul'Farrak") is still a raid by its map: MC, Onyxia, BWL, ZG, AQ20, AQ40, Naxx
+    raidMaps: [409, 249, 469, 309, 509, 531, 533],
     battlegrounds: ['Alterac Valley', 'Warsong Gulch', 'Arathi Basin'],
     // QuestieDB quest sorts that are raid content though no raid zone is named (Atiesh, Thunderfury)
     raidQuestSorts: ['Legendary'],
@@ -71,6 +74,15 @@ window.GAMERULES = {
   // Disenchanting. Source: warcraft.wiki.gg "Disenchanting tables" (Classic; wow-professions.com/forever lists the
   // same materials). Not measured on Forever: the addon also logs your real results (Journal, "de").
   // Rows: [lowest item level, highest item level, [[material, chance, min, max], ...]]
+  // Reagents the group buffs use (Classic rule, warcraft.wiki.gg each spell's page): the spells check flags a
+  // group buff you know with none of its reagent in your bags
+  buffReagents: [
+    { cls: 'PRIEST', spells: ['Prayer of Fortitude', 'Prayer of Shadow Protection', 'Prayer of Spirit'], item: 17029, name: 'Sacred Candle' },
+    { cls: 'MAGE', spells: ['Arcane Brilliance'], item: 17020, name: 'Arcane Powder' },
+    { cls: 'DRUID', spells: ['Gift of the Wild'], item: 17026, name: 'Wild Thornroot', rank: 2 },
+    { cls: 'DRUID', spells: ['Gift of the Wild'], item: 17021, name: 'Wild Berries', rank: 1 },
+    { cls: 'PALADIN', spells: ['Greater Blessing of Kings', 'Greater Blessing of Might', 'Greater Blessing of Wisdom', 'Greater Blessing of Salvation', 'Greater Blessing of Light', 'Greater Blessing of Sanctuary'], item: 21177, name: 'Symbol of Kings' },
+  ],
   disenchant: {
     from: 'warcraft.wiki.gg Disenchanting tables (Classic numbers, not measured on Forever)',
     armor: [

@@ -447,7 +447,13 @@ do
   local c; for _, v in pairs(ClaudeCompanionDB.chars) do c = v end
   local panel = ClaudeCompanionGrind
   local PATTERN = "|cff1eff00|Hitem:14482::::::|h[Pattern: Cindercloth Cloak]|h|r"
-  check(ns.DROPS and ns.DROPS[725] and ns.DROPS[725][1] == "Riverpaw Bandit" and ns.DROPS[725][3] == 87 and ns.DROPS[14482] == nil, "Drops.lua is loaded from the .toc and has only Forever-measured rows")
+  -- the rates come from the weekly data rebuild, so they're read from the row, not written here
+  local GNOLL_PCT, GNOLL_N
+  for i = 1, #((ns.DROPS or {})[725] or {}), 3 do
+    if ns.DROPS[725][i] == "Riverpaw Gnoll" then GNOLL_PCT, GNOLL_N = ns.DROPS[725][i + 1] / 100, ns.DROPS[725][i + 2] end
+  end
+  check(ns.DROPS and ns.DROPS[725] and type(ns.DROPS[725][1]) == "string" and type(ns.DROPS[725][3]) == "number" and GNOLL_PCT and ns.DROPS[14482] == nil,
+    "Drops.lua is loaded from the .toc and has only Forever-measured rows (npc, chance, kills)")
   local none, why = ns.GrindTarget(PATTERN)
   check(none == nil and why:find("start a grind"), "/cc target with no grind says to start one")
   ns.GrindStart("Thaurissan")
@@ -460,13 +466,13 @@ do
     "no Forever-measured rate (Classic only): no expected, rate unknown, counted against all 27 kills")
   local r, lo, hi = ns.OwnRange(0, 27)
   check(r == 0 and lo < 1e-9 and hi > 10 and hi < 15, "own rate 0 in 27 kills has a 95% range up to " .. string.format("%.1f", hi) .. "%")
-  -- an item ForeverDB measured on Forever: Riverpaw Gnoll drops 725 at 29.49% over 356 kills
+  -- an item ForeverDB measured on Forever: Riverpaw Gnoll drops 725 (Gnoll Paw)
   local gnoll = { id = 725, name = "Gnoll Paw" }
   g.killsBy["Riverpaw Gnoll"] = 10
   ns.TargetStats(g, gnoll)
-  check(ns.DROPS[725] and math.abs(gnoll.expected - 10 * 0.2949) < 1e-9 and gnoll.sample == 356 and gnoll.kills == 10,
+  check(GNOLL_PCT and math.abs(gnoll.expected - 10 * GNOLL_PCT) < 1e-9 and gnoll.sample == GNOLL_N and gnoll.kills == 10,
     "expected = kills x Forever-measured chance (" .. tostring(gnoll.expected) .. ", " .. tostring(gnoll.sample) .. " kills measured)")
-  check(math.abs(gnoll.none - (1 - 0.2949) ^ 10) < 1e-9, "chance of none after 10 kills")
+  check(GNOLL_PCT and math.abs(gnoll.none - (1 - GNOLL_PCT) ^ 10) < 1e-9, "chance of none after 10 kills")
   g.killsBy["Riverpaw Gnoll"] = nil
   local ok, err = pcall(ns.UpdateGrindPanel)
   check(ok, "the panel draws a running grind with a target and drops (" .. tostring(err) .. ")")
