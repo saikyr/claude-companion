@@ -1,54 +1,47 @@
-# Claude Companion with Claude: set up in one paste
+# Claude Companion with Claude: set up
 
 The Companion app works fully on its own. A Claude project adds a coach that reads what the app worked
 out (your gear scores for every spec, quest rewards, gold per hour, flips) and answers questions like
 "which reward should I take?" or "where should I farm?". Its suggestions show in the app's
 **From Claude** tab as cards you can tick off.
 
-Claude can also install the Companion for you, so you don't need to download anything first.
-
 ## What you need
 
 - WoW Forever installed (English client), on Windows or a Mac.
-- The **Claude desktop app** (Windows or Mac), signed in with a Claude plan that has projects (Pro or above).
+- For the coach: the **Claude desktop app**, signed in with a Claude plan that has projects (Pro or above).
 
 ## Set it up (once, about 5 minutes)
 
-1. In the Claude desktop app, click **New project**. Name it **Claude Companion**.
-2. Paste the whole text below into **What do you want to work on?**. Nothing to fill in.
-3. Leave **Context** empty (no folder to create or add: Claude asks for the one it needs), and click
-   **Create project**. If Claude doesn't start on its own, say **set me up**.
-
-Claude then checks whether the Companion is installed. If it isn't, it runs the installer for you or gives
-you one line to paste into PowerShell (Windows) or Terminal (Mac). Then it asks for access to your
-`ClaudeCompanion` addon folder, reads your character, and is ready. In game, type `/reload` once so the app
-has your data.
-
-The guide Claude follows is in that folder (`claude/GUIDE.md`) and updates itself with the app.
-
-## The text to paste into the project's instructions
+You install the Companion yourself, the normal way: a download and an installer you double-click. Claude
+never runs anything on your computer; it only reads your addon folder, and writes its cards there.
 
 ```
-I play WoW Forever. Set up the Claude Companion for me, then be my coach with it.
-If you can't open my ClaudeCompanion addon folder yet: install it by running the line for my system
-(if you can't run commands on my computer, give me the line to paste and wait until I say it's done).
-It finds the game, installs the addon and opens the app.
-On Windows, in PowerShell:
-$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol='Tls12'; $d="$env:TEMP\ClaudeCompanion-setup"; Remove-Item "$d","$d.zip" -Recurse -Force -EA 0; iwr -UseBasicParsing 'https://jucbngafdnyaizfxgplk.supabase.co/storage/v1/object/public/releases/latest/ClaudeCompanion-Windows.zip' -OutFile "$d.zip"; Expand-Archive "$d.zip" $d; powershell -NoProfile -ExecutionPolicy Bypass -File "$d\files\install.ps1"
-On a Mac, in Terminal:
-d="${TMPDIR:-/tmp}/ClaudeCompanion-setup"; rm -rf "$d" "$d.zip"; curl -fsSL -o "$d.zip" 'https://jucbngafdnyaizfxgplk.supabase.co/storage/v1/object/public/releases/latest/ClaudeCompanion-Mac.zip' && ditto -x -k "$d.zip" "$d" && "$d/Install Claude Companion.app/Contents/MacOS/install"
-Then ask for access to World of Warcraft/_forever_/Interface/AddOns/ClaudeCompanion, tell me to
-/reload in game, and say who you see. Before every answer, read claude/GUIDE.md in that folder and
-follow it exactly.
+1. Install the Companion (about 2 minutes):
+   - Windows: download https://jucbngafdnyaizfxgplk.supabase.co/storage/v1/object/public/releases/latest/ClaudeCompanion-Windows.zip
+     Right-click the zip, Extract All, open the folder, double-click Install Claude Companion.
+     If Windows warns: More info, then Run anyway.
+   - Mac: download https://jucbngafdnyaizfxgplk.supabase.co/storage/v1/object/public/releases/latest/ClaudeCompanion-Mac.zip
+     Double-click the zip, then Install Claude Companion. The first time: System Settings,
+     Privacy & Security, Open Anyway.
+   It finds the game, installs the addon and opens the app. Then type /reload in game.
+2. In the Claude desktop app: New project, name it Claude Companion, paste the text below into
+   "What do you want to work on?", leave Context empty, click Create project.
+   It asks for your addon folder: allow it.
 ```
 
-## Already installed, or don't want Claude to install it?
+## The text to paste into "What do you want to work on?"
 
-Install it yourself from the download (`READ ME.txt` in the zip says how), then do steps 1 to 3 above: Claude
-sees it's installed and goes straight to folder access.
-
-- Windows: https://jucbngafdnyaizfxgplk.supabase.co/storage/v1/object/public/releases/latest/ClaudeCompanion-Windows.zip
-- Mac: https://jucbngafdnyaizfxgplk.supabase.co/storage/v1/object/public/releases/latest/ClaudeCompanion-Mac.zip
+```
+I play WoW Forever with the Claude Companion addon and app. I install it myself; you are my coach.
+1. Ask for access to my ClaudeCompanion addon folder. It is in my World of Warcraft folder, in
+   _forever_/Interface/AddOns/ClaudeCompanion (Windows: usually C:\Program Files (x86)\World of Warcraft,
+   Mac: /Applications/World of Warcraft). Use folder access only: never run, download or install anything.
+2. If that folder isn't there yet, the Companion isn't installed: tell me to install it from the download
+   I was given, type /reload in game, and tell you when it's done.
+3. Then read claude/GUIDE.md and companion-data/snapshot.json in that folder, and tell me in a few lines
+   who you see (character, level, specs, professions) and how old the data is.
+Before every answer, read claude/GUIDE.md in that folder and follow it exactly.
+```
 
 ## Good to know
 

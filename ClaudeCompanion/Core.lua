@@ -7,6 +7,7 @@
 --     chars = { ["Name-Realm"] = <char> },
 --     items = { [itemString] = { id, name, q, ilvl, ..., icon, tip = { {l,lc,r,rc}, ... } } },
 --     cacheStats = { evicted, lastEvict, cap },   -- item cache housekeeping (oldest unused items make room)
+--     ahListings = { [house] = { t, keys = { [priceKey] = "unit,count,band,seller;..." } } },  -- the newest full scan's listings, per auction house (Market.lua), for probable sales
 --   }
 --   <char> = {
 --     key, created, lastSync, syncs,
@@ -26,7 +27,7 @@ ns.VERSION = "1.5.0"
 ns.SCHEMA = 1
 -- the source commit of this build: tools/publish-stable.py writes it here; "dev" in a checkout.
 -- The app compares it with the build it runs itself, to say when the game still needs a /reload.
-ns.BUILD = "aa54a5e5f4b2"
+ns.BUILD = "dde73e2e0ebd"
 
 BINDING_HEADER_CLAUDECOMPANION = "Claude Companion"
 BINDING_NAME_CLAUDECOMPANION_TOGGLE = "Open or close Claude window"
