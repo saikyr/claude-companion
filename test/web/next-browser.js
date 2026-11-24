@@ -372,6 +372,16 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   check(g.complete === true && Array.isArray(g.incomplete) && g.incomplete.length === 0 && /copper per hour/.test(g.basis), 'a finished hour-long grind is complete');
   const app = await page.evaluate(() => window.CC.api.trackerStats(window.CC.api.CH.grinds[0]).perHour);
   check(Math.round(app) === g.gph, 'the Grinds tab and the snapshot show the same gold per hour');
+  // #131: a gray is worth its vendor price, whatever one AH listing asks (gph and gph_high)
+  const gray = await page.evaluate(() => {
+    const A = window.CC.api, pr = (A.CH.ah = A.CH.ah || {}).prices = A.CH.ah.prices || {}, keep = pr['13817'];
+    pr['13817'] = { obs: [{ t: 1795400000, src: 'scan', qty: 2, min: 225552, med: 225552 }] };
+    const t = { start: 1795400000, finish: 1795403600, coin: 0, loot: { 13817: { id: 13817, q: 0, count: 1, name: 'Tapered Greatsword' } } };
+    const st = A.trackerStats(t), go = A.goldOf(t), sell = (A.byId(13817) || {}).sell || 0;
+    if (keep) pr['13817'] = keep; else delete pr['13817'];
+    return { ah: st.ah, high: go.gph_high, sell };
+  });
+  check(gray.ah === gray.sell && gray.high === gray.sell, 'a gray item counts at vendor price in gph and gph_high, not at its AH listing (#131): ' + JSON.stringify(gray));
   // ---- dungeon quests are marked keep (CLAUDE.md, the dungeon-quest rule)
   const dq = (snap.quests || []).find((q) => q.id === 5089);
   check(dq && dq.keep === true && dq.dungeon === 'Blackrock Spire', "a dungeon quest is keep, with its dungeon (General Drakkisath's Command: Blackrock Spire)");

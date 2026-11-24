@@ -78,9 +78,13 @@ check(len(G['src']) > 15000, f'>15,000 items with sources (got {len(G["src"])})'
 fq = n(q for q in G['quests'].values() if q.get('origin') == 'f')
 check(fq > 1500, f'>1,500 Forever-only quests (got {fq})')
 check(len(npc) > 15000, f'>15,000 NPCs (got {len(npc)})')
-# ForeverDB 17059 Plans: Dark Iron Reaver: teaches spell 20890 (the Reaver's craft), needs Thorium Brotherhood Friendly
-check((G.get('teach') or {}).get('17015') == [[17059, 300]] and (G.get('req') or {}).get('17059') == ['Thorium Brotherhood', 5],
-      'Dark Iron Reaver: recipe Plans: Dark Iron Reaver (skill 300), Thorium Brotherhood Friendly')
+# ForeverDB 17059 Plans: Dark Iron Reaver: teaches spell 20890 (the Reaver's craft), needs Thorium Brotherhood Honored
+check((G.get('teach') or {}).get('17015') == [[17059, 300]] and (G.get('req') or {}).get('17059') == ['Thorium Brotherhood', 6],
+      'Dark Iron Reaver: recipe Plans: Dark Iron Reaver (skill 300), Thorium Brotherhood Honored')
+# standings as Forever's tooltips give them (#129): 6 Honored, 7 Revered
+R = G.get('req') or {}
+check(R.get('19445') == ['Timbermaw Hold', 6] and R.get('19447') == ['Argent Dawn', 7] and all(5 <= v[1] <= 8 for v in R.values()),
+      f"rep gates: Weapon - Agility Honored, Bracer - Healing Revered, all Friendly to Exalted ({R.get('19445')}, {R.get('19447')})")
 check(len(G.get('teach') or {}) > 1000, f">1,000 crafted items with a recipe item (got {len(G.get('teach') or {})})")
 
 # ---------------------------------------------------------------- 4. the player's own game data

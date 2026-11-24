@@ -837,6 +837,8 @@
   };
 
   // ------------------------------------------------------------ grinds
+  // poor (gray) loot: worth what a vendor pays, whatever an AH listing asks
+  const isGray = (l, it) => (l.q != null ? l.q : it.q) === 0;
   function trackerStats(t) {
     const secs = Math.max(1, t.secs || ((t.finish || t.last || t.start) - t.start - (t.pausedSecs || 0)));
     const hrs = secs / 3600;
@@ -847,6 +849,7 @@
     Object.entries(t.loot || {}).forEach(([id, l]) => {
       const it = item(l.item) || byId(l.id || id) || {};
       vendor += (it.sell || 0) * l.count;
+      if (isGray(l, it)) { ah += (it.sell || 0) * l.count; return; }   // grays only ever go to a vendor (#131)
       const pp = planPrice(l.id || id);
       if (pp == null) unpriced += 1;
       ah += Math.max(pp != null ? pp : 0, it.sell || 0) * l.count;   // never below what a vendor pays
@@ -856,7 +859,7 @@
   // The one gold-per-hour for Claude (snapshot grinds and runs, the brief): the same numbers as the
   // Grinds and Dungeons tabs, plus a range and whether the tracking is complete. No agent works out
   // gold per hour itself; it quotes these fields (docs/FEATURES.md, "Gold per hour").
-  //   gph       coin + loot at your AH median (vendor price when never seen on the AH or when a vendor pays more), per hour
+  //   gph       coin + loot at your AH median (vendor price when never seen on the AH, when a vendor pays more, and for gray items), per hour
   //   gph_low   coin + loot at vendor price: what it is worth for sure
   //   gph_high  coin + loot at the highest median your scans saw in the 7 days before it ended
   // All before the AH's 5% cut, whether the loot was sold or not. Copper per hour.
@@ -867,6 +870,7 @@
     let high = 0;
     Object.entries(t.loot || {}).forEach(([id, l]) => {
       const it = item(l.item) || byId(l.id || id) || {};
+      if (isGray(l, it)) { high += (it.sell || 0) * l.count; return; }
       const obs = arr(((((CH && CH.ah) || {}).prices || {})[String(l.id || id)] || {}).obs).filter((o) => o && o.t && o.t <= end + 3600 && o.t >= end - WEEK && (o.med || o.min));
       const best = obs.reduce((m, o) => Math.max(m, o.med || o.min), 0);
       const pp = planPrice(l.id || id);

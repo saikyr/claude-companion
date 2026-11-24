@@ -380,15 +380,17 @@ cov['npcs'] = len(npcs)
 cov['npcs_with_spawn_point'] = sum(1 for n in npcs.values() if n[6])
 
 # ------------------------------------------------------------------ item gates and recipes (ForeverDB)
-# req[id] = [faction name, standing 5 Friendly .. 8 Exalted]: the reputation the item itself needs (rep vendor
+# req[id] = [faction name, standing 5 Friendly .. 8 Exalted, the game's standingID as rules.js names them]: the
+# reputation the item itself needs (rep vendor
 # gear, faction recipes). teach[crafted id] = [[recipe item id, skill to learn it], ...]: the recipe whose taught
 # spell is the spell that crafts the item (ForeverDB's craft rows carry that spell). No entry = a trainer recipe
 # or one ForeverDB has no recipe item for; the item's "how" line says which.
 req = {}
 for it in FDB_ITEMS.values():
     r = it.get('rep')
-    if it['id'] in items and isinstance(r, list) and len(r) == 3 and r[2] and 4 < (r[1] or 0) <= 8:
-        req[it['id']] = [r[2], r[1]]
+    # ForeverDB gives the 0-based rank (4 Friendly, 5 Honored, 6 Revered, 7 Exalted: Forever's tooltips, #129)
+    if it['id'] in items and isinstance(r, list) and len(r) == 3 and r[2] and 4 <= (r[1] or 0) <= 7:
+        req[it['id']] = [r[2], r[1] + 1]
 TEACHES = defaultdict(set)
 for it in FDB_ITEMS.values():
     if it.get('c') != 9 or it['id'] not in items: continue

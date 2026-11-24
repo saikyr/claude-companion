@@ -230,10 +230,10 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   const craft = await page.evaluate(() => window.CC.api.gdSourceLines(17015).map((l) => l.l));   // Dark Iron Reaver
   check(craft.some((l) => /^Crafted \(Blacksmithing\) · Recipe: Plans: Dark Iron Reaver \(skill 300\), sold by Lokhtos Darkbargainer, Blackrock Depths$/.test(l)),
     'crafted item: its recipe and where the recipe is sold (' + craft.join(' | ') + ')');
-  check(craft.includes('Needs Friendly with Thorium Brotherhood for Plans: Dark Iron Reaver (you: none)'), "crafted item: the recipe's reputation, with yours");
+  check(craft.includes('Needs Honored with Thorium Brotherhood for Plans: Dark Iron Reaver (you: none)'), "crafted item: the recipe's reputation, with yours");
   check(craft.includes('Needs Blacksmithing 320 to craft it (you: none)'), 'crafted item: the skill to craft it');
-  const gates = await page.evaluate(() => window.CC.api.itemGates(19447).map((g) => g.short));   // Formula: Enchant Bracer - Healing
-  check(gates.includes('Honored with Argent Dawn (you: Neutral)'), "an item's own reputation need, against yours (" + gates.join(' | ') + ')');
+  const gates = await page.evaluate(() => window.CC.api.itemGates(19447).map((g) => g.short));   // Formula: Enchant Bracer - Healing (Revered: Forever's tooltip, #129)
+  check(gates.includes('Revered with Argent Dawn (you: Neutral)'), "an item's own reputation need, against yours (" + gates.join(' | ') + ')');
 
   check(errors.length === 0, 'no page errors' + (errors.length ? ': ' + errors.slice(0, 3).join(' | ') : ''));
 

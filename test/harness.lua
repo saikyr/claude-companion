@@ -372,6 +372,12 @@ do
   check(ns.PlanPrice(99904) == 90 and ns.PlanPrice(99903) == 650 and ns.PlanPrice(99901) == 1000 and ns.PlanPrice(99905) == nil and ns.PlanPrice(99906) == nil,
     "ns.PlanPrice: prices are shared by the save's characters on the same realm and faction, newest scan first (#12)")
   ClaudeCompanionDB.chars["Alt-Test"], ClaudeCompanionDB.chars["Horde-Test"], ClaudeCompanionDB.chars["Old-Test"] = nil, nil, nil
+  -- #131: a gray is worth what a vendor pays, whatever one AH listing asks; nothing is worth less than its vendor price
+  ClaudeCompanionDB.items["t:gray"] = { q = 0, sell = 50 }
+  ClaudeCompanionDB.items["t:green"] = { q = 2, sell = 1200 }
+  local v, a = ns.LootValue({ loot = { [99901] = { id = 99901, item = "t:gray", q = 0, count = 2 }, [99903] = { id = 99903, item = "t:green", count = 1 } } })
+  check(v == 1300 and a == 100 + 1200, "ns.LootValue: a gray at vendor price despite its AH median, a green never below vendor (#131): " .. tostring(v) .. " " .. tostring(a))
+  ClaudeCompanionDB.items["t:gray"], ClaudeCompanionDB.items["t:green"] = nil, nil
   if FAILED then error("v1.4 checks failed") end
 end
 -- #1 item cache: full cache makes room (oldest first) and keeps items in use

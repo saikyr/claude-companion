@@ -116,7 +116,10 @@ function ns.LootValue(t)
         local item = l.item and ClaudeCompanionDB.items[l.item]
         local sell = item and item.sell or 0
         vendor = vendor + sell * l.count
-        ah = ah + (ns.PlanPrice(l.id or id) or sell) * l.count
+        -- gray (poor) items only ever go to a vendor: one odd AH listing of a gray is not its worth (#131)
+        local q = l.q or (item and item.q)
+        local ahp = q ~= 0 and ns.PlanPrice(l.id or id) or nil
+        ah = ah + math.max(ahp or 0, sell) * l.count   -- never below what a vendor pays
     end
     return vendor, ah
 end
