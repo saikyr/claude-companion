@@ -240,7 +240,8 @@
   const KIND_WORD = Object.fromEntries(KINDS);
   // Why an item is not in Upgrades or Pre-BiS (candidates' `avail`); the snapshot writes the key
   const AVAIL = { raid: 'Raid', pvp: 'PvP (Honor)', unseen: 'Not seen on Forever yet', worldAh: 'World drop, not seen on your AH yet' };
-  const availWord = (c) => AVAIL[c.avail] + (c.avail !== 'unseen' && c.seen === false ? ' · not seen on Forever yet' : '');
+  // battleground quartermasters sell for gold and their reputation, not Honor
+  const availWord = (c) => (c.avail === 'pvp' && !isPvp(c.id) ? 'PvP (battleground reputation)' : AVAIL[c.avail]) + (c.avail !== 'unseen' && c.seen === false ? ' · not seen on Forever yet' : '');
   // a quest reward is raid gear when the quest or an earlier step of its chain is raid content (quests.js)
   const raidQuest = (qid) => (CC.quests && CC.quests.raid ? CC.quests.raid(qid) : ((A.GD.quests || {})[qid] || {}).type === 'Raid');
   // Raid and PvP by source (#110), the one place both the source word and `avail` read. Raid: a group size
@@ -301,7 +302,7 @@
     Object.entries(ah.prices || {}).forEach(([key, p]) => { if (arr(p.obs).some((o) => o && o.qty > 0)) onMyAh.add(Number(p.id || key.split(':')[0])); });
     if (cache && cache.ck === ck) return cache;
     const fixed = [], rolls = [], byId = {}, later = [];
-    const skipped = { 'quest reward you already took (or not for you)': 0, 'raid only': 0, 'PvP honor gear': 0, 'other faction only': 0, 'only Classic data says where it comes from': 0, 'no endgametools tooltip': 0, 'stats from ForeverDB only (no Forever client tooltip)': 0, 'not for your class': 0, 'no known source': 0, 'world drop not seen on your AH yet': 0 };
+    const skipped = { 'quest reward you already took (or not for you)': 0, 'raid only': 0, 'PvP honor gear': 0, 'battleground reputation gear': 0, 'other faction only': 0, 'only Classic data says where it comes from': 0, 'no endgametools tooltip': 0, 'stats from ForeverDB only, and Forever not seen to have it': 0, 'not for your class': 0, 'no known source': 0, 'world drop not seen on your AH yet': 0 };
     const side = (char().faction || '')[0];            // 'A' or 'H'; vendors that only serve the other side don't count
     for (const [k, g] of Object.entries((A.GD && A.GD.items) || {})) {
       const c = g[9], sub = packSub(g);
@@ -326,13 +327,17 @@
       const fromRaid = raidSource(k);
       // Not for now or pre-BiS, but kept and shown with why (AVAIL): raid content, PvP honor gear, and items
       // Forever isn't known to have yet (only Classic data names a source, or none does)
-      const seen = !!onForever && clientTip;
+      // ForeverDB's stats count when Forever itself was seen giving the item (a drop, container or quest sighting:
+      // Forever's own items, its Tier 0.5 spec sets, have no endgametools page yet). A vendor row alone doesn't:
+      // ForeverDB lists Season of Discovery raid-token vendors the Forever client carries.
+      const foreverSeen = arr(src).some((r) => r[10] === 'f');
+      const seen = !!onForever && (clientTip || foreverSeen);
       const avail = fromRaid ? 'raid' : pvpSource(id) ? 'pvp' : !seen ? 'unseen' : !rr && kindOf(id) === 'world' && !onMyAh.has(id) ? 'worldAh' : null;
       // only a quest gives it, and every such quest is done (or for the other faction or another class)
       if (Q && !vend && (!how || /^Quest/.test(how) && !/ · (Vendor|World Drop|Drop|Boss Drop|Profession|PvP reward) · /.test(' · ' + how + ' · ')) && arr(src).every((r) => r[0] === 'quest') && Q.rewardGone(id)) { skipped['quest reward you already took (or not for you)']++; continue; }
       if (avail === 'pvp' && vend && !myVend.length) { skipped['other faction only']++; continue; }
       if (avail) {
-        skipped[avail === 'raid' ? 'raid only' : avail === 'pvp' ? 'PvP honor gear' : avail === 'worldAh' ? 'world drop not seen on your AH yet' : !clientTip ? 'stats from ForeverDB only (no Forever client tooltip)' : src || vend ? 'only Classic data says where it comes from' : 'no known source']++;
+        skipped[avail === 'raid' ? 'raid only' : avail === 'pvp' ? (isPvp(id) ? 'PvP honor gear' : 'battleground reputation gear') : avail === 'worldAh' ? 'world drop not seen on your AH yet' : !clientTip ? 'stats from ForeverDB only, and Forever not seen to have it' : src || vend ? 'only Classic data says where it comes from' : 'no known source']++;
         later.push({ id, key: k, g, name: g[0], inv: g[4], req: g[3] || 0, boe, size, how, kind: kindOf(id), avail, seen, st: W.fromPack(g) });
         continue;
       }

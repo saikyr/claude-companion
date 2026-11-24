@@ -61,6 +61,7 @@ that must hold go in CI or in the database (for example `private.claude_put_sett
     # app logic: stat weights and item advice (node)
     node test/web/advice.test.js
     node test/web/classes.test.js     # every class and spec: trees, weights, weapon DPS per hand, who wears what
+    node test/web/bis-lists.test.js   # the real pack's pre-BiS shows the picks published Forever lists agree on
 
     # game data: one source per domain (docs/ARCHITECTURE.md, Data sources); rebuild ~10 min first time.
     # .github/workflows/pack.yml does all of this every Monday on a pack/rebuild-* branch (and starts checks.yml there);

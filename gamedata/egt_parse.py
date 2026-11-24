@@ -38,7 +38,11 @@ EQUIP = [
     (r'damage done by (\w+) spells and effects by up to (\d+)', lambda m: {SCHOOL[m[1]]: int(m[2])} if m[1] in SCHOOL else None),
     (r'[Rr]estores (\d+) mana per 5 sec', lambda m: {43: int(m[1])}),
     (r'[Rr]estores (\d+) health per 5 sec', lambda m: {46: int(m[1])}),
+    # the client writes these in either case ("Critical Strike with Spells": Eye of the Beast); EQUIP is
+    # matched ignoring case
     (r'critical strike with spells by ([\d.]+)%', lambda m: {21: float(m[1])}),
+    (r'critical strike with melee and ranged attacks by ([\d.]+)%', lambda m: {116: float(m[1])}),
+    (r'chance to hit with ranged weapons by ([\d.]+)%', lambda m: {117: float(m[1])}),
     (r'critical strike by ([\d.]+)%', lambda m: {116: float(m[1])}),
     (r'chance to hit with spells by ([\d.]+)%', lambda m: {18: float(m[1])}),
     (r'chance to hit by ([\d.]+)%', lambda m: {117: float(m[1])}),
@@ -92,7 +96,7 @@ def parse(h):
             if m: got = fn(m); break
         if got is None and l.startswith('Equip:'):
             for rx, fn in EQUIP:
-                m = re.search(rx, l)
+                m = re.search(rx, l, re.I)
                 if m: got = fn(m); break
             if not got: unparsed.append(l)
         for k, v in (got or {}).items():
