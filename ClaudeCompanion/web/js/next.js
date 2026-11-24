@@ -93,6 +93,11 @@
   // which instances are raids or battlegrounds: data/rules.js (no per-item source says it reliably)
   const RAIDS = new Set(arr((RULES.instances || {}).raids)), PVP = new Set(arr((RULES.instances || {}).battlegrounds));
   const unlocks = () => arr(RULES.unlocks);
+  // the wing of an instance a creature is in (rules.js instances.wings: Lower/Upper Blackrock Spire, Dire Maul
+  // East/West/North, Stratholme Live/Undead); null = the instance has no wings or the creature isn't placed
+  const WINGS = (RULES.instances || {}).wings || {};
+  const wingOf = (zone, npc) => { const w = WINGS[zone]; if (!w) return null; const hit = Object.entries(w).find(([, ids]) => ids.includes(npc)); return hit ? hit[0] : null; };
+  const wingNpcs = (zone, wing) => arr((WINGS[zone] || {})[wing]);
   // What one run is worth: per slot and spec, the expected gain of the best upgrade that drops (items in
   // order of gain, each counting only when nothing better dropped: Σ gain × p × Π(1 − p of the better ones)),
   // added over the slots. Items with no known drop rate are listed but not counted. `only` / `except`: boss NPC ids.
@@ -122,7 +127,7 @@
       if (!sc || !sc.specs.some((s) => s.gain)) return;
       const pct = r[3];
       if (pct == null) unrated++;
-      ups.push({ id, name: sc.name, slot: sc.slot, boss: r[1], pct, forever: r[11] === 'm', kills: r[12], g: addGains({}, sc, 1), at: sc.specs.map((s) => s.at).find(Boolean) || null });
+      ups.push({ id, name: sc.name, slot: sc.slot, boss: r[1], npc: r[2], wing: wingOf(d.name, r[2]), pct, forever: r[11] === 'm', kills: r[12], g: addGains({}, sc, 1), at: sc.specs.map((s) => s.at).find(Boolean) || null });
     });
     ups.sort((a, b) => valueOf(b.g) - valueOf(a.g));
     return { gains: expectedRun(ups), ups, unrated };
@@ -185,9 +190,11 @@
       if (d.raid || d.pvp || d.max == null) return;
       if (d.min > lvl + 3) return;                                    // bosses well above you
       const carved = ul.filter((u) => u.value && u.value.npcs && u.value.npcs.some((n) => d.bosses[n]));
-      const except = new Set(carved.flatMap((u) => u.value.npcs));
+      // a carved part (Upper Blackrock Spire) takes its bosses and every creature of its wing (trash, Lord Valthalak)
+      const partNpcs = (u) => [...new Set(u.value.npcs.concat(u.value.wing ? wingNpcs(d.name, u.value.wing) : []))];
+      const except = new Set(carved.flatMap(partNpcs));
       const parts = [{ name: d.name, v: instanceValue(d, null, except.size ? except : null), u: ul.find((u) => u.value && u.value.zone === d.name) }]
-        .concat(carved.map((u) => ({ name: u.name, v: instanceValue(d, new Set(u.value.npcs)), u })));
+        .concat(carved.map((u) => ({ name: u.name, v: instanceValue(d, new Set(partNpcs(u))), u })));
       parts.forEach((p) => {
         const locked = p.u && !ulState[p.u.id].done ? p.u : null;
         // boss levels of this part only (Upper and Lower Blackrock Spire)
@@ -387,8 +394,7 @@
     const qa = (id, t) => `<a href="https://foreverchanges.pro/quest/${id}" target="_blank" rel="noopener">${esc(t)}</a>`;
     if (x.kind === 'dungeon') {
       if (x.ups.length) h += `<div class="tsec">Upgrades <span>${x.ups.length}, with the boss and drop chance</span></div>`;
-      x.ups.slice(0, 12).forEach((u) => { h += itemTr(u.id, u.name, `${esc(u.boss)} · ${u.pct == null ? 'no drop rate' : u.forever ? `${u.pct}% (Forever, ${u.kills} kills)` : `${u.pct}% (Classic rate)`}${u.at ? ' · at ' + u.at : ''}`, gv(u.g)); });
-      if (x.ups.length > 12) h += `<p class="meta">and ${x.ups.length - 12} more upgrades</p>`;
+      x.ups.forEach((u) => { h += itemTr(u.id, u.name, `${esc(u.boss)}${u.wing ? ' (' + esc(u.wing) + ')' : ''} · ${u.pct == null ? 'no drop rate' : u.forever ? `${u.pct}% (Forever, ${u.kills} kills)` : `${u.pct}% (Classic rate)`}${u.at ? ' · at ' + u.at : ''}`, gv(u.g)); });
       if (x.quests.length) h += `<div class="tsec">Quests <span>${x.quests.length}</span></div>`;
       x.quests.forEach((q) => { h += tr(q.items[0] ? A.itemIconOf(q.items[0].id) : qIc, qa(q.quest, q.name), q.items.length ? rewards(q.items) : (q.xp ? pct(q.xp) : ''), gv(q.gains)); });
     } else if (x.kind === 'quest') {
@@ -477,6 +483,10 @@
         xpPctOfLevel: x.xp ? +x.xp.toFixed(1) : null,
         lines: lines(x).map((w) => (typeof w === 'string' ? w.replace(/<[^>]+>/g, '') : 'NEEDS: ' + w.need)),
         steps: x.st && x.st.steps ? x.st.steps : undefined,
+        // a dungeon's every upgrade (#105), not only the best few gear[] keeps: each with its source, wing and drop rate
+        ups: x.kind === 'dungeon' ? arr(x.ups).map((u) => ({ id: Number(u.id), name: u.name, slot: u.slot, boss: u.boss, npc: u.npc, wing: u.wing || null,
+          pct: u.pct == null ? null : u.pct, rate: u.pct == null ? 'unknown' : u.forever ? `Forever, ${u.kills} kills` : 'Classic rate',
+          gains: Object.fromEntries(Object.entries(u.g).map(([k, v]) => [k, +v.toFixed(1)])), at: u.at || undefined })) : undefined,
       }));
     } finally { A.STATE.nextSpec = keep; }
   }

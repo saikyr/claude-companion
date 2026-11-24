@@ -162,6 +162,16 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   await page.waitForTimeout(1500);
   const snapNext = await page.evaluate(() => window.CC.next.snapshot());
   check(snapNext.length > 3 && snapNext.every((x) => x.id && x.kind && typeof x.value === 'number'), 'snapshot nextSteps: id, kind, value');
+  // #105: each dungeon row lists every upgrade it drops, with its source, wing and rate; Upper Blackrock Spire's trash
+  // and Lord Valthalak are in the Upper row, not in Blackrock Spire's
+  const dRows = snapNext.filter((x) => x.kind === 'dungeon');
+  check(dRows.length && dRows.every((x) => Array.isArray(x.ups)) && dRows.some((x) => x.ups.length)
+    && dRows.every((x) => x.ups.every((u) => u.id && u.boss && typeof u.npc === 'number' && u.gains && typeof u.rate === 'string' && 'wing' in u)),
+    'snapshot nextSteps: a dungeon row lists its upgrades (id, boss, npc, wing, rate, gains per spec)');
+  const allRows = await page.evaluate(() => window.CC.next.ranked('all').filter((x) => x.kind === 'dungeon').map((x) => ({ name: x.name, ups: x.ups.map((u) => ({ npc: u.npc, wing: u.wing })) })));
+  const brsRow = allRows.find((x) => x.name === 'Blackrock Spire'), ubrsRow = allRows.find((x) => x.name === 'Upper Blackrock Spire');
+  check(brsRow && ubrsRow && brsRow.ups.every((u) => u.wing !== 'Upper') && ubrsRow.ups.length && ubrsRow.ups.every((u) => u.wing === 'Upper'),
+    `Blackrock Spire's row has no Upper creature and the Upper row only Upper ones (${brsRow && brsRow.ups.length} / ${ubrsRow && ubrsRow.ups.length})`);
   if (posted) { const j = JSON.parse(posted); check(Array.isArray(j.nextSteps) && j.nextSteps.length > 3, 'the snapshot sent to the server has nextSteps'); }
 
   // ---- gold per hour comes from the app, with a range and completeness (the brief copies these)
