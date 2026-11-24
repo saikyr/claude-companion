@@ -56,6 +56,8 @@ jobs:
         run: node test/web/quests.test.js
       - name: Spell ranks (bars below your best rank, the class trainer's list)
         run: node test/web/spells.test.js
+      - name: The AH buy list (rules, backtests)
+        run: node test/web/market.test.js
       - name: The app's own icons are original-client icons
         run: node test/web/icons.test.js
       - name: Python syntax

@@ -188,6 +188,22 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
     ch.ah.sales = [{ t: 1795003600, item: 'Runecloth', price: 4000, count: 2 }]; window.CC.api.STATE.tab = 'auction'; window.CC.api.STATE.ahSec = 'flips'; window.CC.api.render();
     const h = document.querySelector('main').innerHTML; window.CC.api.STATE.tab = 'overview'; window.CC.api.render(); return h; });
   check(/Sell-through/.test(flipsHtml) && /sellthru/.test(flipsHtml), 'the Flips view shows the sell-through table');
+  // #115: the buy list: an item listed under what a vendor pays shows as a certain buy; the speculative rules carry
+  // their backtest and are shown only when it made money; the Buy list section draws both tables
+  const buy = await page.evaluate(() => { const A = window.CC.api, ch = A.CH, ls = ch.ah.lastScan, g = A.GD.items[14047];
+    const keep = ch.ah.prices['14047'];
+    ch.ah.prices['14047'] = { id: 14047, name: 'Runecloth', obs: [{ t: ls.t, min: 1, med: 1500, qty: 4, src: 'scan' }] };
+    const b = A.buyListOf(ch.ah); A.STATE.tab = 'auction'; A.STATE.ahSec = 'buy'; A.render();
+    const h = document.querySelector('main').innerHTML, snap = window.CC.snapshot().ah.buyList;
+    if (keep) ch.ah.prices['14047'] = keep; else delete ch.ah.prices['14047'];
+    A.STATE.tab = 'overview'; A.render();
+    return { sell: g && g[6], row: b.rows.find((r) => r.id === 14047 && r.rule === 'vendor'), rules: b.rules, html: h, snap: !!(snap && snap.rules && snap.rows), snapRows: (snap && snap.rows) || [] }; });
+  check(buy.sell > 1 && buy.row && buy.row.net === buy.sell - 1 && buy.row.offered, 'buy list: Runecloth listed at 1c is a vendor buy worth the vendor price − 1c (' + JSON.stringify(buy.row) + ')');
+  check(['dip', 'thin'].every((id) => { const r = buy.rules.find((x) => x.id === id); return r && r.backtest && typeof r.backtest.n === 'number' && !r.offered; }),
+    'buy list: the fixture has one scan, so neither price rule has a backtest to offer it (' + JSON.stringify(buy.rules.map((r) => [r.id, r.offered])) + ')');
+  check(buy.snapRows.every((r) => r.offered), 'snapshot ah.buyList lists only the rows the app shows');
+  check(/buyrules/.test(buy.html) && /buylist/.test(buy.html) && /Runecloth/.test(buy.html), 'the Buy list section shows the rules and the rows');
+  check(buy.snap, 'snapshot ah.buyList');
   // #118: each known recipe's margin, the Professions tab's numbers: a reagent only a vendor sells is priced at the
   // vendor's price (Rune Thread, 50s on Forever), never guessed from its sell price; a reagent with no price is missing
   const crafts = await page.evaluate(() => window.CC.snapshot().crafts);

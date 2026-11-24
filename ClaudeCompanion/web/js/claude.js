@@ -261,6 +261,8 @@
         sold: arr(ah.sales).slice(-25).map((x) => ({ t: x.t, item: x.item, net: x.net })),
         bought: arr(ah.buys).slice(-25).map((x) => ({ t: x.t, item: x.item, price: x.price, count: x.count || null })),
         flips: A.flipsOf ? (({ totals, done, open }) => ({ totals, done: done.slice(0, 25), open })) (A.flipsOf(ah)) : null,
+        // the buy list (#115): every rule with its evidence (speculative ones with their backtest), and the rows of the rules the app shows (hidden = rows of rules it doesn't)
+        buyList: A.buyListOf ? ((b) => b && { scan: b.scan, rules: b.rules, rows: b.rows.filter((r) => r.offered).slice(0, 60), hidden: b.rows.filter((r) => !r.offered).length })(A.buyListOf(ah)) : null,
         // your own sell-through per item (#116): posts against the sales that followed within 48 h
         sellThrough: A.sellThrough ? (({ since, windowHours, totals, items }) => ({ since, windowHours, totals, items: items.slice(0, 40) }))(A.sellThrough(ah)) : null,
         mine: ah.owned ? arr(ah.owned.list).map((a) => ({ id: a.id, name: name(a.id), qty: a.qty, buyout: a.buyout })) : [],
