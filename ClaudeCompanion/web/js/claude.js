@@ -228,7 +228,7 @@
       // your group's spells by school (n, full resists, damage and damage resisted) and kills. Counts only
       combat: CC.combat && CC.combat.state ? CC.combat.api.summary(CC.combat.state) : null,
       pack: A.GD ? { built: A.GD.built ? new Date(A.GD.built * 1000).toISOString() : null, from: A.GD.from } : null,
-      character: { name: c.name, level: c.level, xp: c.xp, xpMax: c.xpMax, rested: c.rested, class: c.class, race: c.race,
+      character: { name: c.name, level: c.level, maxLevel: c.maxLevel || null, xp: c.xp, xpMax: c.xpMax, rested: c.rested, class: c.class, race: c.race,
         faction: c.faction, money: c.money, where: c.where, hearth: c.hearth },
       gear: CC.gear ? CC.gear.summary() : [],
       // what the app says about each item you own (js/advice.js); keep-only items are left out

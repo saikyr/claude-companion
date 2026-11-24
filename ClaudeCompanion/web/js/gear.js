@@ -72,18 +72,19 @@
   const setValue = (sid, n, w) => arr(((A.GD.sets || {})[sid] || [])[2]).filter((b) => b[0] <= n && arr(b[2]).length)
     .reduce((a, b) => { const st = {}; b[2].forEach(([k, v]) => { st[k] = (st[k] || 0) + v; }); return a + score(st, w, null, {}); }, 0);
   // the change in set bonuses when item inId goes on in place of outIds (what it replaces), against the gear
-  // worn[] (the set compared with): {d, sets: [{name, from, to, d}]}. A second copy of a piece adds nothing.
+  // worn[] (the set compared with): {d, sets: [{name, from, to, d}]}. A piece counts once however many copies
+  // are worn; taking one copy off keeps it while another is still on.
   function setDelta(w, worn, inId, outIds) {
     const outs = arr(outIds).filter((i) => i != null);
     if (!setOf(inId) && !outs.some((i) => setOf(i))) return { d: 0, sets: [] };
-    const ids = new Set(Object.values(worn || {}).map((x) => x && x.id).filter((i) => i != null));
-    const cnt = {};
-    ids.forEach((i) => { const s = setOf(i); if (s) cnt[s] = (cnt[s] || 0) + 1; });
-    const after = Object.assign({}, cnt);
-    const gone = new Set(outs.filter((i) => ids.has(i)));
-    gone.forEach((i) => { const s = setOf(i); if (s) after[s]--; });
-    const sIn = setOf(inId);
-    if (sIn && (!ids.has(inId) || gone.has(inId))) after[sIn] = (after[sIn] || 0) + 1;
+    const copies = {};
+    Object.values(worn || {}).forEach((x) => { if (x && x.id != null) copies[x.id] = (copies[x.id] || 0) + 1; });
+    const pieces = (cp) => { const c = {}; Object.keys(cp).forEach((i) => { const s = cp[i] > 0 && setOf(Number(i)); if (s) c[s] = (c[s] || 0) + 1; }); return c; };
+    const cnt = pieces(copies);
+    const next = Object.assign({}, copies);
+    outs.forEach((i) => { if (next[i] > 0) next[i]--; });
+    if (inId != null) next[inId] = (next[inId] || 0) + 1;
+    const after = pieces(next);
     const sets = [];
     new Set(Object.keys(after).concat(Object.keys(cnt))).forEach((sid) => {
       const from = cnt[sid] || 0, to = after[sid] || 0;
@@ -500,13 +501,19 @@
       const blocked = name === 'Off hand' && twoHand;
       const fitsPre = (c) => invs.includes(c.inv) && handFits(name, c.inv, use);
       const fits = (c) => fitsPre(c) && !blocked;          // usable now (a worn two-hander blocks the off hand)
-      // a two-hander replaces the main hand and the off hand; a set bonus it makes or breaks counts too
-      const outOf = (c) => {
+      // a two-hander replaces the main hand and the off hand; a set bonus it makes or breaks counts too. In a
+      // ring or trinket row it replaces whichever of the two gives the bigger gain with the set change counted
+      // (the weaker one, unless that one keeps a set bonus)
+      const swap = (c, s) => {
         const own = cur.find((y) => y.id && y.id === c.id);
-        return [own ? own.id : weakest.id].concat(name === 'Main hand' && c.inv === TWO_HAND && worn[17] ? [worn[17].id] : []);
+        const two = name === 'Main hand' && c.inv === TWO_HAND && worn[17];
+        const opts = (own ? [own] : cur).map((y) => {
+          const sd = setDelta(w, worn, c.id, [y.id].concat(two ? [worn[17].id] : []));
+          return { y, sd, d: s - y.s - (two ? offScore : 0) + sd.d };
+        });
+        return opts.reduce((a, o) => (o.d > a.d ? o : a), opts[0]);
       };
-      const setD = (c) => setDelta(w, worn, c.id, outOf(c));
-      const gain = (c, s) => s - weakest.s - (name === 'Main hand' && c.inv === TWO_HAND ? offScore : 0) + setD(c).d;
+      const gain = (c, s) => swap(c, s).d;
       // what it would replace, for the hit cap: itself when worn here, else the weaker item (and a two-hander
       // also frees the off hand's hit)
       const replOf = (c) => {
@@ -514,7 +521,7 @@
         const r = own ? own.st : weakest.st;
         return name === 'Main hand' && c.inv === TWO_HAND && worn[17] ? W.addSt(r, worn[17].st) : r;
       };
-      const x = (c, extra) => { const s = score(c.st, w, name, replOf(c)), sd = setD(c); return Object.assign({ c, s, d: gain(c, s), sb: sd.sets.length ? sd : null }, extra || {}); };
+      const x = (c, extra) => { const s = score(c.st, w, name, replOf(c)), o = swap(c, s); return Object.assign({ c, s, d: o.d, sb: o.sd.sets.length ? o.sd : null }, extra || {}); };
       const distinct = (list) => { const seen = new Set(); return list.filter((y) => !seen.has(y.c.name) && seen.add(y.c.name)); };
       const byGain = (a, b) => b.d - a.d;
       // ---- usable now: fixed items, your own, AH listings

@@ -75,6 +75,12 @@ def set_stats(text):
     """A set bonus line's stats (#13): "+20 Attack Power." and "Increases healing done by ... up to 44." read as
     the same item stat lines an Equip: line or a base stat line would be; an effect (a proc, a % to Fear) gives none."""
     t = text.rstrip('.')
+    # a proc or a buff for a while ("Chance on hit to ... for 10 sec", "when struck"): an effect, not a stat;
+    # "Improves your chance to hit by 1%" is a stat
+    if re.search(r'(?i)\bchance on\b|\ba chance\b|\bhas a \d+% chance\b|when struck|for \d+ (sec|min)', t):
+        return None
+    m = re.match(r'healing done by spells and effects by up to (\d+) and damage done by spells and effects by up to (\d+)', t.split('Increases ', 1)[-1])
+    if m: return {41: int(m[1]), 42: int(m[2])}
     m = re.match(r'^\+(\d+) Armor$', t)   # a bonus writes armor with a plus, an item's armor line without
     if m: return {100: int(m[1])}
     for rx, fn in LINE:

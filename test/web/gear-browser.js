@@ -139,13 +139,28 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
     A.GD.sets = Object.assign({}, keep, { t2: ['Test Pair', [up.id, other.items[0].id], [[2, '+20 Intellect.', [[5, 20]]]], 16] });
     const after = G.summary()[holyIdx].upgrades.find((u) => u.id === up.id && u.slot === up.slot);
     const wInt = (before.weightValues || {})[5] || 0;
+    // a ring row: the weaker ring is a set piece whose bonus is big, so a new ring replaces the stronger one
+    const rings = before.worn.find((x) => x.slot === 'Ring'), rUp = before.upgrades.find((u) => u.slot === 'Ring');
+    let ring = null;
+    if (rings && rings.items.length === 2 && rUp) {
+      const [r1, r2] = rings.items.slice().sort((a, b) => a.score - b.score), other2 = before.worn.find((x) => x.slot !== 'Ring' && x.items[0]);
+      A.GD.sets = Object.assign({}, keep, { t3: ['Test Ring Set', [r1.id, other2.items[0].id], [[2, '+500 Intellect.', [[5, 500]]]], 16] });
+      const a2 = G.summary()[holyIdx].upgrades.find((u) => u.id === rUp.id && u.slot === 'Ring');
+      ring = { weak: r1.score, strong: r2.score, up: rUp, after: a2 || null };
+    }
+    // two copies of a set ring: taking one off keeps the piece
+    A.GD.sets = Object.assign({}, keep, { t4: ['Copies', [900001, 900003], [[2, '+10 Intellect.', [[5, 10]]]], 16] });
+    const copy = G.setDelta(w, { 11: { id: 900001 }, 12: { id: 900001 }, 1: { id: 900003 } }, 777, [900001]);
     A.GD.sets = keep;
-    return { make, brk, dup, none, up, after, wInt };
+    return { make, brk, dup, none, up, after, wInt, ring, copy };
   }, sum.indexOf(holy));
   check(setT.make.d === 10 && setT.make.sets[0].from === 1 && setT.make.sets[0].to === 2, 'set bonus: the second piece makes the 2-piece bonus (+10)');
   check(setT.brk.d === -10 && setT.dup.d === 0 && setT.none.d === 0 && setT.none.sets.length === 0, 'set bonus: taking a piece off breaks it; a second copy adds nothing; no set, nothing');
   check(setT.after && setT.after.setBonus && Math.abs(setT.after.setBonus.gain - +(20 * setT.wInt).toFixed(1)) < 0.11 && Math.abs(setT.after.gain - (setT.up.gain + setT.after.setBonus.gain)) < 0.11,
     `the Gear plan: an upgrade that completes a set gains its bonus (${setT.up.gain} → ${setT.after && setT.after.gain}, set ${JSON.stringify(setT.after && setT.after.setBonus)})`);
+  check(setT.copy.d === 0, 'set bonus: two copies of a piece, one taken off: the bonus stays');
+  check(!setT.ring || (setT.ring.after && Math.abs(setT.ring.after.gain - +(setT.ring.up.score - setT.ring.strong).toFixed(1)) < 0.11 && !setT.ring.after.setBonus),
+    `a ring row: a new ring replaces the stronger ring when the weaker one keeps a set bonus (${JSON.stringify(setT.ring)})`);
   const worldSeen = await page.evaluate(() => {
     const ah = window.CC.api.CH.ah = window.CC.api.CH.ah || {}; ah.prices = ah.prices || {};
     const before = window.CC.gear.availability(2243);

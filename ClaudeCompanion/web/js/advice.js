@@ -100,12 +100,16 @@
     if (own) return { row: name, s, gain: 0, same: true };
     const twoHandWorn = !!mh && CC.gear.wornInv(mh) === 17;
     if (name === 'Off hand' && twoHandWorn) return { row: name, s, gain: null, blocked: 'you use a two-hander' };
-    const vs = cur.reduce((a, c) => (c.s < a.s ? c : a), cur[0]);
-    // a two-hander replaces the main hand and the off hand
+    // a two-hander replaces the main hand and the off hand; a set bonus it makes or breaks counts (the Gear tab's
+    // own rule, gear.js setDelta), and in a ring or trinket row it replaces whichever gives the bigger gain
     const withOh = name === 'Main hand' && inv === 17 && oh;
-    const base = vs.s + (withOh ? W.score(oh.st, ctx.w, 17, oh.st) : 0);
-    // a set bonus it makes or breaks (the Gear tab's own rule, gear.js setDelta)
-    const sd = CC.gear.setDelta ? CC.gear.setDelta(ctx.w, worn, it.id, [vs.id].concat(withOh ? [oh.id] : [])) : { d: 0 };
+    const ohS = withOh ? W.score(oh.st, ctx.w, 17, oh.st) : 0;
+    const opt = cur.map((c) => {
+      const sd = CC.gear.setDelta ? CC.gear.setDelta(ctx.w, worn, it.id, [c.id].concat(withOh ? [oh.id] : [])) : { d: 0 };
+      return { vs: c, sd, g: s - c.s - ohS + sd.d };
+    }).reduce((a, o) => (o.g > a.g ? o : a));
+    const vs = opt.vs, sd = opt.sd;
+    const base = vs.s + ohS;
     return { row: name, s, base, gain: s - base + sd.d, setBonus: sd.d ? +sd.d.toFixed(1) : undefined, vs, also: withOh ? oh.id : null, target: vs.n, effect: effectOf(it.id) || (vs.id ? effectOf(vs.id) : false) };
   }
 
