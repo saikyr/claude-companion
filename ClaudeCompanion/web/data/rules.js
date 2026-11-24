@@ -30,7 +30,9 @@ window.GAMERULES = {
     // Brilliant Chromatic Scale: Blackwing Lair; Souldarite, Bloodvine, Primal Bat Leather, Blood Tiger Hide:
     // Zul'Gurub). Recipes from warcraft.wiki.gg (Classic); the pack has no reagents. Item ids are the pack's.
     raidMatCrafts: [16979, 16980, 18263, 19156, 19165, 16982, 19162, 16983, 19163, 19149, 19164, 17013, 19148,
-      18509, 19157, 19682, 19683, 19684, 19998, 19999, 19685, 19686, 19687, 19688, 19689],
+      18509, 19157, 19682, 19683, 19684, 19998, 19999, 19685, 19686, 19687, 19688, 19689,
+      17015, 17016, 17193, 18282, 15138, 19690, 19691, 19692, 19693, 19694, 19695,
+      22652, 22654, 22655, 22658, 22661, 22662, 22663, 22664, 22665, 22666, 22669, 22670, 22671],
   },
   // Attunements and keys: what opens an instance or a part of one, and the quests or items that give it.
   // Quest and item ids are the game-data pack's (QuestieDB Forever / ForeverDB); the app checks them against your

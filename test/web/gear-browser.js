@@ -131,11 +131,11 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   check(holy && !holy.preBis.some((p) => raidIds.has(p.id) || p.alternatives.some((a) => raidIds.has(a.id))), 'snapshot: no raid weapon (Atiesh, Qiraji staves, Fang of Korialstrasz) in pre-BiS');
   check(holy && holy.notInPreBis.some((x) => x.availability === 'raid') && holy.notInPreBis.every((x) => ['raid', 'pvp', 'unseen'].includes(x.availability)), 'snapshot: raid and not-yet-seen items kept with why (notInPreBis)');
   // #110: raid, world-boss, battleground and raid-material sources are raid / PvP; dungeon and world drops aren't
-  const kinds = await page.evaluate(() => Object.fromEntries([23025, 20632, 20682, 13001, 21210, 19165, 19682, 19309, 19315, 22747, 22752, 2243, 18510]
+  const kinds = await page.evaluate(() => Object.fromEntries([23025, 20632, 20682, 20580, 19140, 21210, 19165, 19682, 17193, 22669, 19309, 19315, 22747, 22752, 2243, 13001, 13133, 13075, 18510]
     .map((id) => [id, window.CC.gear.kindOf(id)])));
-  check([23025, 20632, 20682, 13001, 21210, 19165, 19682].every((id) => kinds[id] === 'raid'), `raid: Naxx chest, Taerar, the Abyssal Council, world bosses, the AQ rep chain, MC and ZG crafts (${JSON.stringify(kinds)})`);
+  check([23025, 20632, 20682, 20580, 19140, 21210, 19165, 19682, 17193, 22669].every((id) => kinds[id] === 'raid'), `raid: Naxx chest, Taerar, the Abyssal Council, the green dragons, Cache of the Firelord, the AQ rep chain, MC, ZG and Naxx crafts (${JSON.stringify(kinds)})`);
   check([19309, 19315, 22747, 22752].every((id) => kinds[id] === 'pvp'), 'PvP: Alterac Valley and Warsong Gulch quartermasters');
-  check(kinds[2243] === 'world' && kinds[18510] === 'crafted', 'a world drop and a Dire Maul craft stay what they are');
+  check([2243, 13001, 13133, 13075].every((id) => kinds[id] === 'world') && kinds[18510] === 'crafted', 'world drops (also world-drop epics that raid bosses list too) and a Dire Maul craft stay what they are');
   await page.evaluate(() => { window.CC.api.STATE.tab = 'gear'; window.CC.api.STATE.gearSlot = 'Main hand'; window.CC.api.render(); });
   const later = await page.$$eval('.slotdet details.later', (els) => els.map((e) => e.textContent).join('\n'));
   check(/Raid, PvP and not in game yet/.test(later) && /Raid/.test(later), 'Main hand: raid items listed under "Raid, PvP and not in game yet", not in Pre-BiS');

@@ -178,7 +178,7 @@
   const raidQuest = (qid) => (CC.quests && CC.quests.raid ? CC.quests.raid(qid) : ((A.GD.quests || {})[qid] || {}).type === 'Raid');
   // Raid and PvP by source (#110), the one place both the source word and `avail` read. Raid: a group size
   // of 20+, a quest from raid content, crafts whose reagents only raids drop, or loot whose every placed
-  // source is a raid zone or a world boss. PvP: the PvP halls, rank titles, battleground zones and their
+  // source is a raid zone or a world boss (a zone-less drop or a container keeps it open-world). PvP: the PvP halls, rank titles, battleground zones and their
   // quartermasters. Lists: data/rules.js instances.
   const INST = (window.GAMERULES || {}).instances || {};
   const RAID_Z = new Set(arr(INST.raids)), BG_Z = new Set(arr(INST.battlegrounds)), WB = new Set(arr(INST.worldBosses));
@@ -189,6 +189,9 @@
     if (size >= 20 || RAID_MATS.has(Number(id)) || rows.some((r) => r[0] === 'quest' && raidQuest(r[2]))) return true;
     if (rows.some((r) => r[0] === 'world' || r[0] === 'quest' || r[0] === 'craft' || r[0] === 'vendor')) return false;
     if (arr((A.GD.vend || {})[id]).length) return false;
+    // a drop with no zone from a creature that isn't a world boss (a world-drop epic's list names a few
+    // droppers, Mushgog among them), or a lockbox or sack: open-world, so not raid gear
+    if (rows.some((r) => !r[7] && ((r[0] === 'drop' && !WB.has(r[2])) || r[0] === 'container'))) return false;
     const placed = rows.filter((r) => (r[0] === 'drop' && WB.has(r[2])) || (typeof r[7] === 'string' && r[7]));
     return placed.length > 0 && placed.every((r) => (r[0] === 'drop' && WB.has(r[2])) || RAID_Z.has(r[7]));
   }
