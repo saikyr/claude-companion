@@ -173,6 +173,23 @@
       },
       note: 'One point of shadow spell power = 1. Built for questing and dungeons: kill, regen with Spirit Tap, next pull. Hit counts up to the raid cap, 17% (data/rules.js spellHit).',
       src: { label: 'Worked out 18 Nov 2026 from Forever shadow ranks (metabot.gg), talents (foreverchanges.pro talents), 14 crit / 10 hit rating = 1% (foreverdb.net/stats); coefficients are Classic rules', url: null } },
+    // At 60 in groups (his pick, 24 Nov 2026): the published Forever Shadow lists' order, hit > spell power >
+    // crit > spell penetration > Spirit. The default for Shadow from `level` on; the questing one stays below it
+    // and can still be picked.
+    { id: 'shadow-group', cls: 'PRIEST', trees: ['Shadow'], level: 60, name: 'Shadow (groups at 60)', role: 'spell',
+      w: { 45: 1, 42: 1, 111: 1, 31: 1.66, 32: 0.3, 47: 0.2, 6: 0.1, 43: 0.66, 5: 0.35 },
+      why: {
+        45: 'The unit: every other number is "worth this many points of shadow spell power".',
+        42: 'Spell damage counts for shadow spells in full.', 111: 'Shadow damage counts in full.',
+        31: 'Until you reach the hit cap a hit point is worth 1.66 (the Icy Veins Forever order, spell power = 1); past the cap it is worth nothing. Your hit and the cap are read from the game: see the hit line on the Gear page.',
+        32: '14 crit rating = 1% crit; crits add 50% (100% in Shadowform) to Mind Blast and Mind Flay only: 0.3.',
+        47: 'Spell penetration only matters against targets that resist shadow, which most dungeon and raid bosses barely do: 0.2, below crit as the lists rank it.',
+        6: 'Spirit Tap fires on your own killing blows on targets that give experience or honor: at 60 in a group it rarely does, and Shadowform casters regen little while casting. Last, as every Forever list ranks it: 0.1.',
+        43: 'Steady mana through long boss fights: 0.66.',
+        5: '15 mana per point plus a little crit: 0.35.',
+      },
+      note: 'One point of shadow spell power = 1. For level 60 in dungeons and raids: hit to the raid cap (17%), then spell power, crit, and Spirit last, the order the published Forever Shadow lists use. Below 60 Shadow uses the questing weights (Spirit 0.55, for Spirit Tap after your own kills).',
+      src: { label: 'The published Forever Shadow pre-raid lists\' order (wowtbc.gg, conquestcapped.com, wow.gg, read 24 Nov 2026); numbers as the questing Shadow weights except Spirit and spell penetration', url: null } },
   ];
 
   const BUILTIN = {}, GUIDE = {};
@@ -190,7 +207,9 @@
   // what each tree uses until you pick something else: its first profile
   const DEFAULT = {};
   Object.values(BUILTIN).forEach((p) => p.trees.forEach((t) => { const k = p.cls + '/' + t; if (!DEFAULT[k]) DEFAULT[k] = p.id; }));
-  PROJECT.forEach((p) => p.trees.forEach((t) => { DEFAULT[p.cls + '/' + t] = p.id; }));
+  PROJECT.forEach((p) => p.trees.forEach((t) => { if (!p.level) DEFAULT[p.cls + '/' + t] = p.id; }));
+  // a profile with a level is the default from that level on (Shadow in groups at 60)
+  const BY_LEVEL = PROJECT.filter((p) => p.level).sort((a, b) => b.level - a.level);
 
   // ---------------------------------------------------------------- your own profiles
   // Saved in this browser (localStorage 'cc.weights.v1'), per class so alts of the same class share
@@ -247,7 +266,7 @@
       b.sort((x, y) => (y.trees.includes(tree) - x.trees.includes(tree)));
       return b.concat(W.custom(cls));
     },
-    defaultFor: (cls, tree) => DEFAULT[cls + '/' + tree] || null,
+    defaultFor: (cls, tree, level) => ((BY_LEVEL.find((p) => p.cls === cls && p.trees.includes(tree) && Number(level) >= p.level) || {}).id) || DEFAULT[cls + '/' + tree] || null,
     // a new profile of your own, copied from another (or empty)
     create(cls, fromId, name) {
       const st = store(), from = fromId && W.get(fromId);
@@ -385,7 +404,9 @@
     if (sp.treeWhy === 'none') return `Default: no talent points yet, so the tree your class levels in (${sp.tree})`;
     if (sp.treeWhy === 'unknown') return `Default: your talent trees couldn't be read, so the tree your class levels in (${sp.tree}). Sync in game, or pick weights`;
     if (sp.treeWhy === 'tie') return `Default: your points are tied, so ${sp.tree}. Pick other weights if you play the other tree`;
-    return `Default: most of your talent points are in ${sp.tree}`;
+    const lv = Number(((A.CH && A.CH.snap) || {}).character && A.CH.snap.character.level) || 0;
+    const byLevel = BY_LEVEL.find((p) => p.cls === ((A.CH.snap || {}).character || {}).classFile && p.trees.includes(sp.tree) && lv >= p.level);
+    return `Default: most of your talent points are in ${sp.tree}` + (byLevel ? `, and at level ${byLevel.level} the group weights` : '');
   }
 
   // one profile: its numbers as bars, then why
@@ -437,7 +458,7 @@
     if (specs.length) {
       h += `<h2>Your specs</h2><p class="meta">Each spec uses the weights for the talent tree you have the most points in, unless you pick others.</p><div class="table wspec"><div class="thead"><div>Spec</div><div>Scores gear with</div><div>Why</div></div>`;
       specs.forEach((sp) => {
-        const cur = CC.gear.profileKey(sp), picked = CC.gear.pickedProfile(sp), def = W.defaultFor(cls, sp.tree);
+        const cur = CC.gear.profileKey(sp), picked = CC.gear.pickedProfile(sp), def = W.defaultFor(cls, sp.tree, (A.CH.snap && A.CH.snap.character || {}).level);
         const opts = [`<option value=""${picked ? '' : ' selected'}>${esc((W.get(def) || {}).name || 'Default')} (default)</option>`]
           .concat(builtIn.concat(mine).filter((p) => p.id !== def || picked).map((p) => `<option value="${esc(p.id)}"${picked && p.id === cur ? ' selected' : ''}>${esc(p.name)}${p.own ? ' (yours)' : ''}</option>`));
         h += `<div class="tr"><div class="c-main"><div class="nm">${esc(sp.label)}${sp.i === active ? ' <span class="badge on">active</span>' : ''}</div></div><div><select data-wspec="${sp.i}">${opts.join('')}</select></div><div class="dim small">${esc(reason(sp))}</div></div>`;

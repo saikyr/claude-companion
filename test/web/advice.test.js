@@ -39,7 +39,14 @@ test('every class and spec has a sourced default', () => {
   }
   assert(Object.values(W.BUILTIN).every((p) => !/guide order|mana model|project weights|:/.test(p.name)), 'plain profile names');
   assert(Object.values(W.BUILTIN).filter((p) => p.basis).every((p) => Object.values(p.basis).every((b) => !/× cost/.test(b))), 'reasons in plain words');
-  assert(['healing', 'disc', 'shadow'].every((id) => Object.keys(W.BUILTIN[id].w).every((k) => !W.PCT[k])), 'worked-out profiles leave "%" lines to their rating');
+  assert(['healing', 'disc', 'shadow', 'shadow-group'].every((id) => Object.keys(W.BUILTIN[id].w).every((k) => !W.PCT[k])), 'worked-out profiles leave "%" lines to their rating');
+  // Shadow at 60 uses the group weights (his pick, 24 Nov): the lists' order, Spirit last; questing below 60
+  assert.strictEqual(W.defaultFor('PRIEST', 'Shadow', 59), 'shadow');
+  assert.strictEqual(W.defaultFor('PRIEST', 'Shadow', 60), 'shadow-group');
+  assert.strictEqual(W.defaultFor('PRIEST', 'Holy', 60), 'healing', 'only Shadow changes at 60');
+  const g = W.get('shadow-group').w;
+  assert(g[31] > g[45] && g[45] > g[32] && g[32] > g[47] && g[47] > g[6], 'group Shadow: hit > spell power > crit > spell penetration > Spirit');
+  Object.keys(g).forEach((k) => assert(W.get('shadow-group').why[k], `group Shadow: a reason for stat ${k}`));
 });
 test('weapon specs weigh weapon DPS at 14 attack power', () => {
   const arms = W.get('iv-arms');
