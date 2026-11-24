@@ -97,6 +97,12 @@ const CASES = [
   ['an AH price from his own scan, right', { id: 'ah-ok', title: 'Destiny price', facts: [{ label: 'Destiny on your AH', value: '235g (lowest, your scan)', src: 'ah:647@1795369186#min' }] }, [], []],
   ['an AH price, wrong number', { id: 'ah-bad', title: 'Destiny price', facts: [{ label: 'Destiny on your AH', value: '250g', src: 'ah:647@1795369186#min' }] }, [], ['value']],
   ['an AH price from a scan that never happened', { id: 'ah-none', title: 'Destiny price', facts: [{ label: 'Destiny on your AH', value: '235g', src: 'ah:647@1795000000#min' }] }, [], ['value']],
+  // #114: a list entry by a field, not its position (the order differs between computers)
+  ['a grind picked by its name', { id: 'byname', title: 'Cultists', facts: [{ label: 'Kills', value: '80', src: 'snapshot#grind.recent[name=cultists].kills' }] }, [], []],
+  ['a grind picked by its name, wrong number', { id: 'byname-bad', title: 'Cultists', facts: [{ label: 'Kills', value: '81', src: 'snapshot#grind.recent[name=cultists].kills' }] }, [], ['value']],
+  ['a list entry that is not there', { id: 'byname-none', title: 'Trolls', facts: [{ label: 'Kills', value: '80', src: 'snapshot#grind.recent[name=trolls].kills' }] }, [], ['value']],
+  ['a run picked by its name', { id: 'byname-run', title: 'Run', facts: [{ label: 'Kills', value: '200', src: 'snapshot#runs[name=Stratholme].kills' }] }, [], []],
+  ['an unclosed entry pick', { id: 'byname-fmt', title: 'x', facts: [{ label: 'Kills', value: '80', src: 'snapshot#grind.recent[name=cultists.kills' }] }, ['src'], []],
   ['an AH price src without the scan time', { id: 'ah-fmt', title: 'Destiny price', facts: [{ label: 'Destiny on your AH', value: '235g', src: 'ah:647#min' }] }, ['src'], []],
   ['an AH price src with a leading zero', { id: 'ah-zero', title: 'Destiny price', facts: [{ label: 'Destiny on your AH', value: '235g', src: 'ah:0647@1795369186#min' }] }, ['src'], []],
   ['profit with only flips#sold', { id: 'sold', title: 'Flip profit', facts: [{ label: 'Sold', value: '90g', src: 'flips#sold' }] }, ['profit'], []],
@@ -176,6 +182,35 @@ function pyRules(card) {
     check(/cards refused/.test(refused) && /gold-81 \[profit\]/.test(refused), `a list with one bad card is refused, saying which and why (${refused.slice(0, 90)}...)`);
     check(B.query(`select count(*) from public.records where id = 'setting|cc.claude.cards'`) === '0', 'and nothing was written');
     check(put([CASES[0][1], CASES[3][1]]) === '', 'a list that passes is written');
+    // #114: a fact Claude already wrote that has drifted is marked on its card, not a reason to refuse the list;
+    // new and edited facts are still checked
+    const stored = () => { const raw = B.query(`select data->>'v' from public.records where id = 'setting|cc.claude.cards' and account_id = '${account}'`); return raw ? JSON.parse(raw) : null; };
+    const lvl = { id: 'lvl-card', title: 'Level', facts: [{ label: 'Level', value: '59', src: 'snapshot#character.level' }, { label: 'Kills', value: '80', src: 'snapshot#grind.recent[name=cultists].kills' }] };
+    check(put([CASES[0][1], lvl]) === '', 'a list with a level fact is written');
+    await pc.client.pushSnapshot(Object.assign({}, snapshot, { character: Object.assign({}, snapshot.character, { level: 60 }) }));
+    const fresh = { id: 'new-card', title: 'Crit', facts: [{ label: 'Crit', value: '5.2%', src: 'snapshot#character.crit' }] };
+    const r1 = put([CASES[0][1], lvl, fresh]);
+    const st = stored();
+    const lc = st && st.cards.find((c) => c.id === 'lvl-card');
+    check(r1 === '' && lc && lc.stale && lc.stale.length === 1 && lc.stale[0].label === 'Level' && /= 60/.test(lc.stale[0].msg) && st.cards.some((c) => c.id === 'new-card'),
+      `the level moved to 60: the old fact is kept and marked stale, the new card is written (${r1.slice(0, 80)} ${JSON.stringify(lc && lc.stale)})`);
+    check(!lc.stale.some((x) => x.label === 'Kills'), 'a fact that still matches is not marked');
+    const r2 = put([CASES[0][1], Object.assign({}, lc), fresh]);
+    check(r2 === '' && stored().cards.find((c) => c.id === 'lvl-card').stale.length === 1, 'sent back with its stale marks: the marks are dropped and worked out again');
+    const edited = { id: 'lvl-card', title: 'Level', facts: [{ label: 'Level', value: '58', src: 'snapshot#character.level' }] };
+    check(/cards refused/.test(put([CASES[0][1], edited])), 'an edited fact with the wrong number is refused');
+    check(/cards refused/.test(put([CASES[0][1], lvl, { id: 'new-bad', title: 'Level', facts: [{ label: 'Level', value: '59', src: 'snapshot#character.level' }] }])), 'a new card with the old number is refused');
+    check(/cards refused/.test(put([CASES[0][1], Object.assign({}, lvl, { title: 'Swap layers' })])), 'an old card that breaks another rule is still refused');
+    const dup = Object.assign({}, lvl, { facts: lvl.facts.concat([{ label: 'Level', value: '42', src: 'snapshot#character.level' }]) });
+    check(/cards refused/.test(put([CASES[0][1], dup])), 'a new wrong fact with the same label and src as an old one is still refused (one excuse per old fact)');
+    const laund = { id: 'laund', title: 'Level', status: 'done', facts: [{ label: 'Level', value: '7', src: 'snapshot#character.level' }] };
+    check(put([CASES[0][1], lvl, laund]) === '', 'a done card is not checked');
+    check(/cards refused/.test(put([CASES[0][1], lvl, Object.assign({}, laund, { status: 'open' })])), 'a done card reopened: its never-checked fact is checked');
+    check(!(stored().cards.find((c) => c.id === 'laund') || {}).stale, 'a done card is not marked stale');
+    check(put([CASES[0][1], lvl]) === '', 'back to the list without it');
+    await pc.client.pushSnapshot(snapshot);
+    check(put([CASES[0][1], lvl]) === '' && !stored().cards.find((c) => c.id === 'lvl-card').stale, 'the number matches again: the mark goes');
+
     // the repo's example cards pass both engines
     const example = live(JSON.parse(fs.readFileSync(path.join(ROOT, 'test', 'fixtures', 'cards.json'), 'utf8')));
     const exPg = JSON.parse(B.query(`select private.check_cards('${account}', ${lit(JSON.stringify(example))}::jsonb)::text`));

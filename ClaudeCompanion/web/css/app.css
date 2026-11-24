@@ -445,6 +445,7 @@ img.kic { width: var(--ic-sm); height: var(--ic-sm); border-radius: var(--r-sm);
 .facts dt { font: 600 var(--f-lbl) var(--ui); text-transform: uppercase; letter-spacing: .08em; color: var(--t3); }
 .facts dd { margin: 0; font-variant-numeric: tabular-nums; }
 .facts dd .sub { display: block; }
+.facts dd .sub.need { color: var(--warn); }
 .citems { border: 1px solid var(--line); border-radius: var(--r-sm); }
 .ctrack { font-size: var(--f-sm); }
 .ctrack b { color: var(--t1); }
