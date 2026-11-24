@@ -713,6 +713,17 @@
       if (next.length) h += `<p class="dim">Next at level ${next[0].level}: ${next.map((x) => esc(x.name) + rk(x)).join(', ')}</p>`;
       h += `<p class="foot-note">From the trainer${R.trainer.npc ? ' ' + esc(R.trainer.npc) : ''} ${when}</p>`;
     }
+    const out = arr(R.reagents).filter((r) => !r.have);
+    if (out.length) h += `<p class="need">No ${[...new Set(out.map((r) => esc(r.name)))].join(' or ')} in your bags, for ${out.map((r) => esc(r.spell)).join(', ')}.</p>`;
+    // spells only a book teaches (no trainer has them)
+    if (R.books && R.books.now.length) {
+      const from = (b) => b.sources.slice(0, 2).map((x) => esc(x.name) + (x.zone ? ', ' + esc(x.zone) : '')).join('; ');
+      h += `<p class="need">From a book, not the trainer (you don't know these yet):</p><ul>${R.books.now.map((b) => {
+        const p = planPrice(b.item);
+        return `<li><span data-item="item:${b.item}">${esc(b.book)}</span>: ${esc(b.spell)}${b.rank > 1 ? ' ' + b.rank : ''}${p ? ' · ' + money(p) + ' on your AH' : ''} <span class="dim">${from(b)}</span></li>`;
+      }).join('')}</ul>`;
+    }
+    if (R.books && R.books.raid.length) h += `<p class="dim">From raids: ${R.books.raid.map((b) => `<span data-item="item:${b.item}">${esc(b.book)}</span> (${esc(b.sources[0].zone || '')})`).join(', ')}</p>`;
     return h + '</section>';
   }
   V.talents = function () {
@@ -757,7 +768,7 @@
     }
     const bars = arr(sp.actionBars);
     // spell ranks (js/spells.js, the one check): bars below your best rank, ranks the trainer has for you
-    const R = window.CCSpells ? window.CCSpells.check(CH) : null;
+    const R = window.CCSpells ? window.CCSpells.check(CH, GD) : null;
     const RS = R && R.specs.find((x) => x.spec === cur);
     const old = {};
     if (RS) RS.outdated.forEach((o) => { old[o.slot] = o; });

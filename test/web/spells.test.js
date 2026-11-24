@@ -57,5 +57,43 @@ check(top.specs[0].outdated.length === 1 && top.specs[0].outdated[0].rank === 6,
 const fw = S.check({ snap: ch.snap, specs: {}, trainer: { level: 58, services: [{ name: 'Fear Ward', status: 'available', level: 20 }] } });
 check(fw.train.length === 0, 'an unranked service in the spellbook is not to train');
 check(R.known.some((k) => k.name === 'Flash Heal' && k.rank === 7) && !R.known.some((k) => k.name === 'Fear Ward'), 'known: the best rank of each ranked spell');
+
+// #122: spells only a book teaches, and the group buffs' reagents. A made-up pack: codexes with and without a
+// source, a mage tome, a pet grimoire; the real one: every class's books from the shipped pack
+globalThis.GAMERULES = { buffReagents: [{ cls: 'PRIEST', spells: ['Prayer of Fortitude', 'Prayer of Shadow Protection'], item: 17029, name: 'Sacred Candle' }] };
+const book = (name, req) => [name, 3, req, req, 0, 0, 0, 0, [], 9, [], '', 0];
+const gd = { items: { 17413: book('Codex: Prayer of Fortitude', 48), 17414: book('Codex: Prayer of Fortitude II', 60), 22393: book('Codex: Prayer of Shadow Protection', 60),
+    1084: book('Codex of Renew', 8), 18600: book('Tome of Arcane Brilliance', 56), 16302: book('Grimoire of Firebolt (Rank 2)', 8), 9001: book('Codex of Flash Heal VII', 56) },
+  src: { 17413: [['drop', 'Anvilrage Warden', 1, 0, 0, 0, 0, 'Blackrock Depths', null, null, 'f']], 17414: [['drop', 'Warpwood Tangler', 2, 0, 0, 0, 0, 'Dire Maul', null, null, 'f']],
+    22393: [['drop', 'x', 3, 0, 0, 0, 0, 'Scholomance', null, null, 'c']], 18600: [['drop', 'y', 4, 0, 0, 0, 0, 'Scholomance', null, null, 'f']], 9001: [['drop', 'z', 5, 0, 0, 0, 0, '', null, null, 'c']] },
+  vend: { 16302: [['Spackle', 'Stormwind City', 0, 0, 0, 1, '', 'A']] }, teach: {} };
+const pr = JSON.parse(JSON.stringify(ch)); pr.snap.character = { level: 58, classFile: 'PRIEST' };
+pr.snap.spellbook[0].spells.push({ name: 'Prayer of Fortitude', rank: 'Rank 1', id: 21562 });
+const PB = S.check(pr, gd).books;
+check(PB.now.length === 0 && PB.later.map((b) => b.item).sort().join() === '17414,22393', `books: Prayer of Fortitude II and Prayer of Shadow Protection at 60, rank 1 known (${JSON.stringify(PB)})`);
+check(!PB.later.concat(PB.now).some((b) => b.item === 1084 || b.item === 18600 || b.item === 16302), 'a book with no source, another class\'s tome, a pet grimoire: left out');
+check(!PB.later.concat(PB.now).some((b) => b.item === 9001), 'a book for a rank you know (Flash Heal 7) is not missing');
+check(PB.later[0].sources[0].name === 'Warpwood Tangler' && PB.later[0].sources[0].forever && PB.later[0].rank === 2, 'a book carries its sources (Forever-seen or Classic) and its rank');
+pr.snap.character.level = 60;
+check(S.check(pr, gd).books.now.length === 2, 'at 60 they are books to get now');
+const RG = S.check(pr, gd).reagents;
+check(RG.length === 1 && RG[0].spell === 'Prayer of Fortitude' && RG[0].have === 0, 'a group buff you know with no Sacred Candle in your bags is flagged');
+pr.snap.bags = [{ id: 0, items: [{ slot: 1, item: 'item:17029::::::::60', count: 7 }] }];
+check(S.check(pr, gd).reagents[0].have === 7, 'and counted when you carry some');
+check(S.check(ch).books.now.length === 0 && Array.isArray(S.check(ch).reagents), 'no pack, no class: no books, no crash');
+// raid-only books are kept apart; a book with a raid and a dungeon source shows the dungeon first
+globalThis.GAMERULES = Object.assign({}, globalThis.GAMERULES, { instances: { raids: ['Molten Core', 'Scholomance'] } });
+gd.src[17414].unshift(['drop', 'Raider', 9, 0, 0, 0, 0, 'Molten Core', null, null, 'f']);
+const RB = S.check(pr, gd).books;
+check(RB.raid.map((b) => b.item).join() === '22393' && !RB.now.some((b) => b.item === 22393), `a book only a raid gives is under raid (${JSON.stringify(RB.raid.map((b) => b.item))})`);
+const pf2 = RB.now.find((b) => b.item === 17414);
+check(pf2 && !pf2.raid && pf2.sources[0].name === 'Warpwood Tangler' && pf2.sources[1].raid === true, 'a book with a dungeon source too: not raid, dungeon source first');
+globalThis.GAMERULES = { buffReagents: globalThis.GAMERULES.buffReagents };
+// the real pack: the three priest books the issue names are found by their names
+const fs = require('fs'), vm = require('vm'), path = require('path');
+const dc = {}; dc.window = dc; vm.createContext(dc);
+vm.runInContext(fs.readFileSync(path.join(__dirname, '../../ClaudeCompanion/web/data/gamedata.js'), 'utf8'), dc);
+const real = S.check(Object.assign({}, pr, { snap: Object.assign({}, pr.snap, { spellbook: [{ name: 'Holy', spells: [{ name: 'Renew', rank: 'Rank 9', id: 1 }] }] }) }), dc.GAMEDATA).books.now.map((b) => b.item);
+check([17413, 17414, 22393].every((id) => real.includes(id)), `the shipped pack: Codex: Prayer of Fortitude I and II and Prayer of Shadow Protection (${real.join(', ')})`);
 if (failed) { console.log(failed + ' failed'); process.exit(1); }
 console.log('all spell-rank checks pass');
