@@ -93,6 +93,8 @@ jobs:
         run: node test/web/gear-browser.js
       - name: Now page in a browser (next steps, filters, unlocks, snapshot)
         run: node test/web/next-browser.js
+      - name: More than one character (picker, shared AH prices)
+        run: node test/web/chars-browser.js
       - name: Local server API (server.py)
         run: node test/web/server-api.test.js 47999 /tmp/f/_forever_/Interface/AddOns/ClaudeCompanion/companion-data
       - name: Server rules (hidden browser)

@@ -359,6 +359,19 @@ do
   c.ah.prices["99903"] = { obs = { { t = 1, src = "scan", qty = 3, min = 400, med = 500 } } }
   check(ns.PlanPrice(99901) == 1000 and ns.PlanPrice(99902) == 700 and ns.PlanPrice(99903) == 500 and ns.PlanPrice(99904) == nil,
     "ns.PlanPrice: newest scan's median, else the newest price seen (the app's rule)")
+  -- #12: an alt on the same realm and faction prices with what any character of the save saw; another faction doesn't
+  local house = c.snap and c.snap.character or {}
+  check(house.server == 1, "the snapshot keeps the server id from the GUID (" .. tostring(house.server) .. ")")
+  ClaudeCompanionDB.chars["Alt-Test"] = { snap = { character = { realm = house.realm, server = house.server, faction = house.faction } },
+    ah = { prices = { ["99904"] = { obs = { { t = 5, src = "scan", qty = 2, min = 80, med = 90 } } },
+                      ["99903"] = { obs = { { t = 9, src = "scan", qty = 1, min = 600, med = 650 } } } } } }
+  ClaudeCompanionDB.chars["Horde-Test"] = { snap = { character = { realm = house.realm, server = house.server, faction = "Other" } },
+    ah = { prices = { ["99905"] = { obs = { { t = 5, src = "scan", qty = 2, min = 80, med = 70 } } } } } }
+  ClaudeCompanionDB.chars["Old-Test"] = { snap = { character = { faction = house.faction } },   -- saved before the server id: shares with no one
+    ah = { prices = { ["99906"] = { obs = { { t = 5, src = "scan", qty = 2, min = 80, med = 70 } } } } } }
+  check(ns.PlanPrice(99904) == 90 and ns.PlanPrice(99903) == 650 and ns.PlanPrice(99901) == 1000 and ns.PlanPrice(99905) == nil and ns.PlanPrice(99906) == nil,
+    "ns.PlanPrice: prices are shared by the save's characters on the same realm and faction, newest scan first (#12)")
+  ClaudeCompanionDB.chars["Alt-Test"], ClaudeCompanionDB.chars["Horde-Test"], ClaudeCompanionDB.chars["Old-Test"] = nil, nil, nil
   if FAILED then error("v1.4 checks failed") end
 end
 -- #1 item cache: full cache makes room (oldest first) and keeps items in use

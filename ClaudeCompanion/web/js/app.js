@@ -280,9 +280,14 @@
     const rec = p[String(id)];
     if (!rec) return null;
     const obs = arr(rec.obs);
+    // a full scan newer than the item's own newest reading didn't list it (another character's scan of the same AH
+    // only notes "none listed" for what its own previous scan had): none listed now
+    const ls = ((CH && CH.ah) || {}).lastScan;
     for (let i = obs.length - 1; i >= 0; i--) {
       const o = obs[i];
-      if (o.src === 'scan') return o.qty ? { min: o.min, med: o.med || o.min, qty: o.qty, t: o.t, src: 'scan' } : { none: true, t: o.t, src: 'scan' };
+      if (o.src !== 'scan') continue;
+      if (ls && ls.t && (o.t || 0) < ls.t - 600) return { none: true, t: ls.t, src: 'scan' };
+      return o.qty ? { min: o.min, med: o.med || o.min, qty: o.qty, t: o.t, src: 'scan' } : { none: true, t: o.t, src: 'scan' };
     }
     const o = obs[obs.length - 1];
     return o && o.min ? { min: o.min, med: o.min, qty: o.qty, t: o.t, src: o.src } : null;
@@ -1346,6 +1351,15 @@
   }
 
   // ------------------------------------------------------------ render
+  // the character picker (#4): only with more than one character; the one played last comes first
+  function charPicker() {
+    if (CHARS.length < 2) return '';
+    const label = ({ c }) => { const x = ((c.snap || {}).character) || {}; return `${x.name && x.name !== 'World' ? x.name : 'Character'} · ${x.level || '?'} ${x.class || ''}`.trim(); };
+    const cur = CHARS.find((x) => x.c === CH || (CH && x.c.snap === CH.snap));
+    return `<select class="charpick" data-charpick aria-label="Character">${CHARS.map((x, i) => `<option value="${esc(x.key)}"${x === cur ? ' selected' : ''}>${esc(label(x))}${i === 0 ? ' (played last)' : ''}</option>`).join('')}</select>`
+      + (STATE.viewingOther ? `<div class="sub need small">Not the character you played last. Claude's summary is of ${esc(label(CHARS[0]).split(' · ')[0])}; logging in on any character switches back.</div>` : '');
+  }
+  document.addEventListener('change', (e) => { const el = e.target.closest && e.target.closest('[data-charpick]'); if (el) setChar(el.value); });
   function render() {
     const app = $('#app');
     if (!CH) { app.innerHTML = `<div class="drop"><p><b>Claude Companion</b></p><p>${STATE.loading ? 'Loading your character…' : 'No data yet. Type <b>/reload</b> in game and this page fills in by itself.'}</p></div>`; return; }
@@ -1361,7 +1375,7 @@
     const tabLabel = (TABS.find((t) => t[0] === STATE.tab) || TABS[0])[1];
     const navBtn = (k) => { const [, l] = TABS.find((t) => t[0] === k), ic = uiIcon(k); return `<button data-tab="${k}" title="${l}" class="${STATE.tab === k ? 'on' : ''}"${STATE.tab === k ? ' aria-current="page"' : ''}><img src="${ICON_URL}${ic}.jpg" alt=""><span>${l}</span>${warn[k] ? '<span class="dot old" title="Some data here is out of date"></span>' : ''}</button>`; };
     app.innerHTML = `<aside class="side">
-        <div class="me"><div class="av" title="Level ${c.level || '?'}">${c.level || '?'}</div><div class="nm">${esc(c.name && c.name !== 'World' ? c.name : 'Your character')}</div><div class="dim small">Level ${c.level || '?'} ${esc(c.race || '')} ${esc(c.class || '')}</div>
+        <div class="me"><div class="av" title="Level ${c.level || '?'}">${c.level || '?'}</div><div class="nm">${esc(c.name && c.name !== 'World' ? c.name : 'Your character')}</div><div class="dim small">Level ${c.level || '?'} ${esc(c.race || '')} ${esc(c.class || '')}</div>${charPicker()}
           <div class="xp" title="${c.level >= MAX_LEVEL ? 'Max level' : `${(c.xp || 0).toLocaleString()} / ${(c.xpMax || 0).toLocaleString()} XP`}"><i style="width:${xpPct}%"></i><i class="rest" style="width:${restPct}%"></i></div>
           <div class="row sb"><span>${money(c.money, { short: true })}</span><span class="dim small">${esc(w.sub || w.zone || '')}</span></div></div>
         <nav>${NAV_GROUPS.map(([gl, keys]) => `<div class="navg">${gl ? `<div class="navh">${gl}</div>` : ''}${keys.filter((k) => V[k]).map(navBtn).join('')}</div>`).join('')}</nav>
@@ -1389,6 +1403,60 @@
     });
     return db;
   }
+  // which character is shown (#4): the one played last, unless the picker chose another since that
+  // character last saved. Logging in on a different character (a newer save) follows it again.
+  let CHARS = [];
+  // not a cc. key: the pick is this browser's own, never a setting synced to other computers or settings.json
+  const PICK_KEY = 'ccLocal.char.pick';
+  const BG = new URLSearchParams(location.search).has('background');
+  const takenOf = (c) => ((c && c.snap) || {}).taken || 0;
+  function pickedChar(keys, chars) {
+    let pick = null;
+    if (BG) { STATE.viewingOther = false; return keys[0]; }   // the hidden browser writes the snapshot: always the character played last
+    try { pick = JSON.parse(localStorage.getItem(PICK_KEY) || 'null'); } catch (e) { pick = null; }
+    const newest = keys[0];
+    STATE.viewingOther = false;
+    if (pick && pick.key !== newest && chars[pick.key] && takenOf(chars[newest]) <= (pick.newest || 0)) { STATE.viewingOther = true; return pick.key; }
+    if (pick) try { localStorage.removeItem(PICK_KEY); } catch (e) { /* private mode */ }
+    return newest;
+  }
+  function setChar(key) {
+    const newest = CHARS[0];
+    try {
+      if (!newest || key === newest.key) localStorage.removeItem(PICK_KEY);
+      else localStorage.setItem(PICK_KEY, JSON.stringify({ key, newest: takenOf(newest.c) }));
+    } catch (e) { /* private mode: the pick lasts until the next load */ }
+    if (RAW) load(RAW, { live: STATE.live });
+  }
+  // AH prices belong to the auction house, not the character (#12): every character on the same realm
+  // and faction sees the prices and the newest full scan any of them recorded. Sales, buys and posts
+  // stay the character's own. The saved data is not changed; this is the view the tabs read.
+  // the house: realm (Forever reads none) or else the server id from the character's GUID, and the faction; a
+  // character saved before the server id was recorded shares with no one until its next save
+  const ahHouse = (c) => { const ch = ((c && c.snap) || {}).character || {}; const realm = ch.realm || (ch.server ? 'server:' + ch.server : '');
+    return realm && ch.faction ? realm + '|' + ch.faction : null; };
+  function withSharedAh(chars, key) {
+    const me = chars[key], house = ahHouse(me);
+    if (!house) return me;
+    const others = Object.keys(chars).filter((k) => k !== key && chars[k] && chars[k].snap && chars[k].ah && ahHouse(chars[k]) === house);
+    if (!others.length) return me;
+    const own = me.ah || {}, prices = {};
+    let lastScan = own.lastScan || null;
+    [key, ...others].forEach((k) => {
+      const ah = chars[k].ah || {};
+      Object.entries(ah.prices || {}).forEach(([ik, p]) => {
+        if (!p) return;
+        const q = prices[ik];
+        if (!q) { prices[ik] = Object.assign({}, p, { obs: arr(p.obs).slice() }); return; }
+        const seen = new Set(q.obs.map((o) => o && o.t + '|' + (o.src || '')));
+        arr(p.obs).forEach((o) => { if (o && !seen.has(o.t + '|' + (o.src || ''))) q.obs.push(o); });
+        q.obs.sort((a, b) => (a.t || 0) - (b.t || 0));
+        if ((p.last || 0) > (q.last || 0)) Object.assign(q, p, { obs: q.obs });
+      });
+      if (ah.lastScan && (!lastScan || (ah.lastScan.t || 0) > (lastScan.t || 0))) lastScan = ah.lastScan;
+    });
+    return Object.assign({}, me, { ah: Object.assign({}, own, { prices, lastScan }) });
+  }
   function load(db, opts) {
     RAW = specsByGroup(db || {});
     DB = RAW;
@@ -1396,9 +1464,10 @@
     NAME_PRICE = null;
     const chars = DB.chars || {};
     const keys = Object.keys(chars).filter((k) => chars[k] && chars[k].snap);
-    if (!keys.length) { CH = null; render(); return; }
+    if (!keys.length) { CH = null; CHARS = []; render(); return; }
     keys.sort((a, b) => ((chars[b].snap || {}).taken || 0) - ((chars[a].snap || {}).taken || 0));
-    CH = chars[keys[0]];
+    CHARS = keys.map((k) => ({ key: k, c: chars[k] }));
+    CH = withSharedAh(chars, pickedChar(keys, chars));
     ITEMS = DB.items || {};
     SPELLS = DB.spells || {};
     ITEM_BY_ID = {};
@@ -1411,6 +1480,7 @@
   // for view modules in their own files (js/gear.js): they add V.<tab> and use these helpers
   window.CC = {
     load, loadText, V, reload: () => RAW && load(RAW, { live: STATE.live }),
+    setChar, get CHARS() { return CHARS; },
     api: { get CH() { return CH; }, get RAW() { return RAW; }, get DB() { return DB; }, STATE, GD, esc, arr, money, icon, itemIcon, anyItemIcon, anyItemName, gdItem, gdTip,
       gdSourceLines, itemGates, recipeLine, planPrice, priceOf, trackerStats, goldOf, lootStrip, ago, dur, fmtTime, flipsOf, cooldowns, craftCost, specTrees, specLabel, TREE_NAMES, gearIds, item, byId, render, QCOL, deOutcome,
       itemLink, itemIconOf, itemCell, itemInline, uiIcon, UI_ICON, PROF_ICON },

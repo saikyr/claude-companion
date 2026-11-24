@@ -263,6 +263,8 @@
     setTimeout(async () => {
       await settingsReady; await installedReady;
       if (!BACKGROUND) saveSettings();
+      // the snapshot is always the character played last (#4): looking at another in the picker doesn't change it
+      if (CC.api.STATE.viewingOther) return;
       let snap;
       try { snap = build(); } catch (e) { console.warn('snapshot', e); return; }
       if (!snap) return;
