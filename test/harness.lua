@@ -635,6 +635,44 @@ do
   GetTaxiMapID, C_Map = oldTM, oldMap
   if FAILED then error("group loot / flight path checks failed") end
 end
+-- #108: where things are inside an instance: a creature seen, an NPC or object talked to, an object looted,
+-- each with the sub-area; once per thing and sub-area per login; nothing outside instances or without a sub-area
+do
+  local function check(ok, what) print((ok and "PASS " or "FAIL ") .. what); if not ok then FAILED = true end end
+  local c; for _, v in pairs(ClaudeCompanionDB.chars) do c = v end
+  local oldII, oldZ, oldS, oldG, oldUN = IsInInstance, GetRealZoneText, GetSubZoneText, UnitGUID, UnitName
+  local oldN, oldL = GetNumLootItems, GetLootSourceInfo
+  local function places() local n = {}; for _, e in ipairs(c.journal) do if e.e == "place" then n[#n + 1] = e end end; return n end
+  local before = #places()
+  Fire("PLAYER_TARGET_CHANGED")
+  check(#places() == before, "outside an instance nothing is placed")
+  IsInInstance = function() return true, "party" end
+  GetRealZoneText = function() return "Blackrock Spire" end
+  GetSubZoneText = function() return "Hordemar City" end
+  UnitGUID = function(u) if u == "player" then return "Player-1-ABC" elseif u == "target" then return "Creature-0-1-2-3-10299-0000"
+    elseif u == "npc" then return "GameObject-0-1-2-3-175334-0000" end end
+  UnitName = function(u) if u == "target" then return "Scarshield Infiltrator" elseif u == "npc" then return "Bijou's Belongings" end return oldUN(u) end
+  Fire("PLAYER_TARGET_CHANGED"); Fire("PLAYER_TARGET_CHANGED")
+  local p = places()
+  check(#p == before + 1 and p[#p].kind == "npc" and p[#p].id == 10299 and p[#p].name == "Scarshield Infiltrator" and p[#p].sub == "Hordemar City" and p[#p].zone == "Blackrock Spire",
+    "a creature targeted inside: its id, name and sub-area, once")
+  Fire("GOSSIP_SHOW")
+  p = places()
+  check(p[#p].kind == "object" and p[#p].id == 175334 and p[#p].name == "Bijou's Belongings", "an object talked to is placed as an object")
+  GetSubZoneText = function() return "Skitterweb Tunnels" end
+  GetNumLootItems = function() return 1 end
+  GetLootSourceInfo = function() return "GameObject-0-1-2-3-175382-0000", 1 end
+  Fire("LOOT_OPENED")
+  p = places()
+  check(p[#p].kind == "object" and p[#p].id == 175382 and p[#p].sub == "Skitterweb Tunnels", "an object looted is placed where it was opened")
+  GetSubZoneText = function() return "" end
+  UnitGUID = function(u) if u == "target" then return "Creature-0-1-2-3-9218-0000" end return oldG(u) end
+  local n = #places(); Fire("PLAYER_TARGET_CHANGED")
+  check(#places() == n, "no sub-area (Dire Maul names none): nothing placed")
+  IsInInstance, GetRealZoneText, GetSubZoneText, UnitGUID, UnitName = oldII, oldZ, oldS, oldG, oldUN
+  GetNumLootItems, GetLootSourceInfo = oldN, oldL
+  if FAILED then error("place checks failed") end
+end
 -- logout after the game has emptied bags, gear and money keeps the last good snapshot's values
 do
   local function check(ok, what) print((ok and "PASS " or "FAIL ") .. what); if not ok then FAILED = true end end

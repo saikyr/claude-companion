@@ -1169,6 +1169,46 @@
   const DE = (window.GAMERULES || {}).disenchant || {};
   const deTable = (it) => (it.q === 2 ? (it.class === 2 ? DE.weapon : DE.armor) : it.q === 3 ? DE.rare : it.q === 4 ? DE.epic : null);
   let DE_SEEN = null;
+  // ---------------------------------------------------------------- where things are inside instances (#108)
+  // No source places anything inside Forever's dungeons, so this is what your own visits recorded, all characters
+  // and computers: the addon's "place" entries (a creature seen, an NPC or object talked to or looted, each with
+  // the sub-area the game named), boss kills and quest items looted, by instance and sub-area. Each thing with how
+  // often it was seen there and when last. Instances whose sub-areas the game doesn't name (Dire Maul) have none.
+  let PLACES = null;
+  function placesSeen() {
+    const n = Object.values((DB && DB.chars) || {}).reduce((a, c) => a + arr(c && c.journal).length, 0);
+    if (PLACES && PLACES.db === DB && PLACES.n === n) return PLACES.by;
+    const objName = {};
+    Object.values((GD && GD.src) || {}).forEach((rows) => arr(rows).forEach((r) => { if (r && r[0] === 'object' && r[2] && r[1]) objName[r[2]] = r[1]; }));
+    const by = {}, seen = new Set();
+    const add = (e, list, id, name) => {
+      if (!name) return;
+      const k = JSON.stringify([e.t, e.e, list, id || name]);
+      if (seen.has(k)) return;
+      seen.add(k);
+      const z = (by[e.zone] = by[e.zone] || {}), s = (z[e.sub] = z[e.sub] || { sub: e.sub, bosses: {}, npcs: {}, objects: {}, items: {}, last: 0 });
+      const key = id || name, x = (s[list][key] = s[list][key] || { id: id || null, name, n: 0, last: 0 });
+      x.n++; x.last = Math.max(x.last, e.t || 0); s.last = Math.max(s.last, e.t || 0);
+    };
+    Object.values((DB && DB.chars) || {}).forEach((c) => arr(c && c.journal).forEach((e) => {
+      if (!e || !e.zone || !e.sub || e.sub === e.zone) return;
+      if (e.e === 'place' && e.kind === 'npc') add(e, 'npcs', e.id, e.name || (GD && GD.npcs[e.id] || [])[0]);
+      else if (e.e === 'place' && e.kind === 'object') add(e, 'objects', e.id, e.name || objName[e.id]);
+      else if (e.e === 'boss') add(e, 'bosses', null, e.name);
+      else if (e.e === 'loot' && e.item) {
+        const id = Number(String(e.item).replace(/^item:/, '').split(':')[0]), it = GD && GD.items[id];
+        if (it && it[9] === 12) add(e, 'items', id, it[0]);   // quest items: where an objective's item was found
+      }
+    }));
+    const out = {};
+    Object.entries(by).forEach(([zone, subs]) => {
+      out[zone] = Object.values(subs).map((s) => ({ sub: s.sub, last: s.last,
+        bosses: Object.values(s.bosses).map((x) => x.name), npcs: Object.values(s.npcs), objects: Object.values(s.objects), items: Object.values(s.items) }))
+        .sort((a, b) => a.sub.localeCompare(b.sub));
+    });
+    PLACES = { db: DB, n, by: out };
+    return out;
+  }
   function deMeasured() {
     // a new save, or a disenchant added to any character's list
     const n = Object.values((DB && DB.chars) || {}).reduce((a, c) => a + arr(c && c.deResults).length, 0);
@@ -1731,7 +1771,7 @@
     RAW = specsByGroup(db || {});
     DB = RAW;
     try { if (window.CC && window.CC.syncView) DB = specsByGroup(window.CC.syncView(RAW) || RAW); } catch (e) { console.warn('sync view', e); DB = RAW; }
-    DE_SEEN = null;
+    DE_SEEN = null; PLACES = null;
     const chars = DB.chars || {};
     const keys = Object.keys(chars).filter((k) => chars[k] && chars[k].snap);
     if (!keys.length) { CH = null; CHARS = []; render(); return; }
@@ -1754,7 +1794,7 @@
     load, loadText, V, reload: () => RAW && load(RAW, { live: STATE.live }),
     setChar, get CHARS() { return CHARS; },
     api: { get CH() { return CH; }, get SPELLS() { return SPELLS; }, get RAW() { return RAW; }, get DB() { return DB; }, STATE, GD, esc, arr, money, icon, itemIcon, anyItemIcon, anyItemName, gdItem, gdTip,
-      gdSourceLines, itemGates, recipeLine, planPrice, priceOf, trackerStats, goldOf, lootStrip, ago, dur, fmtTime, flipsOf, sellThrough, buyListOf, positionsOf, paperOf, weeklyOf, cooldowns, craftCost, craftProfit, vendorPrice, specTrees, specLabel, TREE_NAMES, gearIds, item, byId, render, QCOL, deOutcome,
+      gdSourceLines, itemGates, recipeLine, planPrice, priceOf, trackerStats, goldOf, lootStrip, ago, dur, fmtTime, flipsOf, sellThrough, buyListOf, positionsOf, paperOf, weeklyOf, cooldowns, craftCost, craftProfit, vendorPrice, specTrees, specLabel, TREE_NAMES, gearIds, item, byId, render, QCOL, deOutcome, placesSeen,
       itemLink, itemIconOf, itemCell, itemInline, uiIcon, UI_ICON, PROF_ICON },
   };
 

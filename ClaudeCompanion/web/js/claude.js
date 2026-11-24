@@ -77,6 +77,20 @@
 
   // a quest's reward items: from the game when the quest is in the log (it shows the real rolls),
   // else from the game-data pack. Each with the app's score for every spec.
+  // a quest's things found inside an instance on your visits: an objective's creature, object or item, or the
+  // NPC you hand it in to, matched by name in placesSeen ({name, kind, instance, sub, n, last}); [] when none
+  function questWhere(q, to) {
+    const texts = arr(q.objectives).map((o) => String(o.text || '').toLowerCase());
+    if (to && to[1]) texts.push(String(to[1]).toLowerCase());
+    const out = [];
+    Object.entries(A.placesSeen ? A.placesSeen() : {}).forEach(([instance, subs]) => subs.forEach((s) => {
+      [['npc', s.npcs], ['object', s.objects], ['item', s.items], ['boss', s.bosses.map((name) => ({ name }))]].forEach(([kind, list]) => list.forEach((x) => {
+        const nm = String(x.name || '').toLowerCase();
+        if (nm.length > 3 && texts.some((t) => t.includes(nm))) out.push({ name: x.name, kind, instance, sub: s.sub, n: x.n || null, last: x.last || null });
+      }));
+    }));
+    return out;
+  }
   function questRewards(rw, gq) {
     const rated = (x, how, count) => {
       const r = CC.advice && CC.advice.rate ? CC.advice.rate(x) : null;
@@ -253,6 +267,9 @@
       // raid-frame addon replaces most mouseover macros. null = the build doesn't read them yet
       addons: s.addons ? arr(s.addons).filter((x) => x && x.name).map((x) => ({ name: x.name, title: x.title || x.name, version: x.version || null,
         enabled: x.enabled != null ? x.enabled : null, loaded: !!x.loaded })) : null,
+      // what your visits saw where inside each instance (app.js placesSeen): sub-area, bosses, creatures, objects,
+      // quest items, each with how often and when last (unix); the game names no sub-areas in some (Dire Maul)
+      places: Object.entries(A.placesSeen ? A.placesSeen() : {}).map(([instance, subs]) => ({ instance, subs })),
       quests: arr(s.quests).filter((q) => q && q.id).map((q) => {
         const gq = (A.GD && A.GD.quests[q.id]) || {};
         const to = arr(gq.to)[0];
@@ -263,6 +280,8 @@
           // reputation the quest gives (pack), so a rep goal can be weighed: [faction, amount]
           rep: arr(gq.rep).map(([f, n]) => ({ faction: f, amount: n })),
           objectives: arr(q.objectives).map((o) => o.text), turnIn: to ? { npc: to[1], zone: to[2], x: to[3], y: to[4] } : null,
+          // where your visits saw what this quest names (its objectives, the NPC you hand it in to) inside an instance
+          where: questWhere(q, to),
           xp: (q.rewards || {}).xp, money: (q.rewards || {}).money,
           // every reward item scored for every spec by the app's one engine (js/advice.js rate): read
           // these, never score rewards by hand. choose = pick one of the choose rewards

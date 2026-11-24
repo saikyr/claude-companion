@@ -292,6 +292,31 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   check(mac.m[0] && mac.m[0].body === '/cast [@mouseover] Renew' && mac.m[0].scope === 'account', 'snapshot macros: name, scope and text');
   check(mac.a && mac.a.length === 2 && mac.a[0].name === 'Clique' && mac.a[0].enabled === false && mac.none === null, 'snapshot addons: enabled or not, null when the build doesn\'t read them');
   check(/Addons/.test(mac.h) && /Clique/.test(mac.h) && /turned off/.test(mac.h), 'Talents & Bars lists the addons, a turned-off one says so');
+  // #108: where things are inside an instance, from the addon's place entries, boss kills and quest items looted
+  const pl = await page.evaluate(() => {
+    const A = window.CC.api, c = Object.values(A.DB.chars)[0], keep = c.journal, s = A.CH.snap, keepQ = s.quests;
+    const at = (sub, e) => Object.assign({ t: 1795400000, zone: 'Blackrock Spire', sub }, e);
+    c.journal = arr0(keep).concat([
+      at('Hordemar City', { e: 'place', kind: 'npc', id: 10299, name: 'Scarshield Infiltrator' }),
+      at('Hordemar City', { e: 'place', kind: 'npc', id: 10299, name: 'Scarshield Infiltrator', t: 1795500000 }),
+      at('Hordemar City', { e: 'place', kind: 'object', id: 175334 }),
+      at('Chamber of Battle', { e: 'boss', name: 'Overlord Wyrmthalak' }),
+      at('Chamber of Battle', { e: 'loot', item: 'item:12780::::::::60', count: 1 }),
+      at('Chamber of Battle', { e: 'loot', item: 'item:14047::::::::60', count: 2 }),
+      { t: 1795400001, zone: 'Dire Maul', sub: '', e: 'place', kind: 'npc', id: 1, name: 'x' }]);
+    s.quests = [{ id: 4742, title: 'Seal of Ascension', objectives: [{ text: "Bijou's Belongings: 0/1" }, { text: 'General Drakkisath\'s Command: 0/1' }] }];
+    const all = A.placesSeen(), out = window.CC.snapshot();
+    c.journal = keep; s.quests = keepQ;
+    return { all, places: out.places, where: out.quests[0].where };
+    function arr0(x) { return Array.isArray(x) ? x : []; }
+  });
+  const hc = (pl.all['Blackrock Spire'] || []).find((x) => x.sub === 'Hordemar City'), cb = (pl.all['Blackrock Spire'] || []).find((x) => x.sub === 'Chamber of Battle');
+  check(hc && hc.npcs[0].id === 10299 && hc.npcs[0].n === 2 && hc.npcs[0].last === 1795500000 && hc.objects[0].name === "Bijou's Belongings",
+    'places: a creature seen twice in Hordemar City, an object named from the pack ' + JSON.stringify(hc));
+  check(cb && cb.bosses[0] === 'Overlord Wyrmthalak' && cb.items.length === 1 && cb.items[0].id === 12780 && !pl.all['Dire Maul'],
+    'places: a boss and a quest item (not Runecloth) in Chamber of Battle; no sub-area, no place');
+  check(pl.places.some((p) => p.instance === 'Blackrock Spire') && pl.where.some((w) => w.name === "Bijou's Belongings" && w.sub === 'Hordemar City' && w.kind === 'object')
+    && pl.where.some((w) => w.kind === 'item' && w.sub === 'Chamber of Battle'), 'snapshot places, and a quest\'s objectives found by name: ' + JSON.stringify(pl.where));
   // #21: 10 of your own disenchants of green armor at item level 46-50 replace the table; 9 don't
   const deT = await page.evaluate(() => {
     const A = window.CC.api, D = A.DB, c = Object.values(D.chars)[0], keep = c.deResults, prices = A.CH.ah.prices;

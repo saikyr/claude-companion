@@ -527,6 +527,58 @@ ns.On("PLAYER_TARGET_CHANGED", function() Remember("target") end)
 ns.On("UPDATE_MOUSEOVER_UNIT", function() Remember("mouseover") end)
 ns.On("NAME_PLATE_UNIT_ADDED", function(unit) Remember(unit) end)
 
+---------------------------------------------------------------- where things are inside an instance (#108)
+-- No source has positions inside Forever's dungeons (QuestieDB gives -1, -1 there), so the addon notes
+-- where you see them: a "place" journal entry {kind npc / object, id, name} carries the sub-area the game
+-- names (GetSubZoneText: "Hordemar City") and the map position when the game gives one (ns.Log adds both).
+-- A creature you target, mouse over or see a nameplate of; an NPC or object you talk to or that gives a
+-- quest (GOSSIP_SHOW, QUEST_DETAIL...: unit "npc"); an object you loot (GetLootSourceInfo). Once per thing
+-- and sub-area per login. Nothing when the sub-area is empty (Dire Maul names none) or a GUID is secret.
+local placed = {}
+local function Place(kind, id, name)
+    if not ns.char or not id then return end
+    local inside, itype = Call(IsInInstance)
+    if not Clean(inside) or (Clean(itype) ~= "party" and Clean(itype) ~= "raid") then return end
+    local zone, sub = Clean(Call(GetRealZoneText)), Clean(Call(GetSubZoneText))
+    if type(sub) ~= "string" or sub == "" or sub == zone then return end
+    local key = table.concat({ tostring(zone), sub, kind, tostring(id) }, "|")
+    if placed[key] then return end
+    placed[key] = true
+    ns.Log("place", { kind = kind, id = id, name = name })
+end
+ns.Place = Place
+local function PlaceUnit(unit)
+    local guid = Clean(Call(UnitGUID, unit))
+    if type(guid) ~= "string" or Clean(Call(UnitIsPlayer, unit)) then return end
+    local kind, _, _, _, _, id = strsplit("-", guid)
+    id = tonumber(id)
+    local name = Clean(Call(UnitName, unit))
+    if kind == "Creature" or kind == "Vehicle" then Place("npc", id, name)
+    elseif kind == "GameObject" then Place("object", id, name) end
+end
+ns.PlaceUnit = PlaceUnit
+ns.On("PLAYER_TARGET_CHANGED", function() ns.Try("place", PlaceUnit, "target") end)
+ns.On("UPDATE_MOUSEOVER_UNIT", function() ns.Try("place", PlaceUnit, "mouseover") end)
+ns.On("NAME_PLATE_UNIT_ADDED", function(unit) ns.Try("place", PlaceUnit, unit) end)
+for _, ev in ipairs({ "GOSSIP_SHOW", "QUEST_DETAIL", "QUEST_GREETING", "QUEST_PROGRESS", "QUEST_COMPLETE" }) do
+    ns.On(ev, function() ns.Try("place", PlaceUnit, "npc") end)
+end
+ns.On("LOOT_OPENED", function()
+    ns.Try("place", function()
+        if type(GetLootSourceInfo) ~= "function" then return end
+        for i = 1, (Clean(Call(GetNumLootItems)) or 0) do
+            local src = { pcall(GetLootSourceInfo, i) }
+            for j = 2, table.maxn(src), 2 do
+                local guid = Clean(src[j])
+                if type(guid) == "string" then
+                    local kind, _, _, _, _, id = strsplit("-", guid)
+                    if kind == "GameObject" then Place("object", tonumber(id)) end
+                end
+            end
+        end
+    end)
+end)
+
 local function NpcID(guid)
     if type(guid) ~= "string" then return nil end
     local kind, _, _, _, _, id = strsplit("-", guid)
