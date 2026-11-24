@@ -127,7 +127,7 @@
     const p = pick && W.get(pick);
     return p && p.cls === cls ? pick : null;
   }
-  const profileKey = (spec) => pickedProfile(spec) || W.defaultFor(char().classFile, spec.tree);
+  const profileKey = (spec) => pickedProfile(spec) || W.defaultFor(char().classFile, spec.tree, char().level);
   // clearing a pick stores '' so an older pick under the legacy key doesn't come back
   const setProfile = (spec, id) => localStorage.setItem(store(spec, 'profile'), id || '');
   // A spell profile's weights carry the hit model (non-enumerable `hit`, read by W.score): the cap, the hit the
@@ -205,7 +205,7 @@
   function baseline(spec, pk) {
     const sets = SETS(), pick = readChoice(spec, 'set');
     const stem = (x) => (x || '').toLowerCase().replace(/[^a-z]/g, '').slice(0, 4);
-    const role = (W.get(W.defaultFor(char().classFile, spec.tree)) || W.get(pk) || {}).role;
+    const role = (W.get(W.defaultFor(char().classFile, spec.tree, char().level)) || W.get(pk) || {}).role;
     const words = [spec.tree, pk && W.get(pk) && W.get(pk).name, role === 'heal' ? 'heal' : ''].map(stem).filter((x) => x.length === 4);
     const byName = (g) => g.name.toLowerCase().split(/[^a-z]+/).some((t) => words.includes(stem(t)));
     let set = null, why = '';
