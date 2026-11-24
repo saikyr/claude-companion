@@ -1206,10 +1206,13 @@
   // Your own sell-through (#116): what you posted against what then sold, per item, unit by unit, oldest post first.
   // A post is settled once it sold or its longest auction time (48 h) has passed; until then it is pending and
   // left out of the share. Posts carry the item and stack size from the game's post call; sales come from the
-  // "Auction successful" letters (salesOf), matched by item name. Cancels and expiries can't be told apart.
+  // "Auction successful" letters (salesOf), matched by item name. What didn't sell: the game's own chat lines
+  // ("Your auction of X has expired", "...cancelled"), which the addon keeps in the Journal (ahExpired, ahRemoved),
+  // counted per auction since the first post.
   const SELL_WINDOW = 48 * 3600;
-  function sellThrough(ah, now) {
+  function sellThrough(ah, now, journal) {
     now = now || Math.floor(Date.now() / 1000);
+    journal = journal || (CH && CH.journal);
     const nameOfPost = (p) => (p.item && ITEMS[p.item] && ITEMS[p.item].name) || (p.id ? anyItemName(p.id, null) : null) || p.name || null;
     const lots = arr(ah.posts).filter((p) => p && p.t).map((p) => ({ name: nameOfPost(p), t: p.t, left: p.qty || 1, qty: p.qty || 1, unit: p.unit || 0, sold: 0, hours: [] }))
       .filter((l) => l.name).sort((a, b) => a.t - b.t);
@@ -1235,21 +1238,29 @@
       tot.posts++; tot.units += l.qty; tot.sold += l.sold; tot.hours.push(...l.hours);
       if (l.unit >= 100000) { tot.worth10g.units += l.qty; tot.worth10g.sold += l.sold; }
     });
+    const since = lots.length ? lots[0].t : null, ended = { expired: 0, cancelled: 0 };
+    arr(journal).forEach((e) => {
+      if (!e || !since || e.t < since || (e.e !== 'ahExpired' && e.e !== 'ahRemoved')) return;
+      const k = e.e === 'ahExpired' ? 'expired' : 'cancelled';
+      ended[k]++;
+      if (by[e.name]) by[e.name][k] = (by[e.name][k] || 0) + 1;
+    });
     const share = (a, b) => (b ? +(a / b).toFixed(2) : null);
-    const items = Object.values(by).map((r) => ({ item: r.item, posted: r.units, sold: r.sold, pending: r.pending, share: share(r.sold, r.units), medianHours: med(r.hours), lastPost: r.lastPost, unit: r.unit }))
+    const items = Object.values(by).map((r) => ({ item: r.item, posted: r.units, sold: r.sold, pending: r.pending, share: share(r.sold, r.units), medianHours: med(r.hours),
+      expired: r.expired || 0, cancelled: r.cancelled || 0, lastPost: r.lastPost, unit: r.unit }))
       .sort((a, b) => b.posted - a.posted || b.lastPost - a.lastPost);
-    return { since: lots.length ? lots[0].t : null, windowHours: SELL_WINDOW / 3600,
-      totals: { posted: tot.units, sold: tot.sold, pending: tot.pending, share: share(tot.sold, tot.units), medianHours: med(tot.hours),
+    return { since, windowHours: SELL_WINDOW / 3600,
+      totals: { posted: tot.units, sold: tot.sold, pending: tot.pending, share: share(tot.sold, tot.units), medianHours: med(tot.hours), expired: ended.expired, cancelled: ended.cancelled,
         worth10g: { posted: tot.worth10g.units, sold: tot.worth10g.sold, share: share(tot.worth10g.sold, tot.worth10g.units) } }, items };
   }
   function sellThroughView(ah) {
     const S = sellThrough(ah), T = S.totals;
     if (!S.items.length) return '';
     const pct = (x) => (x == null ? '–' : Math.round(x * 100) + '%');
-    let h = `<h2>Sell-through</h2><p class="meta">Of ${T.posted} units you posted (since ${fmtTime(S.since)}), ${T.sold} sold within ${S.windowHours} h: ${pct(T.share)}${T.medianHours != null ? `, typically ${T.medianHours} h after posting` : ''}${T.worth10g.posted ? ` · posted at 10g or more each: ${T.worth10g.sold} of ${T.worth10g.posted} sold (${pct(T.worth10g.share)})` : ''}${T.pending ? ` · ${T.pending} still listed, not counted yet` : ''}</p>`;
+    let h = `<h2>Sell-through</h2><p class="meta">Of ${T.posted} units you posted (since ${fmtTime(S.since)}), ${T.sold} sold within ${S.windowHours} h: ${pct(T.share)}${T.medianHours != null ? `, typically ${T.medianHours} h after posting` : ''}${T.worth10g.posted ? ` · posted at 10g or more each: ${T.worth10g.sold} of ${T.worth10g.posted} sold (${pct(T.worth10g.share)})` : ''}${T.pending ? ` · ${T.pending} still listed, not counted yet` : ''}${T.expired || T.cancelled ? ` · auctions ended unsold: ${T.expired} expired, ${T.cancelled} cancelled` : ''}</p>`;
     h += `<div class="table sellthru"><div class="thead"><div>Item</div><div class="c-num">Posted</div><div class="c-num">Sold</div><div class="c-num">Share</div><div class="c-num">Hours to sell</div></div>`;
-    S.items.slice(0, 40).forEach((r) => (h += `<div class="tr"><div class="c-main"><div class="nm">${esc(r.item)}</div><div class="sub">last posted ${fmtTime(r.lastPost)} at ${money(r.unit)} each${r.pending ? ` · ${r.pending} still listed` : ''}</div></div><div class="c-num">${r.posted}</div><div class="c-num">${r.sold}</div><div class="c-num">${pct(r.share)}</div><div class="c-num dim">${r.medianHours == null ? '–' : r.medianHours}</div></div>`));
-    h += '</div><p class="meta">A post counts once it sold or 48 hours (the longest auction) have passed. Unsold posts may have been cancelled or expired: the game doesn\'t say which.</p>';
+    S.items.slice(0, 40).forEach((r) => (h += `<div class="tr"><div class="c-main"><div class="nm">${esc(r.item)}</div><div class="sub">last posted ${fmtTime(r.lastPost)} at ${money(r.unit)} each${r.pending ? ` · ${r.pending} still listed` : ''}${r.expired ? ` · ${r.expired} expired` : ''}${r.cancelled ? ` · ${r.cancelled} cancelled` : ''}</div></div><div class="c-num">${r.posted}</div><div class="c-num">${r.sold}</div><div class="c-num">${pct(r.share)}</div><div class="c-num dim">${r.medianHours == null ? '–' : r.medianHours}</div></div>`));
+    h += '</div><p class="meta">A post counts once it sold or 48 hours (the longest auction) have passed. Expired and cancelled are the game\'s own messages, counted per auction.</p>';
     return h;
   }
 

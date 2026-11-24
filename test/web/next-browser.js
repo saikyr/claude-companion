@@ -172,13 +172,16 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
         { t: T, id: 812, qty: 1, unit: 950000 },                                                         // a staff at 95g: never sold
         { t: T + 100 * H, id: 14047, qty: 3, unit: 2100 }],                                               // posted 1 h ago: pending
       sales: [{ t: T + 2 * H, item: 'Runecloth', price: 6000, count: 3 }, { t: T + 5 * H, item: 'Runecloth', price: 3800, count: 2 },
-        { t: T + 60 * H, item: 'Runecloth', price: 2000, count: 1 }] }, T + 101 * H);
+        { t: T + 60 * H, item: 'Runecloth', price: 2000, count: 1 }] }, T + 101 * H,
+      [{ t: T + 48 * H, e: 'ahExpired', name: 'Glowing Brightwood Staff' }, { t: T + 3 * H, e: 'ahRemoved', name: 'Runecloth' }, { t: T - H, e: 'ahExpired', name: 'Runecloth' }]);
   });
   const rc = st.items.find((x) => x.item === 'Runecloth'), staffSt = st.items.find((x) => x.item === 'Glowing Brightwood Staff');
   check(rc && rc.posted === 6 && rc.sold === 5 && rc.pending === 3 && rc.share === 0.83 && rc.medianHours === 2,
     'sell-through: 5 of 6 Runecloth sold within 48 h (a sale 60 h later is not counted), the newest post pending (' + JSON.stringify(rc) + ')');
   check(staffSt && staffSt.sold === 0 && st.totals.worth10g.posted === 1 && st.totals.worth10g.sold === 0 && st.totals.posted === 7 && st.totals.sold === 5,
     'sell-through totals, and posts at 10g or more apart (' + JSON.stringify(st.totals) + ')');
+  check(staffSt.expired === 1 && rc.cancelled === 1 && rc.expired === 0 && st.totals.expired === 1 && st.totals.cancelled === 1,
+    'sell-through: expired and cancelled auctions from the game\'s messages, since the first post');
   check(await page.evaluate(() => 'sellThrough' in window.CC.snapshot().ah), 'snapshot ah.sellThrough');
   // the Flips view draws the sell-through table under the flips
   const flipsHtml = await page.evaluate(() => { const ch = window.CC.api.CH; ch.ah.posts = [{ t: 1795000000, id: 14047, qty: 2, unit: 2000 }];
