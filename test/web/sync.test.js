@@ -147,6 +147,18 @@ async function main() {
     await sync(pc, pcDb, pcSet);
     check(pcSet['cc.weights.v1'] === 'Mac at 12:11' && macSet['cc.weights.v1'] === 'Mac at 12:11', `both changed it: the newer change wins on both (${pcSet['cc.weights.v1']} / ${macSet['cc.weights.v1']})`);
 
+    // cc.claude.cards has one writer, Claude: a stale copy on a computer never goes out (#107)
+    B.query(`select private.claude_put_setting('${pc.client.state.account}', 'cc.claude.cards', '{"schema":1,"cards":[{"id":"new-1","kind":"note","title":"new"}]}');`);
+    pcSet['cc.claude.cards'] = '{"schema":1,"cards":[{"id":"old-1","kind":"note","title":"old"}]}';
+    pc.tick(60000); await pc.client.push(pcDb, pcSet);
+    check(/new/.test(B.query(`select data->>'v' from public.records where id = 'setting|cc.claude.cards'`)), 'a stale cc.claude.cards on a computer is never pushed over Claude\'s');
+    await sync(mac, macDb, macSet);
+    check(/new/.test(macSet['cc.claude.cards'] || ''), 'and the other computer gets Claude\'s cards');
+    const stale = { id: 'setting|cc.claude.cards', char: '*', kind: 'setting', t: 9e9, mutable: true, data: { k: 'cc.claude.cards', v: 'old build', t: 9e9 } };
+    await B.fetch('/rpc/cc_push', { body: JSON.stringify({ p_key: JSON.parse(pc.files.state).key, p_records: [stale] }) });
+    check(/new/.test(B.query(`select data->>'v' from public.records where id = 'setting|cc.claude.cards'`)), 'the database ignores cc.claude.cards from a computer (an older build)');
+    delete pcSet['cc.claude.cards'];
+
     // a running grind replaces its one live row
     pcDb.chars[key].grind = Object.assign({ name: 'g', start: T }, pcDb.chars[key].grind, { kills: 99 });
     await sync(pc, pcDb, pcSet);

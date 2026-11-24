@@ -310,7 +310,11 @@
   document.body.appendChild(tip);
   // game colour codes inside tooltip text (|cffRRGGBB ... |r) become coloured text
   const wowText = (t) => esc(t).replace(/\|c[0-9a-f]{2}([0-9a-f]{6})([\s\S]*?)(\|r|$)/gi, '<span style="color:#$1">$2</span>').replace(/\|r/g, '');
-  const lineHTML = (ln) => `<div class="l"><span style="color:#${ln.lc || 'ffffff'}">${wowText(ln.l || '')}</span>${ln.r ? `<span class="r" style="color:#${ln.rc || 'ffffff'}">${wowText(ln.r)}</span>` : ''}</div>`;
+  // the game's quality colours (dark on our panel) become the page's quality classes, so a tooltip title
+  // matches the item's name everywhere else (#23)
+  const QUALITY_HEX = { '9d9d9d': 0, 'ffffff': 1, '1eff00': 2, '0070dd': 3, 'a335ee': 4, 'ff8000': 5, 'e6cc80': 6 };
+  const colourAttr = (hex) => { const q = QUALITY_HEX[String(hex || '').toLowerCase()]; return q != null && q >= 2 ? `class="q${q}"` : `style="color:#${hex || 'ffffff'}"`; };
+  const lineHTML = (ln) => `<div class="l"><span ${colourAttr(ln.lc)}>${wowText(ln.l || '')}</span>${ln.r ? `<span class="r" style="color:#${ln.rc || 'ffffff'}">${wowText(ln.r)}</span>` : ''}</div>`;
   function itemTip(key) {
     // a key the item cache doesn't have: the same item by id, else the pack's tooltip
     const id = idOfKey(key);
@@ -926,6 +930,7 @@
       const pr = planPrice(g.id), each = pr ? '≈ ' + coinText(pr) : it && it.sell ? `vendor ≈ ${coinText(it.sell * 4)}` : 'no price';
       out.push({ l: `${need}× ${anyItemName(g.id)}`, lc: QCOL[(it && it.q) != null ? it.q : gd ? gd[1] : 1] || 'ffffff', r: `${have} · ${each}`, rc: have >= need ? '1eff00' : 'ff6060' });
     });
+    if (cp && cp.missing) out.push({ l: `Profit unknown: ${cp.missing} reagent${cp.missing > 1 ? 's have' : ' has'} no price yet (scan the AH)`, lc: '9d9d9d' });
     if (cp && !cp.missing) out.push({ l: `Cost ${coinText(cp.cost)} · sells ${coinText(cp.value)} · ${cp.profit >= 0 ? 'profit' : 'loss'} ${coinText(Math.abs(cp.profit))}`, lc: cp.profit >= 0 ? '1eff00' : 'ff6060' });
     return out;
   }
@@ -977,7 +982,10 @@
     const q = (STATE.recFilter || '').toLowerCase().trim();
     const flt = STATE.recF || 'all', sort = STATE.recSort || 'profit';
     const all = arr(p.recipes).map((r) => ({ r, cp: craftProfit(r), sec: recipeSection(r) }));
-    const counts = { all: all.length, profit: all.filter((x) => x.cp && x.cp.profit > 0).length, skill: all.filter((x) => x.r.difficulty != null && x.r.difficulty < 3).length };
+    // a profit is known only when every reagent has a price (missing = reagents with none): the rest
+    // never count as making a profit and sort after every known one (#10)
+    const known = (x) => x.cp && !x.cp.missing;
+    const counts = { all: all.length, profit: all.filter((x) => known(x) && x.cp.profit > 0).length, skill: all.filter((x) => x.r.difficulty != null && x.r.difficulty < 3).length };
     const FILTERS = [['all', 'All'], ['profit', 'Makes a profit'], ['skill', 'Gives skill-ups']];
     h += `<div class="toolbar"><input class="search" id="recsearch" placeholder="Search ${esc(p.name)} recipes or reagents" value="${esc(STATE.recFilter || '')}">
       <div class="chips">${FILTERS.map(([k, l]) => `<button data-recf="${k}" class="${flt === k ? 'on' : ''}">${l} <span>${counts[k]}</span></button>`).join('')}</div>
@@ -985,12 +993,12 @@
     cooldowns(p.name).forEach((c) => { h += `<div class="cd">${icon(c.icon, { size: 'xs' })}<b>${esc(c.name)}</b><span>cooldown, ${cdWhen(c)}</span></div>`; });
     const reagName = (id) => { const it = byId(id), g = gdItem(id); return ((it && it.name) || (g && g[0]) || '').toLowerCase(); };
     let rows = all.filter((x) => {
-      if (flt === 'profit' && !(x.cp && x.cp.profit > 0)) return false;
+      if (flt === 'profit' && !(known(x) && x.cp.profit > 0)) return false;
       if (flt === 'skill' && !(x.r.difficulty != null && x.r.difficulty < 3)) return false;
       return !q || (x.r.name || '').toLowerCase().includes(q) || x.sec.toLowerCase().includes(q) || arr(x.r.reagents).some((g) => reagName(g.id).includes(q));
     });
     if (!rows.length) return h + `<div class="empty">No ${esc(p.name)} recipes match. Clear the search or pick another filter.</div>`;
-    const byProfit = (a, b) => (b.cp ? b.cp.profit : -1e12) - (a.cp ? a.cp.profit : -1e12) || (a.r.name || '').localeCompare(b.r.name || '');
+    const byProfit = (a, b) => (known(b) ? b.cp.profit : -1e12) - (known(a) ? a.cp.profit : -1e12) || (a.r.name || '').localeCompare(b.r.name || '');
     rows.sort(sort === 'name' ? (a, b) => (a.r.name || '').localeCompare(b.r.name || '') : byProfit);
     // sections in the order of their best recipe
     const secs = [];
