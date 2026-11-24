@@ -256,12 +256,132 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   const snapMs = await page.evaluate(() => { const t = performance.now(); window.CC.snapshot(); return Math.round(performance.now() - t); });
   console.log(`     (snapshot built in ${snapMs} ms)`);
   const snap = await page.evaluate(() => window.CC.snapshot());
+  // #91: consumables you carry and bank, what each does (the game's tooltip), and what it doesn't stack with now
+  const cons = await page.evaluate(() => {
+    const A = window.CC.api, ch = A.CH, s = ch.snap, D = A.DB.items;
+    const keep = { bags: s.bags, buffs: s.buffs, equipped: s.equipped, bank: ch.bank };
+    D['t:flask'] = { id: 13512, name: 'Flask of Supreme Power', class: 0, tip: [{ l: 'Flask of Supreme Power' }, { l: 'Requires Level 50' }, { l: 'Use: Increases damage done by magical spells and effects by up to 150 for 2 hrs.' }] };
+    D['t:oil'] = { id: 20749, name: 'Brilliant Wizard Oil', class: 7, tip: [{ l: 'Brilliant Wizard Oil' }, { l: 'Use: While applied to target weapon it increases spell damage by up to 36 for 30 minutes.' }] };
+    D['t:cloth'] = { id: 14047, name: 'Runecloth', class: 7 };
+    D['t:port'] = { id: 2593, name: 'Flask of Port', class: 0 };
+    D['t:fish'] = { id: 3825, name: 'Fishliver Oil', class: 0 };
+    s.bags = [{ id: 0, items: [{ item: 't:flask', count: 2 }, { item: 't:oil', count: 1 }, { item: 't:cloth', count: 20 }, { item: 't:port', count: 1 }, { item: 't:fish', count: 1 }] }];
+    ch.bank = Object.assign({}, ch.bank, { bags: [{ id: -1, items: [{ item: 't:flask', count: 3 }] }] });
+    s.buffs = [{ name: 'Distilled Wisdom', spell: 17627, left: 3000 }];
+    s.equipped = [{ slot: 16, slotName: 'MainHand', item: 't:staff', enchant: { id: 2504, text: 'Spell Power +30', temp: { name: 'Brilliant Wizard Oil', left: 900 } } }];
+    const out = window.CC.snapshot();
+    // at logout the game read no buffs: the snapshot kept the read before's, which may have run out since
+    s.kept = ['buffs', 'equipped']; s.keptFrom = s.taken - 7200;
+    const old = window.CC.snapshot();
+    delete s.kept; delete s.keptFrom;
+    Object.assign(s, { bags: keep.bags, buffs: keep.buffs, equipped: keep.equipped }); ch.bank = keep.bank;
+    ['t:flask', 't:oil', 't:cloth', 't:port', 't:fish'].forEach((k) => delete D[k]);
+    return { c: out.consumables, b: out.buffs, e: out.equipped, old, taken: s.taken };
+  });
+  // #95: macros with their text, and the addons installed (with the Talents & Bars list)
+  const mac = await page.evaluate(() => {
+    const A = window.CC.api, s = A.CH.snap, keep = { macros: s.macros, addons: s.addons };
+    s.macros = [{ index: 1, scope: 'account', name: 'Tag', body: '/cast [@mouseover] Renew' }];
+    s.addons = [{ name: 'Clique', title: 'Clique', version: 'v1.2', enabled: false, loaded: false }, { name: 'ClaudeCompanion', title: 'Claude Companion', version: '1.5.0', enabled: true, loaded: true }];
+    const out = window.CC.snapshot();
+    const tab = A.STATE.tab; A.STATE.tab = 'talents'; A.render(); const h = document.querySelector('main').innerHTML; A.STATE.tab = tab;
+    s.addons = undefined; const none = window.CC.snapshot().addons;
+    Object.assign(s, keep); A.render();
+    return { m: out.macros, a: out.addons, h, none };
+  });
+  check(mac.m[0] && mac.m[0].body === '/cast [@mouseover] Renew' && mac.m[0].scope === 'account', 'snapshot macros: name, scope and text');
+  check(mac.a && mac.a.length === 2 && mac.a[0].name === 'Clique' && mac.a[0].enabled === false && mac.none === null, 'snapshot addons: enabled or not, null when the build doesn\'t read them');
+  check(/Addons/.test(mac.h) && /Clique/.test(mac.h) && /turned off/.test(mac.h), 'Talents & Bars lists the addons, a turned-off one says so');
+  // #108: where things are inside an instance, from the addon's place entries, boss kills and quest items looted
+  const pl = await page.evaluate(() => {
+    const A = window.CC.api, c = Object.values(A.DB.chars)[0], keep = c.journal, s = A.CH.snap, keepQ = s.quests;
+    const at = (sub, e) => Object.assign({ t: 1795400000, zone: 'Blackrock Spire', sub }, e);
+    c.journal = arr0(keep).concat([
+      at('Hordemar City', { e: 'place', kind: 'npc', id: 10299, name: 'Scarshield Infiltrator' }),
+      at('Hordemar City', { e: 'place', kind: 'npc', id: 10299, name: 'Scarshield Infiltrator', t: 1795500000 }),
+      at('Hordemar City', { e: 'place', kind: 'object', id: 175334 }),
+      at('Chamber of Battle', { e: 'boss', name: 'Overlord Wyrmthalak' }),
+      at('Chamber of Battle', { e: 'loot', item: 'item:12780::::::::60', count: 1 }),
+      at('Chamber of Battle', { e: 'loot', item: 'item:14047::::::::60', count: 2 }),
+      at('Chamber of Battle', { e: 'loot', item: 'item:12780::::::::60', count: 1, t: 1795400100 }),
+      at('Hordemar City', { e: 'place', kind: 'object', id: 999999 }),
+      { t: 1795400002, zone: 'Elwynn Forest', sub: 'Fargodeep Mine', e: 'loot', item: 'item:12780::::::::60', count: 1 },
+      { t: 1795400001, zone: 'Dire Maul', sub: '', e: 'place', kind: 'npc', id: 1, name: 'x' }]);
+    s.quests = [{ id: 4742, title: 'Seal of Ascension', objectives: [{ text: "Bijou's Belongings: 0/1" }, { text: 'General Drakkisath\'s Command: 0/1' }] }];
+    const all = A.placesSeen(), out = window.CC.snapshot();
+    c.journal = keep; s.quests = keepQ;
+    return { all, places: out.places, where: out.quests[0].where };
+    function arr0(x) { return Array.isArray(x) ? x : []; }
+  });
+  const hc = (pl.all['Blackrock Spire'] || []).find((x) => x.sub === 'Hordemar City'), cb = (pl.all['Blackrock Spire'] || []).find((x) => x.sub === 'Chamber of Battle');
+  check(hc && hc.npcs[0].id === 10299 && hc.npcs[0].n === 2 && hc.npcs[0].last === 1795500000 && hc.objects[0].name === "Bijou's Belongings"
+    && hc.objects.some((o) => o.id === 999999 && o.name === null),
+    'places: a creature seen twice in Hordemar City, an object named from the pack, one the pack doesn\'t name kept by id ' + JSON.stringify(hc));
+  check(cb && cb.bosses[0] === 'Overlord Wyrmthalak' && cb.items.length === 1 && cb.items[0].id === 12780 && cb.items[0].n === 2 && !pl.all['Dire Maul'] && !pl.all['Elwynn Forest'],
+    'places: a boss and a quest item looted twice (not Runecloth) in Chamber of Battle; no sub-area, no place; quest items outside instances left out');
+  check(pl.places.some((p) => p.instance === 'Blackrock Spire') && pl.where.some((w) => w.name === "Bijou's Belongings" && w.sub === 'Hordemar City' && w.kind === 'object')
+    && pl.where.some((w) => w.kind === 'item' && w.sub === 'Chamber of Battle'), 'snapshot places, and a quest\'s objectives found by name: ' + JSON.stringify(pl.where));
+  // #21: 10 of your own disenchants of green armor at item level 46-50 replace the table; 9 don't
+  const deT = await page.evaluate(() => {
+    const A = window.CC.api, D = A.DB, c = Object.values(D.chars)[0], keep = c.deResults, prices = A.CH.ah.prices;
+    A.CH.ah.prices = Object.assign({}, prices, { 11176: { id: 11176, name: 'Dream Dust', obs: [{ t: 1795000000, min: 1000, med: 1000, qty: 50, src: 'scan' }] },
+      11175: { id: 11175, name: 'Greater Nether Essence', obs: [{ t: 1795000000, min: 5000, med: 5000, qty: 5, src: 'scan' }] } });
+    const mk = (n) => Array.from({ length: n }, (_, i) => ({ t: 1795000000 + i, item: 'item:9' + i, ilvl: 48, q: 2, class: 4, out: [{ id: 11176, count: 2 }] }));
+    c.deResults = mk(9);
+    const table = A.deOutcome({ q: 2, class: 4, ilvl: 48 });
+    c.deResults = mk(10);
+    const own = A.deOutcome({ q: 2, class: 4, ilvl: 48 });
+    c.deResults = keep; A.CH.ah.prices = prices;
+    return { table, own };
+  });
+  check(deT.table.from === 'table' && deT.table.n === 9 && /9 of your own so far/.test(deT.table.label) && deT.table.mats.find((m) => m.name === 'Dream Dust').id === 11176,
+    'disenchant: 9 of your own: still the Classic table, saying so; materials by id');
+  check(deT.own.from === 'measured' && deT.own.n === 10 && deT.own.value === 2000 && deT.own.mats.length === 1 && deT.own.mats[0].ch === 1 && /your 10 disenchants/.test(deT.own.label),
+    'disenchant: 10 of your own (2 Dream Dust each at 10s): 20s, from your disenchants ' + JSON.stringify(deT.own));
+  // #90: what killed you, from this computer's combat log: the Grinds tab and the snapshot's combat.deaths
+  const dz = await page.evaluate(() => {
+    const A = window.CC.api, C = window.CC.combat, keep = C.state, st = C.api.fresh();
+    st.npcs['Gordok Hyena'] = { npc: 11360, kills: 0, deaths: 0, schools: {}, taken: { dmg: 2100, hits: 5 } };
+    st.deaths = [{ at: '11/23/2026 07:37:04.0000', by: [{ name: 'Gordok Hyena', npc: 11360, kind: 'creature', count: 3, dmg: 2100, hits: 5 }], dmg: 2100, seconds: 10 }];
+    st.lines = 10; C.state = st;
+    const tab = A.STATE.tab; A.STATE.tab = 'grinds'; A.render(); const h = document.querySelector('main').innerHTML; A.STATE.tab = tab;
+    const snap = window.CC.snapshot().combat;
+    C.state = keep; A.render();
+    return { h, d: snap && snap.deaths, n: snap && snap.npcs[0] };
+  });
+  check(/What killed you/.test(dz.h) && /3× Gordok Hyena 2,100 in 5 hits/.test(dz.h) && /420 a hit/.test(dz.h), 'Grinds tab: what killed you (3 hyenas) and who hits hardest');
+  check(dz.d && dz.d[0].by[0].count === 3 && dz.n && dz.n.taken.dmg === 2100, 'snapshot combat: deaths and damage taken per creature');
+  const fl = cons.c.find((x) => x.id === 13512), oil = cons.c.find((x) => x.id === 20749);
+  check(fl && fl.bags === 2 && fl.bank === 3 && fl.from === 'game' && fl.use.some((l) => /^Use: Increases damage/.test(l)) && !cons.c.some((x) => x.id === 14047),
+    'consumables: a flask in bags and bank, what it does from the game, cloth left out (' + JSON.stringify(fl) + ')');
+  check(fl && fl.groups.some((g) => g.id === 'flask') && fl.notWith.some((n) => n.buff === 'Distilled Wisdom' && /not checked on Forever/.test(n.label)),
+    'consumables: a flask doesn\'t stack with the flask on you now, labelled as a Classic rule');
+  check(oil && oil.notWith.some((n) => n.weapon === 'MainHand' && n.on === 'Brilliant Wizard Oil'), 'consumables: an oil replaces the one on the main hand');
+  const port = cons.c.find((x) => x.id === 2593), fish = cons.c.find((x) => x.id === 3825);
+  check(port && !port.groups.length && !port.notWith.length && fish && !fish.groups.length && !fish.notWith.length,
+    'consumables: Flask of Port is no flask and Fishliver Oil no weapon oil');
+  const oFl = cons.old.consumables.find((x) => x.id === 13512), oOil = cons.old.consumables.find((x) => x.id === 20749);
+  check(oFl && !oFl.notWith.length && oOil && !oOil.notWith.length && cons.old.buffs[0].at === new Date((cons.taken - 7200) * 1000).toISOString(),
+    'buffs and weapon oils kept at logout from an older read: dated by that read, and no clash from them');
+  check(cons.b[0] && cons.b[0].name === 'Distilled Wisdom' && cons.b[0].left === 3000 && cons.b[0].at === new Date(cons.taken * 1000).toISOString(), 'snapshot buffs: name, seconds left and when read');
+  check(cons.e[0] && cons.e[0].enchant && cons.e[0].enchant.id === 2504 && cons.e[0].enchant.temp.name === 'Brilliant Wizard Oil' && cons.e[0].enchant.temp.at,
+    'snapshot equipped: the enchant and the oil on the weapon');
   const g = (snap.grind.recent || [])[0] || {};
   check(g.name === 'test grind' && g.hours === 1 && g.coin === 100000, 'snapshot grind: hours and coin');
   check(g.gph === 100000 + 950000 && g.gph_low < g.gph && g.gph_high >= g.gph, `snapshot grind: gph at the AH median, gph_low at vendor price, gph_high >= gph (${g.gph_low} / ${g.gph} / ${g.gph_high})`);
   check(g.complete === true && Array.isArray(g.incomplete) && g.incomplete.length === 0 && /copper per hour/.test(g.basis), 'a finished hour-long grind is complete');
   const app = await page.evaluate(() => window.CC.api.trackerStats(window.CC.api.CH.grinds[0]).perHour);
   check(Math.round(app) === g.gph, 'the Grinds tab and the snapshot show the same gold per hour');
+  // #131: a gray is worth its vendor price, whatever one AH listing asks (gph and gph_high)
+  const gray = await page.evaluate(() => {
+    const A = window.CC.api, pr = (A.CH.ah = A.CH.ah || {}).prices = A.CH.ah.prices || {}, keep = pr['13817'];
+    pr['13817'] = { obs: [{ t: 1795400000, src: 'scan', qty: 2, min: 225552, med: 225552 }] };
+    const t = { start: 1795400000, finish: 1795403600, coin: 0, loot: { 13817: { id: 13817, q: 0, count: 1, name: 'Tapered Greatsword' } } };
+    const st = A.trackerStats(t), go = A.goldOf(t), sell = (A.byId(13817) || {}).sell || 0;
+    if (keep) pr['13817'] = keep; else delete pr['13817'];
+    return { ah: st.ah, high: go.gph_high, sell };
+  });
+  check(gray.ah === gray.sell && gray.high === gray.sell, 'a gray item counts at vendor price in gph and gph_high, not at its AH listing (#131): ' + JSON.stringify(gray));
   // ---- dungeon quests are marked keep (CLAUDE.md, the dungeon-quest rule)
   const dq = (snap.quests || []).find((q) => q.id === 5089);
   check(dq && dq.keep === true && dq.dungeon === 'Blackrock Spire', "a dungeon quest is keep, with its dungeon (General Drakkisath's Command: Blackrock Spire)");

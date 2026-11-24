@@ -53,7 +53,7 @@ test('vendors: >3,500 items, every row names the vendor', () => {
 test('recipes and reputation gates: crafted items name their recipe item, faction recipes their reputation', () => {
   assert.ok(n(GD.teach) > 1000 && n(GD.req) > 300, `teach ${n(GD.teach)}, req ${n(GD.req)}`);
   assert.strictEqual(JSON.stringify(GD.teach[17015]), '[[17059,300]]');                       // Dark Iron Reaver <- Plans: Dark Iron Reaver
-  assert.strictEqual(JSON.stringify(GD.req[17059]), '["Thorium Brotherhood",5]');              // the plans need Friendly
+  assert.strictEqual(JSON.stringify(GD.req[17059]), '["Thorium Brotherhood",6]');              // the plans need Honored (#129)
   const bad = Object.entries(GD.teach).filter(([id, rs]) => !GD.items[id] || rs.some(([r]) => !GD.items[r] || GD.items[r][9] !== 9));   // the recipe is a Recipe-class item
   assert.strictEqual(bad.length, 0, bad.slice(0, 3).map((x) => x[0]).join(', '));
   assert.ok(Object.values(GD.req).every(([f, st]) => f && st >= 5 && st <= 8));
@@ -93,6 +93,11 @@ test('rules: disenchant tables cover item levels without gaps, chances add up to
     }
   }
   for (let i = 1; i < D.skill.length; i++) assert.ok(D.skill[i][0] > D.skill[i - 1][0] && D.skill[i][1] > D.skill[i - 1][1]);
+  // #21: every material has its item id, and the pack names that id the same
+  for (const k of ['armor', 'weapon', 'rare', 'epic']) for (const r of D[k]) for (const [name] of r[2]) {
+    const id = D.ids[name];
+    assert.ok(id && GD.items[id] && GD.items[id][0] === name, `${name}: id ${id} is ${id && GD.items[id] && GD.items[id][0]}`);
+  }
 });
 
 test('rules: every attunement and key names quests, items, bosses and zones the pack has', () => {

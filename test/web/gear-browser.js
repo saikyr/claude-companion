@@ -124,6 +124,60 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   check(snapQ && snapQ.rewards.length === 1 && snapQ.rewards[0].id === 18491 && Array.isArray(snapQ.rewards[0].specs), 'a complete quest the game read with no rewards: the pack\'s reward, scored for every spec');
   const sum = await page.evaluate(() => window.CC.gear.summary());
   const holy = sum.find((s) => s.tree === 'Holy');
+  // #99: a healer's crit weight comes from their own heals: Greater Heal R5 and Flash Heal R7 at 500 +healing
+  const crit = await page.evaluate((holyIdx) => {
+    const A = window.CC.api, SP = A.DB.spells, s = A.CH.snap, keep = { book: s.spellbook, healing: (s.stats || {}).healing, taken: s.taken };
+    SP[25314] = { name: 'Greater Heal', tip: [{ l: 'Greater Heal' }, { l: '710 Mana', r: '40 yd range' }, { l: '2.5 sec cast' }, { l: 'A slow casting spell that heals a single target for 1966 to 2194.' }] };
+    SP[10917] = { name: 'Flash Heal', tip: [{ l: 'Flash Heal' }, { l: '380 Mana', r: '40 yd range' }, { l: '1.5 sec cast' }, { l: 'Heals a friendly target for 812 to 958.' }] };
+    s.spellbook = [{ name: 'Holy', spells: [{ name: 'Greater Heal', rank: 'Rank 5', id: 25314 }, { name: 'Greater Heal', rank: 'Rank 1', id: 2060 }, { name: 'Flash Heal', rank: 'Rank 7', id: 10917 }] }];
+    s.stats = Object.assign({}, s.stats, { healing: 500 }); s.taken = (s.taken || 0) + 1;
+    const out = window.CC.gear.summary()[holyIdx];
+    A.STATE.tab = 'gear'; A.render(); const h = document.querySelector('main').innerHTML;
+    delete SP[25314]; delete SP[10917]; Object.assign(s, { spellbook: keep.book, taken: keep.taken }); s.stats.healing = keep.healing;
+    const after = window.CC.gear.summary()[holyIdx];
+    return { c: out.crit, w32: out.weightValues[32], h: /Crit: 1% is worth/.test(h), after: after.crit || null, a32: after.weightValues[32] };
+  }, sum.indexOf(holy));
+  // the tooltip's 2.5 sec (Divine Fury) is ignored: the share uses the base 3 sec. Greater Heal: 2080 + 0.857 × 500 = 2509, / 0.857 × 0.5 × 2/3 × 1% = 9.76 a 1%; Flash Heal: 885 + 214 = 1099 / 0.4286 × … = 8.55; average 9.15 / 14 = 0.65
+  check(crit.c && crit.c.heals.length === 2 && crit.c.heals[0].name === 'Greater Heal' && crit.c.heals[0].rank === 5 && Math.abs(crit.c.perPct - 9.15) < 0.05 && crit.w32 === 0.65 && crit.c.profileWeight === 0.3,
+    `a healer's crit weight from their heals: 1% = ${crit.c && crit.c.perPct} healing, 0.65 a rating (the profile's 0.3 until read) ${JSON.stringify(crit.c)}`);
+  check(crit.h && crit.after === null && crit.a32 === 0.3, 'the Gear page says how crit was worked out; heals not read: the profile\'s 0.3');
+  // #13: a set bonus with stats counts in a gain when an item makes or breaks it
+  const setT = await page.evaluate((holyIdx) => {
+    const A = window.CC.api, G = window.CC.gear, keep = A.GD.sets;
+    const w = { 5: 1 };
+    A.GD.sets = Object.assign({}, keep, { t1: ['Test Set', [900001, 900002], [[2, '+10 Intellect.', [[5, 10]]], [3, 'a proc', []]], 16] });
+    const make = G.setDelta(w, { 1: { id: 900001 }, 5: { id: 777 } }, 900002, [777]);
+    const brk = G.setDelta(w, { 1: { id: 900001 }, 5: { id: 900002 } }, 777, [900002]);
+    const dup = G.setDelta(w, { 11: { id: 900001 }, 12: { id: 900002 } }, 900002, [123]);
+    const none = G.setDelta(w, { 1: { id: 5 } }, 6, [5]);
+    // in the plan: the best Holy upgrade and an item worn in another slot become one set
+    const before = G.summary()[holyIdx], up = before.upgrades[0];
+    const other = before.worn.find((x) => x.slot !== up.slot && x.items[0]);
+    A.GD.sets = Object.assign({}, keep, { t2: ['Test Pair', [up.id, other.items[0].id], [[2, '+20 Intellect.', [[5, 20]]]], 16] });
+    const after = G.summary()[holyIdx].upgrades.find((u) => u.id === up.id && u.slot === up.slot);
+    const wInt = (before.weightValues || {})[5] || 0;
+    // a ring row: the weaker ring is a set piece whose bonus is big, so a new ring replaces the stronger one
+    const rings = before.worn.find((x) => x.slot === 'Ring'), rUp = before.upgrades.find((u) => u.slot === 'Ring');
+    let ring = null;
+    if (rings && rings.items.length === 2 && rUp) {
+      const [r1, r2] = rings.items.slice().sort((a, b) => a.score - b.score), other2 = before.worn.find((x) => x.slot !== 'Ring' && x.items[0]);
+      A.GD.sets = Object.assign({}, keep, { t3: ['Test Ring Set', [r1.id, other2.items[0].id], [[2, '+500 Intellect.', [[5, 500]]]], 16] });
+      const a2 = G.summary()[holyIdx].upgrades.find((u) => u.id === rUp.id && u.slot === 'Ring');
+      ring = { weak: r1.score, strong: r2.score, up: rUp, after: a2 || null };
+    }
+    // two copies of a set ring: taking one off keeps the piece
+    A.GD.sets = Object.assign({}, keep, { t4: ['Copies', [900001, 900003], [[2, '+10 Intellect.', [[5, 10]]]], 16] });
+    const copy = G.setDelta(w, { 11: { id: 900001 }, 12: { id: 900001 }, 1: { id: 900003 } }, 777, [900001]);
+    A.GD.sets = keep;
+    return { make, brk, dup, none, up, after, wInt, ring, copy };
+  }, sum.indexOf(holy));
+  check(setT.make.d === 10 && setT.make.sets[0].from === 1 && setT.make.sets[0].to === 2, 'set bonus: the second piece makes the 2-piece bonus (+10)');
+  check(setT.brk.d === -10 && setT.dup.d === 0 && setT.none.d === 0 && setT.none.sets.length === 0, 'set bonus: taking a piece off breaks it; a second copy adds nothing; no set, nothing');
+  check(setT.after && setT.after.setBonus && Math.abs(setT.after.setBonus.gain - +(20 * setT.wInt).toFixed(1)) < 0.11 && Math.abs(setT.after.gain - (setT.up.gain + setT.after.setBonus.gain)) < 0.11,
+    `the Gear plan: an upgrade that completes a set gains its bonus (${setT.up.gain} → ${setT.after && setT.after.gain}, set ${JSON.stringify(setT.after && setT.after.setBonus)})`);
+  check(setT.copy.d === 0, 'set bonus: two copies of a piece, one taken off: the bonus stays');
+  check(!setT.ring || (setT.ring.after && Math.abs(setT.ring.after.gain - +(setT.ring.up.score - setT.ring.strong).toFixed(1)) < 0.11 && !setT.ring.after.setBonus),
+    `a ring row: a new ring replaces the stronger ring when the weaker one keeps a set bonus (${JSON.stringify(setT.ring)})`);
   const worldSeen = await page.evaluate(() => {
     const ah = window.CC.api.CH.ah = window.CC.api.CH.ah || {}; ah.prices = ah.prices || {};
     const before = window.CC.gear.availability(2243);
@@ -176,10 +230,10 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   const craft = await page.evaluate(() => window.CC.api.gdSourceLines(17015).map((l) => l.l));   // Dark Iron Reaver
   check(craft.some((l) => /^Crafted \(Blacksmithing\) · Recipe: Plans: Dark Iron Reaver \(skill 300\), sold by Lokhtos Darkbargainer, Blackrock Depths$/.test(l)),
     'crafted item: its recipe and where the recipe is sold (' + craft.join(' | ') + ')');
-  check(craft.includes('Needs Friendly with Thorium Brotherhood for Plans: Dark Iron Reaver (you: none)'), "crafted item: the recipe's reputation, with yours");
+  check(craft.includes('Needs Honored with Thorium Brotherhood for Plans: Dark Iron Reaver (you: none)'), "crafted item: the recipe's reputation, with yours");
   check(craft.includes('Needs Blacksmithing 320 to craft it (you: none)'), 'crafted item: the skill to craft it');
-  const gates = await page.evaluate(() => window.CC.api.itemGates(19447).map((g) => g.short));   // Formula: Enchant Bracer - Healing
-  check(gates.includes('Honored with Argent Dawn (you: Neutral)'), "an item's own reputation need, against yours (" + gates.join(' | ') + ')');
+  const gates = await page.evaluate(() => window.CC.api.itemGates(19447).map((g) => g.short));   // Formula: Enchant Bracer - Healing (Revered: Forever's tooltip, #129)
+  check(gates.includes('Revered with Argent Dawn (you: Neutral)'), "an item's own reputation need, against yours (" + gates.join(' | ') + ')');
 
   check(errors.length === 0, 'no page errors' + (errors.length ? ': ' + errors.slice(0, 3).join(' | ') : ''));
 

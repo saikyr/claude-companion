@@ -20,14 +20,18 @@ B=https://foreverdb.net/data
 } > raw/fdb/list.txt
 curl -sf --retry 3 --parallel --parallel-max 8 -K raw/fdb/list.txt
 
-echo "3/8 endgametools item pages (weapons and armor; only pages not fetched in the last 30 days)"
-# every weapon and armor QuestieDB or ForeverDB knows: Forever's own items (its Tier 0.5 spec sets) are only in ForeverDB
+echo "3/8 endgametools item pages (weapons, armor and consumables; only pages not fetched in the last 30 days)"
+# every weapon, armor and consumable QuestieDB or ForeverDB knows: Forever's own items (its Tier 0.5 spec sets) are only
+# in ForeverDB; consumables (potions, elixirs, flasks, food, scrolls, oils) for what they do on Forever (#91)
 python3 -I - "$W" <<'EOF'
 import json, os, sys, time
 w = sys.argv[1]
 items = json.load(open(os.path.join(w, 'out', 'questie_item.json')))
-ids = {k for k, v in items.items() if len(v) > 11 and v[11] in (2, 4)}
-ids |= {str(it['id']) for it in json.load(open(os.path.join(w, 'raw', 'fdb', 'items.json'))) if it.get('c') in (2, 4)}
+import re
+oil = re.compile(r'((Wizard|Mana|Shadow|Frost) Oil|Sharpening Stone|Weightstone)$')   # Trade Goods (class 7) used on a weapon
+ids = {k for k, v in items.items() if len(v) > 11 and (v[11] in (0, 2, 4) or (v[11] == 7 and oil.search(str(v[0] or ''))))}
+ids |= {str(it['id']) for it in json.load(open(os.path.join(w, 'raw', 'fdb', 'items.json')))
+        if it.get('c') in (0, 2, 4) or (it.get('c') == 7 and oil.search(str(it.get('n') or '')))}
 old = time.time() - 30 * 86400
 with open(os.path.join(w, 'raw', 'egt', 'list.txt'), 'w') as f:
     n = 0

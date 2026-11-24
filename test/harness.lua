@@ -372,6 +372,12 @@ do
   check(ns.PlanPrice(99904) == 90 and ns.PlanPrice(99903) == 650 and ns.PlanPrice(99901) == 1000 and ns.PlanPrice(99905) == nil and ns.PlanPrice(99906) == nil,
     "ns.PlanPrice: prices are shared by the save's characters on the same realm and faction, newest scan first (#12)")
   ClaudeCompanionDB.chars["Alt-Test"], ClaudeCompanionDB.chars["Horde-Test"], ClaudeCompanionDB.chars["Old-Test"] = nil, nil, nil
+  -- #131: a gray is worth what a vendor pays, whatever one AH listing asks; nothing is worth less than its vendor price
+  ClaudeCompanionDB.items["t:gray"] = { q = 0, sell = 50 }
+  ClaudeCompanionDB.items["t:green"] = { q = 2, sell = 1200 }
+  local v, a = ns.LootValue({ loot = { [99901] = { id = 99901, item = "t:gray", q = 0, count = 2 }, [99903] = { id = 99903, item = "t:green", count = 1 } } })
+  check(v == 1300 and a == 100 + 1200, "ns.LootValue: a gray at vendor price despite its AH median, a green never below vendor (#131): " .. tostring(v) .. " " .. tostring(a))
+  ClaudeCompanionDB.items["t:gray"], ClaudeCompanionDB.items["t:green"] = nil, nil
   if FAILED then error("v1.4 checks failed") end
 end
 -- #1 item cache: full cache makes room (oldest first) and keeps items in use
@@ -634,6 +640,44 @@ do
   NumTaxiNodes, TaxiNodeName, TaxiNodeGetType = oldN, oldName, oldType
   GetTaxiMapID, C_Map = oldTM, oldMap
   if FAILED then error("group loot / flight path checks failed") end
+end
+-- #108: where things are inside an instance: a creature seen, an NPC or object talked to, an object looted,
+-- each with the sub-area; once per thing and sub-area per login; nothing outside instances or without a sub-area
+do
+  local function check(ok, what) print((ok and "PASS " or "FAIL ") .. what); if not ok then FAILED = true end end
+  local c; for _, v in pairs(ClaudeCompanionDB.chars) do c = v end
+  local oldII, oldZ, oldS, oldG, oldUN = IsInInstance, GetRealZoneText, GetSubZoneText, UnitGUID, UnitName
+  local oldN, oldL = GetNumLootItems, GetLootSourceInfo
+  local function places() local n = {}; for _, e in ipairs(c.journal) do if e.e == "place" then n[#n + 1] = e end end; return n end
+  local before = #places()
+  Fire("PLAYER_TARGET_CHANGED")
+  check(#places() == before, "outside an instance nothing is placed")
+  IsInInstance = function() return true, "party" end
+  GetRealZoneText = function() return "Blackrock Spire" end
+  GetSubZoneText = function() return "Hordemar City" end
+  UnitGUID = function(u) if u == "player" then return "Player-1-ABC" elseif u == "target" then return "Creature-0-1-2-3-10299-0000"
+    elseif u == "npc" then return "GameObject-0-1-2-3-175334-0000" end end
+  UnitName = function(u) if u == "target" then return "Scarshield Infiltrator" elseif u == "npc" then return "Bijou's Belongings" end return oldUN(u) end
+  Fire("PLAYER_TARGET_CHANGED"); Fire("PLAYER_TARGET_CHANGED")
+  local p = places()
+  check(#p == before + 1 and p[#p].kind == "npc" and p[#p].id == 10299 and p[#p].name == "Scarshield Infiltrator" and p[#p].sub == "Hordemar City" and p[#p].zone == "Blackrock Spire",
+    "a creature targeted inside: its id, name and sub-area, once")
+  Fire("GOSSIP_SHOW")
+  p = places()
+  check(p[#p].kind == "object" and p[#p].id == 175334 and p[#p].name == "Bijou's Belongings", "an object talked to is placed as an object")
+  GetSubZoneText = function() return "Skitterweb Tunnels" end
+  GetNumLootItems = function() return 1 end
+  GetLootSourceInfo = function() return "GameObject-0-1-2-3-175382-0000", 1 end
+  Fire("LOOT_OPENED")
+  p = places()
+  check(p[#p].kind == "object" and p[#p].id == 175382 and p[#p].sub == "Skitterweb Tunnels", "an object looted is placed where it was opened")
+  GetSubZoneText = function() return "" end
+  UnitGUID = function(u) if u == "target" then return "Creature-0-1-2-3-9218-0000" end return oldG(u) end
+  local n = #places(); Fire("PLAYER_TARGET_CHANGED")
+  check(#places() == n, "no sub-area (Dire Maul names none): nothing placed")
+  IsInInstance, GetRealZoneText, GetSubZoneText, UnitGUID, UnitName = oldII, oldZ, oldS, oldG, oldUN
+  GetNumLootItems, GetLootSourceInfo = oldN, oldL
+  if FAILED then error("place checks failed") end
 end
 -- logout after the game has emptied bags, gear and money keeps the last good snapshot's values
 do
@@ -1032,6 +1076,56 @@ do -- #16: item cooldowns (Salt Shaker on 3 days, Hearthstone on 1 hour), read f
   ns.char.snap.itemCooldowns = after; shaker = false
   check(#ns.ItemCooldowns() == 0, "an item you no longer have leaves the list")
   C_Container.GetContainerItemInfo, C_Container.GetContainerItemCooldown, GetInventoryItemCooldown, GetInventoryItemLink = oldInfo, oldCd, oldInvCd, oldLink
+end
+do -- #91: weapon enchants, from the game: the permanent one's id and the text it adds, the temporary one's name and time
+  local function check(ok, what) print((ok and "PASS " or "FAIL ") .. what); if not ok then FAILED = true end end
+  local oldLink, oldTip, oldInv, oldWE = GetInventoryItemLink, C_TooltipInfo.GetHyperlink, C_TooltipInfo.GetInventoryItem, GetWeaponEnchantInfo
+  GetInventoryItemLink = function(u, slot)
+    if slot == 16 then return "|cff0070dd|Hitem:873:2504::::::::58:::::|h[Staff of Jordan]|h|r" end
+    if slot == 1 then return "|cff0070dd|Hitem:10041::::::::58:::::|h[Dalaran Wizard's Robe]|h|r" end
+  end
+  C_TooltipInfo.GetHyperlink = function(link)
+    local lines = { { leftText = "Staff of Jordan" }, { leftText = "Two-Hand" } }
+    if link:find("item:873:2504") then lines[#lines + 1] = { leftText = "Spell Power +30" } end
+    return { lines = lines }
+  end
+  C_TooltipInfo.GetInventoryItem = function(u, slot) return { lines = { { leftText = "Staff of Jordan" }, { leftText = 7 }, { leftText = "Brilliant Wizard Oil (30 min) (5 charges)" } } } end
+  GetWeaponEnchantInfo = function() return true, 1500000, 0, 2628, false, 0, 0, 0 end
+  ns.Snapshot("manual")
+  local by = {}; for _, e in ipairs(ns.char.snap.equipped or {}) do by[e.slot] = e end
+  local e = by[16] and by[16].enchant
+  check(e and e.id == 2504 and e.text == "Spell Power +30", "main hand: the permanent enchant's id and the line it adds (" .. tostring(e and e.text) .. ")")
+  check(e and e.temp and e.temp.name == "Brilliant Wizard Oil" and e.temp.left == 1500 and e.temp.id == 2628 and e.temp.charges == nil,
+    "main hand: the oil on it, its name from the tooltip and 25 minutes left")
+  check(by[1] and by[1].enchant == nil, "armour slots carry no enchant field")
+  GetWeaponEnchantInfo = function() return false, 0, 0, 0, false, 0, 0, 0 end
+  ns.Snapshot("manual")
+  by = {}; for _, e2 in ipairs(ns.char.snap.equipped or {}) do by[e2.slot] = e2 end
+  check(by[16].enchant and by[16].enchant.temp == nil and by[16].enchant.id == 2504, "no oil: only the permanent enchant")
+  local oldTL = ns.TooltipLines; ns.TooltipLines = function() error("tooltip broke") end
+  ns.Snapshot("manual")
+  ns.TooltipLines = oldTL
+  by = {}; for _, e2 in ipairs(ns.char.snap.equipped or {}) do by[e2.slot] = e2 end
+  check(by[16] and by[16].enchant == nil and by[1], "an error reading an enchant loses only the enchant, not the worn gear")
+  GetInventoryItemLink, C_TooltipInfo.GetHyperlink, C_TooltipInfo.GetInventoryItem, GetWeaponEnchantInfo = oldLink, oldTip, oldInv, oldWE
+  ns.Snapshot("manual")
+end
+do -- #95: the addons installed, enabled for this character or not, with version; macros with their text
+  local function check(ok, what) print((ok and "PASS " or "FAIL ") .. what); if not ok then FAILED = true end end
+  local list = { { "ClaudeCompanion", "Claude Companion", 2, "1.5.0", true }, { "Clique", "|cff00ff00Clique|r", 0, "v1.2", false }, { "Grid2", "Grid2", 2, SECRET, true } }
+  C_AddOns = { GetNumAddOns = function() return #list end,
+    GetAddOnInfo = function(i) local a = list[i]; return a[1], a[2], "notes", true, a[3] == 0 and "DISABLED" or nil, "INSECURE" end,
+    GetAddOnEnableState = function(name, who) assert(type(name) == "string" and who ~= nil); for _, a in ipairs(list) do if a[1] == name then return a[3] end end return 0 end,
+    GetAddOnMetadata = function(name, k) for _, a in ipairs(list) do if a[1] == name then return a[4] end end end,
+    IsAddOnLoaded = function(name) for _, a in ipairs(list) do if a[1] == name then return a[5] end end end }
+  ns.Snapshot("manual")
+  local by = {}; for _, a in ipairs(ns.char.snap.addons or {}) do by[a.name] = a end
+  check(by.Clique and by.Clique.enabled == false and by.Clique.title == "Clique" and by.Clique.version == "v1.2" and by.Clique.loaded == false and by.Clique.why == "DISABLED",
+    "addons: Clique turned off for this character, its title without colour codes")
+  check(by.Grid2 and by.Grid2.enabled == true and by.Grid2.loaded == true and by.Grid2.version == nil, "addons: Grid2 on and loaded (a hidden version is left out)")
+  local m = ns.char.snap.macros or {}
+  check(m[1] and m[1].scope == "account" and m[1].body == "/cast Shadow Word: Pain" and m[2] and m[2].scope == "character", "macros: account and character ones with their text")
+  C_AddOns = nil
 end
 local f = io.open("out.lua", "w"); f:write("ClaudeCompanionDB = " .. ser(ClaudeCompanionDB)); f:close()
 print("DIAG:")

@@ -85,6 +85,21 @@ const check = (ok, what) => { console.log((ok ? 'ok   ' : 'FAIL ') + what); if (
   }
   const back = B.query(`select data->>'v' from public.records where id = 'setting|cc.claude.cardsState'`);
   check(back && JSON.parse(back).cards['browser-card'].state === 'done', 'marking it done reaches the account, where Claude reads it');
+  // #83: a friend's Claude writes from-claude/cards.json on this computer: the app sends it to the account
+  // (the card gate, merged in), so the other computers get it, and says so
+  const fc = path.join(dataDir, 'from-claude');
+  fs.mkdirSync(fc, { recursive: true });
+  fs.writeFileSync(path.join(fc, 'cards.tmp'), JSON.stringify({ schema: 1, cards: [{ id: 'browser-local', kind: 'note', title: 'Card from a Claude on this computer', updated: new Date().toISOString() }] }));
+  fs.renameSync(path.join(fc, 'cards.tmp'), path.join(fc, 'cards.json'));
+  let online2 = null;
+  for (let i = 0; i < 30 && !/browser-local/.test(online2 || ''); i++) { await page.waitForTimeout(1000); online2 = B.query(`select data->>'v' from public.records where id = 'setting|cc.claude.cards'`); }
+  const oc = online2 ? JSON.parse(online2).cards.map((c) => c.id) : [];
+  check(oc.includes('browser-local') && oc.includes('browser-card'), `a cards.json on this computer reaches the account, next to Claude's online cards (${oc.join(', ')})`);
+  await page.click('button[data-tab="overview"]').catch(() => {}); await page.click('button[data-tab="claude"]');
+  check(/were sent to your other computers/.test(await page.textContent('main')), 'From Claude says the cards written here were sent');
+  const stj = JSON.parse(fs.readFileSync(path.join(fc, 'state.json'), 'utf8'));
+  check(stj.upload && stj.upload.ok === true && stj.cards['browser-card'], `state.json says how the send went, for Claude, and keeps the player's choices (${JSON.stringify(stj.upload)})`);
+  fs.rmSync(path.join(fc, 'cards.json'));
   await page.click('button[data-tab="system"]');
   if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT, fullPage: false });
   // the server's hidden browser (?background=1, what runs after a save with the app closed) syncs too

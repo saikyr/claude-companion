@@ -175,6 +175,7 @@ local function TooltipLines(link)
     end
     return #out > 0 and out or nil
 end
+ns.TooltipLines = TooltipLines
 
 -- The cache is capped (LIMITS.items). When it is full, the items seen longest ago make room, a tenth
 -- of the cap at a time, but never one that any character wears, carries, banks, has in the mail or
@@ -434,7 +435,7 @@ local API_NAMES = { "C_AuctionHouse", "C_TooltipInfo", "C_EquipmentSet", "GetTal
     "GetFactionInfo", "C_CurrencyInfo", "C_QuestLog", "GetQuestLogTitle", "C_Container", "GetContainerItemInfo",
     "C_Map", "C_UnitAuras", "UnitBuff", "GetAuctionItemInfo", "PostAuction", "GetInboxInvoiceInfo", "NumTaxiNodes",
     "C_Item", "GetItemInfo", "GetItemStats", "issecretvalue", "CombatLogGetCurrentEventInfo", "GetSpellBonusHealing",
-    "GetManaRegen", "C_Spell", "GetMacroInfo", "GetActionInfo", "GetNumBindings", "GetBindLocation",
+    "GetManaRegen", "C_Spell", "GetMacroInfo", "C_AddOns", "GetActionInfo", "GetNumBindings", "GetBindLocation",
     "GetCombatRating", "GetCombatRatingBonus", "GetSpellDescription", "GetInventoryItemCooldown", "GetContainerItemCooldown",
     -- for measuring Forever drop rates and resistances (docs/ROADMAP.md): which mob each loot slot came
     -- from, and whether the combat log can be read or turned on by an addon

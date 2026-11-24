@@ -32,7 +32,8 @@ const lit = (v) => { const tag = '$q' + crypto.randomBytes(8).toString('hex') + 
 
 function sqlBackend() {
   const db = 'cc_sync_test_' + crypto.randomBytes(4).toString('hex');
-  psql('postgres', `create database ${db};`);
+  // the live database's collation (Supabase: ICU en-US), so text sorts as it does there
+  psql('postgres', `create database ${db} template template0 encoding 'UTF8' locale_provider icu icu_locale 'en-US' locale 'C';`);
   psql(db, fs.readFileSync(path.join(__dirname, 'prelude.sql'), 'utf8'));
   const dir = path.join(ROOT, 'supabase', 'migrations');
   for (const f of fs.readdirSync(dir).filter((f) => f.endsWith('.sql')).sort()) psql(db, fs.readFileSync(path.join(dir, f), 'utf8'));

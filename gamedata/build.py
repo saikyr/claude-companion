@@ -143,12 +143,16 @@ for iid in sorted(all_ids):
         row[1] = eg['q'] if eg['q'] is not None else row[1]
         row[2], row[3] = eg['il'] or row[2], eg['rl'] or row[3]
         row[6], row[7] = eg['sell'], eg['bind']
-        row[8] = [[int(k), v] for k, v in eg['st'].items()]
         row[10] = eg['tip']
         row[11] = 'e'
-        if not row[4] and eg.get('slot') in SLOT_INV:
-            row[4] = 26 if eg['slot'] == 'Ranged' and row[12] == 19 else SLOT_INV[eg['slot']]
-        cov['gear_tooltip_endgametools'] += 1
+        if cls in GEAR:
+            row[8] = [[int(k), v] for k, v in eg['st'].items()]
+            if not row[4] and eg.get('slot') in SLOT_INV:
+                row[4] = 26 if eg['slot'] == 'Ranged' and row[12] == 19 else SLOT_INV[eg['slot']]
+            cov['gear_tooltip_endgametools'] += 1
+        else:
+            # a consumable's tooltip says what it does on Forever (#91); its "Use:" text is no gear stat
+            cov['consumable_tooltip_endgametools'] += 1
     elif cls in GEAR and fd.get('st') is not None and not junk.match(name):
         # endgametools has no page (mostly Season of Discovery gear the Forever client carries but does not
         # drop): ForeverDB's stats, marked so the app can say where they came from
@@ -313,7 +317,8 @@ STAT = {3: 'Agility', 4: 'Strength', 5: 'Intellect', 6: 'Spirit', 7: 'Stamina', 
         112: 'Frost damage', 113: 'Arcane damage', 114: 'Nature damage', 115: 'Holy damage', 116: 'Crit %', 117: 'Hit %', 118: 'Dodge %', 119: 'Parry %', 120: 'Block %'}
 
 # ------------------------------------------------------------------ item sets
-# sets[id] = [name, [item ids], [[pieces, bonus text], ...], class mask]
+# sets[id] = [name, [item ids], [[pieces, bonus text, [[stat id, value], ...]], ...], class mask]: a bonus's stats
+# are what egt_parse read from its line (empty for an effect the score can't count, a proc say)
 SET_LINE = re.compile(r'^\((\d+)\) Set: (.+)$')
 sets = {}
 for it in FDB_ITEMS.values():
@@ -327,7 +332,8 @@ for it in FDB_ITEMS.values():
     # the tooltip with the most bonus lines names the set (pieces the client hides have no tooltip)
     if k and len([l for l in tip if SET_LINE.match(l)]) > len(s_[2]):
         s_[0] = tip[k - 1]
-        s_[2] = [[int(m.group(1)), m.group(2)] for m in map(SET_LINE.match, tip) if m]
+        sst = (EGT.get(str(it['id'])) or {}).get('setst') or {}
+        s_[2] = [[int(m.group(1)), m.group(2), [[int(k), v] for k, v in (sst.get(m.group(2)) or {}).items()]] for m in map(SET_LINE.match, tip) if m]
 # which classes a set is for: the items' own class mask (ForeverDB) or "Classes:" tooltip line, a class
 # quest that rewards a piece, or a class quest that asks for pieces by name (the dungeon set 0.5 chain)
 CLASS_BIT = {'Warrior': 1, 'Paladin': 2, 'Hunter': 4, 'Rogue': 8, 'Priest': 16, 'Shaman': 64, 'Mage': 128, 'Warlock': 256, 'Druid': 1024}
@@ -374,15 +380,17 @@ cov['npcs'] = len(npcs)
 cov['npcs_with_spawn_point'] = sum(1 for n in npcs.values() if n[6])
 
 # ------------------------------------------------------------------ item gates and recipes (ForeverDB)
-# req[id] = [faction name, standing 5 Friendly .. 8 Exalted]: the reputation the item itself needs (rep vendor
+# req[id] = [faction name, standing 5 Friendly .. 8 Exalted, the game's standingID as rules.js names them]: the
+# reputation the item itself needs (rep vendor
 # gear, faction recipes). teach[crafted id] = [[recipe item id, skill to learn it], ...]: the recipe whose taught
 # spell is the spell that crafts the item (ForeverDB's craft rows carry that spell). No entry = a trainer recipe
 # or one ForeverDB has no recipe item for; the item's "how" line says which.
 req = {}
 for it in FDB_ITEMS.values():
     r = it.get('rep')
-    if it['id'] in items and isinstance(r, list) and len(r) == 3 and r[2] and 4 < (r[1] or 0) <= 8:
-        req[it['id']] = [r[2], r[1]]
+    # ForeverDB gives the 0-based rank (4 Friendly, 5 Honored, 6 Revered, 7 Exalted: Forever's tooltips, #129)
+    if it['id'] in items and isinstance(r, list) and len(r) == 3 and r[2] and 4 <= (r[1] or 0) <= 7:
+        req[it['id']] = [r[2], r[1] + 1]
 TEACHES = defaultdict(set)
 for it in FDB_ITEMS.values():
     if it.get('c') != 9 or it['id'] not in items: continue

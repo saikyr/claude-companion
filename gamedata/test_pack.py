@@ -43,8 +43,12 @@ it = G['items']
 st = lambda i: dict((a, b) for a, b in it[str(i)][8])
 # endgametools 17710 (build 1.60.1.71037): +11 Int, 2 mp5, healing 116 / damage 38; game tooltip agrees
 dv = (G.get('sets') or {}).get('182') or []
-check(len(dv) == 4 and dv[0] == 'Vestments of the Devout' and len(dv[1]) == 8 and dv[3] & 16 and any(n == 6 for n, _ in dv[2]),
+check(len(dv) == 4 and dv[0] == 'Vestments of the Devout' and len(dv[1]) == 8 and dv[3] & 16 and any(b[0] == 6 for b in dv[2]),
       'item sets: Vestments of the Devout has 8 pieces, 6-piece bonus, and is a Priest set')
+# #13: a bonus carries its stats (packs built before it have only the text): 3 pieces, spell power 18; a proc, none
+b3 = next((b for b in dv[2] if b[0] == 3), [])
+b4 = next((b for b in dv[2] if b[0] == 4), [])
+check(len(b3) < 3 or (dict(map(tuple, b3[2])) == {45: 18} and b4[2] == []), f'set bonus stats: Devout (3) spell power 18, (4) a proc has none ({b3}, {b4})')
 check(st(17710).get(41) == 116 and st(17710).get(42) == 38 and st(17710).get(43) == 2 and st(17710).get(5) == 11,
       f'Charstone Dirk stats {st(17710)}')
 check(it['17710'][11] == 'e', 'Charstone Dirk tooltip comes from endgametools')
@@ -67,16 +71,20 @@ check((npc.get('9019') or [''])[0] == 'Emperor Dagran Thaurissan', 'npc 9019 is 
 
 # ---------------------------------------------------------------- 3. coverage floors
 n = lambda c: sum(1 for x in c)
-gear_e = n(r for r in it.values() if r[11] == 'e')
+gear_e = n(r for r in it.values() if r[11] == 'e' and r[9] in (2, 4))
 check(gear_e > 10000, f'endgametools tooltips for >10,000 items (got {gear_e})')
 check(len(G['quests']) > 6000, f'>6,000 quests (got {len(G["quests"])})')
 check(len(G['src']) > 15000, f'>15,000 items with sources (got {len(G["src"])})')
 fq = n(q for q in G['quests'].values() if q.get('origin') == 'f')
 check(fq > 1500, f'>1,500 Forever-only quests (got {fq})')
 check(len(npc) > 15000, f'>15,000 NPCs (got {len(npc)})')
-# ForeverDB 17059 Plans: Dark Iron Reaver: teaches spell 20890 (the Reaver's craft), needs Thorium Brotherhood Friendly
-check((G.get('teach') or {}).get('17015') == [[17059, 300]] and (G.get('req') or {}).get('17059') == ['Thorium Brotherhood', 5],
-      'Dark Iron Reaver: recipe Plans: Dark Iron Reaver (skill 300), Thorium Brotherhood Friendly')
+# ForeverDB 17059 Plans: Dark Iron Reaver: teaches spell 20890 (the Reaver's craft), needs Thorium Brotherhood Honored
+check((G.get('teach') or {}).get('17015') == [[17059, 300]] and (G.get('req') or {}).get('17059') == ['Thorium Brotherhood', 6],
+      'Dark Iron Reaver: recipe Plans: Dark Iron Reaver (skill 300), Thorium Brotherhood Honored')
+# standings as Forever's tooltips give them (#129): 6 Honored, 7 Revered
+R = G.get('req') or {}
+check(R.get('19445') == ['Timbermaw Hold', 6] and R.get('19447') == ['Argent Dawn', 7] and all(5 <= v[1] <= 8 for v in R.values()),
+      f"rep gates: Weapon - Agility Honored, Bracer - Healing Revered, all Friendly to Exalted ({R.get('19445')}, {R.get('19447')})")
 check(len(G.get('teach') or {}) > 1000, f">1,000 crafted items with a recipe item (got {len(G.get('teach') or {})})")
 
 # ---------------------------------------------------------------- 4. the player's own game data

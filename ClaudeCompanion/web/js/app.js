@@ -827,10 +827,18 @@
     const macros = arr((CH.snap || {}).macros);
     h += '</section><section>';
     h += macros.length ? `<h2>Macros</h2><div class="list macros">${macros.map((m) => `<div class="li">${icon(m.icon, { size: 'sm' })}<div class="grow"><div>${esc(m.name)}</div><pre>${esc(m.body)}</pre></div></div>`).join('')}</div>` : '<h2>Macros</h2><div class="empty">No macros saved.</div>';
+    // the addons installed for this character (#95), enabled ones first
+    const addons = (CH.snap || {}).addons;
+    if (addons) {
+      const list = arr(addons).filter((x) => x && x.name).sort((a, b) => (b.enabled === true) - (a.enabled === true) || String(a.title || a.name).localeCompare(String(b.title || b.name)));
+      h += `<h2>Addons</h2>${list.length ? `<div class="list addons">${list.map((x) => `<div class="li"><div class="grow"><div>${esc(x.title || x.name)}</div><div class="sub">${esc([x.version, x.enabled === false ? 'turned off' : x.loaded ? 'on' : x.enabled ? 'on, not loaded' : null].filter(Boolean).join(' · '))}</div></div></div>`).join('')}</div>` : '<div class="empty">None read.</div>'}`;
+    }
     return h + '</section></div>';
   };
 
   // ------------------------------------------------------------ grinds
+  // poor (gray) loot: worth what a vendor pays, whatever an AH listing asks
+  const isGray = (l, it) => (l.q != null ? l.q : it.q) === 0;
   function trackerStats(t) {
     const secs = Math.max(1, t.secs || ((t.finish || t.last || t.start) - t.start - (t.pausedSecs || 0)));
     const hrs = secs / 3600;
@@ -841,6 +849,7 @@
     Object.entries(t.loot || {}).forEach(([id, l]) => {
       const it = item(l.item) || byId(l.id || id) || {};
       vendor += (it.sell || 0) * l.count;
+      if (isGray(l, it)) { ah += (it.sell || 0) * l.count; return; }   // grays only ever go to a vendor (#131)
       const pp = planPrice(l.id || id);
       if (pp == null) unpriced += 1;
       ah += Math.max(pp != null ? pp : 0, it.sell || 0) * l.count;   // never below what a vendor pays
@@ -850,7 +859,7 @@
   // The one gold-per-hour for Claude (snapshot grinds and runs, the brief): the same numbers as the
   // Grinds and Dungeons tabs, plus a range and whether the tracking is complete. No agent works out
   // gold per hour itself; it quotes these fields (docs/FEATURES.md, "Gold per hour").
-  //   gph       coin + loot at your AH median (vendor price when never seen on the AH or when a vendor pays more), per hour
+  //   gph       coin + loot at your AH median (vendor price when never seen on the AH, when a vendor pays more, and for gray items), per hour
   //   gph_low   coin + loot at vendor price: what it is worth for sure
   //   gph_high  coin + loot at the highest median your scans saw in the 7 days before it ended
   // All before the AH's 5% cut, whether the loot was sold or not. Copper per hour.
@@ -861,6 +870,7 @@
     let high = 0;
     Object.entries(t.loot || {}).forEach(([id, l]) => {
       const it = item(l.item) || byId(l.id || id) || {};
+      if (isGray(l, it)) { high += (it.sell || 0) * l.count; return; }
       const obs = arr(((((CH && CH.ah) || {}).prices || {})[String(l.id || id)] || {}).obs).filter((o) => o && o.t && o.t <= end + 3600 && o.t >= end - WEEK && (o.med || o.min));
       const best = obs.reduce((m, o) => Math.max(m, o.med || o.min), 0);
       const pp = planPrice(l.id || id);
@@ -924,8 +934,33 @@
       });
       h += '</div>';
     }
+    h += deathsView();
     return h;
   };
+  // #90: from this computer's combat log (js/combatlog.js, while /combatlog is on in game): who hit you in the
+  // 10 seconds before each death, and which creatures hit you hardest overall
+  function deathsView() {
+    const st = CC.combat && CC.combat.state, sum = st && CC.combat.api.summary(st);
+    if (!sum) return '';
+    const n = (x) => Number(x || 0).toLocaleString('en-US');
+    let h = '';
+    const deaths = arr(sum.deaths);
+    if (deaths.length) {
+      h += `<h2>What killed you <span class="dim small">the 10 seconds before each death, from this computer's combat log</span></h2><div class="list deaths">`;
+      deaths.forEach((d) => {
+        const who = arr(d.by).map((b) => `${b.count > 1 ? b.count + '× ' : ''}${esc(b.name)} ${n(b.dmg)} in ${b.hits} hit${b.hits === 1 ? '' : 's'}`).join(', ');
+        h += `<div class="li"><div class="grow"><div>${esc(d.at)}</div><div class="sub">${who || 'nothing hit you in those 10 seconds'}</div></div><div class="num">${n(d.dmg)}</div></div>`;
+      });
+      h += '</div>';
+    }
+    const hard = arr(sum.npcs).filter((x) => x.taken && x.taken.hits >= 5).sort((a, b) => b.taken.dmg / b.taken.hits - a.taken.dmg / a.taken.hits).slice(0, 10);
+    if (hard.length) {
+      h += `<h2>Hits you hardest <span class="dim small">damage per hit, creatures with 5 hits or more</span></h2><div class="list">`;
+      hard.forEach((x) => { h += `<div class="li"><div class="grow"><div>${esc(x.name)}</div><div class="sub">${n(x.taken.dmg)} in ${n(x.taken.hits)} hits</div></div><div class="num">${n(Math.round(x.taken.dmg / x.taken.hits))} a hit</div></div>`; });
+      h += '</div>';
+    }
+    return h;
+  }
 
   // ------------------------------------------------------------ quests
   // a reputation value (points from the start of Neutral, as QuestieDB gives them) as a standing index
@@ -1132,27 +1167,104 @@
     return `<svg class="spark" width="${w}" height="${hgt}"><polyline points="${pts}" fill="none" stroke="#8fd3ff" stroke-width="1.5"/></svg>`;
   }
   // Disenchant outcomes by item level: data/rules.js (GAMERULES.disenchant, with its source)
+  // Materials match prices by item id (rules.js disenchant.ids). Once you have disenchanted enough items of a kind
+  // (green weapon / green armor / blue / purple) in one item level band, what they really gave replaces the table
+  // there (#21): every character of the save counts, since what an item gives is the game's rule, not yours.
   const DE = (window.GAMERULES || {}).disenchant || {};
-  let NAME_PRICE = null;
-  function priceByName(name) {
-    if (!NAME_PRICE) {
-      NAME_PRICE = {};
-      Object.entries(((CH && CH.ah) || {}).prices || {}).forEach(([k, p]) => { if (p.name && !k.includes(':') && NAME_PRICE[p.name] == null) NAME_PRICE[p.name] = { id: p.id, price: planPrice(p.id) }; });
-    }
-    return NAME_PRICE[name] || null;
+  const deTable = (it) => (it.q === 2 ? (it.class === 2 ? DE.weapon : DE.armor) : it.q === 3 ? DE.rare : it.q === 4 ? DE.epic : null);
+  let DE_SEEN = null;
+  // ---------------------------------------------------------------- where things are inside instances (#108)
+  // No source places anything inside Forever's dungeons, so this is what your own visits recorded, all characters
+  // and computers: the addon's "place" entries (a creature seen, an NPC or object talked to or looted, each with
+  // the sub-area the game named), boss kills and quest items looted, by instance and sub-area. Each thing with how
+  // often it was seen there and when last. Instances whose sub-areas the game doesn't name (Dire Maul) have none.
+  let PLACES = null;
+  function placesSeen() {
+    const n = Object.values((DB && DB.chars) || {}).reduce((a, c) => a + arr(c && c.journal).length, 0);
+    if (PLACES && PLACES.db === DB && PLACES.n === n) return PLACES.by;
+    const objName = {};
+    Object.values((GD && GD.src) || {}).forEach((rows) => arr(rows).forEach((r) => { if (r && r[0] === 'object' && r[2] && r[1]) objName[r[2]] = r[1]; }));
+    // quest items count only where they were looted inside an instance: a zone where a run started, a boss died or
+    // the addon noted a place (it notes places in party and raid instances only); loot is logged everywhere
+    const inst = new Set();
+    Object.values((DB && DB.chars) || {}).forEach((c) => arr(c && c.journal).forEach((e) => {
+      if (e && e.zone && (e.e === 'place' || e.e === 'boss' || e.e === 'runStart')) inst.add(e.zone);
+    }));
+    // each character's journal is already merged across computers (one entry once), so every entry counts
+    const by = {};
+    const add = (e, list, id, name) => {
+      if (!name && !id) return;
+      const z = (by[e.zone] = by[e.zone] || {}), s = (z[e.sub] = z[e.sub] || { sub: e.sub, bosses: {}, npcs: {}, objects: {}, items: {}, last: 0 });
+      const key = id || name, x = (s[list][key] = s[list][key] || { id: id || null, name: name || null, n: 0, last: 0 });
+      if (!x.name && name) x.name = name;
+      x.n++; x.last = Math.max(x.last, e.t || 0); s.last = Math.max(s.last, e.t || 0);
+    };
+    Object.values((DB && DB.chars) || {}).forEach((c) => arr(c && c.journal).forEach((e) => {
+      if (!e || !e.zone || !e.sub || e.sub === e.zone) return;
+      if (e.e === 'place' && e.kind === 'npc') add(e, 'npcs', e.id, e.name || (GD && GD.npcs[e.id] || [])[0]);
+      else if (e.e === 'place' && e.kind === 'object') add(e, 'objects', e.id, e.name || objName[e.id]);   // a looted object the pack doesn't name: id only
+      else if (e.e === 'boss' && e.name) add(e, 'bosses', null, e.name);
+      else if (e.e === 'loot' && e.item && inst.has(e.zone)) {
+        const id = Number(String(e.item).replace(/^item:/, '').split(':')[0]), it = GD && GD.items[id];
+        if (it && it[9] === 12) add(e, 'items', id, it[0]);   // quest items: where an objective's item was found
+      }
+    }));
+    const out = {};
+    Object.entries(by).forEach(([zone, subs]) => {
+      out[zone] = Object.values(subs).map((s) => ({ sub: s.sub, last: s.last,
+        bosses: Object.values(s.bosses).map((x) => x.name), npcs: Object.values(s.npcs), objects: Object.values(s.objects), items: Object.values(s.items) }))
+        .sort((a, b) => a.sub.localeCompare(b.sub));
+    });
+    PLACES = { db: DB, n, by: out };
+    return out;
+  }
+  function deMeasured() {
+    // a new save, or a disenchant added to any character's list
+    const n = Object.values((DB && DB.chars) || {}).reduce((a, c) => a + arr(c && c.deResults).length, 0);
+    if (DE_SEEN && DE_SEEN.db === DB && DE_SEEN.n === n) return DE_SEEN.by;
+    const by = {}, seen = new Set();
+    Object.values((DB && DB.chars) || {}).forEach((c) => arr(c && c.deResults).forEach((d) => {
+      if (!d || !d.ilvl || d.q == null || !arr(d.out).length) return;
+      const k = JSON.stringify([d.t, d.item]);
+      if (seen.has(k)) return;
+      seen.add(k);
+      const t = deTable({ q: d.q, class: d.class, ilvl: d.ilvl }), i = t ? t.findIndex((r) => d.ilvl >= r[0] && d.ilvl <= r[1]) : -1;
+      if (i < 0) return;
+      const band = [d.q, d.q === 2 ? (d.class === 2 ? 'w' : 'a') : '', i].join(':');
+      (by[band] = by[band] || []).push(d);
+    }));
+    DE_SEEN = { db: DB, n, by };
+    return by;
   }
   function deOutcome(it) {
-    const t = it.q === 2 ? (it.class === 2 ? DE.weapon : DE.armor) : it.q === 3 ? DE.rare : it.q === 4 ? DE.epic : null;
-    const row = t && t.find((r) => it.ilvl >= r[0] && it.ilvl <= r[1]);
-    if (!row) return null;
-    let value = 0, missing = [];
+    const t = deTable(it);
+    const i = t ? t.findIndex((r) => it.ilvl >= r[0] && it.ilvl <= r[1]) : -1;
+    if (i < 0) return null;
+    const row = t[i];
+    const obs = deMeasured()[[it.q, it.q === 2 ? (it.class === 2 ? 'w' : 'a') : '', i].join(':')] || [];
+    let value = 0;
+    const missing = [];
+    if (obs.length >= (DE.minMeasured || 10)) {
+      // your own: per material, the share of disenchants that gave it and the counts it came in
+      const per = {};
+      obs.forEach((d) => {
+        const got = {};
+        arr(d.out).forEach((o) => { const id = o.id || idOfKey(o.item); if (id) got[id] = (got[id] || 0) + (o.count || 1); });
+        Object.entries(got).forEach(([id, n]) => { const m = per[id] || (per[id] = { id: Number(id), times: 0, total: 0, lo: n, hi: n }); m.times++; m.total += n; m.lo = Math.min(m.lo, n); m.hi = Math.max(m.hi, n); });
+      });
+      const mats = Object.values(per).map((m) => {
+        const price = planPrice(m.id), name = anyItemName(m.id);
+        if (price) value += (m.total / obs.length) * price; else missing.push(name);
+        return { name, id: m.id, ch: +(m.times / obs.length).toFixed(3), lo: m.lo, hi: m.hi, price: price || null };
+      });
+      return { value: Math.round(value), mats, missing, from: 'measured', n: obs.length, label: `your ${obs.length} disenchants of this kind` };
+    }
     const mats = row[2].map(([name, ch, lo, hi]) => {
-      const pr = priceByName(name);
-      const avg = ch * (lo + hi) / 2;
-      if (pr && pr.price) value += avg * pr.price; else missing.push(name);
-      return { name, ch, lo, hi, id: pr && pr.id, price: pr && pr.price };
+      const id = (DE.ids || {})[name] || null, price = id ? planPrice(id) : null;
+      if (price) value += ch * (lo + hi) / 2 * price; else missing.push(name);
+      return { name, ch, lo, hi, id, price: price || null };
     });
-    return { value: Math.round(value), mats, missing };
+    return { value: Math.round(value), mats, missing, from: 'table', n: obs.length, label: `Classic disenchant table${obs.length ? ` (${obs.length} of your own so far; ${DE.minMeasured || 10} replace it)` : ''}` };
   }
   // items you wear or keep in an Equipment Manager set are never suggested
   function gearIds() {
@@ -1395,7 +1507,7 @@
         : `usually ${money(r.usual)} (median lowest of ${r.earlier} earlier scans)${r.falling ? '; falling lately' : ''}. Buy under is break-even if it sells at that again; you make is the backtest's median return, per unit`;
       h += `<div class="tr"><div class="c-main"><div class="nm">${anyItemIcon(r.id, { size: 'sm' })} ${itemLink(r.id)}</div><div class="sub">${why} · ${r.listed} listed${r.volume ? ` · at least ${r.volume.perDay} sold a day (probable, ${r.volume.sold} in ${r.volume.hours} h of scans)` : ''}${r.sellShare != null ? ` · ${pct(r.sellShare)} of yours sold` : ''}${r.dontHold ? ` · <span class="neg">the ${esc(r.band)} band is falling: sell at the next scan, don't hold</span>` : ''}${paperBtn(r)}</div></div><div class="dim">${RULE_WORDS[r.rule]}</div><div class="c-num">${money(r.lowest)}</div><div class="c-num">${money(r.buyUnder)}</div><div class="c-num best">${money(r.net)}</div></div>`;
     });
-    h += '</div>' + trialView() + '<details class="how"><summary>How the buy list works</summary><p>Under the vendor price is certain: a vendor pays a fixed price. Disenchant values use the Classic disenchant table and your AH prices for the materials, so they are an expected value. A vendor sells it for less: how often the lowest price stayed above the vendor\'s, in this item\'s own scans. The two price rules (25% under the usual lowest, few listed far under the rest) are checked against every item\'s scan history: buy at a scan\'s lowest, sell at the next scan\'s lowest after the cut. They are shown only after 30 such cases with a median that made money, and what you make is that median return, not the gap to the usual price. Items with random rolls (of the Owl...) are left out of these two, since one price mixes every roll.</p></details>';
+    h += '</div>' + trialView() + '<details class="how"><summary>How the buy list works</summary><p>Under the vendor price is certain: a vendor pays a fixed price. Disenchant values are an expected value at your AH prices for the materials: from what your own disenchants of that kind and item level gave once there are 10 of them, else the Classic disenchant table. A vendor sells it for less: how often the lowest price stayed above the vendor\'s, in this item\'s own scans. The two price rules (25% under the usual lowest, few listed far under the rest) are checked against every item\'s scan history: buy at a scan\'s lowest, sell at the next scan\'s lowest after the cut. They are shown only after 30 such cases with a median that made money, and what you make is that median return, not the gap to the usual price. Items with random rolls (of the Owl...) are left out of these two, since one price mixes every roll.</p></details>';
     return h;
   }
 
@@ -1507,7 +1619,7 @@
   };
   const EV_LABEL = { xp: 'XP', money: 'Money', coin: 'Coin', loot: 'Loot', kill: 'Kills', ahPost: 'AH posts', receive: 'Received', zone: 'Zones', group: 'Group', flightPath: 'Flight paths', equip: 'Gear', craft: 'Crafts', skill: 'Skills', login: 'Logins', logout: 'Logouts', disenchant: 'Disenchants', profession: 'Professions', death: 'Deaths', grindStart: 'Grind start', grindStop: 'Grind end', grindPause: 'Grind paused', grindResume: 'Grind resumed', runStart: 'Run start', runEnd: 'Run end', runLeft: 'Run left', runBack: 'Run back', boss: 'Bosses', wipe: 'Wipes', groupLoot: 'Group loot', ahScan: 'AH scans', spec: 'Spec', questDone: 'Quests done', questAccept: 'Quests taken', questDrop: 'Quests dropped', level: 'Levels', note: 'Notes', session: 'Sessions', ahSold: 'AH sold', ahExpired: 'AH expired', ahWon: 'AH won', ahOutbid: 'AH outbid', ahRemoved: 'AH cancelled', cooldownCraft: 'Cooldowns', learn: 'Learned', recipe: 'Recipes', rep: 'Reputation' };
   // the loot-money chat line ("You loot 1 Gold ...") is the same money as the 'money' row next to it
-  const EV_HIDDEN = { coin: true };
+  const EV_HIDDEN = { coin: true, place: true };   // place: where things are inside instances, read by placesSeen
   const evRow = (e) => `<div class="ev"><span class="t">${fmtTime(e.t)}</span><span class="what">${EV[e.e] ? EV[e.e](e) : esc(e.e)}</span><span class="where">${esc(e.sub || e.zone || '')}</span></div>`;
   V.journal = function () {
     const all = arr(CH.journal).filter((e) => e && !EV_HIDDEN[e.e]);
@@ -1668,7 +1780,7 @@
     RAW = specsByGroup(db || {});
     DB = RAW;
     try { if (window.CC && window.CC.syncView) DB = specsByGroup(window.CC.syncView(RAW) || RAW); } catch (e) { console.warn('sync view', e); DB = RAW; }
-    NAME_PRICE = null;
+    DE_SEEN = null; PLACES = null;
     const chars = DB.chars || {};
     const keys = Object.keys(chars).filter((k) => chars[k] && chars[k].snap);
     if (!keys.length) { CH = null; CHARS = []; render(); return; }
@@ -1683,13 +1795,15 @@
     render();
     document.dispatchEvent(new CustomEvent('cc:loaded', { detail: { live: STATE.live } }));
   }
+  // the combat log is read after the save: the Grinds tab draws its deaths once it is in
+  document.addEventListener('cc:combatstate', () => { if (CH && STATE.tab === 'grinds') render(); });
   const loadText = (binary, opts) => load(window.CCLua.parse(binary).ClaudeCompanionDB, opts);
   // for view modules in their own files (js/gear.js): they add V.<tab> and use these helpers
   window.CC = {
     load, loadText, V, reload: () => RAW && load(RAW, { live: STATE.live }),
     setChar, get CHARS() { return CHARS; },
-    api: { get CH() { return CH; }, get RAW() { return RAW; }, get DB() { return DB; }, STATE, GD, esc, arr, money, icon, itemIcon, anyItemIcon, anyItemName, gdItem, gdTip,
-      gdSourceLines, itemGates, recipeLine, planPrice, priceOf, trackerStats, goldOf, lootStrip, ago, dur, fmtTime, flipsOf, sellThrough, buyListOf, positionsOf, paperOf, weeklyOf, cooldowns, craftCost, craftProfit, vendorPrice, specTrees, specLabel, TREE_NAMES, gearIds, item, byId, render, QCOL, deOutcome,
+    api: { get CH() { return CH; }, get SPELLS() { return SPELLS; }, get RAW() { return RAW; }, get DB() { return DB; }, STATE, GD, esc, arr, money, icon, itemIcon, anyItemIcon, anyItemName, gdItem, gdTip,
+      gdSourceLines, itemGates, recipeLine, planPrice, priceOf, trackerStats, goldOf, lootStrip, ago, dur, fmtTime, flipsOf, sellThrough, buyListOf, positionsOf, paperOf, weeklyOf, cooldowns, craftCost, craftProfit, vendorPrice, specTrees, specLabel, TREE_NAMES, gearIds, item, byId, render, QCOL, deOutcome, placesSeen,
       itemLink, itemIconOf, itemCell, itemInline, uiIcon, UI_ICON, PROF_ICON },
   };
 

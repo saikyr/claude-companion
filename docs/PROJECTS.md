@@ -164,12 +164,11 @@ private too). What a friend gets is public: the download, and the text below tha
 
 What a friend's Claude can't do, today:
 
-- Read the brief, the history beyond the snapshot, or the `game` schema (issue #80): those are the owner's database.
-  It reads `snapshot.json` (the newest 20 grinds, 10 runs, 25 sales and buys, flips) and cites Forever
-  sources for game facts.
-- Sync cards to the friend's other computers: `from-claude/cards.json` is per computer (issue #83).
-- Have its cards' numbers looked up: offline, `check-cards.py` checks the format and the answer rules,
-  not each number against its source.
+- Read the brief or the history beyond the snapshot: those are the owner's database. It reads `snapshot.json`
+  (the newest 20 grinds, 10 runs, 25 sales and buys, flips). Game facts it reads offline with `claude/game.py`
+  (#80): the same rows and labels as the `game` schema, from the pack its app has.
+- Have its cards' numbers looked up, except drop rates: offline, `check-cards.py` checks the format, the answer
+  rules and each `game.drop:` fact against the pack (`claude/game.py`), not the snapshot numbers against their source.
 
 A message the owner can send a friend: SETUP.md's two blocks, word for word. Before it, the friend needs WoW
 Forever (English client) on Windows or a Mac, and for the coach the Claude desktop app on a plan with
@@ -192,7 +191,8 @@ offered Apple's free Command Line Tools.
 I play WoW Forever with the Claude Companion addon and app. I install it myself; you are my coach.
 1. Ask for access to my ClaudeCompanion addon folder. It is in my World of Warcraft folder, in
    _forever_/Interface/AddOns/ClaudeCompanion (Windows: usually C:\Program Files (x86)\World of Warcraft,
-   Mac: /Applications/World of Warcraft). Use folder access only: never run, download or install anything.
+   Mac: /Applications/World of Warcraft). Use folder access only: never download or install anything, and
+   run nothing on my computer (the Python tools in claude/ run in your own workspace, on the folder).
 2. If that folder isn't there yet, the Companion isn't installed: tell me to install it from the download
    I was given, type /reload in game, and tell you when it's done.
 3. Then read claude/GUIDE.md and companion-data/snapshot.json in that folder, and tell me in a few lines

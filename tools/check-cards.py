@@ -2,10 +2,13 @@
 # Checks a From Claude cards file (companion-data/from-claude/cards.json) against the format in
 # companion-data/SCHEMA.md before Claude writes it to the player's computer.
 # The format, then the answer rules (tools/answer_rules.py: sources for numbers, rates with samples, profit
-# only from flips, risk on farm cards, no banned tips). Online, Postgres runs the same rules and also
-# compares every fact's number with its src (private.claude_put_setting refuses a list that fails).
+# only from flips, risk on farm cards, no banned tips), then each game.drop:<item>:<npc> fact against the pack
+# this install has (game.py, the same rows and labels as the database's game.drop_rates). Online, Postgres runs
+# the same rules and also compares every other fact's number with its src (private.claude_put_setting refuses
+# a list that fails).
 #   python3 tools/check-cards.py path/to/cards.json      -> "ok, N cards" or the problems, exit 1
 import json, os, re, sys
+from decimal import Decimal
 from datetime import datetime
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from answer_rules import card_rules
@@ -59,7 +62,36 @@ def check(d):
             bad.append(f'{at}: track is {{"grind": "<name used with /cc start>", "mobs": [names]}}')
         if c.get('status', 'open') == 'open':           # a withdrawn or done card is no longer advice
             bad += [f'{at}: [{r}] {m}' for r, m in card_rules(c)]
+            for f in (c['facts'] if isinstance(c.get('facts'), list) else []):
+                if isinstance(f, dict) and re.fullmatch(r'game\.drop:\d{1,9}:\d{1,12}', str(f.get('src') or '')):
+                    m = drop_problem(f)
+                    if m: bad.append(f'{at}: [value] fact "{f.get("label")}": {m}')
     return bad
+
+
+_GAME = []
+def drop_problem(f):
+    """private.fact_problem's game.drop branch, offline: the fact must quote the rate as the game data labels it"""
+    if not _GAME:
+        try:
+            from game import Game
+            _GAME.append(Game())
+        except (ImportError, OSError, SystemExit) as e:
+            _GAME.append(e)
+    g = _GAME[0]
+    if not hasattr(g, 'drop'): return f'no game data to check it against ({g})'
+    item, npc = f['src'].split(':')[1:]
+    r = g.drop(item, npc)
+    if r is None: return f'no such drop in the game data (item {item} from creature {npc})'
+    txt = ' '.join('' if f.get(k) is None else str(f.get(k)) for k in ('value', 'note'))   # as Postgres ->> reads them
+    nums = [Decimal(x) for x in re.findall(r'(\d+(?:\.\d+)?)', txt.replace(',', ''), re.ASCII)]   # exact, as numeric compares
+    if r['rate'] == 'forever':
+        if not any(abs(n - Decimal(r['rate_pct'])) <= Decimal('0.05') for n in nums) or not any(n == r['corpses'] for n in nums):
+            return f"the game data says {r['label']}: quote the rate as written there, with the corpses"
+    elif r['rate'] == 'classic':
+        if not re.search(r'\bclassic\b', txt.lower(), re.ASCII): return f"the game data has only a Classic rate ({r['label']}): say Classic"
+    elif not re.search(r'\bunknown\b', txt.lower(), re.ASCII): return f"the game data has no rate ({r['label']}): say unknown"
+    return None
 
 
 if __name__ == '__main__':

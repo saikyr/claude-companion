@@ -38,7 +38,12 @@ NEVER = {'companion-data/snapshot.json', 'companion-data/settings.json', 'compan
 # new build (no /reload asked for it): the kit goes out with the next build.
 KIT = {'claude/COACHING.md': 'docs/COACHING.md', 'claude/FEATURES.md': 'docs/FEATURES.md',
        'claude/answer_rules.py': 'tools/answer_rules.py', 'claude/check-cards.py': 'tools/check-cards.py',
-       'claude/check-answer.py': 'tools/check-answer.py'}
+       'claude/check-answer.py': 'tools/check-answer.py',
+       'claude/game.py': 'tools/game.py', 'claude/pack-to-rows.py': 'tools/pack-to-rows.py'}
+# made at build time: rules.js as JSON for claude/game.py on a computer without node, with the sha of the
+# rules.js it was made from (pack-to-rows.py uses it only while that matches)
+_rspec = importlib.util.spec_from_file_location('pack_to_rows', os.path.join(ROOT, 'tools', 'pack-to-rows.py'))
+pack_rows = importlib.util.module_from_spec(_rspec); _rspec.loader.exec_module(pack_rows)
 
 
 def git(*a, cwd=ROOT, check=True):
@@ -76,6 +81,10 @@ def assemble(work, repo, notes, ver, src_branch, src_sha):
             shutil.copy2(full, dest)
             if rel == 'Core.lua': stamp_build(dest, src_sha)
             with open(dest, 'rb') as fh: files[rel] = hashlib.sha256(fh.read()).hexdigest()
+    with open(os.path.join(ADDON, 'web', 'data', 'rules.js'), encoding='utf-8') as fh: rtext = fh.read()
+    rjson = json.dumps({'sha': pack_rows.rules_sha(rtext), 'rules': pack_rows.rules_obj(rtext)}, ensure_ascii=False).encode('utf-8')
+    with open(os.path.join(work, 'ClaudeCompanion', 'claude', 'rules.json'), 'wb') as fh: fh.write(rjson)
+    files['claude/rules.json'] = hashlib.sha256(rjson).hexdigest()
     for rel, src in KIT.items():
         dest = os.path.join(work, 'ClaudeCompanion', *rel.split('/'))
         os.makedirs(os.path.dirname(dest), exist_ok=True)

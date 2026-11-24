@@ -260,6 +260,8 @@
       cache = { account, after: 0, recs: {}, names: {} };
       state.account = account; state.adopt = true; state.pulledOnce = false;
       state.settings = {}; state.settingsT = {}; state.pendingSince = {};
+      // this computer's cards.json goes to the new account too
+      delete state.live.cards; delete state.cards;
     }
 
     // fetch everything new on the account; returns { changed, settings: {k: v} to apply here }
@@ -317,6 +319,23 @@
       return true;
     }
 
+    // a Claude's cards.json on this computer (a friend's Claude has no database, #83): sent to the account
+    // through the card gate (public.cc_put_cards, merged card by card, newest wins), so the other computers
+    // get them in cc.claude.cards. Sent when the file changed, and again after a refusal (a newer snapshot
+    // can make a fact match). state.cards: what happened last {at, ok, error, cards, stale}.
+    async function pushCards(text) {
+      if (text == null) return null;
+      await ready();
+      const h = hash(text);
+      if (state.live.cards === h && state.cards && state.cards.ok) return null;
+      const r = await rpc('cc_put_cards', { p_key: state.key, p_value: text });
+      // refused: the gate (or the file's format) said no, Claude fixes the file; else not sent, tried again
+      state.cards = { at: new Date(io.now()).toISOString(), ok: !!(r && r.ok), error: (r && r.error) || null, refused: !!(r && r.refused),
+        cards: (r && r.cards) || null, stale: (r && r.stale) || 0 };
+      state.live.cards = h; await io.saveState(state);
+      return state.cards;
+    }
+
     async function linkCode() { await ready(); return rpc('cc_link_code', { p_key: state.key }); }
     async function link(code) {
       await ready();
@@ -336,7 +355,7 @@
     }
 
     return {
-      ready, push, pull, pushSnapshot, linkCode, link, isOff, setOff, status,
+      ready, push, pull, pushSnapshot, pushCards, linkCode, link, isOff, setOff, status,
       get state() { return state; }, get cache() { return cache; },
       view: (own) => view(own, cache, state && state.device),
     };
@@ -389,6 +408,12 @@
         const raw = A.RAW;
         if (raw && raw.chars) await C.push(raw, settingsNow());
         if (CC.lastSnapshot) await C.pushSnapshot(CC.lastSnapshot);
+        // after the snapshot: the card gate checks the cards' numbers against it
+        // (its own failure, an older backend say, is the cards' and doesn't stop the sync)
+        const cardsFile = await fetch('api/cards', { cache: 'no-store' }).then((x) => (x.status === 200 ? x.text() : null)).catch(() => null);
+        let sent = null;
+        try { sent = await C.pushCards(cardsFile); } catch (e) { sent = { at: new Date().toISOString(), ok: false, error: String((e && e.message) || e) }; }
+        if (sent && CC.cardsSent) CC.cardsSent(sent);
         lastPull = Date.now();
         const changedSettings = Object.keys(r.settings).length > 0;
         C.status.ok = true; C.status.error = null;

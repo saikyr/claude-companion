@@ -100,23 +100,29 @@
     if (own) return { row: name, s, gain: 0, same: true };
     const twoHandWorn = !!mh && CC.gear.wornInv(mh) === 17;
     if (name === 'Off hand' && twoHandWorn) return { row: name, s, gain: null, blocked: 'you use a two-hander' };
-    const vs = cur.reduce((a, c) => (c.s < a.s ? c : a), cur[0]);
-    // a two-hander replaces the main hand and the off hand
+    // a two-hander replaces the main hand and the off hand; a set bonus it makes or breaks counts (the Gear tab's
+    // own rule, gear.js setDelta), and in a ring or trinket row it replaces whichever gives the bigger gain
     const withOh = name === 'Main hand' && inv === 17 && oh;
-    const base = vs.s + (withOh ? W.score(oh.st, ctx.w, 17, oh.st) : 0);
-    return { row: name, s, base, gain: s - base, vs, also: withOh ? oh.id : null, target: vs.n, effect: effectOf(it.id) || (vs.id ? effectOf(vs.id) : false) };
+    const ohS = withOh ? W.score(oh.st, ctx.w, 17, oh.st) : 0;
+    const opt = cur.map((c) => {
+      const sd = CC.gear.setDelta ? CC.gear.setDelta(ctx.w, worn, it.id, [c.id].concat(withOh ? [oh.id] : [])) : { d: 0 };
+      return { vs: c, sd, g: s - c.s - ohS + sd.d };
+    }).reduce((a, o) => (o.g > a.g ? o : a));
+    const vs = opt.vs, sd = opt.sd;
+    const base = vs.s + ohS;
+    return { row: name, s, base, gain: s - base + sd.d, setBonus: sd.d ? +sd.d.toFixed(1) : undefined, vs, also: withOh ? oh.id : null, target: vs.n, effect: effectOf(it.id) || (vs.id ? effectOf(vs.id) : false) };
   }
 
   // ---------------------------------------------------------------- values
   function values(o, it) {
-    const v = { vendor: 0, ah: null, de: null, deMats: null, deNeeds: null };
+    const v = { vendor: 0, ah: null, de: null, deMats: null, deNeeds: null, deFrom: null };
     if (!o.noValue && it.sell) v.vendor = it.sell * o.count;
     if (!o.bound && it.bind !== 1 && it.bind !== 4) { const p = A.planPrice(it.id); if (p) v.ah = Math.round(p * 0.95) * o.count; }
     const ench = skill('Enchanting');
     if (ench && (it.class === 2 || it.class === 4) && it.q >= 2 && it.q <= 4 && A.deOutcome) {
       const need = deSkill(it);
       const de = A.deOutcome(it);
-      if (de && ench >= need) { v.de = de.missing.length < de.mats.length ? de.value : null; v.deMats = de.mats; }
+      if (de && ench >= need) { v.de = de.missing.length < de.mats.length ? de.value : null; v.deMats = de.mats; v.deFrom = de.label || null; }
       else if (de) v.deNeeds = need;
     }
     return v;
@@ -281,7 +287,7 @@
       const m = measure(c, r.it, r.st, C.use);
       return m && { spec: c.name, comparedWith: c.base.label, slot: m.row, score: +m.s.toFixed(1), gain: m.gain == null ? null : +m.gain.toFixed(1),
         vs: m.vs && m.vs.id ? { id: m.vs.id, name: A.anyItemName(m.vs.id) } : null, same: !!m.same, blocked: m.blocked || null,
-        canWear: can, level: can && r.it.req > lvl ? r.it.req : null, effect: !!m.effect };
+        canWear: can, level: can && r.it.req > lvl ? r.it.req : null, effect: !!m.effect, setBonus: m.setBonus || null };
     }).filter(Boolean);
     return { id: r.it.id, name: r.it.name, specs: out };
   }
@@ -328,7 +334,7 @@
       h += `<div class="l tipx">${esc(s.name)}: ${s.s.toFixed(1)} <span class="${cls}">${g >= 0 ? '+' : '−'}${Math.abs(g).toFixed(1)}</span> <span class="dim">vs ${esc(vsName)}${!s.can ? ' · you can\'t wear it' : s.later ? ' · level ' + s.later : ''}</span></div>`;
     });
     const val = v.value || {};
-    if (val.de != null) h += `<div class="l tipx">Disenchant: ≈ ${A.money(val.de, { short: true })} <span class="dim">${esc((val.deMats || []).slice().sort((a, b) => b.ch - a.ch).map((m) => `${m.lo === m.hi ? m.lo : m.lo + '–' + m.hi} ${m.name} ${Math.round(m.ch * 100)}%`).join(', '))}</span></div>`;
+    if (val.de != null) h += `<div class="l tipx">Disenchant: ≈ ${A.money(val.de, { short: true })} <span class="dim">${esc((val.deMats || []).slice().sort((a, b) => b.ch - a.ch).map((m) => `${m.lo === m.hi ? m.lo : m.lo + '–' + m.hi} ${m.name} ${Math.round(m.ch * 100)}%`).join(', '))}${val.deFrom ? ' · ' + esc(val.deFrom) : ''}</span></div>`;
     else if (val.deNeeds) h += `<div class="l tipx dim">Disenchant: needs Enchanting ${val.deNeeds}</div>`;
     return h;
   }
@@ -393,7 +399,7 @@
     snapshot() {
       const C = compute();
       return Object.values(C.byKey).filter((v) => v.flag && v.flag !== 'keep').map((v) => ({ id: v.id || null, name: v.name || null, where: [...new Set(v.where)], flag: v.flag, words: v.words, why: v.why || null,
-        value: v.amount || null, specs: v.specs.filter((s) => s.gain != null && !s.same).map((s) => ({ spec: s.name, score: +s.s.toFixed(1), gain: +s.gain.toFixed(1), canWear: s.can, level: s.later || null })) }));
+        value: v.amount || null, deFrom: v.flag === 'de' && v.value ? v.value.deFrom || null : undefined, specs: v.specs.filter((s) => s.gain != null && !s.same).map((s) => ({ spec: s.name, score: +s.s.toFixed(1), gain: +s.gain.toFixed(1), canWear: s.can, level: s.later || null, setBonus: s.setBonus || undefined })) }));
     },
     bestOwnedSnapshot() {
       return C_specs().map((sp) => {
