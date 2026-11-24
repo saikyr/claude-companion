@@ -116,7 +116,10 @@ function GetActionInfo(s) if s==1 then return "spell", 2050 elseif s==2 then ret
 function GetActionTexture() return 135913 end
 function GetActionText() return nil end
 function GetBindingKey(cmd) if cmd=="ACTIONBUTTON1" then return "1" end end
-C_Spell = { GetSpellName = function(id) return "Lesser Heal" end, GetSpellTexture = function() return 136223 end }
+C_Spell = { GetSpellName = function(id) return "Lesser Heal" end, GetSpellTexture = function() return 136223 end,
+  GetSpellDescription = function(id) return "Reduces your target's chance to resist your Shadow spells by 8%." end }
+function GetCombatRating(cr) if cr == 8 then return 30 end return 0 end
+function GetCombatRatingBonus(cr) if cr == 8 then return 3 end return 0 end
 function GetMacroInfo(i) if i==1 or i==121 then return "Tag", 1234, "/cast Shadow Word: Pain" end end
 function GetNumMacros() return 1, 1 end
 function GetNumBindings() return 2 end
@@ -883,6 +886,19 @@ do -- one source for quests, NPCs and item sources: the app's pack, never a copy
   check(src == 0, "no item-source copies in the save (" .. src .. " items have one)")
   check(OLD_ITEM_KEPT, "dropping old copies keeps the item itself")
   if FAILED then error("data source checks failed") end
+end
+do -- spell hit for gear advice: the rating and its %, and each talent you have with its text at your rank
+  local function check(ok, what) print((ok and "PASS " or "FAIL ") .. what); if not ok then FAILED = true end end
+  local c; for _, v in pairs(ClaudeCompanionDB.chars) do c = v end
+  ns.Snapshot("test")
+  local st = c.snap.stats or {}
+  check(st.spellHitRating == 30 and st.spellHitBonus == 3, "spell hit rating and the % it gives are saved")
+  local withRank, withDesc = 0, 0
+  for _, sp in pairs(c.specs) do for _, t in ipairs((sp.traits or {}).trees or {}) do for _, n in ipairs(t.nodes) do
+    if (n.rank or 0) > 0 then withRank = withRank + 1; if n.desc and n.desc:find("8%%") then withDesc = withDesc + 1 end
+    elseif n.desc then withDesc = -1000 end
+  end end end
+  check(withRank > 0 and withDesc == withRank, "talents you have carry their text at your rank, others don't (" .. withDesc .. "/" .. withRank .. ")")
 end
 do -- #16: item cooldowns (Salt Shaker on 3 days, Hearthstone on 1 hour), read from the game's own timers
   local function check(ok, what) print((ok and "PASS " or "FAIL ") .. what); if not ok then FAILED = true end end

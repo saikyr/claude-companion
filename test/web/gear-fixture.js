@@ -19,7 +19,10 @@ function tree(id, points) {
   const nodes = [];
   for (let i = 0; i < 16; i++) {
     const rank = Math.max(0, Math.min(5, points - i * 5));
-    nodes.push({ node: id * 100 + i, x: 300 + (i % 4) * 600, y: 300 + Math.floor(i / 4) * 600, rank, max: 5, name: 'Talent ' + i, spell: 1000 + i, icon: 136223 });
+    const n = { node: id * 100 + i, x: 300 + (i % 4) * 600, y: 300 + Math.floor(i / 4) * 600, rank, max: 5, name: 'Talent ' + i, spell: 1000 + i, icon: 136223 };
+    // the Shadow tree's Shadow Focus, with its text at the rank taken (the addon saves it for talents you have)
+    if (id === 3 && i === 1) { n.name = 'Shadow Focus'; if (n.rank) n.desc = `Reduces your target's chance to resist your Shadow spells by ${2 * n.rank}%.`; }
+    nodes.push(n);
   }
   return { id, nodes };
 }
@@ -65,6 +68,7 @@ function saveLua(now, extra) {
     key: 'Testpriest-Realm',
     snap: {
       taken: now - 600, version: 1, activeSpec: 1,
+      stats: { spellHitRating: 20, spellHitBonus: 2 },
       character: { name: 'Testpriest', race: 'Human', class: 'Priest', classFile: 'PRIEST', faction: 'Alliance', level: 59, xp: 75624, xpMax: 209800, money: 1362396,
         where: { zone: 'Stormwind City', map: 1453, x: 50, y: 50 }, hearth: 'Stormwind City' },
       equipped: Object.entries(SHADOW).map(([slot, id]) => ({ slot: Number(slot), slotName: SLOT[slot], item: item(id), count: 1 })),

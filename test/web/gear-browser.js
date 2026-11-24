@@ -133,6 +133,11 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
     return { before, after };
   });
   check(worldSeen.before === 'worldAh' && worldSeen.after === null, `a world drop your AH once listed is a target again (Hand of Edward the Odd: ${JSON.stringify(worldSeen)})`);
+  // hit up to the cap (spell weights): Shadow Focus 5/5 read from its text, 10 rating per 1% from the client's numbers
+  const sh = sum.find((s) => s.tree === 'Shadow');
+  check(sh && sh.hit && sh.hit.talents.some((t) => t.name === 'Shadow Focus' && t.pct === 10) && sh.hit.ratingPer1Pct === 10 && sh.hit.ratingMeasured && sh.hit.capPct === 5 && sh.hit.overCap,
+    `Shadow: hit from Shadow Focus and gear against the 5-man cap (${JSON.stringify(sh && sh.hit)})`);
+  check(holy && !holy.hit, 'Holy: no hit model (healing weights)');
   check(holy && holy.weightsName === 'Holy' && holy.weightsChosen === 'default for the biggest tree', 'snapshot: Holy weights, chosen by the biggest tree');
   check(holy && holy.ahUpgrades.some((u) => u.roll === 'of Healing' && u.ah && u.ah.price > 0), 'snapshot: AH upgrades with roll and price');
   check(holy && holy.preBis.length >= 15 && holy.preBis.every((p) => Array.isArray(p.alternatives)), 'snapshot: pre-BiS with alternatives');

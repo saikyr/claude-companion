@@ -9,6 +9,11 @@ window.GAMERULES = {
   repFloor: [null, -42000, -6000, -3000, 0, 3000, 9000, 21000, 42000],
   // the Auction House keeps 5% of a sale (checked on Gabriel's own sales, 22 Nov 2026); the deposit comes back on a sale
   ahCut: 0.05,
+  // Spell hit for gear advice. A caster misses a target 2 levels above it 6% of the time and always misses at
+  // least 1%, so against 5-man bosses (level 62 for a level-60 player) 5% hit is the most that counts (Classic
+  // rule, warcraft.wiki.gg "Hit"; not yet measured on Forever). Talents that lower the chance to resist your
+  // spells (Shadow Focus, Elemental Precision...) count as hit for the schools they name.
+  spellHit: { cap: 5, against: '5-man bosses, 2 levels above you', src: 'Classic rule (warcraft.wiki.gg, Hit)' },
   // Instances that are raids or battlegrounds (zone names as the pack writes them). Raids: warcraft.wiki.gg "Raid"
   // (Classic) plus Forever's own, warcraft.wiki.gg/wiki/WoW_Forever (Barrow Deeps, Hyjal Summit). Item group sizes
   // in the pack can't tell them apart (most raid trash drops say nothing).

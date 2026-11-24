@@ -89,8 +89,10 @@
   function measureIn(ctx, it, st, row) {
     const inv = invOf(it);
     const [name, slots] = row, worn = ctx.base.worn;
-    const s = W.score(st, ctx.w, name);
-    const cur = slots.map((n) => worn[n] ? { n, id: worn[n].id, s: W.score(worn[n].st, ctx.w, n) } : { n, id: null, s: 0 });
+    const cur = slots.map((n) => worn[n] ? { n, id: worn[n].id, st: worn[n].st, s: W.score(worn[n].st, ctx.w, n, worn[n].st) } : { n, id: null, s: 0 });
+    // what it would replace: the weaker of the slot's items (its hit leaves room under the hit cap)
+    const weak = cur.reduce((a, c) => (c.s < a.s ? c : a), cur[0]);
+    const s = W.score(st, ctx.w, name, weak && weak.st);
     if (cur.some((c) => c.id === it.id)) return { row: name, s, gain: 0, same: true };
     const mh = worn[16], oh = worn[17];
     const twoHandWorn = !!mh && CC.gear.wornInv(mh) === 17;
@@ -98,7 +100,7 @@
     const vs = cur.reduce((a, c) => (c.s < a.s ? c : a), cur[0]);
     // a two-hander replaces the main hand and the off hand
     const withOh = name === 'Main hand' && inv === 17 && oh;
-    const base = vs.s + (withOh ? W.score(oh.st, ctx.w, 17) : 0);
+    const base = vs.s + (withOh ? W.score(oh.st, ctx.w, 17, oh.st) : 0);
     return { row: name, s, base, gain: s - base, vs, also: withOh ? oh.id : null, target: vs.n, effect: effectOf(it.id) || (vs.id ? effectOf(vs.id) : false) };
   }
 
@@ -215,8 +217,10 @@
       pool.push({ o, it, inv: invOf(it), st, s: W.score(st, ctx.w), unique: /(?:^|\n)Unique/.test(tipText(it)) });
     });
     const worn = ctx.base.worn;
-    const baseScore = (n) => (worn[n] ? W.score(worn[n].st, ctx.w, n) : 0);
-    const inSlot = (p, slot) => Object.assign({}, p, { s: W.score(p.st, ctx.w, slot) });
+    const baseScore = (n) => (worn[n] ? W.score(worn[n].st, ctx.w, n, worn[n].st) : 0);
+    // scored in place of what the compared gear has there (the first of a pair), so hit counts up to the cap
+    const slotNums = Object.fromEntries(CC.gear.SLOTS.map(([name, nums]) => [name, nums]));
+    const inSlot = (p, slot) => Object.assign({}, p, { s: W.score(p.st, ctx.w, slot, ((worn[(slotNums[slot] || [])[0]] || {}).st)) });
     const pick = (invs, n, slot) => {
       const out = [], ids = new Set();
       pool.filter((p) => invs.includes(p.inv)).map((p) => inSlot(p, slot)).sort((a, b) => b.s - a.s).forEach((p) => {

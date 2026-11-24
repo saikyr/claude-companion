@@ -160,7 +160,7 @@
     { id: 'healing', cls: 'PRIEST', trees: ['Holy'], name: 'Holy', role: 'heal', w: HEAL_W, why: HEAL_WHY, note: HEAL_NOTE, src: HEAL_SRC },
     { id: 'disc', cls: 'PRIEST', trees: ['Discipline'], name: 'Discipline', role: 'heal', w: HEAL_W, why: HEAL_WHY, note: HEAL_NOTE, src: HEAL_SRC },
     { id: 'shadow', cls: 'PRIEST', trees: ['Shadow'], name: 'Shadow', role: 'spell',
-      w: { 45: 1, 42: 1, 111: 1, 6: 0.55, 43: 0.66, 5: 0.35, 32: 0.3, 31: 0.2 },
+      w: { 45: 1, 42: 1, 111: 1, 6: 0.55, 43: 0.66, 5: 0.35, 32: 0.3, 31: 1.66 },
       why: {
         45: 'The unit: every other number is "worth this many points of shadow spell power".',
         42: 'Spell damage counts for shadow spells in full.', 111: 'Shadow damage counts in full.',
@@ -168,9 +168,9 @@
         43: 'Steady mana through a questing loop (about 6 kills per mana bar): 0.66.',
         5: '15 mana per point plus a little crit: 0.35.',
         32: '14 crit rating = 1% crit; crits add 50% (100% in Shadowform) to Mind Blast and Mind Flay only: 0.3.',
-        31: '10 hit rating = 1% hit. Against mobs of your level you already hit 96%, and Shadow Focus adds more, so little is missed: 0.2.',
+        31: 'Until you reach the hit cap a hit point is worth 1.66 (the Icy Veins Forever order, spell power = 1); past the cap it is worth nothing. Your hit (gear and talents such as Shadow Focus) and the cap are read from the game: see the hit line on the Gear page.',
       },
-      note: 'One point of shadow spell power = 1. Built for questing and dungeons: kill, regen with Spirit Tap, next pull. For raid bosses (17% spell hit needed), copy this and raise Hit.',
+      note: 'One point of shadow spell power = 1. Built for questing and dungeons: kill, regen with Spirit Tap, next pull. Hit counts up to the 5-man cap (data/rules.js gear.spellHit).',
       src: { label: 'Worked out 18 Nov 2026 from Forever shadow ranks (metabot.gg), talents (foreverchanges.pro talents), 14 crit / 10 hit rating = 1% (foreverdb.net/stats); coefficients are Classic rules', url: null } },
   ];
 
@@ -326,15 +326,30 @@
     },
     // sum of stat x weight; % lines count as their rating (CONV) unless the profile weighs them itself.
     // slot: where the item is worn (see hand), which decides what its weapon DPS is worth
-    score(st, w, slot) {
+    // replaced: the stats of the item this one would replace (the item itself when scoring what you wear).
+    // A spell profile with a hit model (w.hit, gear.js hitModel) counts hit only up to the cap: the room
+    // left with every other item you wear, so hit past the cap is worth nothing.
+    score(st, w, slot, replaced) {
       let s = 0;
+      const hm = w && w.hit;
       for (const [k, v] of Object.entries(st || {})) {
+        if (hm && W.isHit(k)) continue;
         let wt = k === 'dps' ? W.dpsWeight(w, slot) : w[k];
         if (wt == null && PCT[k]) wt = (w[PCT[k][0]] || 0) * PCT[k][1];
         s += (wt || 0) * v;
       }
+      if (hm) s += (w[S.hit] || 0) * Math.min(W.hitRating(st, hm), W.hitRoom(hm, replaced));
       return s;
     },
+    // hit as rating: the rating line, plus "+N% hit" lines at the rating the client gives for 1%
+    isHit: (k) => Number(k) === S.hit || (PCT[k] && PCT[k][0] === S.hit),
+    hitRating(st, hm) {
+      let r = 0;
+      for (const [k, v] of Object.entries(st || {})) if (Number(k) === S.hit) r += v; else if (PCT[k] && PCT[k][0] === S.hit) r += v * ((hm && hm.per1) || PCT[k][1]);
+      return r;
+    },
+    // rating that still counts: the cap, less what you have without the replaced item
+    hitRoom: (hm, replaced) => Math.max(0, hm.capR - (hm.haveR - W.hitRating(replaced, hm))),
     OFF_HAND_DPS,
     // what the stat ids are called, for tables
     statName(k, names) { return k === 'dps' ? 'Melee weapon DPS' : k === 'rdps' ? 'Ranged weapon DPS' : (names && names[k]) || ({ 36: 'Haste', 37: 'Expertise', 39: 'Ranged attack power' })[k] || 'stat ' + k; },

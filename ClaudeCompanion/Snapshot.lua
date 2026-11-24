@@ -65,6 +65,10 @@ local function Stats()
     s.meleeCrit = Clean(Call(GetCritChance))
     s.spellHit = Clean(Call(GetSpellHitModifier))
     s.hit = Clean(Call(GetHitModifier))
+    -- spell hit from rating (the Forever client has ratings): the rating itself and the % it gives now
+    local CR_SPELL_HIT = CR_HIT_SPELL or 8
+    s.spellHitRating = Clean(Call(GetCombatRating, CR_SPELL_HIT))
+    s.spellHitBonus = Clean(Call(GetCombatRatingBonus, CR_SPELL_HIT))
     local base, casting = Call(GetManaRegen)
     s.manaRegen, s.manaRegenCasting = Clean(base), Clean(casting)
     s.resist = {}
@@ -275,6 +279,11 @@ local function TraitTree(configID)
                         max = Clean(node.maxRanks), spell = spellID, name = SpellName(spellID), sub = Clean(node.subTreeID) }
                     n.icon = icon or (spellID and Clean(Call(C_Spell and C_Spell.GetSpellTexture or GetSpellTexture, spellID)))
                     if spellID then ns.NoteSpell(spellID) end
+                    -- a talent you have: its text at your rank ("...chance to resist your Shadow spells by 8%"),
+                    -- the only place the client says what a rank gives on Forever (gear advice reads hit from it)
+                    if spellID and rank > 0 then
+                        n.desc = Clean(Call(C_Spell and C_Spell.GetSpellDescription or GetSpellDescription, spellID))
+                    end
                     if type(node.visibleEdges) == "table" then
                         for _, e in ipairs(node.visibleEdges) do
                             local t = type(e) == "table" and Clean(e.targetNode)

@@ -3,6 +3,7 @@
 Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 
 ## 1.5.0 (in progress: every merge to main updates itself)
+- **Spell hit is measured, and counts only up to the cap.** The addon saves your spell hit rating and what it gives, and the text of each talent you have at your rank (Shadow Focus says how much it adds). For spell weights, hit on an item counts until you reach the 5% that matters against 5-man bosses, and nothing past it; the Gear page shows your hit, where it comes from, and the room left. Shadow's hit weight below the cap is now 1.66 (the guide's order), not 0.2.
 - **World drops count once your AH has seen one.** A world drop (Hand of Edward the Odd) comes from any creature of its level, so in practice from the AH: it's a pre-BiS pick or an upgrade only once your own AH scan or browsing has listed one, or you own it. Until then it's listed under "Raid, PvP and not in game yet" with why.
 - **Character stats survive logout.** The game reads every stat as 0 while logging out, so the saved stats (Intellect, spell hit, crit...) were all zeros; the last good reading is kept instead, marked as kept.
 - **The game data rebuilds itself every week** (drops, quests, items, from the same sources), and its age is on the System tab, and on Overview when it is more than two weeks old.
