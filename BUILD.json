@@ -1,21 +1,21 @@
 {
  "version": "1.5.0",
- "built": "2026-11-24T20:41:25+00:00",
+ "built": "2026-11-24T21:32:49+00:00",
  "channel": {
   "repo": "saikyr/claude-companion",
   "branch": "stable"
  },
  "from": {
   "branch": "main",
-  "commit": "f9d7673cc2e9b3815066e1b403ecf44cefbbff30"
+  "commit": "1c5632cfba43474452962feaf8af5d62de9bf020"
  },
- "build": "f9d7673cc2e9",
- "notes": "Consumables, addons, what killed you, set bonuses, healer crit, disenchant values, friends' game facts and cards, dungeon places, gray loot, rep gates (#140)",
+ "build": "1c5632cfba43",
+ "notes": "Weekly game-data pack rebuild (2026-11-24), with the new build code (#143)",
  "files": {
   "Bindings.xml": "99dcc8984fdbcbea746275e7a8dbbc34e16c462021640ce70232478fb843fb48",
   "ClaudeCompanion.toc": "14d0dd98487ec0a4ce7faefcf2a5d1f75fecd6a6f8890ed9bf815a59269b7731",
-  "Core.lua": "a93f27919ebbe2c3a960726800ec2b5434dc21ef70eecad56efccd570b1cb492",
-  "Drops.lua": "8aea95bdcc57ae6150dbe9599dd276f3e2e6e52173fa06f2a12147a7e7838185",
+  "Core.lua": "abb2926da222d89c4724cbd309e3f275ccd719c7274548b7a4832e579ddd9e18",
+  "Drops.lua": "a5989b335606d4861fd19ab9a28717d315980f77edad4384d144d67b3cdaa025",
   "Journal.lua": "f39dca32b04e2310bdc7ff562f37cc59c12fd59ca7e56c8f5c92ab39014b4d30",
   "Market.lua": "ee1038dfa2cf5ad8e2f24eaeaf48f9611e00a94b4e0384443163d0aad19a1e48",
   "Professions.lua": "a40c23f48c7f019eacae3be619380b5a8f392bf9b7e60428dfe544d0c155b0db",
@@ -36,11 +36,11 @@
   "web/Claude Companion.app/Contents/MacOS/launcher": "65fe025ebb1acad0f786633f5b30f6bdcfa6b49f2912eca1f87385dcec0224c4",
   "web/Claude Companion.app/Contents/Resources/AppIcon.icns": "467ef964fdaff99ca47e80e7aff3d4db96306b984293aeb98251d68d2e4a2fdd",
   "web/Claude Companion.bat": "8f5cf6c1ff6a95ad5e0ebfc10951ef451cccf5b1e9a6d1fc7574600cfd01a2fc",
-  "web/channel.json": "e3d953eab2056bfcf53c75839601707bbd4c4ce1050a8a17ec065fb48a4f6efa",
+  "web/channel.json": "b8bac3754104fb5fad899934ba0bf10c360a2864dca4209855fcfe1c90e776c9",
   "web/css/app.css": "0a2b6aed3e4f4d756913fd478183f71fb22048e9ac9310783796aa24a0616ad1",
-  "web/data/gamedata.js": "45e1f8b44a6f5c358453888bfbc07e9bc9633a3e814f11c64520f6b8dc746a3e",
+  "web/data/gamedata.js": "a32202bd82159d6256705a38767a5c4536520d5f9dc79f2765ca6b2b42a86703",
   "web/data/rules.js": "5d97d9a68d83902c9d85fe84b28b61a9e3d540a0978f8aac26fbf494787d1ebb",
-  "web/data/suffixes.js": "f787290c98bde60385673da9aededce6cdb0a4d7ec59019030fa9ca7dfc3145c",
+  "web/data/suffixes.js": "9ebe42a02614327b8d8605942b9a5e14bc5bb3a9aeabc20c8f05a5c789b67a12",
   "web/icons/app.ico": "890d1ad4b13ed82791c3fa3ad175798ed2fbe7f304af6cb6af5e15e5ce01c7a3",
   "web/icons/icon-192.png": "7ba20877d554551a5378b001f9fe2a60caa7e2224e2d84c42359c069dfc33ca3",
   "web/icons/icon-512.png": "658263476e4a5ac0371ed8fe85671973603436e42e550d92b937c495ba78e567",
