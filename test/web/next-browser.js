@@ -164,6 +164,27 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   await page.waitForTimeout(1500);
   const snapNext = await page.evaluate(() => window.CC.next.snapshot());
   check(snapNext.length > 3 && snapNext.every((x) => x.id && x.kind && typeof x.value === 'number'), 'snapshot nextSteps: id, kind, value');
+  // #116: your own sell-through, posts matched to the sales that followed (unit by unit, oldest post first, within 48 h)
+  const st = await page.evaluate(() => {
+    const T = 1795000000, H = 3600;
+    return window.CC.api.sellThrough({
+      posts: [{ t: T, id: 14047, qty: 4, unit: 2000 }, { t: T + H, id: 14047, qty: 2, unit: 1900 },   // Runecloth: 6 posted
+        { t: T, id: 812, qty: 1, unit: 950000 },                                                         // a staff at 95g: never sold
+        { t: T + 100 * H, id: 14047, qty: 3, unit: 2100 }],                                               // posted 1 h ago: pending
+      sales: [{ t: T + 2 * H, item: 'Runecloth', price: 6000, count: 3 }, { t: T + 5 * H, item: 'Runecloth', price: 3800, count: 2 },
+        { t: T + 60 * H, item: 'Runecloth', price: 2000, count: 1 }] }, T + 101 * H);
+  });
+  const rc = st.items.find((x) => x.item === 'Runecloth'), staffSt = st.items.find((x) => x.item === 'Glowing Brightwood Staff');
+  check(rc && rc.posted === 6 && rc.sold === 5 && rc.pending === 3 && rc.share === 0.83 && rc.medianHours === 2,
+    'sell-through: 5 of 6 Runecloth sold within 48 h (a sale 60 h later is not counted), the newest post pending (' + JSON.stringify(rc) + ')');
+  check(staffSt && staffSt.sold === 0 && st.totals.worth10g.posted === 1 && st.totals.worth10g.sold === 0 && st.totals.posted === 7 && st.totals.sold === 5,
+    'sell-through totals, and posts at 10g or more apart (' + JSON.stringify(st.totals) + ')');
+  check(await page.evaluate(() => 'sellThrough' in window.CC.snapshot().ah), 'snapshot ah.sellThrough');
+  // the Flips view draws the sell-through table under the flips
+  const flipsHtml = await page.evaluate(() => { const ch = window.CC.api.CH; ch.ah.posts = [{ t: 1795000000, id: 14047, qty: 2, unit: 2000 }];
+    ch.ah.sales = [{ t: 1795003600, item: 'Runecloth', price: 4000, count: 2 }]; window.CC.api.STATE.tab = 'auction'; window.CC.api.STATE.ahSec = 'flips'; window.CC.api.render();
+    const h = document.querySelector('main').innerHTML; window.CC.api.STATE.tab = 'overview'; window.CC.api.render(); return h; });
+  check(/Sell-through/.test(flipsHtml) && /sellthru/.test(flipsHtml), 'the Flips view shows the sell-through table');
   // #118: each known recipe's margin, the Professions tab's numbers: a reagent only a vendor sells is priced at the
   // vendor's price (Rune Thread, 50s on Forever), never guessed from its sell price; a reagent with no price is missing
   const crafts = await page.evaluate(() => window.CC.snapshot().crafts);
