@@ -291,6 +291,13 @@
   const rollsOf = (id) => (SFX && SFX.items[id]) || null;
   const rollStats = (rows) => { const st = {}; rows.forEach(([k, v]) => { st[k] = (st[k] || 0) + v; }); return st; };
   let cache = null;
+  // item id -> the class mask of the class sets it belongs to (pack sets: [name, pieces, bonuses, class mask])
+  let MASKS = null;
+  const setMasks = () => {
+    if (!MASKS) { MASKS = {}; Object.values(A.GD.sets || {}).forEach((s) => { if (s && s[3]) arr(s[1]).forEach((id) => { MASKS[id] = (MASKS[id] || 0) | s[3]; }); }); }
+    return MASKS;
+  };
+  const MAX_LEVEL = 60;
   function candidates(use, cls) {
     const Q = CC.quests;
     const ah = (A.CH && A.CH.ah) || {};
@@ -304,6 +311,7 @@
     const fixed = [], rolls = [], byId = {}, later = [];
     const skipped = { 'quest reward you already took (or not for you)': 0, 'raid only': 0, 'PvP honor gear': 0, 'battleground reputation gear': 0, 'other faction only': 0, 'only Classic data says where it comes from': 0, 'no endgametools tooltip': 0, 'stats from ForeverDB only, and Forever not seen to have it': 0, 'not for your class': 0, 'no known source': 0, 'world drop not seen on your AH yet': 0 };
     const side = (char().faction || '')[0];            // 'A' or 'H'; vendors that only serve the other side don't count
+    const bit = CLASS_BIT[char().classFile] || 0;
     for (const [k, g] of Object.entries((A.GD && A.GD.items) || {})) {
       const c = g[9], sub = packSub(g);
       if (c !== 2 && c !== 4) continue;
@@ -313,6 +321,9 @@
       const clientTip = g[11] === 'e';
       const only = arr(g[10]).find((l) => /^Classes: /.test(l));
       if (only && !only.includes(cls)) { skipped['not for your class']++; continue; }
+      // a class set's piece is for that class, whatever its tooltip says (ForeverDB-only items have none)
+      const mask = setMasks()[k];
+      if (mask && bit && !(mask & bit)) { skipped['not for your class']++; continue; }
       const id = Number(k), src = (A.GD.src || {})[k], vend = (A.GD.vend || {})[k];
       const boe = g[7] === 2;
       // only what Forever is known to have: the client's own source (endgametools), a Forever sighting or
@@ -330,7 +341,9 @@
       // ForeverDB's stats count when Forever itself was seen giving the item (a drop, container or quest sighting:
       // Forever's own items, its Tier 0.5 spec sets, have no endgametools page yet). A vendor row alone doesn't:
       // ForeverDB lists Season of Discovery raid-token vendors the Forever client carries.
-      const foreverSeen = arr(src).some((r) => r[10] === 'f');
+      const foreverSeen = arr(src).some((r) => r[10] === 'f' && r[0] !== 'vendor');
+      // ForeverDB often has no required level for them: offered at the level cap only, not guessed lower
+      const req = g[3] || (clientTip ? 0 : MAX_LEVEL);
       const seen = !!onForever && (clientTip || foreverSeen);
       const avail = fromRaid ? 'raid' : pvpSource(id) ? 'pvp' : !seen ? 'unseen' : !rr && kindOf(id) === 'world' && !onMyAh.has(id) ? 'worldAh' : null;
       // only a quest gives it, and every such quest is done (or for the other faction or another class)
@@ -338,10 +351,10 @@
       if (avail === 'pvp' && vend && !myVend.length) { skipped['other faction only']++; continue; }
       if (avail) {
         skipped[avail === 'raid' ? 'raid only' : avail === 'pvp' ? (isPvp(id) ? 'PvP honor gear' : 'battleground reputation gear') : avail === 'worldAh' ? 'world drop not seen on your AH yet' : !clientTip ? 'stats from ForeverDB only, and Forever not seen to have it' : src || vend ? 'only Classic data says where it comes from' : 'no known source']++;
-        later.push({ id, key: k, g, name: g[0], inv: g[4], req: g[3] || 0, boe, size, how, kind: kindOf(id), avail, seen, st: W.fromPack(g) });
+        later.push({ id, key: k, g, name: g[0], inv: g[4], req, boe, size, how, kind: kindOf(id), avail, seen, st: W.fromPack(g) });
         continue;
       }
-      const base = { id, g, inv: g[4], req: g[3] || 0, boe, size, how, kind: kindOf(id) };
+      const base = { id, g, inv: g[4], req, boe, size, how, kind: kindOf(id) };
       if (rr) {
         // each roll is its own item: "Elegant Mantle of Healing"; the base's armor still counts
         const armor = W.fromPack(g);
