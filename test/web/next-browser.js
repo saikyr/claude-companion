@@ -204,6 +204,29 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   check(buy.snapRows.every((r) => r.offered), 'snapshot ah.buyList lists only the rows the app shows');
   check(/buyrules/.test(buy.html) && /buylist/.test(buy.html) && /Runecloth/.test(buy.html), 'the Buy list section shows the rules and the rows');
   check(buy.snap, 'snapshot ah.buyList');
+  // #117: positions: an open flip, its plan typed in the Positions section (synced cc.trade.* key), a paper buy
+  // from the buy list, and the snapshot's parts
+  const pos = await page.evaluate(() => { const A = window.CC.api, ch = A.CH, ls = ch.ah.lastScan;
+    const keep = { buys: ch.ah.buys, sales: ch.ah.sales, rc: ch.ah.prices['14047'] };
+    ch.ah.buys = [{ t: ls.t - 5 * 86400, item: 'Runecloth', price: 2000, count: 2 }]; ch.ah.sales = [];
+    ch.ah.prices['14047'] = { id: 14047, name: 'Runecloth', obs: [{ t: ls.t, min: 1, med: 1500, qty: 4, src: 'scan' }] };
+    A.STATE.tab = 'auction'; A.STATE.ahSec = 'positions'; A.render();
+    const inp = document.querySelector('[data-flipplan]'); inp.value = '0.5'; inp.dispatchEvent(new Event('change', { bubbles: true }));
+    const html = document.querySelector('main').innerHTML, P = A.positionsOf(ch.ah);
+    const planKey = Object.keys(localStorage).find((k) => k.startsWith('cc.trade.plans.'));
+    A.STATE.ahSec = 'buy'; A.render();
+    const btn = [...document.querySelectorAll('[data-paper]')].find((b) => b.dataset.paper.includes('|14047|vendor|'));
+    btn.click();
+    const paper = A.paperOf(ch.ah), marked = /Paper buy marked/.test(document.querySelector('main').innerHTML), snap = window.CC.snapshot().ah;
+    Object.keys(localStorage).filter((k) => k.startsWith('cc.trade.')).forEach((k) => localStorage.removeItem(k));
+    ch.ah.buys = keep.buys; ch.ah.sales = keep.sales; if (keep.rc) ch.ah.prices['14047'] = keep.rc; else delete ch.ah.prices['14047'];
+    A.STATE.tab = 'overview'; A.render();
+    return { row: P.rows[0], html, planKey, paper: paper.trades, marked, snap: { positions: !!snap.positions, paper: !!snap.paper, weekly: Array.isArray(snap.weekly), index: 'index' in (snap.buyList || {}) } }; });
+  check(pos.row && pos.row.flag === 'sell' && pos.row.target === 5000 && pos.row.units === 2 && pos.row.unit === 1000 && /positions/.test(pos.html),
+    'positions: a 5-day-old flip says sell at market; the plan typed in (0.5g) is kept (' + JSON.stringify(pos.row) + ')');
+  check(pos.planKey && /^cc\.trade\.plans\./.test(pos.planKey), 'positions: plans are a cc. setting, synced between computers');
+  check(pos.paper.length === 1 && pos.paper[0].id === 14047 && pos.paper[0].rule === 'vendor' && pos.paper[0].price === 1 && pos.marked, 'buy list: a paper buy is recorded at the scan\'s lowest and marked');
+  check(pos.snap.positions && pos.snap.paper && pos.snap.weekly && pos.snap.index, 'snapshot ah.positions, ah.paper, ah.weekly, ah.buyList.index');
   // #118: each known recipe's margin, the Professions tab's numbers: a reagent only a vendor sells is priced at the
   // vendor's price (Rune Thread, 50s on Forever), never guessed from its sell price; a reagent with no price is missing
   const crafts = await page.evaluate(() => window.CC.snapshot().crafts);

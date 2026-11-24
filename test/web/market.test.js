@@ -132,5 +132,57 @@ check(M.buyList(ctxOf({ '5:1': rec(5, [50, 50, 50, 50, 50, 50]) }, { vsell: { 5:
   check(B.rows[0].rule === 'vendor' && B.rows[0].id === 1 && B.rows[1].id === 2 && B.rows.slice(2).every((r) => !r.offered), 'order: offered rows first, the biggest margin first');
 }
 
+// the market index: per band, the median change of the lowest from the scan before to the newest, for items at both
+{
+  const prices = {};
+  for (let i = 0; i < 12; i++) prices[300 + i] = rec(300 + i, [300000, 300000, 300000, 300000, 300000, i < 9 ? 240000 : 330000]);   // 20g+: 9 of 12 cheaper
+  for (let i = 0; i < 12; i++) prices[400 + i] = rec(400 + i, [5000, 5000, 5000, 5000, 5000, i < 6 ? 4500 : 5500]);              // <1g: half and half
+  prices[500] = rec(500, [300000, 300000, 300000, 300000, 300000, 200000]);
+  prices[501] = rec(501, [300000, 300000, 300000, 300000, null, 200000]);   // not listed at the scan before: not in the index
+  const vb = {}; vb[500] = 1;   // a resell row in the falling band
+  const B = M.buyList(ctxOf(prices, { vbuy: vb }));
+  const hi = B.index.bands.find((b) => b.band === '20g+'), lo = B.index.bands.find((b) => b.band === '<1g');
+  check(hi.n === 13 && hi.cheaper === 10 && hi.falling && hi.medianChange === -0.2, 'index: 20g+ falling, 10 of 13 cheaper, median −20% (' + JSON.stringify(hi) + ')');
+  check(lo.n === 12 && !lo.falling && lo.medianChange === 0, 'index: <1g even, not falling');
+  check(B.index.prev === T0 + 4 * DAY && B.index.scan === lastScan.t, 'index: compares the newest scan with the one before');
+  const rs = rowsOf(B, 'resell').find((r) => r.id === 500);
+  check(rs && rs.dontHold && rs.band === '20g+', 'index: a resell row in a falling band says don\'t hold');
+  const v = M.buyList(ctxOf(prices, { vsell: { 500: 250000 } }));
+  check(rowsOf(v, 'vendor')[0] && !rowsOf(v, 'vendor')[0].dontHold, 'index: a vendor row is never "don\'t hold" (it sells to a vendor)');
+}
+
+// open positions: sell after the hold time or past the stop; at target; unrealised at the lowest after the cut; limits
+{
+  const now = T0 + 10 * DAY;
+  const open = [{ id: 'a', item: 'Old', t: now - 4 * DAY, units: 2, paid: 2000 }, { id: 'b', item: 'Stop', t: now - DAY, units: 1, paid: 1000 },
+    { id: 'c', item: 'Goal', t: now - DAY, units: 1, paid: 1000 }, { id: 'd', item: 'Wait', t: now - DAY, units: 1, paid: 6000 }, { id: 'e', item: 'Gone', t: now - DAY, units: 1, paid: 100 }];
+  const low = { Old: { min: 1200, t: now }, Stop: { min: 840, t: now }, Goal: { min: 1500, t: now }, Wait: { min: 6100, t: now }, Gone: { none: true, t: now } };
+  const P = M.positions({ open, now, cut: 0.05, lowestOf: (n) => low[n] || null, plans: { c: 1400 }, rules: { capItem: 10, capTotal: 50 }, gold: 20000 });
+  const by = (id) => P.rows.find((r) => r.id === id);
+  check(by('a').flag === 'sell' && /past your 3/.test(by('a').why) && by('a').unrealised === Math.round(1200 * 0.95 * 2 - 2000), 'positions: held past 3 days: sell at market; unrealised after the cut');
+  check(by('b').flag === 'sell' && /16% under/.test(by('b').why), 'positions: the lowest 16% under what you paid: sell (stop 15%)');
+  check(by('c').flag === 'target' && by('d').flag === 'hold' && by('e').flag === 'hold' && by('e').unrealised === null && /none listed/.test(by('e').why), 'positions: at the planned price; holding; none listed has no unrealised');
+  check(P.totals.capital === 10100 && P.totals.largest.item === 'Wait' && P.totals.largest.share === 0.3 && P.totals.overItem.join() === 'Wait' && P.totals.overTotal,
+    'positions: capital 10,100 of 20,000 gold: over 50% in all and over 10% in Wait (' + JSON.stringify(P.totals) + ')');
+  check(P.rows[0].flag === 'sell' && P.rows[P.rows.length - 1].flag === 'hold', 'positions: sell first');
+  check(M.positions({ open, now, lowestOf: () => null, gold: null }).totals.totalShare === null, 'positions: no gold on hand known: no shares, no warnings');
+}
+
+// paper trades: scored at the next full scan's lowest after the cut; open until one exists
+{
+  const prices = { 600: rec(600, [100, 100, 100, 100, 70, 120]), 601: rec(601, [100, 100, 100, 100, 100, 70]) };
+  const P = M.paper([{ t: T0 + 4 * DAY, id: 600, rule: 'dip', price: 70 }, { t: T0 + 5 * DAY, id: 601, rule: 'dip', price: 70 }], prices, 0.05);
+  const done = P.trades.find((x) => x.id === 600), open = P.trades.find((x) => x.id === 601), r = P.rules.find((x) => x.rule === 'dip');
+  check(done.sold === 120 && done.net === Math.round(120 * 0.95 - 70) && done.ret === +(120 * 0.95 / 70 - 1).toFixed(3) && open.ret === null, 'paper: scored at the next scan; the newest is still open');
+  check(r.n === 1 && r.open === 1 && r.net === done.net && r.winShare === 1, 'paper: per rule, scored and waiting apart');
+}
+
+// flip profit per week, Monday 00:00 UTC
+{
+  const mon = Date.UTC(2026, 10, 23) / 1000;   // Monday 23 Nov 2026
+  const W = M.weekly([{ sold: mon + 3600, profit: 100, paid: 10 }, { sold: mon + 6 * DAY, profit: -20, paid: 5 }, { sold: mon - 3600, profit: 7, paid: 1 }]);
+  check(W.length === 2 && W[0].week === mon && W[0].flips === 2 && W[0].profit === 80 && W[1].week === mon - 7 * DAY && W[1].profit === 7, 'weekly: flips grouped by the week they sold');
+}
+
 console.log(failed ? `\n${failed} failed` : '\nall ok');
 process.exit(failed ? 1 : 0);
