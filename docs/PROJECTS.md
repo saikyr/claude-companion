@@ -148,20 +148,19 @@ in one line.
 A friend can't join the owner's projects (they're private to him) and can't read this repository (it is
 private too). What a friend gets is public: the download, and the text below that sets up their Claude:
 
-1. **The app.** Claude can install it (next point), or the friend downloads the zip for their computer
-   (README, "Install"), runs the installer, then `/reload` in game. Their install makes its own sync account
-   in the owner's sync database, under a random key; their own computers link with **System > Link another
-   computer**. The owner can see what is stored there (README, "Your data"); the friend can turn sync off on
-   any computer.
-2. **Their own Claude, optional, in one paste.** The friend creates a project in the Claude desktop app,
-   pastes the short text from `ClaudeCompanion/claude/SETUP.md` (the fenced block) into "What do you want to work on?" in the
-   New project dialog, leaves Context empty (Claude asks for folder access itself) and creates it. That text is the set-up: Claude runs, or hands the friend, one line for PowerShell
-   or Terminal that downloads the public zip and runs its installer (`installer/`), then asks for folder
-   access to the addon folder. Every rule is in `claude/GUIDE.md`, which the text sends Claude to before every
-   answer and, which ships with every build together with COACHING.md, FEATURES.md and the checkers
-   (`tools/publish-stable.py`, `KIT`), so it is never older than their app. CI runs both lines on a real
-   Windows and a real Mac (`installers.yml`), and `test/contract.test.js` checks the message below carries
-   SETUP.md's text unchanged.
+1. **The app.** The friend downloads the zip for their computer (README, "Install"), runs the installer,
+   then `/reload` in game. Their install makes its own sync account in the owner's sync database, under a
+   random key; their own computers link with **System > Link another computer**. The owner can see what is
+   stored there (README, "Your data"); the friend can turn sync off on any computer.
+2. **Their own Claude, optional, in one paste.** The friend creates a project in the Claude desktop app and
+   pastes the short text from `ClaudeCompanion/claude/SETUP.md` into "What do you want to work on?" in the
+   New project dialog (Context stays empty). Claude asks for folder access to the addon folder and reads it;
+   it never installs or runs anything (24 Nov: a friend's Claude asked to run an install line could neither
+   run it nor fetch the zip to check it, warned about it, and confused the friend). Every rule is in
+   `claude/GUIDE.md`, which the text sends Claude to before every answer, and which ships with every build
+   together with COACHING.md, FEATURES.md and the checkers (`tools/publish-stable.py`, `KIT`), so it is
+   never older than their app. `test/contract.test.js` checks the message below carries SETUP.md's two
+   blocks unchanged.
 
 What a friend's Claude can't do, today:
 
@@ -172,24 +171,31 @@ What a friend's Claude can't do, today:
 - Have its cards' numbers looked up: offline, `check-cards.py` checks the format and the answer rules,
   not each number against its source.
 
-A message the owner can send a friend: one line, then SETUP.md's paste text word for word. Before it, the
-friend needs WoW Forever (English client) on Windows or a Mac, and the Claude desktop app on a plan with
-projects (Pro or above). Nothing else: the installer finds the game folder (or asks for it), and a Mac
-without Python 3 is offered Apple's free Command Line Tools.
+A message the owner can send a friend: SETUP.md's two blocks, word for word. Before it, the friend needs WoW
+Forever (English client) on Windows or a Mac, and for the coach the Claude desktop app on a plan with
+projects (Pro or above). The installer finds the game folder (or asks for it); a Mac without Python 3 is
+offered Apple's free Command Line Tools.
 
 ```
-In the Claude desktop app: New project, name it Claude Companion, paste everything below into "What do you want to work on?",
-leave Context empty, click Create project. If Claude doesn't start on its own, say: set me up
+1. Install the Companion (about 2 minutes):
+   - Windows: download https://jucbngafdnyaizfxgplk.supabase.co/storage/v1/object/public/releases/latest/ClaudeCompanion-Windows.zip
+     Right-click the zip, Extract All, open the folder, double-click Install Claude Companion.
+     If Windows warns: More info, then Run anyway.
+   - Mac: download https://jucbngafdnyaizfxgplk.supabase.co/storage/v1/object/public/releases/latest/ClaudeCompanion-Mac.zip
+     Double-click the zip, then Install Claude Companion. The first time: System Settings,
+     Privacy & Security, Open Anyway.
+   It finds the game, installs the addon and opens the app. Then type /reload in game.
+2. In the Claude desktop app: New project, name it Claude Companion, paste the text below into
+   "What do you want to work on?", leave Context empty, click Create project.
+   It asks for your addon folder: allow it.
 
-I play WoW Forever. Set up the Claude Companion for me, then be my coach with it.
-If you can't open my ClaudeCompanion addon folder yet: install it by running the line for my system
-(if you can't run commands on my computer, give me the line to paste and wait until I say it's done).
-It finds the game, installs the addon and opens the app.
-On Windows, in PowerShell:
-$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol='Tls12'; $d="$env:TEMP\ClaudeCompanion-setup"; Remove-Item "$d","$d.zip" -Recurse -Force -EA 0; iwr -UseBasicParsing 'https://jucbngafdnyaizfxgplk.supabase.co/storage/v1/object/public/releases/latest/ClaudeCompanion-Windows.zip' -OutFile "$d.zip"; Expand-Archive "$d.zip" $d; powershell -NoProfile -ExecutionPolicy Bypass -File "$d\files\install.ps1"
-On a Mac, in Terminal:
-d="${TMPDIR:-/tmp}/ClaudeCompanion-setup"; rm -rf "$d" "$d.zip"; curl -fsSL -o "$d.zip" 'https://jucbngafdnyaizfxgplk.supabase.co/storage/v1/object/public/releases/latest/ClaudeCompanion-Mac.zip' && ditto -x -k "$d.zip" "$d" && "$d/Install Claude Companion.app/Contents/MacOS/install"
-Then ask for access to World of Warcraft/_forever_/Interface/AddOns/ClaudeCompanion, tell me to
-/reload in game, and say who you see. Before every answer, read claude/GUIDE.md in that folder and
-follow it exactly.
+I play WoW Forever with the Claude Companion addon and app. I install it myself; you are my coach.
+1. Ask for access to my ClaudeCompanion addon folder. It is in my World of Warcraft folder, in
+   _forever_/Interface/AddOns/ClaudeCompanion (Windows: usually C:\Program Files (x86)\World of Warcraft,
+   Mac: /Applications/World of Warcraft). Use folder access only: never run, download or install anything.
+2. If that folder isn't there yet, the Companion isn't installed: tell me to install it from the download
+   I was given, type /reload in game, and tell you when it's done.
+3. Then read claude/GUIDE.md and companion-data/snapshot.json in that folder, and tell me in a few lines
+   who you see (character, level, specs, professions) and how old the data is.
+Before every answer, read claude/GUIDE.md in that folder and follow it exactly.
 ```

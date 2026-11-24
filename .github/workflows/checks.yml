@@ -1,5 +1,11 @@
 name: checks
-on: [push, pull_request, workflow_dispatch]   # dispatch: the weekly pack rebuild runs these on its branch (pack.yml)
+# A branch is checked once, by its pull request (a push to a branch with a PR used to run everything twice);
+# main on push, for publish.yml. Dispatch: the weekly pack rebuild runs these on its branch (pack.yml).
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
 jobs:
   checks:
     runs-on: ubuntu-latest
@@ -110,7 +116,10 @@ jobs:
           ! git ls-files | grep -E 'SavedVariables|snapshot\.json$|settings\.json$|sync(-cache)?\.json$|combat\.json$|web/data\.js$'
 
   # The PC's server (server.ps1) under Windows PowerShell 5.1, the one Windows ships: the same API test.
+  # Windows minutes count double against the free Actions minutes of a private repository: the Windows job runs
+  # on main and by hand, never on a pull request (the Linux job runs the same tests against server.py).
   windows-server:
+    if: github.event_name != 'pull_request'
     runs-on: windows-latest
     steps:
       - name: Block the live sync backend
