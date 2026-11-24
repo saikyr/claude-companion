@@ -44,7 +44,8 @@
       return { id, name: r ? r.name : A.anyItemName(id), how, count: count || 1,
         specs: r ? r.specs.map((p) => ({ spec: p.spec, score: p.score, gain: p.gain, slot: p.slot, vs: p.vs ? p.vs.name : null, canWear: p.canWear, level: p.level, effect: p.effect })) : null };
     };
-    if (rw) return [...arr(rw.items).map((r) => rated(r.item || r.id, 'get', r.count)), ...arr(rw.choices).map((r) => rated(r.item || r.id, 'choose', r.count))];
+    // the game's own list when it gave one; a complete quest often reads back with none (#98): then the pack's
+    if (rw && (arr(rw.items).length || arr(rw.choices).length)) return [...arr(rw.items).map((r) => rated(r.item || r.id, 'get', r.count)), ...arr(rw.choices).map((r) => rated(r.item || r.id, 'choose', r.count))];
     gq = gq || {};
     return [...arr(gq.reward).map(([id, n]) => rated(id, 'get', n)), ...arr(gq.choice).map(([id, n]) => rated(id, 'choose', n)), ...arr(gq.rewardAny).map(([id, n]) => rated(id, 'any', n))];
   }

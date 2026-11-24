@@ -176,11 +176,33 @@
   const availWord = (c) => AVAIL[c.avail] + (c.avail !== 'unseen' && c.seen === false ? ' · not seen on Forever yet' : '');
   // a quest reward is raid gear when the quest or an earlier step of its chain is raid content (quests.js)
   const raidQuest = (qid) => (CC.quests && CC.quests.raid ? CC.quests.raid(qid) : ((A.GD.quests || {})[qid] || {}).type === 'Raid');
+  // Raid and PvP by source (#110), the one place both the source word and `avail` read. Raid: a group size
+  // of 20+, a quest from raid content, crafts whose reagents only raids drop, or loot whose every placed
+  // source is a raid zone or a world boss. PvP: the PvP halls, rank titles, battleground zones and their
+  // quartermasters. Lists: data/rules.js instances.
+  const INST = (window.GAMERULES || {}).instances || {};
+  const RAID_Z = new Set(arr(INST.raids)), BG_Z = new Set(arr(INST.battlegrounds)), WB = new Set(arr(INST.worldBosses));
+  const RAID_MATS = new Set(arr(INST.raidMatCrafts)), PVP_WORDS = arr(INST.pvpVendorWords);
+  const pvpVendor = (v) => BG_Z.has(v[1]) || PVP_WORDS.some((w) => String(v[6] || '').includes(w));
+  function raidSource(id) {
+    const size = (A.GD.size || {})[id] || 0, rows = arr((A.GD.src || {})[id]);
+    if (size >= 20 || RAID_MATS.has(Number(id)) || rows.some((r) => r[0] === 'quest' && raidQuest(r[2]))) return true;
+    if (rows.some((r) => r[0] === 'world' || r[0] === 'quest' || r[0] === 'craft' || r[0] === 'vendor')) return false;
+    if (arr((A.GD.vend || {})[id]).length) return false;
+    const placed = rows.filter((r) => (r[0] === 'drop' && WB.has(r[2])) || (typeof r[7] === 'string' && r[7]));
+    return placed.length > 0 && placed.every((r) => (r[0] === 'drop' && WB.has(r[2])) || RAID_Z.has(r[7]));
+  }
+  function pvpSource(id) {
+    if (isPvp(id)) return true;
+    const vend = arr((A.GD.vend || {})[id]), rows = arr((A.GD.src || {})[id]);
+    if (vend.length && vend.every(pvpVendor)) return true;
+    return rows.length > 0 && rows.every((r) => BG_Z.has(r[7]));
+  }
   function kindOf(id) {
     const size = (A.GD.size || {})[id] || 0, rows = arr((A.GD.src || {})[id]);
     const how = (A.GD.how || {})[id] || '';
-    if (size >= 20 || rows.some((r) => r[0] === 'quest' && raidQuest(r[2]))) return 'raid';
-    if (isPvp(id)) return 'pvp';
+    if (raidSource(id)) return 'raid';
+    if (pvpSource(id)) return 'pvp';
     if (/^World Drop/.test(how)) return 'world';
     if (size || /^(Boss Drop|Dungeon)/.test(how)) return 'dungeon';
     if (/^Quest/.test(how) || rows.some((r) => r[0] === 'quest' || r[0] === 'container')) return 'quest';
@@ -225,11 +247,11 @@
       if (vend && !myVend.length && !src && !how) { skipped['other faction only']++; continue; }
       const onForever = how || rr || arr(src).some((r) => r[10] === 'f') || myVend.some((v) => v[5]);
       const size = (A.GD.size || {})[k] || 0;
-      const fromRaid = arr(src).some((r) => r[0] === 'quest' && raidQuest(r[2]));
+      const fromRaid = raidSource(k);
       // Not for now or pre-BiS, but kept and shown with why (AVAIL): raid content, PvP honor gear, and items
       // Forever isn't known to have yet (only Classic data names a source, or none does)
       const seen = !!onForever && clientTip;
-      const avail = size >= 20 || fromRaid ? 'raid' : isPvp(id) ? 'pvp' : !seen ? 'unseen' : null;
+      const avail = fromRaid ? 'raid' : pvpSource(id) ? 'pvp' : !seen ? 'unseen' : null;
       // only a quest gives it, and every such quest is done (or for the other faction or another class)
       if (Q && !vend && (!how || /^Quest/.test(how) && !/ · (Vendor|World Drop|Drop|Boss Drop|Profession|PvP reward) · /.test(' · ' + how + ' · ')) && arr(src).every((r) => r[0] === 'quest') && Q.rewardGone(id)) { skipped['quest reward you already took (or not for you)']++; continue; }
       if (avail === 'pvp' && vend && !myVend.length) { skipped['other faction only']++; continue; }
@@ -638,6 +660,7 @@
 
   // ---------------------------------------------------------------- the same advice as data, for the Claude snapshot (js/claude.js)
   CC.gear = {
+    kindOf,
     summary() {
       const ch = char();
       if (!A.GD || !A.GD.items || !canUse()) return [];

@@ -17,6 +17,20 @@ window.GAMERULES = {
     battlegrounds: ['Alterac Valley', 'Warsong Gulch', 'Arathi Basin'],
     // QuestieDB quest sorts that are raid content though no raid zone is named (Atiesh, Thunderfury)
     raidQuestSorts: ['Legendary'],
+    // 40-man world bosses and summoned group bosses outside instances (NPC ids in the pack, each with its
+    // Forever copy): warcraft.wiki.gg "World boss" (Classic); the Abyssal High Council and the Silithus colossi
+    // are summoned group bosses (warcraft.wiki.gg "Abyssal High Council"). Their loot is raid gear (#110).
+    worldBosses: [6109, 278779, 12397, 230302, 278677, 14890, 235197, 14887, 235232, 14888, 235180, 14889, 234880,
+      15203, 15305, 15205, 15204, 15740, 15741, 15742],
+    // reputation only raids give: a quest that needs it is raid content (AQ40's Brood of Nozdormu chain)
+    raidFactions: ['Brood of Nozdormu'],
+    // battleground quartermasters and supply officers (the pack's vendor title): their goods are PvP gear
+    pvpVendorWords: ['Stormpike', 'Frostwolf', 'Warsong', 'Silverwing', 'Arathor', 'Defilers'],
+    // crafted gear whose reagents drop only in raids (Fiery Core, Lava Core, Core Leather: Molten Core;
+    // Brilliant Chromatic Scale: Blackwing Lair; Souldarite, Bloodvine, Primal Bat Leather, Blood Tiger Hide:
+    // Zul'Gurub). Recipes from warcraft.wiki.gg (Classic); the pack has no reagents. Item ids are the pack's.
+    raidMatCrafts: [16979, 16980, 18263, 19156, 19165, 16982, 19162, 16983, 19163, 19149, 19164, 17013, 19148,
+      18509, 19157, 19682, 19683, 19684, 19998, 19999, 19685, 19686, 19687, 19688, 19689],
   },
   // Attunements and keys: what opens an instance or a part of one, and the quests or items that give it.
   // Quest and item ids are the game-data pack's (QuestieDB Forever / ForeverDB); the app checks them against your
