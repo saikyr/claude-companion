@@ -200,6 +200,15 @@ span[data-item], .nm [data-tip] { font-weight: 500; }
 .sold .thead, .sold .tr { grid-template-columns: minmax(0, 1fr) 14rem 9rem; }
 .flips .thead, .flips .tr { grid-template-columns: minmax(0, 1fr) 7rem 7rem 6rem 7rem 7rem; }
 .flips.open .thead, .flips.open .tr { grid-template-columns: minmax(0, 1fr) 7rem 7rem 7rem; }
+.sellthru .thead, .sellthru .tr { grid-template-columns: minmax(0, 1fr) 5rem 5rem 5rem 7rem; }
+.buyrules .thead, .buyrules .tr { grid-template-columns: minmax(12rem, 18rem) minmax(0, 1fr) 4rem; }
+.buylist .thead, .buylist .tr { grid-template-columns: minmax(0, 1fr) 10rem 7rem 7rem 7rem; }
+.positions .thead, .positions .tr { grid-template-columns: minmax(0, 1fr) 10rem 7rem 7rem 7rem 7rem; }
+.weekly .thead, .weekly .tr { grid-template-columns: minmax(0, 1fr) 5rem 8rem 8rem; }
+.mindex .thead, .mindex .tr { grid-template-columns: minmax(0, 1fr) 5rem 8rem 6rem 6rem; }
+.paperrules .thead, .paperrules .tr { grid-template-columns: minmax(0, 1fr) 5rem 5rem 8rem 8rem; }
+input.field.num-in { width: 5rem; height: 1.6rem; text-align: right; }
+p.warn { color: var(--warn); }
 .flips.open { margin-top: var(--sp4); }
 .linkbtn { background: none; border: 0; padding: 0; color: var(--t2); font: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 .linkbtn:hover { color: var(--t1); }
