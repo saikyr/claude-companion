@@ -249,19 +249,22 @@
   // source is a raid zone or a world boss (a zone-less drop or a container keeps it open-world). PvP: the PvP halls, rank titles, battleground zones and their
   // quartermasters. Lists: data/rules.js instances.
   const INST = (window.GAMERULES || {}).instances || {};
-  const RAID_Z = new Set(arr(INST.raids)), BG_Z = new Set(arr(INST.battlegrounds)), WB = new Set(arr(INST.worldBosses));
+  const RAID_Z = new Set(arr(INST.raids)), RAID_MAP = new Set(arr(INST.raidMaps)), BG_Z = new Set(arr(INST.battlegrounds)), WB = new Set(arr(INST.worldBosses));
   const RAID_MATS = new Set(arr(INST.raidMatCrafts)), PVP_WORDS = arr(INST.pvpVendorWords);
   const pvpVendor = (v) => BG_Z.has(v[1]) || PVP_WORDS.some((w) => String(v[6] || '').includes(w));
+  // one source row is in a raid: a raid zone or map, or a world boss
+  const raidRow = (r) => (r[0] === 'drop' && WB.has(r[2])) || RAID_Z.has(r[7]) || RAID_MAP.has(Number(r[5]));
   function raidSource(id) {
-    const size = (A.GD.size || {})[id] || 0, rows = arr((A.GD.src || {})[id]);
+    // a vendor row with no zone is a test NPC (Jimmy McWeaksauce), not a place to buy it
+    const size = (A.GD.size || {})[id] || 0, rows = arr((A.GD.src || {})[id]).filter((r) => r && (r[0] !== 'vendor' || r[7]));
     if (size >= 20 || RAID_MATS.has(Number(id)) || rows.some((r) => r[0] === 'quest' && raidQuest(r[2]))) return true;
     if (rows.some((r) => r[0] === 'world' || r[0] === 'quest' || r[0] === 'craft' || r[0] === 'vendor')) return false;
     if (arr((A.GD.vend || {})[id]).length) return false;
     // a drop with no zone from a creature that isn't a world boss (a world-drop epic's list names a few
     // droppers, Mushgog among them), or a lockbox or sack: open-world, so not raid gear
-    if (rows.some((r) => !r[7] && ((r[0] === 'drop' && !WB.has(r[2])) || r[0] === 'container'))) return false;
-    const placed = rows.filter((r) => (r[0] === 'drop' && WB.has(r[2])) || (typeof r[7] === 'string' && r[7]));
-    return placed.length > 0 && placed.every((r) => (r[0] === 'drop' && WB.has(r[2])) || RAID_Z.has(r[7]));
+    if (rows.some((r) => !r[7] && !RAID_MAP.has(Number(r[5])) && ((r[0] === 'drop' && !WB.has(r[2])) || r[0] === 'container'))) return false;
+    const placed = rows.filter((r) => raidRow(r) || (typeof r[7] === 'string' && r[7]));
+    return placed.length > 0 && placed.every(raidRow);
   }
   function pvpSource(id) {
     if (isPvp(id)) return true;
@@ -762,6 +765,7 @@
 
   // ---------------------------------------------------------------- the same advice as data, for the Claude snapshot (js/claude.js)
   CC.gear = {
+    raidSource, raidRow,
     kindOf,
     // why an item is kept out of upgrades and pre-BiS for this character ('raid', 'pvp', 'unseen', 'worldAh'), or null
     weightsAgainst,

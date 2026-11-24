@@ -25,6 +25,9 @@ weekly audit (below) counts how often it is broken.
   and only then say "not found in <sources>".
 - Plans: use his default end point and length from memory and say so. Ask only when memory has none, once,
   at the start. Do the work; don't hand it back to him.
+- A level-60 plan checks the class first, before gear: the brief's `spells` (ranks to `train`, `books` =
+  spells only a book teaches that he doesn't know yet, `noReagent` = a group buff he knows with none of its
+  reagent in his bags). A missing Prayer of Fortitude outranks any gear upgrade.
 - Quests: judge the whole chain (every step, requirements, where each objective is, items he must carry or
   has in his bags or bank), not just the reward.
 - A request for the real solution is not a request for a workaround. If only a workaround exists, say so
