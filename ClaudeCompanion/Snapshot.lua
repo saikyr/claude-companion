@@ -749,6 +749,11 @@ local function Empty(name, v)
         for _, b in ipairs(v) do if b.items and #b.items > 0 then return false end end
         return true
     end
+    if name == "stats" then                          -- at logout every stat reads 0 (no character has 0 Stamina)
+        local b = v.base or {}
+        for _, k in ipairs({ "str", "agi", "sta", "int", "spi" }) do if b[k] and (b[k].total or 0) > 0 then return false end end
+        return true
+    end
     if name == "skills" then                         -- at logout the game lists only the headers (Weapon Skills...), no skills
         for _, k in ipairs(v) do if type(k) == "table" and not k.isHeader then return false end end
         return true
