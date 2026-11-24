@@ -95,21 +95,26 @@
     }
     if (ev === 'UNIT_DIED') {
       if (creature(f[5])) npc(st, f[6], f[5]).deaths++;
-      else if (isMe(f[5], f[7])) died(st);
+      // a hunter's Feign Death writes UNIT_DIED too: not a death
+      else if (isMe(f[5], f[7]) && !(st.feignAt != null && Math.abs(ms(st.through) - st.feignAt) <= 2000)) died(st);
       return;
     }
+    if (ev === 'SPELL_CAST_SUCCESS' && isMe(f[1], f[3]) && (f[9] === '5384' || f[10] === 'Feign Death')) { st.feignAt = ms(st.through); return; }
     // damage done to you, by a creature, another player or the world
     if (HIT.has(ev) && isMe(f[5], f[7])) {
       const env = ev === 'ENVIRONMENTAL_DAMAGE';
       const d = damage(f, adv, ev === 'SWING_DAMAGE' ? 9 : env ? 10 : 12);
       const t = ms(st.through);
       let who;
-      if (env) who = { name: (f[9] || 'world').replace(/^./, (c) => c.toUpperCase()), npc: null, guid: 'env:' + f[9], kind: 'world' };
+      // the environment's type comes after the 17 advanced unit fields
+      const kind = env ? f[adv ? 26 : 9] : null;
+      if (env) who = { name: (/^[A-Za-z]+$/.test(kind || '') ? kind : 'world').replace(/^./, (c) => c.toUpperCase()), npc: null, guid: 'env:' + kind, kind: 'world' };
       else if (creature(f[1])) { who = { name: f[2] || ('npc ' + npcOf(f[1])), npc: npcOf(f[1]), guid: f[1], kind: 'creature' }; const n = npc(st, f[2], f[1]); n.taken.dmg += d.amount; n.taken.hits++; }
       else if (/^Player-/.test(f[1] || '')) who = isMe(f[1], f[3]) ? null : { name: 'a player', npc: null, guid: 'p' + hash(f[1]), kind: 'player' };
       else who = null;   // your own pet, an object
       if (who && t != null) {
-        st.recent = (st.recent || []).filter((r) => t - r.t <= WINDOW);
+        // a clock that went back (a new year in a log without years, the end of summer time): older hits don't count
+        st.recent = (st.recent || []).filter((r) => t - r.t >= 0 && t - r.t <= WINDOW);
         st.recent.push({ t, name: who.name, npc: who.npc, guid: who.guid, kind: who.kind, dmg: d.amount });
       }
       return;
@@ -134,7 +139,7 @@
   function died(st) {
     const t = ms(st.through);
     const by = {};
-    (st.recent || []).filter((r) => t != null && t - r.t <= WINDOW).forEach((r) => {
+    (st.recent || []).filter((r) => t != null && t - r.t >= 0 && t - r.t <= WINDOW).forEach((r) => {
       const k = r.kind + ':' + (r.npc || r.name);
       const b = by[k] || (by[k] = { name: r.name, npc: r.npc, kind: r.kind, guids: {}, dmg: 0, hits: 0 });
       b.guids[r.guid] = true; b.dmg += r.dmg; b.hits++;

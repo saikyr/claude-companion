@@ -92,6 +92,20 @@ check(JSON.stringify(st5.npcs['Son of Arkkoroc'].schools.shadow) === JSON.string
     `11/23/2026 07:36:59.0000  UNIT_DIED,0000000000000000,nil,0x80000000,0x80000000,${meF}`].join('\n') + '\n';
   const sa = C.fresh();
   C.piece(sa, new TextEncoder().encode(A2), true, 'e.txt');
+  const advMe = 'Player-1-A,0000000000000000,5000,6000,0,0,0,0,-1,0,0,0,1.5,2.5,16,1.5,58';
+  const A3 = ['11/23/2026 07:36:00.0000  COMBAT_LOG_VERSION,22,ADVANCED_LOG_ENABLED,1,BUILD_VERSION,1.15.8,PROJECT_ID,2',
+    `11/23/2026 07:40:00.0000  ENVIRONMENTAL_DAMAGE,0000000000000000,nil,0x80000000,0x80000000,${meF},${advMe},Lava,900,0,4,0,0,0,nil,nil,nil,nil`,
+    `11/23/2026 07:40:01.0000  UNIT_DIED,0000000000000000,nil,0x80000000,0x80000000,${meF}`,
+    `11/23/2026 07:50:00.0000  SPELL_CAST_SUCCESS,${meF},0000000000000000,nil,0x80000000,0x80000000,5384,"Feign Death",0x1,${advMe}`,
+    `11/23/2026 07:50:00.1000  UNIT_DIED,0000000000000000,nil,0x80000000,0x80000000,${meF}`,
+    // a log without years: 31 Dec then 1 Jan; the hit 30 minutes before (by the clock going back) is not in the death
+    `12/31 23:59:55.000  SWING_DAMAGE,${hy(1)},${meF},${advU},300,0,1,0,0,0,nil,nil,nil,nil`,
+    `1/1 00:30:00.000  UNIT_DIED,0000000000000000,nil,0x80000000,0x80000000,${meF}`].join('\n') + '\n';
+  const sl = C.fresh();
+  C.piece(sl, new TextEncoder().encode(A3), true, 'f.txt');
+  check(sl.deaths.length === 2 && sl.deaths[0].by[0].name === 'Lava' && !JSON.stringify(sl.deaths).includes('Player-'),
+    'advanced logging: a death in lava is named Lava, not your GUID; Feign Death is no death (' + JSON.stringify(sl.deaths) + ')');
+  check(sl.deaths[1] && sl.deaths[1].by.length === 0, 'a clock that went back: a hit stamped after the death is not counted');
   check(sa.deaths[0] && sa.deaths[0].by[0].dmg === 700, 'advanced logging: the swing damage read past the unit fields (' + JSON.stringify(sa.deaths[0]) + ')');
   // read in pieces: the same deaths
   const bytes = new TextEncoder().encode(L), sp = C.fresh();
