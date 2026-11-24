@@ -3,6 +3,7 @@
 Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 
 ## 1.5.0 (in progress: every merge to main updates itself)
+- **Disenchant values from your own disenchants.** Once you have disenchanted 10 items of a kind in an item level band, what they really gave replaces the Classic table in the disenchant values (Bags & Bank, the buy list), and says how many it is from. Materials are now priced by item id.
 - **Crit for healers is worked out from your heals.** The Holy and Discipline weights (and every healer's) now value crit from your own Greater Heal and Flash Heal: how big they are at your rank and +healing. At 60 with 500 +healing that is about 0.65 a point instead of the flat 0.3, so crit items score higher. The Gear tab says how it was worked out.
 - **Set bonuses count.** An upgrade that completes a set bonus with stats (resistances, spell power, mana per 5) now gains that bonus, and one that breaks a bonus you have loses it; the Gear tab shows "set +N" under the gain. Takes effect once the game data's weekly rebuild reads the bonuses' stats. The Gear tab's pre-BiS also goes up to the level cap the game reports instead of a fixed 60.
 - **What killed you.** With `/combatlog` on in game, the Grinds tab shows, for each death, what hit you in the 10 seconds before (three Gordok Hyenas, 2,100 damage in 5 hits), and which creatures hit you hardest per hit. Claude's snapshot has the same. The app reads your combat log again from the start once to fill this in (log files deleted since are no longer counted).

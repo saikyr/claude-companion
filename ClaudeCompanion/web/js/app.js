@@ -1163,27 +1163,59 @@
     return `<svg class="spark" width="${w}" height="${hgt}"><polyline points="${pts}" fill="none" stroke="#8fd3ff" stroke-width="1.5"/></svg>`;
   }
   // Disenchant outcomes by item level: data/rules.js (GAMERULES.disenchant, with its source)
+  // Materials match prices by item id (rules.js disenchant.ids). Once you have disenchanted enough items of a kind
+  // (green weapon / green armor / blue / purple) in one item level band, what they really gave replaces the table
+  // there (#21): every character of the save counts, since what an item gives is the game's rule, not yours.
   const DE = (window.GAMERULES || {}).disenchant || {};
-  let NAME_PRICE = null;
-  function priceByName(name) {
-    if (!NAME_PRICE) {
-      NAME_PRICE = {};
-      Object.entries(((CH && CH.ah) || {}).prices || {}).forEach(([k, p]) => { if (p.name && !k.includes(':') && NAME_PRICE[p.name] == null) NAME_PRICE[p.name] = { id: p.id, price: planPrice(p.id) }; });
-    }
-    return NAME_PRICE[name] || null;
+  const deTable = (it) => (it.q === 2 ? (it.class === 2 ? DE.weapon : DE.armor) : it.q === 3 ? DE.rare : it.q === 4 ? DE.epic : null);
+  let DE_SEEN = null;
+  function deMeasured() {
+    // a new save, or a disenchant added to any character's list
+    const n = Object.values((DB && DB.chars) || {}).reduce((a, c) => a + arr(c && c.deResults).length, 0);
+    if (DE_SEEN && DE_SEEN.db === DB && DE_SEEN.n === n) return DE_SEEN.by;
+    const by = {}, seen = new Set();
+    Object.values((DB && DB.chars) || {}).forEach((c) => arr(c && c.deResults).forEach((d) => {
+      if (!d || !d.ilvl || d.q == null || !arr(d.out).length) return;
+      const k = JSON.stringify([d.t, d.item]);
+      if (seen.has(k)) return;
+      seen.add(k);
+      const t = deTable({ q: d.q, class: d.class, ilvl: d.ilvl }), i = t ? t.findIndex((r) => d.ilvl >= r[0] && d.ilvl <= r[1]) : -1;
+      if (i < 0) return;
+      const band = [d.q, d.q === 2 ? (d.class === 2 ? 'w' : 'a') : '', i].join(':');
+      (by[band] = by[band] || []).push(d);
+    }));
+    DE_SEEN = { db: DB, n, by };
+    return by;
   }
   function deOutcome(it) {
-    const t = it.q === 2 ? (it.class === 2 ? DE.weapon : DE.armor) : it.q === 3 ? DE.rare : it.q === 4 ? DE.epic : null;
-    const row = t && t.find((r) => it.ilvl >= r[0] && it.ilvl <= r[1]);
-    if (!row) return null;
-    let value = 0, missing = [];
+    const t = deTable(it);
+    const i = t ? t.findIndex((r) => it.ilvl >= r[0] && it.ilvl <= r[1]) : -1;
+    if (i < 0) return null;
+    const row = t[i];
+    const obs = deMeasured()[[it.q, it.q === 2 ? (it.class === 2 ? 'w' : 'a') : '', i].join(':')] || [];
+    let value = 0;
+    const missing = [];
+    if (obs.length >= (DE.minMeasured || 10)) {
+      // your own: per material, the share of disenchants that gave it and the counts it came in
+      const per = {};
+      obs.forEach((d) => {
+        const got = {};
+        arr(d.out).forEach((o) => { const id = o.id || idOfKey(o.item); if (id) got[id] = (got[id] || 0) + (o.count || 1); });
+        Object.entries(got).forEach(([id, n]) => { const m = per[id] || (per[id] = { id: Number(id), times: 0, total: 0, lo: n, hi: n }); m.times++; m.total += n; m.lo = Math.min(m.lo, n); m.hi = Math.max(m.hi, n); });
+      });
+      const mats = Object.values(per).map((m) => {
+        const price = planPrice(m.id), name = anyItemName(m.id);
+        if (price) value += (m.total / obs.length) * price; else missing.push(name);
+        return { name, id: m.id, ch: +(m.times / obs.length).toFixed(3), lo: m.lo, hi: m.hi, price: price || null };
+      });
+      return { value: Math.round(value), mats, missing, from: 'measured', n: obs.length, label: `your ${obs.length} disenchants of this kind` };
+    }
     const mats = row[2].map(([name, ch, lo, hi]) => {
-      const pr = priceByName(name);
-      const avg = ch * (lo + hi) / 2;
-      if (pr && pr.price) value += avg * pr.price; else missing.push(name);
-      return { name, ch, lo, hi, id: pr && pr.id, price: pr && pr.price };
+      const id = (DE.ids || {})[name] || null, price = id ? planPrice(id) : null;
+      if (price) value += ch * (lo + hi) / 2 * price; else missing.push(name);
+      return { name, ch, lo, hi, id, price: price || null };
     });
-    return { value: Math.round(value), mats, missing };
+    return { value: Math.round(value), mats, missing, from: 'table', n: obs.length, label: `Classic disenchant table${obs.length ? ` (${obs.length} of your own so far; ${DE.minMeasured || 10} replace it)` : ''}` };
   }
   // items you wear or keep in an Equipment Manager set are never suggested
   function gearIds() {
@@ -1426,7 +1458,7 @@
         : `usually ${money(r.usual)} (median lowest of ${r.earlier} earlier scans)${r.falling ? '; falling lately' : ''}. Buy under is break-even if it sells at that again; you make is the backtest's median return, per unit`;
       h += `<div class="tr"><div class="c-main"><div class="nm">${anyItemIcon(r.id, { size: 'sm' })} ${itemLink(r.id)}</div><div class="sub">${why} · ${r.listed} listed${r.volume ? ` · at least ${r.volume.perDay} sold a day (probable, ${r.volume.sold} in ${r.volume.hours} h of scans)` : ''}${r.sellShare != null ? ` · ${pct(r.sellShare)} of yours sold` : ''}${r.dontHold ? ` · <span class="neg">the ${esc(r.band)} band is falling: sell at the next scan, don't hold</span>` : ''}${paperBtn(r)}</div></div><div class="dim">${RULE_WORDS[r.rule]}</div><div class="c-num">${money(r.lowest)}</div><div class="c-num">${money(r.buyUnder)}</div><div class="c-num best">${money(r.net)}</div></div>`;
     });
-    h += '</div>' + trialView() + '<details class="how"><summary>How the buy list works</summary><p>Under the vendor price is certain: a vendor pays a fixed price. Disenchant values use the Classic disenchant table and your AH prices for the materials, so they are an expected value. A vendor sells it for less: how often the lowest price stayed above the vendor\'s, in this item\'s own scans. The two price rules (25% under the usual lowest, few listed far under the rest) are checked against every item\'s scan history: buy at a scan\'s lowest, sell at the next scan\'s lowest after the cut. They are shown only after 30 such cases with a median that made money, and what you make is that median return, not the gap to the usual price. Items with random rolls (of the Owl...) are left out of these two, since one price mixes every roll.</p></details>';
+    h += '</div>' + trialView() + '<details class="how"><summary>How the buy list works</summary><p>Under the vendor price is certain: a vendor pays a fixed price. Disenchant values are an expected value at your AH prices for the materials: from what your own disenchants of that kind and item level gave once there are 10 of them, else the Classic disenchant table. A vendor sells it for less: how often the lowest price stayed above the vendor\'s, in this item\'s own scans. The two price rules (25% under the usual lowest, few listed far under the rest) are checked against every item\'s scan history: buy at a scan\'s lowest, sell at the next scan\'s lowest after the cut. They are shown only after 30 such cases with a median that made money, and what you make is that median return, not the gap to the usual price. Items with random rolls (of the Owl...) are left out of these two, since one price mixes every roll.</p></details>';
     return h;
   }
 
@@ -1699,7 +1731,7 @@
     RAW = specsByGroup(db || {});
     DB = RAW;
     try { if (window.CC && window.CC.syncView) DB = specsByGroup(window.CC.syncView(RAW) || RAW); } catch (e) { console.warn('sync view', e); DB = RAW; }
-    NAME_PRICE = null;
+    DE_SEEN = null;
     const chars = DB.chars || {};
     const keys = Object.keys(chars).filter((k) => chars[k] && chars[k].snap);
     if (!keys.length) { CH = null; CHARS = []; render(); return; }

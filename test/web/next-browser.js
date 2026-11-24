@@ -292,6 +292,23 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   check(mac.m[0] && mac.m[0].body === '/cast [@mouseover] Renew' && mac.m[0].scope === 'account', 'snapshot macros: name, scope and text');
   check(mac.a && mac.a.length === 2 && mac.a[0].name === 'Clique' && mac.a[0].enabled === false && mac.none === null, 'snapshot addons: enabled or not, null when the build doesn\'t read them');
   check(/Addons/.test(mac.h) && /Clique/.test(mac.h) && /turned off/.test(mac.h), 'Talents & Bars lists the addons, a turned-off one says so');
+  // #21: 10 of your own disenchants of green armor at item level 46-50 replace the table; 9 don't
+  const deT = await page.evaluate(() => {
+    const A = window.CC.api, D = A.DB, c = Object.values(D.chars)[0], keep = c.deResults, prices = A.CH.ah.prices;
+    A.CH.ah.prices = Object.assign({}, prices, { 11176: { id: 11176, name: 'Dream Dust', obs: [{ t: 1795000000, min: 1000, med: 1000, qty: 50, src: 'scan' }] },
+      11175: { id: 11175, name: 'Greater Nether Essence', obs: [{ t: 1795000000, min: 5000, med: 5000, qty: 5, src: 'scan' }] } });
+    const mk = (n) => Array.from({ length: n }, (_, i) => ({ t: 1795000000 + i, item: 'item:9' + i, ilvl: 48, q: 2, class: 4, out: [{ id: 11176, count: 2 }] }));
+    c.deResults = mk(9);
+    const table = A.deOutcome({ q: 2, class: 4, ilvl: 48 });
+    c.deResults = mk(10);
+    const own = A.deOutcome({ q: 2, class: 4, ilvl: 48 });
+    c.deResults = keep; A.CH.ah.prices = prices;
+    return { table, own };
+  });
+  check(deT.table.from === 'table' && deT.table.n === 9 && /9 of your own so far/.test(deT.table.label) && deT.table.mats.find((m) => m.name === 'Dream Dust').id === 11176,
+    'disenchant: 9 of your own: still the Classic table, saying so; materials by id');
+  check(deT.own.from === 'measured' && deT.own.n === 10 && deT.own.value === 2000 && deT.own.mats.length === 1 && deT.own.mats[0].ch === 1 && /your 10 disenchants/.test(deT.own.label),
+    'disenchant: 10 of your own (2 Dream Dust each at 10s): 20s, from your disenchants ' + JSON.stringify(deT.own));
   // #90: what killed you, from this computer's combat log: the Grinds tab and the snapshot's combat.deaths
   const dz = await page.evaluate(() => {
     const A = window.CC.api, C = window.CC.combat, keep = C.state, st = C.api.fresh();

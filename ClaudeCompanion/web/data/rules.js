@@ -117,6 +117,15 @@ window.GAMERULES = {
   ],
   disenchant: {
     from: 'warcraft.wiki.gg Disenchanting tables (Classic numbers, not measured on Forever)',
+    // the materials by item id (#21), so prices and your own results match by id, never by name
+    ids: { 'Strange Dust': 10940, 'Soul Dust': 11083, 'Vision Dust': 11137, 'Dream Dust': 11176, 'Illusion Dust': 16204,
+      'Lesser Magic Essence': 10938, 'Greater Magic Essence': 10939, 'Lesser Astral Essence': 10998, 'Greater Astral Essence': 11082,
+      'Lesser Mystic Essence': 11134, 'Greater Mystic Essence': 11135, 'Lesser Nether Essence': 11174, 'Greater Nether Essence': 11175,
+      'Lesser Eternal Essence': 16202, 'Greater Eternal Essence': 16203, 'Small Glimmering Shard': 10978, 'Large Glimmering Shard': 11084,
+      'Small Glowing Shard': 11138, 'Large Glowing Shard': 11139, 'Small Radiant Shard': 11177, 'Large Radiant Shard': 11178,
+      'Small Brilliant Shard': 14343, 'Large Brilliant Shard': 14344, 'Nexus Crystal': 20725 },
+    // your own disenchants replace the table for an item level band once there are this many of that kind
+    minMeasured: 10,
     armor: [
     [5, 15, [['Strange Dust', 0.8, 1, 2], ['Lesser Magic Essence', 0.2, 1, 2]]],
     [16, 20, [['Strange Dust', 0.75, 2, 3], ['Greater Magic Essence', 0.2, 1, 2], ['Small Glimmering Shard', 0.05, 1, 1]]],

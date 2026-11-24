@@ -139,7 +139,7 @@
     const offered = (r) => bt[r].n >= MIN_BACKTEST && bt[r].medianReturn > 0;
     out.rules = [
       { id: 'vendor', name: 'Under the vendor price', evidence: 'certain: a vendor pays a fixed price', offered: true },
-      { id: 'disenchant', name: 'Under its disenchant value', evidence: 'expected value, Classic disenchant table (not measured on Forever)', offered: !!ctx.hasEnchanting },
+      { id: 'disenchant', name: 'Under its disenchant value', evidence: 'expected value: what your own disenchants of that kind gave once there are 10, else the Classic table (not measured on Forever)', offered: !!ctx.hasEnchanting },
       { id: 'resell', name: 'A vendor sells it for less', evidence: "the item's own scans: how often the lowest price stayed above the vendor's", offered: true },
       { id: 'dip', name: "25% under the item's usual lowest price", backtest: bt.dip, offered: offered('dip') },
       { id: 'thin', name: 'Few listed, far under the rest', backtest: bt.thin, offered: offered('thin') },
@@ -159,7 +159,7 @@
         const de = ctx.deValue(it);
         if (de && !de.missing.length && de.value) {
           const worth = de.value * (1 - cut);
-          if (cur.min < worth) row('disenchant', worth, null, worth - cur.min, { deValue: de.value, label: 'Classic disenchant table' });
+          if (cur.min < worth) row('disenchant', worth, null, worth - cur.min, { deValue: de.value, label: de.label || 'Classic disenchant table', deFrom: de.from || 'table', deSample: de.n || 0 });
         }
       }
       const vb = ctx.vendorBuy(p.id);

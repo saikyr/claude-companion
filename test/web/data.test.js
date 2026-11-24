@@ -93,6 +93,11 @@ test('rules: disenchant tables cover item levels without gaps, chances add up to
     }
   }
   for (let i = 1; i < D.skill.length; i++) assert.ok(D.skill[i][0] > D.skill[i - 1][0] && D.skill[i][1] > D.skill[i - 1][1]);
+  // #21: every material has its item id, and the pack names that id the same
+  for (const k of ['armor', 'weapon', 'rare', 'epic']) for (const r of D[k]) for (const [name] of r[2]) {
+    const id = D.ids[name];
+    assert.ok(id && GD.items[id] && GD.items[id][0] === name, `${name}: id ${id} is ${id && GD.items[id] && GD.items[id][0]}`);
+  }
 });
 
 test('rules: every attunement and key names quests, items, bosses and zones the pack has', () => {
