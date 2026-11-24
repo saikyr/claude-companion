@@ -109,7 +109,10 @@ test('Gear: raid quest rewards are no pre-BiS source (Atiesh, the Qiraji staves,
   assert.ok(c.later.some((x) => x.avail === 'unseen'), 'items Forever is not known to have yet are kept too');
   assert.ok(c.later.every((x) => !c.byId[x.key]), 'never also a source for now or pre-BiS');
   assert.ok(c.later.some((x) => GD.items[x.key][11] === 'f' && x.avail === 'unseen' && !x.seen), 'gear with ForeverDB stats only (no Forever client tooltip) is kept as not seen yet');
-  assert.ok(Object.values(c.byId).every((x) => x.g[11] === 'e'), 'upgrades and pre-BiS only from the Forever client\'s own tooltips');
+  // the Forever client's own tooltips, or ForeverDB's stats for an item Forever was seen giving (Tier 0.5 spec sets)
+  const seenGiving = (id) => (GD.src[id] || []).some((r) => r[10] === 'f');
+  assert.ok(Object.values(c.byId).every((x) => x.g[11] === 'e' || (x.g[11] === 'f' && seenGiving(String(x.id)))), 'upgrades and pre-BiS only from client tooltips, or ForeverDB stats Forever was seen giving');
+  assert.ok(c.byId['226955'], 'Virtuous Epaulets (Forever\'s Shadow Tier 0.5, ForeverDB stats, from the Twilight set box) is a source');
 });
 
 console.log(failed ? `\n${failed} FAILED` : '\nall passed');

@@ -38,7 +38,10 @@ EQUIP = [
     (r'damage done by (\w+) spells and effects by up to (\d+)', lambda m: {SCHOOL[m[1]]: int(m[2])} if m[1] in SCHOOL else None),
     (r'[Rr]estores (\d+) mana per 5 sec', lambda m: {43: int(m[1])}),
     (r'[Rr]estores (\d+) health per 5 sec', lambda m: {46: int(m[1])}),
-    (r'critical strike with spells by ([\d.]+)%', lambda m: {21: float(m[1])}),
+    # the client writes these % lines in either case ("Critical Strike with Spells": Eye of the Beast), so they
+    # alone ignore case; ranged-only hit ("with ranged weapons") has no stat of its own and stays unparsed
+    (r'(?i)critical strike with spells by ([\d.]+)%', lambda m: {21: float(m[1])}),
+    (r'(?i)critical strike with melee and ranged attacks by ([\d.]+)%', lambda m: {116: float(m[1])}),
     (r'critical strike by ([\d.]+)%', lambda m: {116: float(m[1])}),
     (r'chance to hit with spells by ([\d.]+)%', lambda m: {18: float(m[1])}),
     (r'chance to hit by ([\d.]+)%', lambda m: {117: float(m[1])}),

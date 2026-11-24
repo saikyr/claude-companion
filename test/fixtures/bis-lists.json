@@ -1,0 +1,156 @@
+{
+  "about": "Pre-raid best-in-slot picks from published Forever lists, used to check the app's own pre-BiS (test/web/bis-lists.test.js). A pick is listed when at least two of the sources agree on it, by the Forever client's item id (sites may use Classic names: Nacreous Shell Necklace is Diana's Pearl Necklace in the Forever client). A pick must be available (not filtered out) and shown for its slot (the app's pick or one of its alternatives); `disagree` says why the app's weights rank one lower on purpose. Sources disagree a lot; these are only the shared picks.",
+  "sources": {
+    "wowtbc": "wowtbc.gg/warcraftforever/bis-list/shadow-priest (Pre Raid, Realistic), read 24 Nov 2026",
+    "conquestcapped": "conquestcapped.com/guides/wow-forever/wow-forever-shadow-priest-bis (Pre-Raid BiS, updated 22 Nov 2026)",
+    "timesaver": "timesaver.gg/tools/wow-forever/leveling-gear/priest/shadow (Pre-raid BiS, data checked 13 Nov 2026)"
+  },
+  "lists": [
+    {
+      "class": "PRIEST",
+      "tree": "Shadow",
+      "level": 60,
+      "picks": [
+        {
+          "slot": "Head",
+          "id": 22267,
+          "name": "Spellweaver's Turban",
+          "in": [
+            "wowtbc",
+            "conquestcapped"
+          ]
+        },
+        {
+          "slot": "Neck",
+          "id": 22403,
+          "name": "Diana's Pearl Necklace",
+          "in": [
+            "wowtbc",
+            "conquestcapped"
+          ]
+        },
+        {
+          "slot": "Shoulder",
+          "id": 226955,
+          "name": "Virtuous Epaulets",
+          "in": [
+            "wowtbc",
+            "conquestcapped"
+          ]
+        },
+        {
+          "slot": "Back",
+          "id": 272411,
+          "name": "Arcanoweave Cloak",
+          "in": [
+            "wowtbc",
+            "conquestcapped"
+          ]
+        },
+        {
+          "slot": "Chest",
+          "id": 280057,
+          "name": "Robes of Dark Summons",
+          "in": [
+            "wowtbc",
+            "conquestcapped"
+          ]
+        },
+        {
+          "slot": "Wrist",
+          "id": 254067,
+          "name": "Netherpearl Cuffs",
+          "in": [
+            "wowtbc",
+            "conquestcapped"
+          ]
+        },
+        {
+          "slot": "Hands",
+          "id": 14146,
+          "name": "Gloves of Spell Mastery",
+          "in": [
+            "wowtbc",
+            "conquestcapped"
+          ],
+          "disagree": "The Shadow weights count crit at 0.3 (it adds to Mind Blast and Mind Flay only), so its 28 crit rating is worth 8.4; Felcloth Gloves, Hands of Power and Forever's Tier 0.5 Virtuous Hands score higher"
+        },
+        {
+          "slot": "Waist",
+          "id": 18405,
+          "name": "Belt of the Archmage",
+          "in": [
+            "wowtbc",
+            "conquestcapped",
+            "timesaver"
+          ]
+        },
+        {
+          "slot": "Legs",
+          "id": 22342,
+          "name": "Leggings of Torment",
+          "in": [
+            "wowtbc",
+            "conquestcapped"
+          ]
+        },
+        {
+          "slot": "Feet",
+          "id": 226959,
+          "name": "Virtuous Slippers",
+          "in": [
+            "wowtbc",
+            "conquestcapped"
+          ]
+        },
+        {
+          "slot": "Ring",
+          "id": 22339,
+          "name": "Rune Band of Wizardry",
+          "in": [
+            "wowtbc",
+            "conquestcapped"
+          ]
+        },
+        {
+          "slot": "Ring",
+          "id": 272406,
+          "name": "Channeler's Ring",
+          "in": [
+            "wowtbc",
+            "conquestcapped"
+          ]
+        },
+        {
+          "slot": "Trinket",
+          "id": 272438,
+          "name": "Weakness Analyzer",
+          "in": [
+            "wowtbc",
+            "conquestcapped"
+          ]
+        },
+        {
+          "slot": "Main hand",
+          "id": 18372,
+          "name": "Blade of the New Moon",
+          "in": [
+            "wowtbc",
+            "conquestcapped",
+            "timesaver"
+          ],
+          "disagree": "Ties with Scepter of the Unholy at 88 (88 shadow damage each; Stamina isn't weighed for Shadow), and the app shows the Scepter"
+        },
+        {
+          "slot": "Ranged",
+          "id": 13396,
+          "name": "Skul's Ghastly Touch",
+          "in": [
+            "wowtbc",
+            "conquestcapped"
+          ]
+        }
+      ]
+    }
+  ]
+}

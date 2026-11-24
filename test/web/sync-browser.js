@@ -58,8 +58,10 @@ const check = (ok, what) => { console.log((ok ? 'ok   ' : 'FAIL ') + what); if (
   await page.click('[data-sync="code"]');
   await page.waitForFunction(() => /enter [A-Z0-9]{4} [A-Z0-9]{4}/.test(document.querySelector('main').textContent), null, { timeout: 5000 });
   check(true, 'Link another computer shows a code');
-  await page.waitForTimeout(1500);
-  const snap = JSON.parse(fs.readFileSync(path.join(dataDir, 'snapshot.json'), 'utf8'));
+  // the page writes snapshot.json once its advice is computed: wait for it (up to 15 s on a slow runner)
+  const snapFile = path.join(dataDir, 'snapshot.json');
+  for (let i = 0; i < 30 && !fs.existsSync(snapFile); i++) await page.waitForTimeout(500);
+  const snap = JSON.parse(fs.readFileSync(snapFile, 'utf8'));
   check(snap.sync && snap.sync.account === st.account && !JSON.stringify(snap).includes(st.key), 'snapshot.json has the account for Claude, never the key');
   const inst = fs.existsSync(path.join(dataDir, 'installed.json')) ? JSON.parse(fs.readFileSync(path.join(dataDir, 'installed.json'), 'utf8')) : null;
   check(inst ? snap.app && snap.app.build === inst.tag : snap.app === null, `the snapshot names the app build (${JSON.stringify(snap.app)})`);
