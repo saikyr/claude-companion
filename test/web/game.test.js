@@ -83,6 +83,38 @@ const lit = (s) => '$j$' + s + '$j$';
     const scholo = one(`select game.instance('Scholomance')::text`);
     check(scholo.dropsTotal > 300 && scholo.drops.length === 300 && scholo.drops[0].boss === true, `game.instance: the best 300 of ${scholo.dropsTotal} drops, bosses first, with the total`);
 
+    // tools/game.py (claude/game.py in every build: a friend's Claude has no database) reads the same rows and
+    // labels them the same way: every drop row, and the look-ups, against the database
+    const PY = `import sys, json; sys.path.insert(0, sys.argv[1]); from game import Game, jsonable; g = Game()
+out = {'rates': sorted(json.dumps([r['item_id'], r['kind'], r['source'], r['source_id'], r['zone'], r['rate'], r['label']], ensure_ascii=False) for r in g.rates),
+       'item': g.item('Skeleton Finger'), 'npc': g.npc('Skeletal Horror'), 'q': [g.quest(x) for x in ('5803', '5505', '4862', '1159')],
+       'strat': g.instance('Stratholme'), 'status': g.status()}
+print(json.dumps(out, ensure_ascii=False, default=jsonable))`;
+    const py = JSON.parse(execFileSync('python3', ['-c', PY, path.join(__dirname, '../../tools')], { encoding: 'utf8', maxBuffer: 1 << 28 }));
+    const pgRates = JSON.parse(B.query(`select json_agg(x order by x)::text from (select json_build_array(item_id, kind, source, source_id, zone, rate, label)::text x from game.drop_rates) s`))
+      .map((x) => JSON.stringify(JSON.parse(x)));
+    const pyRates = py.rates.map((x) => JSON.stringify(JSON.parse(x)));
+    const a = new Set(pgRates), b = new Set(pyRates);
+    const onlyPg = pgRates.filter((x) => !b.has(x)), onlyPy = pyRates.filter((x) => !a.has(x));
+    check(pgRates.length === pyRates.length && !onlyPg.length && !onlyPy.length,
+      `game.py: every drop row labelled as the database labels it (${pyRates.length} rows${onlyPg.length ? '; database only: ' + onlyPg.slice(0, 2).join(' ') + '; game.py only: ' + onlyPy.slice(0, 2).join(' ') : ''})`);
+    // canonical: keys sorted (jsonb sorts them), lists of {id, title} by id (the database doesn't order them)
+    const canon = (v) => Array.isArray(v) ? (v.every((e) => e && typeof e === 'object' && 'id' in e && 'title' in e) ? [...v].sort((p, q) => p.id - q.id) : v).map(canon)
+      : v && typeof v === 'object' ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, canon(v[k])])) : v;
+    const diff = (p, q, at) => { const P = JSON.stringify(p), Q = JSON.stringify(q); if (P === Q) return null;
+      if (p && q && typeof p === 'object' && typeof q === 'object') for (const k of new Set([...Object.keys(p), ...Object.keys(q)])) { const d = diff(p[k], q[k], at + '.' + k); if (d) return d; }
+      return `${at}: ${String(P).slice(0, 200)} vs ${String(Q).slice(0, 200)}`; };
+    const same = (what, p, q) => { const d = diff(canon(p), canon(q), ''); check(!d, `game.py ${what} is the database's` + (d ? ` (${d})` : '')); };
+    same('item', py.item, one(`select game.item('Skeleton Finger')::text`));
+    // the database leaves rows of equal rate in no set order: drop lists compare as sets
+    const asSet = (lst) => lst.map((x) => Object.assign({}, x, { drops: x.drops.map((d) => JSON.stringify(canon(d))).sort() }));
+    same('npc', asSet(py.npc), asSet(one(`select game.npc('Skeletal Horror')::text`)));
+    ['5803', '5505', '4862', '1159'].forEach((id, i) => same('quest ' + id, py.q[i], one(`select game.quest('${id}')::text`)));
+    const ps = py.strat, ds = one(`select game.instance('Stratholme')::text`);
+    same('instance (bosses, rules, unlocks, total)', [ps.bosses, ps.rules, ps.unlocks, ps.dropsTotal], [ds.bosses, ds.rules, ds.unlocks, ds.dropsTotal]);
+    same('instance drops (as a set)', ps.drops.map((d) => JSON.stringify(canon(d))).sort(), ds.drops.map((d) => JSON.stringify(canon(d))).sort());
+    check(py.status.pack === meta.hash, 'game.py status names the pack the database loaded');
+
     // reads stay whole while a new pack loads, and after a load that fails half-way (a slot of its own)
     const live = () => B.query('select count(*) from game.drop_rates') + '/' + B.query(`select count(*) from game.items i join game.live l on i.slot = l.slot and i.pack = l.hash`);
     const before = live();

@@ -38,7 +38,8 @@ that must hold go in CI or in the database (for example `private.claude_put_sett
 | `tools/make-release.py` | The first-install zips for Windows and Mac (CI attaches them to the release) |
 | `installer/` | The installers in those zips: `windows/install.ps1` (+ `.bat`), `mac/Install Claude Companion.app` |
 | `tools/make-icons.py` | Draws the app icon (PNG for the installed app, `.icns` for the Mac launcher) |
-| `tools/check-cards.py` | Checks a From Claude `cards.json` before Claude writes it: the format, then the answer rules (`tools/answer_rules.py`) |
+| `tools/check-cards.py` | Checks a From Claude `cards.json` before Claude writes it: the format, then the answer rules (`tools/answer_rules.py`), then each `game.drop:` fact against the pack (`tools/game.py`) |
+| `tools/game.py` | The `game` schema's look-ups offline, from the pack (`tools/pack-to-rows.py` rows, the `game.drop_rates` labels); ships as `claude/game.py` for a friend's Claude. `test/web/game.test.js` compares every drop label and the look-ups with the database; `test/kit_test.py` runs the built kit without node |
 | `tools/check-answer.py` | The same answer rules on a chat draft, line by line (Claude's self-check before sending) |
 | `tools/audit.py` | The weekly correction audit: counts a week's correction log by cause against `docs/audit-baseline.json` ([COACHING.md](COACHING.md)) |
 | `tools/answer_rules.py` | The answer rules; the Postgres card gate (`*_card_gate.sql`) is the same, kept equal by `test/web/cards-gate.test.js` |

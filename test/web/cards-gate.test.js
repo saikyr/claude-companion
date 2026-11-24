@@ -32,7 +32,8 @@ const snapshot = {
 const farm = (extra) => Object.assign({ id: 'farm-fingers', kind: 'farm', title: 'Skeleton Fingers in Duskwood', risk: 'Level 30s mobs, no elites; low risk.',
   facts: [{ label: 'Drop rate', value: '36.36% (220 corpses)', src: 'game.drop:2378:202' }] }, extra || {});
 
-// [name, card, rules both engines must report, rules only Postgres reports (it checks the numbers)]
+// [name, card, rules both engines must report, rules only Postgres reports (it checks the snapshot's numbers;
+// a game.drop fact both check, check-cards.py against the pack through tools/game.py)]
 const CASES = [
   ['a farm card with a sourced Forever rate, risk and the app gph', farm({ facts: [
     { label: 'Drop rate', value: '36.36% (220 corpses, ForeverDB players)', src: 'game.drop:2378:202' },
@@ -43,10 +44,10 @@ const CASES = [
   ['flip profit with the wrong number', { id: 'flips-bad', title: 'Flip profit so far', facts: [{ label: 'Flip profit', value: '95g', src: 'flips#profit' }] }, [], ['value']],
   ['a Classic rate passed off as a rate (the 8% answer)', farm({ facts: [{ label: 'Drop chance', value: '8%' }] }), ['src', 'rate'], []],
   ['paraphrase: the rate in the summary, no sample', farm({ summary: 'About a 49% chance per kill.' }), ['rate'], []],
-  ['a Classic rate with its src, not called Classic', farm({ facts: [{ label: 'Drop chance', value: '49.07% (3 kills seen)', src: 'game.drop:537:6033' }] }), [], ['value']],
+  ['a Classic rate with its src, not called Classic', farm({ facts: [{ label: 'Drop chance', value: '49.07% (3 kills seen)', src: 'game.drop:537:6033' }] }), ['value'], []],
   ['a Classic rate with its src, called Classic', farm({ facts: [{ label: 'Drop chance', value: '49.07% (Classic rate, not Forever)', src: 'game.drop:537:6033' }] }), [], []],
-  ['a Forever rate without its corpses', farm({ facts: [{ label: 'Drop rate', value: '36.36%', src: 'game.drop:2378:202' }] }), ['rate'], ['value']],
-  ['a rate sourced to a drop with no rate', farm({ facts: [{ label: 'Drop rate', value: 'about 10%, 50 kills', src: 'game.drop:537:5185' }] }), [], ['value']],
+  ['a Forever rate without its corpses', farm({ facts: [{ label: 'Drop rate', value: '36.36%', src: 'game.drop:2378:202' }] }), ['rate', 'value'], []],
+  ['a rate sourced to a drop with no rate', farm({ facts: [{ label: 'Drop rate', value: 'about 10%, 50 kills', src: 'game.drop:537:5185' }] }), ['value'], []],
   ['a rate with a non-drop src', farm({ facts: [{ label: 'Drop rate', value: '36.36% (220 corpses)', src: 'snapshot#character.level' }] }), [], ['value']],
   ['a duo claim (the duo Strat answer)', { id: 'strat-duo', title: 'Duo Stratholme Live with your friend' }, ['duo'], []],
   ['paraphrase: soloable', { id: 'solo', title: 'Scholomance is soloable for a priest' }, ['duo'], []],
@@ -215,6 +216,8 @@ function pyRules(card) {
     const example = live(JSON.parse(fs.readFileSync(path.join(ROOT, 'test', 'fixtures', 'cards.json'), 'utf8')));
     const exPg = JSON.parse(B.query(`select private.check_cards('${account}', ${lit(JSON.stringify(example))}::jsonb)::text`));
     check(exPg.length === 0, 'test/fixtures/cards.json passes the Postgres gate' + (exPg.length ? ': ' + JSON.stringify(exPg) : ''));
+    const exPy = example.cards.flatMap(pyRules);
+    check(exPy.length === 0, 'and check-cards.py, its game.drop facts against the pack' + (exPy.length ? ': ' + exPy.join(' ') : ''));
   } finally { B.drop(); fs.rmSync(out, { recursive: true, force: true }); }
   console.log(failed ? `\n${failed} failed` : '\nall passed');
   process.exit(failed ? 1 : 0);

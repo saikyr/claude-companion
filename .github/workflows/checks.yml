@@ -103,8 +103,8 @@ jobs:
         run: python3 test/server_test.py
       - name: Self-update, end to end (mock GitHub)
         run: python3 test/update_test.py && python3 test/update_test.py --url
-      - name: From Claude cards format
-        run: python3 tools/check-cards.py test/fixtures/cards.json
+      - name: The Claude kit as a build ships it (game.py, check-cards.py on the example cards, no node)
+        run: python3 test/kit_test.py
       - name: No personal data
         run: |
           ! git ls-files | grep -E 'SavedVariables|snapshot\.json$|settings\.json$|sync(-cache)?\.json$|combat\.json$|web/data\.js$'

@@ -14,23 +14,40 @@ vendors, rules. Keys are stable for one pack: items/quests/npcs by id, drops and
 import argparse, hashlib, json, os, re, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# the repository (tools/ next to ClaudeCompanion/), or a build's claude/ inside ClaudeCompanion/ (claude/game.py)
 DATA = os.path.join(ROOT, 'ClaudeCompanion', 'web', 'data')
+if not os.path.isdir(DATA) and os.path.isdir(os.path.join(ROOT, 'web', 'data')): DATA = os.path.join(ROOT, 'web', 'data')
 
 
-def load_js(path, var):
-    """window.<var> = {...}; -> the object (the pack files are plain JSON after the assignment)."""
+def load_js(path, var, parse_float=None):
+    """window.<var> = {...}; -> the object (the pack files are plain JSON after the assignment).
+    parse_float=decimal.Decimal keeps each number exactly as written (tools/game.py: labels as Postgres prints them)."""
     text = open(path, encoding='utf-8').read()
     m = re.search(r'window\.' + var + r'\s*=\s*', text)
     if not m: raise SystemExit(f'{path}: no window.{var}')
-    return json.JSONDecoder().raw_decode(text[m.end():])[0], text
+    return json.JSONDecoder(parse_float=parse_float).raw_decode(text[m.end():])[0], text
 
 
 def rules_obj(text):
-    """rules.js is JavaScript, not JSON (comments, unquoted keys): node evaluates it."""
+    """rules.js is JavaScript, not JSON (comments, unquoted keys): node evaluates it. Where there is no node
+    (a friend's computer), the build ships the same object as rules.json next to this file (tools/publish-stable.py),
+    used only while its sha matches the rules.js it was made from."""
     import subprocess
     js = "global.window={};require(process.argv[1]);process.stdout.write(JSON.stringify(window.GAMERULES))"
-    r = subprocess.run(['node', '-e', js, os.path.join(DATA, 'rules.js')], capture_output=True, text=True, check=True)
-    return json.loads(r.stdout)
+    try:
+        r = subprocess.run(['node', '-e', js, os.path.join(DATA, 'rules.js')], capture_output=True, text=True, check=True)
+        return json.loads(r.stdout)
+    except (OSError, subprocess.CalledProcessError) as e:
+        shipped = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rules.json')
+        if os.path.exists(shipped):
+            with open(shipped, encoding='utf-8') as f: d = json.load(f)
+            if d.get('sha') == rules_sha(text): return d['rules']
+            raise SystemExit(f'{shipped} was made from another rules.js: reinstall the app')
+        raise SystemExit(f'reading rules.js needs node ({e})')
+
+
+def rules_sha(text):
+    return hashlib.sha256(text.encode('utf-8')).hexdigest()
 
 
 def at(row, i, default=None):

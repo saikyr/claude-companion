@@ -17,6 +17,7 @@ Mac: `/Applications/World of Warcraft/_forever_/Interface/AddOns/ClaudeCompanion
 | `claude/COACHING.md` | How to answer: sections 1 to 4 and 7 apply to you, read through the table below. Sections 5, 6 and 8 are for the app owner's own project |
 | `claude/FEATURES.md` | What the app records and what it doesn't. Its "Claude reads" column is SQL for the owner's database: you read the same fields in `snapshot.json` (next section) |
 | `claude/check-cards.py`, `claude/check-answer.py`, `claude/answer_rules.py` | The checkers (Python 3, no packages) |
+| `claude/game.py` (with `claude/pack-to-rows.py`, `claude/rules.json`) | **Game facts**: items, drops with labelled rates, NPCs, quests and chains, instances, from the app's own game data (`web/data/`). The same answers as the owner's `game` schema |
 | `companion-data/SCHEMA.md` | Every field of `snapshot.json` and the cards format |
 | `companion-data/snapshot.json` | **The player's data.** Written by the app after every save in game |
 | `companion-data/from-claude/cards.json` | **The only file you write** |
@@ -31,7 +32,7 @@ name something you can't reach, use this instead; this guide wins where they dif
 | They say | For you |
 | --- | --- |
 | the brief (`private.claude_brief`), `private.history`, the snapshot query | `companion-data/snapshot.json` |
-| game facts only from the `game` schema, never the web | named Forever sources on the web, each cited (below) |
+| game facts only from the `game` schema, never the web (`game.item(...)`, `game.npc`, `game.quest`, `game.instance`, `game.drop_rates`) | `python3 claude/game.py item <id or name>` (and `npc`, `quest`, `instance`, `drop <item id> <npc id>`, `status`): the same fields, never the web |
 | CLAUDE.md | this guide |
 | `tools/check-cards.py`, `tools/check-answer.py` | `claude/check-cards.py`, `claude/check-answer.py` |
 | fix the app in a PR, or file a `from-coaching` issue | tell the player what is missing and why |
@@ -62,7 +63,7 @@ name something you can't reach, use this instead; this guide wins where they dif
 | Are my action bars at the best rank? What can I train? | `spells` (`specs[].outdated`, `bars[]`, `train[]`, `later[]`, `known[]`; the trainer's list is as new as `spells.trainer.taken`) | guess ranks from memory or Classic lists |
 | Gold per hour, grinds, runs | `grind.recent[]` (last 20), `grind.running`, `runs[]` (last 10) | your own arithmetic |
 | Sales, buys, profit | `ah.sold[]`, `ah.bought[]` (last 25 each), `ah.flips` | calling a sale profit |
-| Game facts: drops, quests, vendors | named Forever sources (foreverchanges.pro, ForeverDB, endgametools, QuestieDB Forever), each cited; a Classic number is labelled Classic; a drop rate needs its sample size, or it is "unknown" | Wowhead; a rate with no sample |
+| Game facts: items, drops, quests, NPCs, vendors, instances | `python3 claude/game.py item <id or name>`, `npc <id or name>`, `quest <id or title>`, `instance <zone>`, `drop <item id> <npc id>` (JSON). Quote each rate's `label` as given: Forever with its range and corpses, Classic (never as a Forever rate), or unknown. `quest` says whether to keep it (`keep`: the dungeon-quest rule). Only for what it doesn't hold, a named Forever source (foreverchanges.pro, endgametools), cited | the web for anything game.py has; Wowhead; a rate with no sample |
 
 Only the newest part of the history is in the snapshot. Older grinds, sales and the journal stay in the
 game's save file; if the answer needs them, say the snapshot doesn't hold them.
@@ -86,10 +87,10 @@ cards within 5 seconds.
    `id` to update it; set `status` to `withdrawn` to take one back.
 2. Every number in a card's `facts[]` carries its `src` (`snapshot#<path>` for a number from the
    snapshot, `grind:<name>@<start>#gph` for a grind's gold per hour). A farm card has a `risk` line.
-   A drop rate on a card needs a `game.drop:` src, which is the owner's database and not yours: on a card,
-   write the rate as "unknown" and give the cited rate (source and sample) in chat. Never make up a src.
-3. Check it: `python3 claude/check-cards.py <your file>` must print `ok`. Fix what it names; never reword
-   around it.
+   A drop rate on a card needs a `game.drop:<item id>:<npc id>` src, and its value quoted as `claude/game.py drop <item id> <npc id>`
+   labels it (the % and the corpses, or Classic, or unknown). Never make up a src.
+3. Check it: `python3 claude/check-cards.py <your file>` must print `ok`: it also looks every `game.drop:` fact up in
+   the game data. Fix what it names; never reword around it.
 4. Write it to a temporary file in `companion-data/from-claude/`, then rename it to `cards.json`.
 
 Cards written this way show on this computer only. The player's other computers don't get them.
