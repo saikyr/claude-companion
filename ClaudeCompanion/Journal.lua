@@ -85,6 +85,7 @@ local function House(c)
     if not realm or not ch.faction or ch.faction == "" then return nil end
     return realm .. "|" .. ch.faction
 end
+ns.House = House
 -- The price to plan with, the app's one rule (js/app.js planPrice, kept the same; #9): the median of the
 -- newest AH scan when it found the item listed; else the newest price seen that has one (an earlier scan's
 -- median, or the lowest seen while browsing); nil = never priced. No copies: this runs every second for the

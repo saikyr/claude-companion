@@ -262,7 +262,7 @@
         bought: arr(ah.buys).slice(-25).map((x) => ({ t: x.t, item: x.item, price: x.price, count: x.count || null })),
         flips: A.flipsOf ? (({ totals, done, open }) => ({ totals, done: done.slice(0, 25), open })) (A.flipsOf(ah)) : null,
         // the buy list (#115): every rule with its evidence (speculative ones with their backtest), and the rows of the rules the app shows (hidden = rows of rules it doesn't)
-        buyList: A.buyListOf ? ((b) => b && { scan: b.scan, rules: b.rules, rows: b.rows.filter((r) => r.offered).slice(0, 60), hidden: b.rows.filter((r) => !r.offered).length, index: b.index })(A.buyListOf(ah)) : null,
+        buyList: A.buyListOf ? ((b) => b && { scan: b.scan, rules: b.rules, rows: b.rows.filter((r) => r.offered).slice(0, 60), hidden: b.rows.filter((r) => !r.offered).length, index: b.index, cadence: b.cadence, volume: b.volume.slice(0, 40) })(A.buyListOf(ah)) : null,
         // open flips against your rules (#117), your paper trades scored, and flip profit per week
         positions: A.positionsOf ? A.positionsOf(ah) : null,
         paper: A.paperOf ? ((p) => p && { rules: p.rules, trades: p.trades.slice(0, 40) })(A.paperOf(ah)) : null,

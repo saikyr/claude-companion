@@ -195,5 +195,25 @@ check(M.buyList(ctxOf({ '5:1': rec(5, [50, 50, 50, 50, 50, 50]) }, { vsell: { 5:
   check(W.length === 2 && W[0].week === mon && W[0].flips === 2 && W[0].profit === 80 && W[1].week === mon - 7 * DAY && W[1].profit === 7, 'weekly: flips grouped by the week they sold');
 }
 
+// market volume (#116): probable sales per day from scans the addon compared, pairs 12 h or more apart left out
+{
+  const p = rec(700, [100, 100, 100, 100, 100, 100]);
+  p.obs[3] = Object.assign(p.obs[3], { sold: 99, gap: DAY, soldAt: 90 });          // a day apart: counts nothing, left out
+  p.obs[4] = Object.assign(p.obs[4], { sold: 10, gap: 6 * 3600, soldAt: 100 });
+  p.obs[5] = Object.assign(p.obs[5], { sold: 0, gap: 6 * 3600 });
+  const v = M.volume(M.history(p));
+  check(v && v.sold === 10 && v.hours === 12 && v.perDay === 20 && v.soldAt === 100 && v.pairs === 2, 'volume: 10 sold in 12 h of scans = 20 a day; a pair a day apart is left out (' + JSON.stringify(v) + ')');
+  check(M.volume(M.history(rec(701, [100, 100]))) === null, 'volume: no compared scans, no number');
+  const none = M.buyList({ prices: {}, lastScan: null });
+  check(Array.isArray(none.volume) && none.volume.length === 0 && none.cadence === null, 'no full scan yet: an empty volume list (the snapshot slices it)');
+  const hid = M.buyList(ctxOf({ 700: p }, { ctx: { lastScan: Object.assign({}, lastScan, { compared: lastScan.t - 6 * 3600, listings: 100, sellers: 0 }) } }));
+  check(hid.cadence.sellersHidden, 'cadence: a scan that showed no sellers says sales are not measured');
+  const B = M.buyList(ctxOf({ 700: p }, { vsell: { 700: 200 }, ctx: { lastScan: Object.assign({}, lastScan, { compared: lastScan.t - 6 * 3600 }) } }));
+  check(B.volume.length === 1 && B.volume[0].id === 700 && rowsOf(B, 'vendor')[0].volume.perDay === 20, 'volume: in the buy list rows and its own list');
+  check(B.cadence.measures && B.cadence.gapHours === 6, 'cadence: two scans 6 h apart measure sales');
+  const far = M.buyList(ctxOf({ 700: p }, { ctx: { lastScan: Object.assign({}, lastScan, { compared: lastScan.t - 20 * 3600 }) } }));
+  check(!far.cadence.measures && far.cadence.gapHours === 20, 'cadence: 20 h apart does not');
+}
+
 console.log(failed ? `\n${failed} failed` : '\nall ok');
 process.exit(failed ? 1 : 0);
