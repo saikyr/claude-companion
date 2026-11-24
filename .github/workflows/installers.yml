@@ -3,9 +3,9 @@ name: installers
 # build the zips, unzip them like a person would, run each installer into a made-up game folder twice
 # (install, then reinstall over it), and check the addon is complete, an older install's files are
 # gone, and companion-data (the person's own files) is untouched.
+# Mac minutes count 10x and Windows 2x against the free Actions minutes of a private repository, so these run
+# only after a merge to main that touches the installers, and by hand (workflow_dispatch), never on each PR.
 on:
-  pull_request:
-    paths: ['installer/**', 'tools/make-release.py', 'tools/publish-stable.py', '.github/workflows/installers.yml']
   push:
     branches: [main]
     paths: ['installer/**', 'tools/make-release.py', 'tools/publish-stable.py', '.github/workflows/installers.yml']
