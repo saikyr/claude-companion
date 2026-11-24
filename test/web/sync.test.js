@@ -99,8 +99,14 @@ async function main() {
     B.query("update private.link_attempts set at = now() - interval '2 hours'");
     const code = await pc.client.linkCode();
     check(/^[A-HJ-NP-Z2-9]{8}$/.test(code.code), 'link codes: 8 letters and digits without I, O, 0, 1');
+    // the Mac's cards.json (a friend's Claude) went to its own account before the link: it goes again to the new one (#83)
+    const macCards = JSON.stringify({ schema: 1, cards: [{ id: 'mac-card', title: 'From the Mac', updated: '2026-11-24T10:00:00Z' }] });
+    const sentBefore = await mac.client.pushCards(macCards);
     await mac.client.link(code.code);
     check(pc.client.state.account === mac.client.state.account, 'a link code joins the Mac to the PC\'s account');
+    const sentAfter = await mac.client.pushCards(macCards);
+    const joinedCards = B.query(`select data->>'v' from public.records where id = 'setting|cc.claude.cards' and account_id = '${pc.client.state.account}'`);
+    check(sentBefore && sentBefore.ok && sentAfter && sentAfter.ok && /mac-card/.test(joinedCards || ''), "after a link, the computer's cards.json is sent again, to the account it joined");
     let reuse = false; try { await computer(B.fetch, 'x', 'pc').client.link(code.code); } catch (e) { reuse = true; }
     check(reuse, 'a link code works once');
     await sync(mac, macDb, macSet);

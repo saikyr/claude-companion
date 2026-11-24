@@ -220,7 +220,8 @@ function pyRules(card) {
     check(exPy.length === 0, 'and check-cards.py, its game.drop facts against the pack' + (exPy.length ? ': ' + exPy.join(' ') : ''));
 
     // #83: a computer sends its from-claude/cards.json (a friend's Claude, no database) through the same gate,
-    // merged into the stored list card by card (the newer updated wins), written as Claude's (no device)
+    // merged into the stored list card by card (the file's copy unless the stored one is newer; a card this computer
+    // sent before and the file dropped goes), written as Claude's (no device)
     const before = stored().cards.map((c) => c.id).sort();
     const T = (h) => new Date(Date.UTC(2026, 10, 24, h)).toISOString();
     const fileCard = { id: 'friend-1', title: 'Level', updated: T(10), facts: [{ label: 'Level', value: '59', src: 'snapshot#character.level' }] };
@@ -245,6 +246,29 @@ function pyRules(card) {
     check(pc.client.state.cards.ok === false && pc.client.state.live.cards, 'the refusal is kept for the app to show');
     const s3 = await pc.client.pushCards(file([newer, wrongCard]));
     check(s3 && s3.ok === false, 'a refused file is tried again at the next sync (a newer snapshot can make it match)');
+    check(s2.refused === true && pc.client.state.cards.refused === true, 'a refusal says it is one (Claude fixes the file), not a lost connection');
+    // an edit or a withdrawal that keeps the card's time: the file is what Claude wrote last, it wins the tie
+    await pc.client.pushCards(file([Object.assign({}, newer, { title: 'Edited' })]));
+    check(stored().cards.find((c) => c.id === 'friend-1').title === 'Edited', 'an edit without a new updated time counts');
+    await pc.client.pushCards(file([Object.assign({}, newer, { title: 'Edited', status: 'withdrawn' })]));
+    check(stored().cards.find((c) => c.id === 'friend-1').status === 'withdrawn', 'so does a withdrawal');
+    // a card taken out of this computer's file goes; the owner's Claude's cards (never from this computer) stay
+    const other = { id: 'friend-3', title: 'Another', updated: T(14) };
+    const s5 = await pc.client.pushCards(file([other]));
+    const after5 = stored().cards.map((c) => c.id);
+    check(s5.ok && !after5.includes('friend-1') && after5.includes('friend-3') && before.every((id) => after5.includes(id)),
+      `a card this computer sent and the file no longer has is taken off; the others stay (${after5.join(', ')})`);
+    const from = JSON.parse(B.query(`select (data->'from')::text from public.records where id = 'setting|cc.claude.cards' and account_id = '${account}'`));
+    check(from['friend-3'] === pc.client.state.device && !from[before[0]], 'the stored list remembers which computer each card came from');
+    // a file too big once merged is a refusal, which Claude can fix by taking cards out
+    const big = Array.from({ length: 140 }, (_, i) => ({ id: 'big-' + i, title: 'x'.repeat(400), updated: T(15) }));
+    const s6 = await pc.client.pushCards(file(big));
+    check(s6 && s6.ok === false && s6.refused === true && /60 KB/.test(s6.error), `too big: refused, saying so (${s6 && s6.error})`);
+    check((await pc.client.pushCards(file(big.slice(0, 20)))).ok === true, 'and a shorter file goes');
+    // the owner's Claude writing the whole list online: every card is then its own
+    B.query(`select private.claude_put_setting('${account}', 'cc.claude.cards', ${lit(JSON.stringify(stored()))})`);
+    check(B.query(`select coalesce((data->'from')::text, 'none') from public.records where id = 'setting|cc.claude.cards' and account_id = '${account}'`) === 'none',
+      "a write by the owner's Claude clears which computer cards came from");
     const s4 = await pc.client.pushCards('not json');
     check(s4 && s4.ok === false && /not JSON/.test(s4.error), 'a file that is not JSON is refused, not an error');
     const fails = (sql) => { try { B.query(sql); return ''; } catch (e) { return e.message; } };

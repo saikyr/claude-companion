@@ -260,6 +260,8 @@
       cache = { account, after: 0, recs: {}, names: {} };
       state.account = account; state.adopt = true; state.pulledOnce = false;
       state.settings = {}; state.settingsT = {}; state.pendingSince = {};
+      // this computer's cards.json goes to the new account too
+      delete state.live.cards; delete state.cards;
     }
 
     // fetch everything new on the account; returns { changed, settings: {k: v} to apply here }
@@ -327,7 +329,8 @@
       const h = hash(text);
       if (state.live.cards === h && state.cards && state.cards.ok) return null;
       const r = await rpc('cc_put_cards', { p_key: state.key, p_value: text });
-      state.cards = { at: new Date(io.now()).toISOString(), ok: !!(r && r.ok), error: (r && r.error) || null,
+      // refused: the gate (or the file's format) said no, Claude fixes the file; else not sent, tried again
+      state.cards = { at: new Date(io.now()).toISOString(), ok: !!(r && r.ok), error: (r && r.error) || null, refused: !!(r && r.refused),
         cards: (r && r.cards) || null, stale: (r && r.stale) || 0 };
       state.live.cards = h; await io.saveState(state);
       return state.cards;

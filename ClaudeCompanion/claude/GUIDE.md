@@ -96,8 +96,8 @@ cards within 5 seconds.
 With sync on, the app sends the file to the player's account at the next sync (within seconds while the app is open),
 through the same gate as the owner's cards, and their other linked computers show them too. The gate also checks
 every number against the newest snapshot; if it refuses, nothing is sent and `from-claude/state.json` `upload`
-says why (`ok` false, `error`): fix what it names. A card you leave out of the file stays on the other computers,
-so take one back with `status` `withdrawn`, never by deleting it.
+says why (`ok` false, `refused` true, `error`): fix what it names. A card you take out of the file is taken off the
+other computers too; `status` `withdrawn` keeps it, closed, in the player's list.
 
 ## Chat answers
 

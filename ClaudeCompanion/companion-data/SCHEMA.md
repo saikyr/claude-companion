@@ -71,10 +71,10 @@ tab and on the Overview as cards. The same cards file format goes one of two way
 | Where | Written by | What |
 | --- | --- | --- |
 | account setting `cc.claude.cards` | **Claude only**, with `select private.claude_put_setting('<account>', 'cc.claude.cards', '<cards.json text>')` | Online: every computer of the account gets it at its next sync (about a minute). The usual way. |
-| `from-claude/cards.json` | **Claude only** | On one computer, through folder access (a friend's Claude project). Claude rewrites the whole file (write a temp file, then rename). The app never changes it; with sync on, it sends the file to the account (`public.cc_put_cards`: the same gate as `claude_put_setting`, merged into `cc.claude.cards` card by card, the newer `updated` winning), so the account's other computers show the cards too. A card left out of the file stays online: withdraw it with `status`. How the last send went is `upload` in state.json. |
+| `from-claude/cards.json` | **Claude only** | On one computer, through folder access (a friend's Claude project). Claude rewrites the whole file (write a temp file, then rename). The app never changes it; with sync on, it sends the file to the account (`public.cc_put_cards`: the same gate as `claude_put_setting`, merged into `cc.claude.cards` card by card: the file's copy unless the stored one is strictly newer; a card this computer sent before and the file no longer has is dropped; cards from another computer or the owner's Claude stay), so the account's other computers show the cards too. How the last send went is `upload` in state.json. |
 | `from-claude/state.json` and account setting `cc.claude.cardsState` | **the app only** | What the player did: done, dismissed, which steps are ticked. Same content in both. Claude reads it (`select data->>'v' from private.history where account = '<account>' and id = 'setting|cc.claude.cardsState'`), never writes it. |
 
-The app shows both card sources as one list: the same `id` in both is one card, the newer `updated` wins.
+The app shows both card sources as one list: the same `id` in both is one card, the newer `updated` wins (this computer's file on a tie).
 It checks every 5 seconds, so a new card shows without a reload.
 **Before writing cards.json, run `python3 tools/check-cards.py cards.json`** (in the repo; a friend's Claude: `claude/check-cards.py` in the addon folder); it must print `ok`.
 Reinstalling the addon by copying the zip over the folder keeps both files; deleting the folder first loses them.
@@ -121,12 +121,12 @@ checked against the newest snapshot, and every other rule refuses, on old cards 
 
 ```json
 { "schema": 1, "written": "<ISO>", "cards": { "<card id>": { "state": "done" | "dismissed", "steps": [0, 2], "at": "<ISO>" } },
-  "upload": { "at": "<ISO>", "ok": true, "error": null, "cards": 4, "stale": 0 } }
+  "upload": { "at": "<ISO>", "ok": true, "error": null, "refused": false, "cards": 4, "stale": 0 } }
 ```
 
 `upload` (state.json on this computer only, not the synced copy): how this computer's `cards.json` was last
-sent to the account. `ok` false with `error` = refused or not sent (the gate's message: fix what it names),
-and nothing was written; the app tries again at the next sync. `cards` = the cards online after the merge,
+sent to the account. `ok` false: nothing was written; `refused` true = the gate or the file's format said no
+(`error` names what: fix it), else it wasn't sent (no connection) and the app tries again at the next sync. `cards` = the cards online after the merge,
 `stale` = stored facts whose number has since changed.
 
 No `state` means the card is open (the player can restore a closed card). `steps` are the ticked

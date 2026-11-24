@@ -41,19 +41,20 @@
   const open = () => visible().filter((c) => standing(c) === 'open');
 
   // ------------------------------------------------------------ reading and saving
-  // both sources as one list: the same id in both = one card, the newer version wins (online on a tie)
+  // both sources as one list: the same id in both = one card, the newer version wins (this computer's file on a
+  // tie: what Claude wrote here last, also before the send reaches the account or when it was refused)
   function setCards(file, online) {
     S.raw = JSON.stringify([file, online]);
     S.have = file != null || online != null;
     const errs = [], by = {};
-    [[online, 'Cards from your account'], [file, 'cards.json']].forEach(([text, what]) => {
+    [[online, 'Cards from your account', false], [file, 'cards.json', true]].forEach(([text, what, wins]) => {
       if (text == null) return;
       try {
         const d = JSON.parse(text);
         if (!d || !Array.isArray(d.cards)) throw new Error('no "cards" list');
         const seen = new Set();
         const ok = d.cards.filter((c) => c && typeof c.id === 'string' && c.id && typeof c.title === 'string' && !seen.has(c.id) && seen.add(c.id));
-        ok.forEach((c) => { const had = by[c.id]; if (!had || (secs(c.updated || c.created) || 0) > (secs(had.updated || had.created) || 0)) by[c.id] = c; });
+        ok.forEach((c) => { const had = by[c.id], a = secs(c.updated || c.created) || 0, b = had ? secs(had.updated || had.created) || 0 : 0; if (!had || a > b || (wins && a === b)) by[c.id] = c; });
         const bad = d.cards.length - ok.length;
         if (bad) errs.push(`${what}: ${bad} card${bad > 1 ? 's' : ''} skipped (each needs a unique id and a title)`);
       } catch (e) { errs.push(`${what} could not be read: ${e.message}`); }
@@ -123,7 +124,7 @@
     if (!r) return '<p class="meta dim">The cards Claude wrote on this computer go to your other computers at the next sync.</p>';
     if (r.ok) return `<p class="meta">The cards Claude wrote on this computer were sent to your other computers ${A.ago(Date.parse(r.at) / 1000)}.${r.stale ? ` ${r.stale} number${r.stale > 1 ? 's have' : ' has'} changed since Claude wrote ${r.stale > 1 ? 'them' : 'it'}.` : ''}</p>`;
     // refused by the gate (Claude fixes the file) or not sent (no connection: the app tries again)
-    if (/^cards refused|cards\.json/.test(r.error || '')) return `<p class="meta neg">The cards Claude wrote on this computer were not sent to your other computers: ${esc(r.error)}. They show here only until Claude fixes them.</p>`;
+    if (r.refused) return `<p class="meta neg">The cards Claude wrote on this computer were not sent to your other computers: ${esc(r.error)}. They show here only until Claude fixes them.</p>`;
     return `<p class="meta dim">The cards Claude wrote on this computer haven't reached your other computers yet (${esc(r.error || 'not sent')}); the app tries again at the next sync.</p>`;
   }
 
