@@ -228,27 +228,31 @@
       const name = names.find((n) => known[n]);
       if (!name) return;
       const k = known[name], tip = arr((SP[k.id] || {}).tip);
-      let lo = null, hi = null, cast = null;
+      let lo = null, hi = null;
       tip.forEach((ln) => {
         [ln && ln.l, ln && ln.r].forEach((t) => {
           if (typeof t !== 'string') return;
-          const c = /^([\d.]+) sec cast$/.exec(t); if (c) cast = Number(c[1]);
           const m = /\b(?:[Hh]eals?|healing)\b[^.]*?\bfor (\d+) to (\d+)/.exec(t); if (m && lo == null) { lo = Number(m[1]); hi = Number(m[2]); }
         });
       });
+      const rule = (CRIT_RULE.spells || {})[name] || {};
+      const c0 = rule.cast, cast = typeof c0 === 'number' ? c0 : c0 ? (c0[k.rank] || c0.other) : null;
       if (lo == null || !(cast > 0)) return;
-      const coef = Math.min(cast, 3.5) / 3.5, avg = (lo + hi) / 2, size = avg + coef * healing;
+      const lv = (rule.learn || {})[k.rank], low = lv && lv < 20 ? 1 - (20 - lv) * 0.0375 : 1;
+      const coef = Math.min(cast, 3.5) / 3.5 * low, avg = (lo + hi) / 2, size = avg + coef * healing;
       heals.push({ name, rank: k.rank || null, id: k.id, avg, cast, coef: +coef.toFixed(3), size: Math.round(size),
         perPct: +(0.01 * CRIT_RULE.critBonus * (1 - CRIT_RULE.overheal) * size / coef).toFixed(2) });
     });
     if (!heals.length) return null;
     const per1 = W.PCT[21][1];
     const perPct = heals.reduce((a, h) => a + h.perPct, 0) / heals.length;
-    return { weight: +(perPct / per1).toFixed(2), perPct: +perPct.toFixed(2), per1, healing, heals, base: prof.w[W.S.crit],
+    // in the profile's own units: points of +healing times what the profile gives a point of +healing
+    const unit = prof.w[W.S.heal] != null ? prof.w[W.S.heal] : 1;
+    return { weight: +(perPct / per1 * unit).toFixed(2), unit, perPct: +perPct.toFixed(2), per1, healing, heals, base: prof.w[W.S.crit],
       critBonus: CRIT_RULE.critBonus, overheal: CRIT_RULE.overheal, label: CRIT_RULE.label };
   }
   function critLine(cm) {
-    return `<div class="meta">Crit: 1% is worth ${cm.perPct.toFixed(1)} healing on your heals (${cm.heals.map((h) => `${esc(h.name)}${h.rank ? ' R' + h.rank : ''} ${h.size}`).join(', ')}, with your ${cm.healing} +healing), so a point of crit rating counts ${cm.weight} (${cm.per1} = 1%). ${esc(cm.label)}: a crit heals 150%, a third of the extra overheals.</div>`;
+    return `<div class="meta">Crit: 1% is worth ${cm.perPct.toFixed(1)} healing on your heals (${cm.heals.map((h) => `${esc(h.name)}${h.rank ? ' R' + h.rank : ''} ${h.size}`).join(', ')}, with your ${cm.healing} +healing), so a point of crit rating counts ${cm.weight} (${cm.per1} = 1%${cm.unit !== 1 ? `, at this profile's ${cm.unit} for a point of +healing` : ''}). ${esc(cm.label)}: a crit heals 150%, a third of the extra overheals.</div>`;
   }
   const hitSummary = (hm) => ({ havePct: +(hm.haveR / hm.per1).toFixed(2), capPct: hm.cap, gearPct: +hm.gearPct.toFixed(2),
     talents: hm.talents, ratingPer1Pct: +hm.per1.toFixed(2), ratingMeasured: hm.measured, against: hm.against, capSource: hm.src,

@@ -568,6 +568,7 @@ local function Spellbook()
             local tab = { name = Clean(name), spells = {} }
             for i = (Clean(off) or 0) + 1, (Clean(off) or 0) + (Clean(num) or 0) do
                 local sname, rank, id = Call(GetSpellBookItemName, i, BOOKTYPE_SPELL or "spell")
+                if Clean(id) then ns.NoteSpell(Clean(id)) end
                 tab.spells[#tab.spells + 1] = { name = Clean(sname), rank = Clean(rank), id = Clean(id),
                     icon = Clean(Call(GetSpellBookItemTexture, i, BOOKTYPE_SPELL or "spell")) }
             end

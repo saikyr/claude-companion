@@ -127,7 +127,7 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   // #99: a healer's crit weight comes from their own heals: Greater Heal R5 and Flash Heal R7 at 500 +healing
   const crit = await page.evaluate((holyIdx) => {
     const A = window.CC.api, SP = A.DB.spells, s = A.CH.snap, keep = { book: s.spellbook, healing: (s.stats || {}).healing, taken: s.taken };
-    SP[25314] = { name: 'Greater Heal', tip: [{ l: 'Greater Heal' }, { l: '710 Mana', r: '40 yd range' }, { l: '3 sec cast' }, { l: 'A slow casting spell that heals a single target for 1966 to 2194.' }] };
+    SP[25314] = { name: 'Greater Heal', tip: [{ l: 'Greater Heal' }, { l: '710 Mana', r: '40 yd range' }, { l: '2.5 sec cast' }, { l: 'A slow casting spell that heals a single target for 1966 to 2194.' }] };
     SP[10917] = { name: 'Flash Heal', tip: [{ l: 'Flash Heal' }, { l: '380 Mana', r: '40 yd range' }, { l: '1.5 sec cast' }, { l: 'Heals a friendly target for 812 to 958.' }] };
     s.spellbook = [{ name: 'Holy', spells: [{ name: 'Greater Heal', rank: 'Rank 5', id: 25314 }, { name: 'Greater Heal', rank: 'Rank 1', id: 2060 }, { name: 'Flash Heal', rank: 'Rank 7', id: 10917 }] }];
     s.stats = Object.assign({}, s.stats, { healing: 500 }); s.taken = (s.taken || 0) + 1;
@@ -137,7 +137,7 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
     const after = window.CC.gear.summary()[holyIdx];
     return { c: out.crit, w32: out.weightValues[32], h: /Crit: 1% is worth/.test(h), after: after.crit || null, a32: after.weightValues[32] };
   }, sum.indexOf(holy));
-  // Greater Heal: 2080 + 0.857 × 500 = 2509, / 0.857 × 0.5 × 2/3 × 1% = 9.76 a 1%; Flash Heal: 885 + 214 = 1099 / 0.4286 × … = 8.55; average 9.15 / 14 = 0.65
+  // the tooltip's 2.5 sec (Divine Fury) is ignored: the share uses the base 3 sec. Greater Heal: 2080 + 0.857 × 500 = 2509, / 0.857 × 0.5 × 2/3 × 1% = 9.76 a 1%; Flash Heal: 885 + 214 = 1099 / 0.4286 × … = 8.55; average 9.15 / 14 = 0.65
   check(crit.c && crit.c.heals.length === 2 && crit.c.heals[0].name === 'Greater Heal' && crit.c.heals[0].rank === 5 && Math.abs(crit.c.perPct - 9.15) < 0.05 && crit.w32 === 0.65 && crit.c.profileWeight === 0.3,
     `a healer's crit weight from their heals: 1% = ${crit.c && crit.c.perPct} healing, 0.65 a rating (the profile's 0.3 until read) ${JSON.stringify(crit.c)}`);
   check(crit.h && crit.after === null && crit.a32 === 0.3, 'the Gear page says how crit was worked out; heals not read: the profile\'s 0.3');

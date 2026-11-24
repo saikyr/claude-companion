@@ -176,6 +176,17 @@ window.GAMERULES = {
   critHeals: {
     label: 'Classic rule, not checked on Forever',
     critBonus: 0.5, overheal: 1 / 3,
+    // each heal's base cast time (the share uses it, not the tooltip's, which talents such as Divine Fury shorten),
+    // by rank where low ranks cast faster, and the level a rank is learned below 20 (its share is cut by
+    // (20 − level) × 3.75%). Classic numbers.
+    spells: {
+      'Greater Heal': { cast: 3 }, 'Heal': { cast: 3, learn: { 1: 16 } },
+      'Lesser Heal': { cast: { 1: 1.5, 2: 2, 3: 2.5 }, learn: { 1: 1, 2: 4, 3: 10 } }, 'Flash Heal': { cast: 1.5 },
+      'Healing Touch': { cast: { 1: 1.5, 2: 2, 3: 2.5, 4: 3, other: 3.5 }, learn: { 1: 1, 2: 8, 3: 14 } },
+      'Holy Light': { cast: 2.5, learn: { 1: 1, 2: 6, 3: 14 } }, 'Flash of Light': { cast: 1.5 },
+      'Healing Wave': { cast: { 1: 1.5, 2: 2, 3: 2.5, other: 3 }, learn: { 1: 1, 2: 6, 3: 12, 4: 18 } }, 'Lesser Healing Wave': { cast: 1.5 },
+    },
+    // not modelled: what a crit does beyond its size (Illumination's mana back for a Paladin, Inspiration, Ancestral Healing)
     PRIEST: [['Greater Heal', 'Heal', 'Lesser Heal'], ['Flash Heal']],
     // direct heals only: a heal with a heal-over-time part (Regrowth) or jumps (Chain Heal) splits its share
     // differently from cast time / 3.5
