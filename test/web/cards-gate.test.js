@@ -14,6 +14,12 @@ let failed = 0;
 const check = (ok, what) => { console.log((ok ? 'ok   ' : 'FAIL ') + what); if (!ok) failed++; };
 const lit = (s) => '$j$' + s + '$j$';
 const set = (a) => [...new Set(a)].sort().join(',');
+// Skeleton Finger from Skeletal Horror: its Forever rate and corpses from the pack, since the weekly rebuild
+// changes them (the cases below are written with 36.36% of 220, and get the pack's numbers)
+const PACK = (() => { const vm = require('vm'), dc = {}; dc.window = dc; vm.createContext(dc);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'ClaudeCompanion/web/data/gamedata.js'), 'utf8'), dc); return dc.GAMEDATA; })();
+const FINGER = (PACK.src[2378] || []).find((r) => r[2] === 202 && r[10] === 'f' && r[12] > 0);
+const live = (x) => JSON.parse(JSON.stringify(x).replace(/36\.36%/g, FINGER[3] + '%').replace(/\b220 corpses/g, FINGER[12] + ' corpses'));
 
 const START = '2026-11-22T22:00:00.000Z';
 const snapshot = {
@@ -113,6 +119,8 @@ const CHAT = [
   ['Your measured gph there was 30g per hour (app, 1.2 hours).', []],
 ];
 
+CASES.splice(0, CASES.length, ...live(CASES)); CHAT.splice(0, CHAT.length, ...live(CHAT));
+
 function computer(fetch, name) {
   const files = { state: JSON.stringify({ key: crypto.randomBytes(32).toString('hex') }) };
   return { files, client: S.client({ fetch, now: () => Date.now(),
@@ -169,7 +177,7 @@ function pyRules(card) {
     check(B.query(`select count(*) from public.records where id = 'setting|cc.claude.cards'`) === '0', 'and nothing was written');
     check(put([CASES[0][1], CASES[3][1]]) === '', 'a list that passes is written');
     // the repo's example cards pass both engines
-    const example = JSON.parse(fs.readFileSync(path.join(ROOT, 'test', 'fixtures', 'cards.json'), 'utf8'));
+    const example = live(JSON.parse(fs.readFileSync(path.join(ROOT, 'test', 'fixtures', 'cards.json'), 'utf8')));
     const exPg = JSON.parse(B.query(`select private.check_cards('${account}', ${lit(JSON.stringify(example))}::jsonb)::text`));
     check(exPg.length === 0, 'test/fixtures/cards.json passes the Postgres gate' + (exPg.length ? ': ' + JSON.stringify(exPg) : ''));
   } finally { B.drop(); fs.rmSync(out, { recursive: true, force: true }); }
