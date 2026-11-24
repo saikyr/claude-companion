@@ -507,7 +507,31 @@ def mac_setup():
     for _ in range(40):
         if running(): return
         time.sleep(0.25)
+    port_error()
     raise SystemExit(f'the server did not start; see {LOG}')
+
+
+PORT_ERROR = (f"Claude Companion couldn't start its server on port {PORT}. Is another program using it? "
+              'Close that program, then open Claude Companion again.')
+
+
+def port_taken():
+    # something other than this app answers or listens on the port
+    if running(): return False
+    import socket
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        try: s.bind(('127.0.0.1', PORT)); return False
+        except OSError: return True
+
+
+def port_error():
+    # said where the player looks (the same words as server.ps1's Show-PortError); only when the port is taken
+    if not port_taken(): return
+    print(PORT_ERROR, flush=True)
+    if sys.platform == 'darwin':
+        msg = PORT_ERROR.replace('\\', '\\\\').replace('"', '\\"')
+        subprocess.run(['osascript', '-e', f'display dialog "{msg}" with title "Claude Companion" buttons {{"OK"}} default button "OK"'],
+                       capture_output=True)
 
 
 def stop_other_copies():
@@ -592,7 +616,13 @@ def background_snapshot():
 
 
 def serve(open_after):
-    srv = ThreadingHTTPServer(('127.0.0.1', PORT), Handler)
+    try: srv = ThreadingHTTPServer(('127.0.0.1', PORT), Handler)
+    except OSError:
+        # another program holds the port. Exit 0, so launchd doesn't restart this copy over and over; the
+        # one opening the app (mac_setup, or this when it opens the app) tells the player (#18)
+        if open_after: port_error()
+        else: print(PORT_ERROR, flush=True)
+        sys.exit(0)
     print(f'Claude Companion serving {URL} for {FOREVER}', flush=True)
     if not os.path.isdir(os.path.join(FOREVER, 'WTF')):
         print('Note: no WTF folder found next to Interface. Put ClaudeCompanion in _forever_/Interface/AddOns.', flush=True)

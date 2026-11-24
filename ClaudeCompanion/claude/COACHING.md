@@ -81,6 +81,25 @@ numbers, rates, gold or plans go through `python3 tools/check-answer.py` first.
   code: when it finds the app missing or wrong, it opens a GitHub issue labelled `from-coaching` and answers
   with what the app has. The build project fixes it.
 
+### Dungeon and raid prep
+
+Every prep for a dungeon or raid run follows these steps, in this order (#109). A list of quest names is
+not a prep: on 24 Nov a Lower Blackrock Spire prep was only that, and he came out without the Seal of
+Ascension, with 1 of 3 gems, and without finding Bijou's Belongings.
+
+1. **Gates first.** Name every key, attunement or chain step the run can give (`data/rules.js` `unlocks`,
+   `game.quest(...)->'unlocks'`): who gives it, where they stand inside, and what goes wrong (for example
+   "pugs kill the Scarshield Infiltrator because he shows hostile: ask them not to").
+2. **Inside spots in walking order.** Every quest giver, quest object and boss, as landmark steps, never
+   coordinates alone. Take them from the game data when it has positions, otherwise from a named Forever
+   source. If no source has a spot, say so before the run, not after.
+3. **Loot to reserve.** Which drops he must Need or reserve (quest items, key parts such as the gems), and
+   the exact line to type in party before the first pull.
+4. **Skip list.** Quests that gate nothing and whose rewards the app scores below what he wears, for every
+   spec. They stay in his log (the dungeon-quest rule), but he doesn't hold up the group for them.
+5. **One card.** The steps above on one From Claude card, in order, short enough to check mid-fight.
+6. **After the run:** answer "what did I miss that gates anything" first, then the fix.
+
 ## 6. Routing (the coordinator)
 
 The coordinator has nothing to answer from: memory holds no game facts. It sends every game, gold, gear,
