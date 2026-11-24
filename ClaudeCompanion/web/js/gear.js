@@ -173,7 +173,7 @@
   const KINDS = [['owned', 'Yours'], ['ah', 'On the AH'], ['dungeon', 'Dungeon'], ['quest', 'Quest'], ['crafted', 'Crafted'], ['vendor', 'Vendor'], ['roll', 'Random green'], ['world', 'World drop'], ['raid', 'Raid'], ['pvp', 'PvP']];
   const KIND_WORD = Object.fromEntries(KINDS);
   // Why an item is not in Upgrades or Pre-BiS (candidates' `avail`); the snapshot writes the key
-  const AVAIL = { raid: 'Raid', pvp: 'PvP (Honor)', unseen: 'Not seen on Forever yet' };
+  const AVAIL = { raid: 'Raid', pvp: 'PvP (Honor)', unseen: 'Not seen on Forever yet', worldAh: 'World drop, not seen on your AH yet' };
   const availWord = (c) => AVAIL[c.avail] + (c.avail !== 'unseen' && c.seen === false ? ' · not seen on Forever yet' : '');
   // a quest reward is raid gear when the quest or an earlier step of its chain is raid content (quests.js)
   const raidQuest = (qid) => (CC.quests && CC.quests.raid ? CC.quests.raid(qid) : ((A.GD.quests || {})[qid] || {}).type === 'Raid');
@@ -226,10 +226,16 @@
   let cache = null;
   function candidates(use, cls) {
     const Q = CC.quests;
-    const ck = JSON.stringify(use) + cls + (SFX ? SFX.built : '') + '|' + (((A.CH && A.CH.snap) || {}).taken || 0) + '|' + arr(((A.CH && A.CH.snap) || {}).completedQuests).length;
+    const ah = (A.CH && A.CH.ah) || {};
+    const ck = JSON.stringify(use) + cls + (SFX ? SFX.built : '') + '|' + (((A.CH && A.CH.snap) || {}).taken || 0) + '|' + arr(((A.CH && A.CH.snap) || {}).completedQuests).length + '|' + ((ah.lastScan || {}).t || 0) + '|' + Object.keys(ah.prices || {}).length;
+    // A world drop (any creature of its level, no named source) is got from the AH in practice, so it's a
+    // target only once your own AH has listed one (any scan or browse, ever); until then it's kept with why.
+    // Items you own come in separately (ownedCands), so one you looted still counts.
+    const onMyAh = new Set();
+    Object.entries(ah.prices || {}).forEach(([key, p]) => { if (arr(p.obs).some((o) => o && o.qty > 0)) onMyAh.add(Number(p.id || key.split(':')[0])); });
     if (cache && cache.ck === ck) return cache;
     const fixed = [], rolls = [], byId = {}, later = [];
-    const skipped = { 'quest reward you already took (or not for you)': 0, 'raid only': 0, 'PvP honor gear': 0, 'other faction only': 0, 'only Classic data says where it comes from': 0, 'no endgametools tooltip': 0, 'stats from ForeverDB only (no Forever client tooltip)': 0, 'not for your class': 0, 'no known source': 0 };
+    const skipped = { 'quest reward you already took (or not for you)': 0, 'raid only': 0, 'PvP honor gear': 0, 'other faction only': 0, 'only Classic data says where it comes from': 0, 'no endgametools tooltip': 0, 'stats from ForeverDB only (no Forever client tooltip)': 0, 'not for your class': 0, 'no known source': 0, 'world drop not seen on your AH yet': 0 };
     const side = (char().faction || '')[0];            // 'A' or 'H'; vendors that only serve the other side don't count
     for (const [k, g] of Object.entries((A.GD && A.GD.items) || {})) {
       const c = g[9], sub = packSub(g);
@@ -255,12 +261,12 @@
       // Not for now or pre-BiS, but kept and shown with why (AVAIL): raid content, PvP honor gear, and items
       // Forever isn't known to have yet (only Classic data names a source, or none does)
       const seen = !!onForever && clientTip;
-      const avail = fromRaid ? 'raid' : pvpSource(id) ? 'pvp' : !seen ? 'unseen' : null;
+      const avail = fromRaid ? 'raid' : pvpSource(id) ? 'pvp' : !seen ? 'unseen' : !rr && kindOf(id) === 'world' && !onMyAh.has(id) ? 'worldAh' : null;
       // only a quest gives it, and every such quest is done (or for the other faction or another class)
       if (Q && !vend && (!how || /^Quest/.test(how) && !/ · (Vendor|World Drop|Drop|Boss Drop|Profession|PvP reward) · /.test(' · ' + how + ' · ')) && arr(src).every((r) => r[0] === 'quest') && Q.rewardGone(id)) { skipped['quest reward you already took (or not for you)']++; continue; }
       if (avail === 'pvp' && vend && !myVend.length) { skipped['other faction only']++; continue; }
       if (avail) {
-        skipped[avail === 'raid' ? 'raid only' : avail === 'pvp' ? 'PvP honor gear' : !clientTip ? 'stats from ForeverDB only (no Forever client tooltip)' : src || vend ? 'only Classic data says where it comes from' : 'no known source']++;
+        skipped[avail === 'raid' ? 'raid only' : avail === 'pvp' ? 'PvP honor gear' : avail === 'worldAh' ? 'world drop not seen on your AH yet' : !clientTip ? 'stats from ForeverDB only (no Forever client tooltip)' : src || vend ? 'only Classic data says where it comes from' : 'no known source']++;
         later.push({ id, key: k, g, name: g[0], inv: g[4], req: g[3] || 0, boe, size, how, kind: kindOf(id), avail, seen, st: W.fromPack(g) });
         continue;
       }
@@ -665,6 +671,8 @@
   // ---------------------------------------------------------------- the same advice as data, for the Claude snapshot (js/claude.js)
   CC.gear = {
     kindOf,
+    // why an item is kept out of upgrades and pre-BiS for this character ('raid', 'pvp', 'unseen', 'worldAh'), or null
+    availability(id) { const c = canUse() && candidates(canUse(), char().class); const l = c && c.later.find((x) => x.id === Number(id)); return l ? l.avail : null; },
     summary() {
       const ch = char();
       if (!A.GD || !A.GD.items || !canUse()) return [];

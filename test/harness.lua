@@ -622,7 +622,9 @@ do
   local oldSkill = C_SkillInfo.GetSkillLineInfo
   SetMoney(0); GetInventoryItemLink = function() return nil end; C_Container.GetContainerItemInfo = function() return nil end
   C_SkillInfo.GetSkillLineInfo = function() return { name = "Weapon Skills", isHeader = true } end   -- logout: headers only
+  local oldStat = UnitStat; UnitStat = function() return 0, 0, 0, 0 end                              -- logout: every stat 0
   Advance(60); Fire("PLAYER_LOGOUT")
+  UnitStat = oldStat
   local s = c.snap
   local items2 = 0; for _, b in ipairs(s.bags or {}) do items2 = items2 + #(b.items or {}) end
   local kept = table.concat(s.kept or {}, ",")
@@ -630,6 +632,7 @@ do
   check(#(good.equipped or {}) > 0 and #(s.equipped or {}) == #good.equipped, "logout keeps worn gear the game already emptied")
   check(s.character.money == good.character.money and good.character.money > 0, "logout keeps gold when the game reads 0")
   check(good.kept == nil, "a logout that reads everything keeps nothing")
+  check(kept:find("stats") and s.stats.base.sta.total == good.stats.base.sta.total and good.stats.base.sta.total > 0, "logout keeps the character stats when the game reads them all as 0")
   check(kept:find("skills") and s.skills[1] and not s.skills[1].isHeader and s.skills[1].name == "Tailoring",
     "logout keeps the skills when the game lists only their headers (gear advice and professions need them)")
   check(s.reason == "logout" and s.taken > good.taken and kept:find("bags") and kept:find("equipped") and kept:find("character.money") and s.keptFrom == good.taken,
