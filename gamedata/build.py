@@ -143,12 +143,16 @@ for iid in sorted(all_ids):
         row[1] = eg['q'] if eg['q'] is not None else row[1]
         row[2], row[3] = eg['il'] or row[2], eg['rl'] or row[3]
         row[6], row[7] = eg['sell'], eg['bind']
-        row[8] = [[int(k), v] for k, v in eg['st'].items()]
         row[10] = eg['tip']
         row[11] = 'e'
-        if not row[4] and eg.get('slot') in SLOT_INV:
-            row[4] = 26 if eg['slot'] == 'Ranged' and row[12] == 19 else SLOT_INV[eg['slot']]
-        cov['gear_tooltip_endgametools'] += 1
+        if cls in GEAR:
+            row[8] = [[int(k), v] for k, v in eg['st'].items()]
+            if not row[4] and eg.get('slot') in SLOT_INV:
+                row[4] = 26 if eg['slot'] == 'Ranged' and row[12] == 19 else SLOT_INV[eg['slot']]
+            cov['gear_tooltip_endgametools'] += 1
+        else:
+            # a consumable's tooltip says what it does on Forever (#91); its "Use:" text is no gear stat
+            cov['consumable_tooltip_endgametools'] += 1
     elif cls in GEAR and fd.get('st') is not None and not junk.match(name):
         # endgametools has no page (mostly Season of Discovery gear the Forever client carries but does not
         # drop): ForeverDB's stats, marked so the app can say where they came from

@@ -256,6 +256,31 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   const snapMs = await page.evaluate(() => { const t = performance.now(); window.CC.snapshot(); return Math.round(performance.now() - t); });
   console.log(`     (snapshot built in ${snapMs} ms)`);
   const snap = await page.evaluate(() => window.CC.snapshot());
+  // #91: consumables you carry and bank, what each does (the game's tooltip), and what it doesn't stack with now
+  const cons = await page.evaluate(() => {
+    const A = window.CC.api, ch = A.CH, s = ch.snap, D = A.DB.items;
+    const keep = { bags: s.bags, buffs: s.buffs, equipped: s.equipped, bank: ch.bank };
+    D['t:flask'] = { id: 13512, name: 'Flask of Supreme Power', class: 0, tip: [{ l: 'Flask of Supreme Power' }, { l: 'Requires Level 50' }, { l: 'Use: Increases damage done by magical spells and effects by up to 150 for 2 hrs.' }] };
+    D['t:oil'] = { id: 20749, name: 'Brilliant Wizard Oil', class: 0, tip: [{ l: 'Brilliant Wizard Oil' }, { l: 'Use: While applied to target weapon it increases spell damage by up to 36 for 30 minutes.' }] };
+    D['t:cloth'] = { id: 14047, name: 'Runecloth', class: 7 };
+    s.bags = [{ id: 0, items: [{ item: 't:flask', count: 2 }, { item: 't:oil', count: 1 }, { item: 't:cloth', count: 20 }] }];
+    ch.bank = Object.assign({}, ch.bank, { bags: [{ id: -1, items: [{ item: 't:flask', count: 3 }] }] });
+    s.buffs = [{ name: 'Distilled Wisdom', spell: 17627, left: 3000 }];
+    s.equipped = [{ slot: 16, slotName: 'MainHand', item: 't:staff', enchant: { id: 2504, text: 'Spell Power +30', temp: { name: 'Brilliant Wizard Oil', left: 900 } } }];
+    const out = window.CC.snapshot();
+    Object.assign(s, { bags: keep.bags, buffs: keep.buffs, equipped: keep.equipped }); ch.bank = keep.bank;
+    delete D['t:flask']; delete D['t:oil']; delete D['t:cloth'];
+    return { c: out.consumables, b: out.buffs, e: out.equipped };
+  });
+  const fl = cons.c.find((x) => x.id === 13512), oil = cons.c.find((x) => x.id === 20749);
+  check(fl && fl.bags === 2 && fl.bank === 3 && fl.from === 'game' && fl.use.some((l) => /^Use: Increases damage/.test(l)) && !cons.c.some((x) => x.id === 14047),
+    'consumables: a flask in bags and bank, what it does from the game, cloth left out (' + JSON.stringify(fl) + ')');
+  check(fl && fl.groups.some((g) => g.id === 'flask') && fl.notWith.some((n) => n.buff === 'Distilled Wisdom' && /not checked on Forever/.test(n.label)),
+    'consumables: a flask doesn\'t stack with the flask on you now, labelled as a Classic rule');
+  check(oil && oil.notWith.some((n) => n.weapon === 'MainHand' && n.on === 'Brilliant Wizard Oil'), 'consumables: an oil replaces the one on the main hand');
+  check(cons.b[0] && cons.b[0].name === 'Distilled Wisdom' && cons.b[0].left === 3000 && cons.b[0].at, 'snapshot buffs: name, seconds left and when read');
+  check(cons.e[0] && cons.e[0].enchant && cons.e[0].enchant.id === 2504 && cons.e[0].enchant.temp.name === 'Brilliant Wizard Oil' && cons.e[0].enchant.temp.at,
+    'snapshot equipped: the enchant and the oil on the weapon');
   const g = (snap.grind.recent || [])[0] || {};
   check(g.name === 'test grind' && g.hours === 1 && g.coin === 100000, 'snapshot grind: hours and coin');
   check(g.gph === 100000 + 950000 && g.gph_low < g.gph && g.gph_high >= g.gph, `snapshot grind: gph at the AH median, gph_low at vendor price, gph_high >= gph (${g.gph_low} / ${g.gph} / ${g.gph_high})`);

@@ -160,4 +160,19 @@ window.GAMERULES = {
     skill: [[20, 1], [25, 25], [30, 50], [35, 75], [40, 100], [45, 125], [50, 150], [55, 175], [60, 200], [65, 225]],
     epicSkill: 225,
   },
+  // Buffs that don't stack (#91): Classic rules, not checked on Forever. Each group: only one of its buffs is on
+  // you at a time, so a consumable in a group is wasted while another of the group is up. Matched by buff name
+  // (what the game shows on you) and by item name or its tooltip (what you carry); `why` is said as given.
+  stacking: {
+    label: 'Classic rule, not checked on Forever',
+    groups: [
+      { id: 'food', why: 'one food buff at a time (Well Fed)', buffs: [/^Well Fed$/], tip: /well fed/i },
+      { id: 'flask', why: 'one flask at a time', buffs: [/^Flask of /, /^Supreme Power$/, /^Distilled Wisdom$/, /^Chromatic Resistance$/, /^Petrification$/], items: [/^Flask of /] },
+      { id: 'arcane-elixir', why: 'Arcane Elixir and Greater Arcane Elixir are the same buff', buffs: [/^Arcane Elixir$/, /^Greater Arcane Elixir$/], items: [/^(Greater )?Arcane Elixir$/] },
+      { id: 'spirit', why: 'a Scroll of Spirit and a priest\'s Divine Spirit don\'t stack', buffs: [/^Spirit$/, /^Divine Spirit$/, /^Prayer of Spirit$/], items: [/^Scroll of Spirit/] },
+      { id: 'stamina', why: 'a Scroll of Stamina and Power Word: Fortitude don\'t stack', buffs: [/^Stamina$/, /^Power Word: Fortitude$/, /^Prayer of Fortitude$/], items: [/^Scroll of Stamina/] },
+      { id: 'intellect', why: 'a Scroll of Intellect and Arcane Intellect don\'t stack', buffs: [/^Intellect$/, /^Arcane Intellect$/, /^Arcane Brilliance$/], items: [/^Scroll of Intellect/] },
+      { id: 'weapon', why: 'one temporary enchant per weapon (oil, sharpening stone, weightstone, poison)', buffs: null, items: [/ (Mana |Wizard )?Oil$/, /Sharpening Stone$/, /Weightstone$/, / Poison( [IVX]+)?$/], kind: 'weapon' },
+    ],
+  },
 };

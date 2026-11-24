@@ -87,6 +87,49 @@ local SLOT_NAMES = { [0] = "Ammo", "Head", "Neck", "Shoulder", "Shirt", "Chest",
     "Hands", "Finger1", "Finger2", "Trinket1", "Trinket2", "Back", "MainHand", "OffHand", "Ranged", "Tabard" }
 ns.SLOT_NAMES = SLOT_NAMES
 
+-- A weapon's enchants (#91), from the game: the permanent one is the enchant id in the link and the tooltip
+-- lines the same item without it doesn't have; the temporary one (an oil, a sharpening stone, a poison) is
+-- GetWeaponEnchantInfo's time and charges, and its name is the tooltip line that ends in "(30 min)".
+local function lineSet(lines)
+    local set = {}
+    for _, l in ipairs(lines or {}) do if l.l then set[l.l] = true end end
+    return set
+end
+local function TempLine(slot)
+    if not (C_TooltipInfo and C_TooltipInfo.GetInventoryItem) then return nil end
+    local data = Call(C_TooltipInfo.GetInventoryItem, "player", slot)
+    for _, line in ipairs(type(data) == "table" and type(data.lines) == "table" and data.lines or {}) do
+        local t = Clean(line.leftText)
+        local name = t and (t:match("^(.-) %(%d+ min%)$") or t:match("^(.-) %(%d+ sec%)$") or t:match("^(.-) %(%d+ hours?%)$")
+            or t:match("^(.-) %(%d+ [Cc]harges?%)$"))
+        if name then return name, t end
+    end
+end
+local function Enchants(slot, link)
+    local e = {}
+    local id = tonumber(link:match("item:%d+:(%d+)"))
+    if id and id > 0 then
+        e.id = id
+        local with, without = ns.TooltipLines and ns.TooltipLines(link), ns.TooltipLines and ns.TooltipLines((link:gsub("(item:%d+:)%d+", "%1")))
+        if with and without then
+            local base, text = lineSet(without), {}
+            for _, l in ipairs(with) do if l.l and not base[l.l] then text[#text + 1] = l.l end end
+            if #text > 0 then e.text = table.concat(text, " / ") end
+        end
+    end
+    if (slot == 16 or slot == 17) and GetWeaponEnchantInfo then
+        local r = { Call(GetWeaponEnchantInfo) }
+        local has, ms, charges, tid = r[1], r[2], r[3], r[4]
+        if slot == 17 then has, ms, charges, tid = r[5], r[6], r[7], r[8] end
+        if Clean(has) then
+            local name, line = TempLine(slot)
+            e.temp = { id = Clean(tid), left = Clean(ms) and math.floor(Clean(ms) / 1000) or nil, charges = Clean(charges) ~= 0 and Clean(charges) or nil,
+                name = name, line = line }
+        end
+    end
+    return next(e) and e or nil
+end
+
 local function Equipped()
     local out = {}
     for slot = 0, 19 do
@@ -96,7 +139,8 @@ local function Equipped()
             out[#out + 1] = { slot = slot, slotName = SLOT_NAMES[slot], link = link, item = ns.NoteItem(link),
                 icon = Clean(Call(GetInventoryItemTexture, "player", slot)),
                 count = Clean(Call(GetInventoryItemCount, "player", slot)),
-                dur = Clean(cur), durMax = Clean(max) }
+                dur = Clean(cur), durMax = Clean(max),
+                enchant = (slot == 16 or slot == 17 or slot == 18) and Enchants(slot, link) or nil }
         end
     end
     return out

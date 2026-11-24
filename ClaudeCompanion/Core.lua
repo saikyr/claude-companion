@@ -175,6 +175,7 @@ local function TooltipLines(link)
     end
     return #out > 0 and out or nil
 end
+ns.TooltipLines = TooltipLines
 
 -- The cache is capped (LIMITS.items). When it is full, the items seen longest ago make room, a tenth
 -- of the cap at a time, but never one that any character wears, carries, banks, has in the mail or

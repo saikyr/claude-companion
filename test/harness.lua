@@ -1033,6 +1033,34 @@ do -- #16: item cooldowns (Salt Shaker on 3 days, Hearthstone on 1 hour), read f
   check(#ns.ItemCooldowns() == 0, "an item you no longer have leaves the list")
   C_Container.GetContainerItemInfo, C_Container.GetContainerItemCooldown, GetInventoryItemCooldown, GetInventoryItemLink = oldInfo, oldCd, oldInvCd, oldLink
 end
+do -- #91: weapon enchants, from the game: the permanent one's id and the text it adds, the temporary one's name and time
+  local function check(ok, what) print((ok and "PASS " or "FAIL ") .. what); if not ok then FAILED = true end end
+  local oldLink, oldTip, oldInv, oldWE = GetInventoryItemLink, C_TooltipInfo.GetHyperlink, C_TooltipInfo.GetInventoryItem, GetWeaponEnchantInfo
+  GetInventoryItemLink = function(u, slot)
+    if slot == 16 then return "|cff0070dd|Hitem:873:2504::::::::58:::::|h[Staff of Jordan]|h|r" end
+    if slot == 1 then return "|cff0070dd|Hitem:10041::::::::58:::::|h[Dalaran Wizard's Robe]|h|r" end
+  end
+  C_TooltipInfo.GetHyperlink = function(link)
+    local lines = { { leftText = "Staff of Jordan" }, { leftText = "Two-Hand" } }
+    if link:find("item:873:2504") then lines[#lines + 1] = { leftText = "Spell Power +30" } end
+    return { lines = lines }
+  end
+  C_TooltipInfo.GetInventoryItem = function(u, slot) return { lines = { { leftText = "Staff of Jordan" }, { leftText = "Brilliant Wizard Oil (30 min)" } } } end
+  GetWeaponEnchantInfo = function() return true, 1500000, 0, 2628, false, 0, 0, 0 end
+  ns.Snapshot("manual")
+  local by = {}; for _, e in ipairs(ns.char.snap.equipped or {}) do by[e.slot] = e end
+  local e = by[16] and by[16].enchant
+  check(e and e.id == 2504 and e.text == "Spell Power +30", "main hand: the permanent enchant's id and the line it adds (" .. tostring(e and e.text) .. ")")
+  check(e and e.temp and e.temp.name == "Brilliant Wizard Oil" and e.temp.left == 1500 and e.temp.id == 2628 and e.temp.charges == nil,
+    "main hand: the oil on it, its name from the tooltip and 25 minutes left")
+  check(by[1] and by[1].enchant == nil, "armour slots carry no enchant field")
+  GetWeaponEnchantInfo = function() return false, 0, 0, 0, false, 0, 0, 0 end
+  ns.Snapshot("manual")
+  by = {}; for _, e2 in ipairs(ns.char.snap.equipped or {}) do by[e2.slot] = e2 end
+  check(by[16].enchant and by[16].enchant.temp == nil and by[16].enchant.id == 2504, "no oil: only the permanent enchant")
+  GetInventoryItemLink, C_TooltipInfo.GetHyperlink, C_TooltipInfo.GetInventoryItem, GetWeaponEnchantInfo = oldLink, oldTip, oldInv, oldWE
+  ns.Snapshot("manual")
+end
 local f = io.open("out.lua", "w"); f:write("ClaudeCompanionDB = " .. ser(ClaudeCompanionDB)); f:close()
 print("DIAG:")
 for k, d in pairs(ClaudeCompanionDB.chars["Gabriel-Atlas"].diag) do if d.err > 0 then print(k, d.err, d.lastErr) end end
