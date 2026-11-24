@@ -33,7 +33,9 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
       { name: 'Runecloth Bag', difficulty: 1, reagents: [{ id: 14048, need: 5 }] },
       { name: 'Runecloth Belt', difficulty: 0, reagents: [{ id: 14048, need: 3 }] },
       { name: 'Bolt of Runecloth', difficulty: 3, reagents: [{ id: 14047, need: 4 }] },
-      { name: 'Mooncloth', difficulty: 1, cooldownEnds: now + 2 * 86400 + 3 * 3600 + 30, reagents: [{ id: 14256, need: 2 }] }] } },
+      { name: 'Mooncloth', difficulty: 1, cooldownEnds: now + 2 * 86400 + 3 * 3600 + 30, reagents: [{ id: 14256, need: 2 }] },
+      // #118: a made-up recipe whose reagent only a vendor prices (Rune Thread) and whose product the AH prices
+      { name: 'Test Staff', difficulty: 3, output: 812, makesMin: 1, makesMax: 1, reagents: [{ id: 14341, need: 2 }] }] } },
   });
   let posted = null;
   const browser = await chromium.launch();
@@ -162,6 +164,13 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   await page.waitForTimeout(1500);
   const snapNext = await page.evaluate(() => window.CC.next.snapshot());
   check(snapNext.length > 3 && snapNext.every((x) => x.id && x.kind && typeof x.value === 'number'), 'snapshot nextSteps: id, kind, value');
+  // #118: each known recipe's margin, the Professions tab's numbers: a reagent only a vendor sells is priced at the
+  // vendor's price (Rune Thread, 50s on Forever), never guessed from its sell price; a reagent with no price is missing
+  const crafts = await page.evaluate(() => window.CC.snapshot().crafts);
+  const staff = crafts.find((c) => c.name === 'Test Staff'), moon = crafts.find((c) => c.name === 'Mooncloth');
+  check(staff && staff.reagents[0].from === 'vendor' && staff.reagents[0].each === 5000 && staff.cost === 10000 && staff.value === Math.round(950000 * 0.95) && staff.profit === staff.value - 10000 && crafts[0] === staff,
+    'snapshot crafts: a vendor-priced reagent, the product after the AH cut, the margin, best first (' + JSON.stringify(staff) + ')');
+  check(moon && moon.missing === 1 && moon.profit === null && moon.cooldownEnds, 'snapshot crafts: an unpriced reagent leaves the margin unknown, with the cooldown');
   // #105: each dungeon row lists every upgrade it drops, with its source, wing and rate; Upper Blackrock Spire's trash
   // and Lord Valthalak are in the Upper row, not in Blackrock Spire's
   const dRows = snapNext.filter((x) => x.kind === 'dungeon');

@@ -42,7 +42,7 @@ record; `data` holds the addon's record as saved. Times are Unix seconds, money 
 | AH posts | each auction you post: item, qty, unit price, duration | kind `ah_post`; Auction House tab, Posted | `kind = 'ah_post'` |
 | Your auctions | what you had listed when the AH was last open | `now` row; Auction House tab | snapshot `ah.mine[]` |
 | AH chat lines | sold, expired, outbid, won, removed | journal `e` = `ahSold`, `ahExpired`, `ahOutbid`, `ahWon`, `ahRemoved` | `kind = 'journal' and data->>'e' like 'ah%'` |
-| Craft profit | each recipe's reagent cost and its output's value at your AH prices, after the AH cut | Professions tab ("Makes a profit": only recipes whose every reagent has a price; the others say how many have none) | not in the snapshot: say so, or read the recipe and the prices |
+| Craft profit | each recipe's reagent cost (your AH plan price or a vendor's Forever price, whichever is lower) and its output's value at your AH prices, after the AH cut | Professions tab ("Makes a profit": only recipes whose every reagent has a price; the others say how many have none) | snapshot `crafts[]` (every known recipe, best margin first) |
 | Disenchant results | what each item really gave when disenchanted | kind `de`; grind cards | `kind = 'de'` |
 
 Flip query, every flip so far:

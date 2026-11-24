@@ -978,36 +978,45 @@
   // a recipe's reagents as tooltip lines: what it takes, what you have, what it costs
   function reagentLines(r, cp) {
     const out = [{ l: 'Reagents', lc: 'ffd100', r: 'have · each', rc: '8a8f98' }];
-    arr(r.reagents).forEach((g) => {
+    const priced = craftCost(r).parts;
+    arr(r.reagents).forEach((g, i) => {
       const it = byId(g.id), gd = gdItem(g.id), have = ownedCount(g.id), need = g.need || 1;
-      const pr = planPrice(g.id), each = pr ? '≈ ' + coinText(pr) : it && it.sell ? `vendor ≈ ${coinText(it.sell * 4)}` : 'no price';
+      const pp = priced[i] || {}, each = pp.each ? (pp.from === 'vendor' ? 'vendor ' : '≈ ') + coinText(pp.each) : 'no price';
       out.push({ l: `${need}× ${anyItemName(g.id)}`, lc: QCOL[(it && it.q) != null ? it.q : gd ? gd[1] : 1] || 'ffffff', r: `${have} · ${each}`, rc: have >= need ? '1eff00' : 'ff6060' });
     });
-    if (cp && cp.missing) out.push({ l: `Profit unknown: ${cp.missing} reagent${cp.missing > 1 ? 's have' : ' has'} no price yet (scan the AH)`, lc: '9d9d9d' });
+    if (cp && cp.missing) out.push({ l: `Profit unknown: ${cp.missing} reagent${cp.missing > 1 ? 's have' : ' has'} no AH or vendor price yet (scan the AH)`, lc: '9d9d9d' });
     if (cp && !cp.missing) out.push({ l: `Cost ${coinText(cp.cost)} · sells ${coinText(cp.value)} · ${cp.profit >= 0 ? 'profit' : 'loss'} ${coinText(Math.abs(cp.profit))}`, lc: cp.profit >= 0 ? '1eff00' : 'ff6060' });
     return out;
   }
   // what a craft costs (reagents at AH median) against what the result sells for
   // what a craft's reagents cost: AH median, else about 4x a vendor-only reagent's sell price; missing = reagents with no price
+  // what a vendor on your side charges for an item: the lowest price ForeverDB saw a vendor ask on Forever
+  // (pack vend rows [npc, zone, x, y, price, seenOnForever, title, side]); null = no vendor sells it, as far as known
+  function vendorPrice(id) {
+    const side = (((CH && CH.snap) || {}).character || {}).faction === 'Horde' ? 'H' : 'A';
+    const ps = arr((GD && GD.vend[id]) || []).filter((v) => v[5] && v[4] > 0 && (!v[7] || v[7] === side)).map((v) => v[4]);
+    return ps.length ? Math.min(...ps) : null;
+  }
+  // a recipe's materials (#118): each reagent at your AH plan price or a vendor's price, whichever is lower;
+  // a reagent with neither is counted in missing (never guessed from its vendor sell price)
   function craftCost(r) {
     let cost = 0, missing = 0;
-    arr(r.reagents).forEach((g) => {
-      const p = planPrice(g.id);
-      const it = byId(g.id);
-      if (p) cost += p * (g.need || 1);
-      else if (it && it.sell) cost += it.sell * 4 * (g.need || 1);
-      else missing++;
+    const parts = arr(r.reagents).map((g) => {
+      const ah = planPrice(g.id), vend = vendorPrice(g.id), need = g.need || 1;
+      const each = ah && vend ? Math.min(ah, vend) : ah || vend || null;
+      if (each) cost += each * need; else missing++;
+      return { id: g.id, need, each, from: each == null ? null : each === vend ? 'vendor' : 'ah' };
     });
-    return { cost, missing };
+    return { cost, missing, parts };
   }
   function craftProfit(r) {
     if (!r.output) return null;
     const v = planPrice(r.output);
     if (!v) return null;
     const makes = ((r.makesMin || 1) + (r.makesMax || r.makesMin || 1)) / 2;
-    const { cost, missing } = craftCost(r);
+    const { cost, missing, parts } = craftCost(r);
     const value = Math.round(v * makes * (1 - RULES.ahCut)); // the AH keeps its cut of the sale
-    return { cost, value, profit: value - cost, missing };
+    return { cost, value, profit: value - cost, missing, parts, makes, each: v };
   }
   // recipe sections: "Enchant Bracer - X" -> "Enchant Bracer"; otherwise the slot the result goes in
   const INV_SECTION = { 1: 'Head', 2: 'Neck', 3: 'Shoulders', 4: 'Shirts', 5: 'Chest', 20: 'Chest', 6: 'Waist', 7: 'Legs', 8: 'Feet', 9: 'Wrists', 10: 'Hands', 11: 'Rings', 12: 'Trinkets', 16: 'Back', 18: 'Bags', 19: 'Tabards', 13: 'Weapons', 17: 'Weapons', 21: 'Weapons', 22: 'Off hand', 23: 'Off hand', 14: 'Off hand', 15: 'Ranged', 26: 'Ranged' };
@@ -1482,7 +1491,7 @@
     load, loadText, V, reload: () => RAW && load(RAW, { live: STATE.live }),
     setChar, get CHARS() { return CHARS; },
     api: { get CH() { return CH; }, get RAW() { return RAW; }, get DB() { return DB; }, STATE, GD, esc, arr, money, icon, itemIcon, anyItemIcon, anyItemName, gdItem, gdTip,
-      gdSourceLines, itemGates, recipeLine, planPrice, priceOf, trackerStats, goldOf, lootStrip, ago, dur, fmtTime, flipsOf, cooldowns, craftCost, specTrees, specLabel, TREE_NAMES, gearIds, item, byId, render, QCOL, deOutcome,
+      gdSourceLines, itemGates, recipeLine, planPrice, priceOf, trackerStats, goldOf, lootStrip, ago, dur, fmtTime, flipsOf, cooldowns, craftCost, craftProfit, vendorPrice, specTrees, specLabel, TREE_NAMES, gearIds, item, byId, render, QCOL, deOutcome,
       itemLink, itemIconOf, itemCell, itemInline, uiIcon, UI_ICON, PROF_ICON },
   };
 

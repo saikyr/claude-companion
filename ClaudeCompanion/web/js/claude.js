@@ -245,6 +245,15 @@
       cooldowns: A.cooldowns ? A.cooldowns().map((c) => ({ name: c.name, profession: c.prof || null, readyAt: c.ends, item: c.item || null })) : [],
       professions: arr(s.skills).filter((k, i, all) => k && k.maxRank > 1 && k.skillLineCategoryID === 11 && all.findIndex((y) => y && y.name === k.name) === i)
         .map((k) => ({ name: k.name, rank: k.rank, max: k.maxRank })),
+      // every known recipe's margin, the Professions tab's own numbers (#118): materials at your AH plan price or a
+      // vendor's, whichever is lower; the product at your AH plan price × how many it makes, after the AH cut
+      crafts: A.craftProfit ? Object.values(CH.professions || {}).filter((p) => p && p.name).flatMap((p) => arr(p.recipes).map((r) => {
+        const cp = r.output ? A.craftProfit(r) : null, cc = A.craftCost(r);
+        return { profession: p.name, name: r.name, output: r.output || null, makes: cp ? cp.makes : null,
+          cost: cc.cost, missing: cc.missing, value: cp ? cp.value : null, profit: cp && !cc.missing ? cp.profit : null,
+          reagents: cc.parts.map((x) => ({ id: x.id, name: A.anyItemName ? A.anyItemName(x.id) : null, need: x.need, each: x.each, from: x.from })),
+          cooldownEnds: r.cooldownEnds || null };
+      })).sort((a, b) => (b.profit == null ? -Infinity : b.profit) - (a.profit == null ? -Infinity : a.profit)) : [],
       reputation: arr(s.reputation).filter((r) => r && !r.isHeader).map((r) => ({ name: r.name, standing: r.reaction, value: r.currentStanding })),
       ah: {
         lastScan: ah.lastScan ? { t: ah.lastScan.t, auctions: ah.lastScan.auctions } : null,
