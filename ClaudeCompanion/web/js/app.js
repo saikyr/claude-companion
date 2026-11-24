@@ -280,9 +280,14 @@
     const rec = p[String(id)];
     if (!rec) return null;
     const obs = arr(rec.obs);
+    // a full scan newer than the item's own newest reading didn't list it (another character's scan of the same AH
+    // only notes "none listed" for what its own previous scan had): none listed now
+    const ls = ((CH && CH.ah) || {}).lastScan;
     for (let i = obs.length - 1; i >= 0; i--) {
       const o = obs[i];
-      if (o.src === 'scan') return o.qty ? { min: o.min, med: o.med || o.min, qty: o.qty, t: o.t, src: 'scan' } : { none: true, t: o.t, src: 'scan' };
+      if (o.src !== 'scan') continue;
+      if (ls && ls.t && (o.t || 0) < ls.t - 600) return { none: true, t: ls.t, src: 'scan' };
+      return o.qty ? { min: o.min, med: o.med || o.min, qty: o.qty, t: o.t, src: 'scan' } : { none: true, t: o.t, src: 'scan' };
     }
     const o = obs[obs.length - 1];
     return o && o.min ? { min: o.min, med: o.min, qty: o.qty, t: o.t, src: o.src } : null;
@@ -1401,10 +1406,13 @@
   // which character is shown (#4): the one played last, unless the picker chose another since that
   // character last saved. Logging in on a different character (a newer save) follows it again.
   let CHARS = [];
-  const PICK_KEY = 'cc.char.pick.v1';
+  // not a cc. key: the pick is this browser's own, never a setting synced to other computers or settings.json
+  const PICK_KEY = 'ccLocal.char.pick';
+  const BG = new URLSearchParams(location.search).has('background');
   const takenOf = (c) => ((c && c.snap) || {}).taken || 0;
   function pickedChar(keys, chars) {
     let pick = null;
+    if (BG) { STATE.viewingOther = false; return keys[0]; }   // the hidden browser writes the snapshot: always the character played last
     try { pick = JSON.parse(localStorage.getItem(PICK_KEY) || 'null'); } catch (e) { pick = null; }
     const newest = keys[0];
     STATE.viewingOther = false;
@@ -1423,9 +1431,13 @@
   // AH prices belong to the auction house, not the character (#12): every character on the same realm
   // and faction sees the prices and the newest full scan any of them recorded. Sales, buys and posts
   // stay the character's own. The saved data is not changed; this is the view the tabs read.
-  const ahHouse = (c) => { const ch = ((c && c.snap) || {}).character || {}; return (ch.realm || '') + '|' + (ch.faction || ''); };
+  // the house: realm (Forever reads none) or else the server id from the character's GUID, and the faction; a
+  // character saved before the server id was recorded shares with no one until its next save
+  const ahHouse = (c) => { const ch = ((c && c.snap) || {}).character || {}; const realm = ch.realm || (ch.server ? 'server:' + ch.server : '');
+    return realm && ch.faction ? realm + '|' + ch.faction : null; };
   function withSharedAh(chars, key) {
     const me = chars[key], house = ahHouse(me);
+    if (!house) return me;
     const others = Object.keys(chars).filter((k) => k !== key && chars[k] && chars[k].snap && chars[k].ah && ahHouse(chars[k]) === house);
     if (!others.length) return me;
     const own = me.ah || {}, prices = {};

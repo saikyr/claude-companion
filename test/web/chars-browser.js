@@ -14,17 +14,21 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
 
 (async () => {
   const now = Math.floor(Date.now() / 1000);
-  const alt = (key, name, cls, classFile, faction, taken, ah) => ({ key, snap: { taken, version: 1, character: { name, class: cls, classFile, faction, level: 30, race: 'Human' } }, ah });
+  const alt = (key, name, cls, classFile, faction, taken, ah, server = 1) => ({ key, snap: { taken, version: 1, character: { name, class: cls, classFile, faction, server, level: 30, race: 'Human' } }, ah });
   const save = saveLua(now, { alts: [
     alt('Altmage-Realm', 'Altmage', 'Mage', 'MAGE', 'Alliance', now - 7200, { prices: { '2589': { id: 2589, name: 'Linen Cloth', last: now - 7200, obs: [{ t: now - 7200, min: 40, med: 50, qty: 20, src: 'scan' }] } } }),
     alt('Hordie-Realm', 'Hordie', 'Warrior', 'WARRIOR', 'Horde', now - 9000, { prices: { '2592': { id: 2592, name: 'Wool Cloth', last: now - 9000, obs: [{ t: now - 9000, min: 90, med: 99, qty: 20, src: 'scan' }] } } }),
+    // saved before the server id was recorded: its AH can't be told apart, so it shares with no one
+    alt('Oldie-Realm', 'Oldie', 'Rogue', 'ROGUE', 'Alliance', now - 99000, { prices: { '2996': { id: 2996, name: 'Bolt of Linen Cloth', last: now - 99000, obs: [{ t: now - 99000, min: 200, med: 250, qty: 5, src: 'scan' }] } } }, null),
+    // an older scan by Altmage saw Silk Cloth; Testpriest's newer full scan didn't list it
+    alt('Silky-Realm', 'Silky', 'Mage', 'MAGE', 'Alliance', now - 50000, { prices: { '4306': { id: 4306, name: 'Silk Cloth', last: now - 50000, obs: [{ t: now - 50000, min: 300, med: 320, qty: 9, src: 'scan' }] } } }),
   ] });
   const browser = await chromium.launch();
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
   const page = await ctx.newPage();
   const errors = [], snaps = [];
   page.on('pageerror', (e) => errors.push(String(e)));
-  await page.route('**/*', async (route) => {
+  await ctx.route('**/*', async (route) => {
     const u = new URL(route.request().url());
     if (u.hostname !== 'cc.test') return route.abort();
     if (u.pathname === '/api/stamp') return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ stamp: 1, game: false }) });
@@ -44,7 +48,7 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   await page.waitForSelector('aside .me .charpick', { timeout: 30000 });
 
   const opts = await page.$$eval('aside .me .charpick option', (os) => os.map((o) => o.textContent));
-  check(opts.length === 3 && /^Testpriest/.test(opts[0]) && /played last/.test(opts[0]) && /^Altmage/.test(opts[1]) && /^Hordie/.test(opts[2]),
+  check(opts.length === 5 && /^Testpriest/.test(opts[0]) && /played last/.test(opts[0]) && /^Altmage/.test(opts[1]) && /^Hordie/.test(opts[2]),
     'the picker lists every character, the one played last first: ' + opts.join(' | '));
   check(await name() === 'Testpriest', 'the character played last is shown by default');
   check(!(await page.$('aside .me .sub.need')), 'no "not the character you played last" note when showing it');
@@ -52,6 +56,8 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   check(snaps.includes('Testpriest'), "Claude's snapshot is of the character played last");
   check(await ch(() => !!CC.api.CH.ah.prices['2589']), "Testpriest sees Altmage's Linen Cloth price (same realm and faction)");
   check(await ch(() => !CC.api.CH.ah.prices['2592']), "Testpriest doesn't see Hordie's Wool Cloth price (the other faction's AH)");
+  check(await ch(() => !CC.api.CH.ah.prices['2996']), "a character saved without a server id shares no prices");
+  check(await ch(() => !!CC.api.CH.ah.prices['4306'] && (CC.api.priceOf(4306) || {}).none === true), "an item an older scan saw but the newest full scan didn't list counts as none listed");
 
   snaps.length = 0;
   await page.selectOption('aside .me .charpick', 'Altmage-Realm');
@@ -68,6 +74,13 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   await page.waitForSelector('aside .me .charpick', { timeout: 30000 });
   await page.waitForFunction(() => document.querySelector('aside .me .nm').innerText !== '');
   check(await name() === 'Altmage', 'the pick is remembered after a reload');
+  check(await ch(() => Object.keys(localStorage).every((k) => !k.startsWith('cc.') || !/pick/.test(k))), "the pick is not a cc. setting (never synced to other computers or settings.json)");
+  // the hidden browser (same storage) ignores a pick: it writes the snapshot, always of the character played last
+  const bg = await ctx.newPage();
+  await bg.goto('http://cc.test/?background=1#overview');
+  await bg.waitForSelector('aside .me .nm', { timeout: 30000 });
+  check(await bg.$eval('aside .me .nm', (e) => e.innerText) === 'Testpriest', 'the hidden browser shows the character played last whatever was picked');
+  await bg.close();
 
   await page.selectOption('aside .me .charpick', 'Hordie-Realm');
   await page.waitForFunction(() => document.querySelector('aside .me .nm').innerText === 'Hordie');

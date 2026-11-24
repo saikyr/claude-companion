@@ -69,7 +69,7 @@ function saveLua(now, extra) {
     snap: {
       taken: now - 600, version: 1, activeSpec: 1,
       stats: { spellHitRating: 20, spellHitBonus: 2 },
-      character: { name: 'Testpriest', race: 'Human', class: 'Priest', classFile: 'PRIEST', faction: 'Alliance', level: 59, xp: 75624, xpMax: 209800, money: 1362396,
+      character: { name: 'Testpriest', race: 'Human', class: 'Priest', classFile: 'PRIEST', faction: 'Alliance', server: 1, level: 59, xp: 75624, xpMax: 209800, money: 1362396,
         where: { zone: 'Stormwind City', map: 1453, x: 50, y: 50 }, hearth: 'Stormwind City' },
       equipped: Object.entries(SHADOW).map(([slot, id]) => ({ slot: Number(slot), slotName: SLOT[slot], item: item(id), count: 1 })),
       gearSets: [set(0, 'heals', HEALS), set(1, 'shadow', SHADOW)],
