@@ -855,6 +855,59 @@ do
   AHm.GetNumReplicateItems, AHm.GetReplicateItemInfo, AHm.GetReplicateItemLink = oldN, oldInfo, oldLink
   if FAILED then error("AH scan checks failed") end
 end
+do -- probable sales between two full scans (#116): a listing gone before its time could run out, its seller not relisting
+  local FAILED = false
+  local function check(ok, what) print((ok and "PASS " or "FAIL ") .. what); if not ok then FAILED = true end end
+  local c; for _, v in pairs(ClaudeCompanionDB.chars) do c = v end
+  local AHm = C_AuctionHouse
+  local oldN, oldInfo, oldLeft, oldNow = AHm.GetNumReplicateItems, AHm.GetReplicateItemInfo, AHm.GetReplicateItemTimeLeft, ns.Now
+  local rows
+  AHm.GetNumReplicateItems = function() return #rows end
+  AHm.GetReplicateItemInfo = function(i) local r = rows[i + 1]
+    return r.name, 1, r.c, 1, true, 40, 0, 1, 1, r.u * r.c, 0, false, nil, r.s, r.s, 0, r.id, true end
+  AHm.GetReplicateItemTimeLeft = function(i) return rows[i + 1].b end
+  local function scanAt(t)
+    ns.Now = function() return t end
+    c.ah.lastScan.t = t - 3600
+    ns.AHScan(); Fire("REPLICATE_ITEM_LIST_UPDATE"); Advance(3)
+    for _ = 1, 100 do RunTimers(); if ns.ahScan.state == "idle" then break end end
+  end
+  local t0 = 1796000000
+  -- bands 1 short, 2 medium, 3 long, 4 very long (at least 12 h left)
+  rows = {
+    { id = 14047, name = "Runecloth", u = 2000, c = 20, b = 4, s = "Alice" },
+    { id = 14047, name = "Runecloth", u = 2100, c = 20, b = 4, s = "Bob" },
+    { id = 14047, name = "Runecloth", u = 2200, c = 20, b = 1, s = "Cara" },
+    { id = 14047, name = "Runecloth", u = 2300, c = 20, b = 4, s = "Dan" },
+    { id = 2589, name = "Linen Cloth", u = 50, c = 5, b = 4, s = "Eve" },
+  }
+  scanAt(t0)
+  local rc = c.ah.prices["14047"]
+  check(rc.obs[#rc.obs].sold == nil, "the first scan has nothing to compare against")
+  local house = ns.House(c) or c.key
+  check(ClaudeCompanionDB.ahListings and ClaudeCompanionDB.ahListings[house] and ClaudeCompanionDB.ahListings[house].keys["14047"], "the scan's listings are kept for the next one, per auction house")
+  -- 3 hours later: Alice's very-long listing is gone (bought), Cara's short one may have run out, Dan relisted, Bob still up;
+  -- Eve's Linen is gone with nothing listed
+  rows = {
+    { id = 14047, name = "Runecloth", u = 2100, c = 20, b = 4, s = "Bob" },
+    { id = 14047, name = "Runecloth", u = 2250, c = 20, b = 4, s = "Dan" },
+  }
+  scanAt(t0 + 3 * 3600)
+  local o = rc.obs[#rc.obs]
+  check(o.sold == 20 and o.soldAt == 2000 and o.early == 40 and o.relisted == 20 and o.gap == 3 * 3600,
+    "Runecloth: 20 probably sold at 20s, Dan's 20 relisted, Cara's short auction not counted (" .. tostring(o.sold) .. "/" .. tostring(o.early) .. "/" .. tostring(o.relisted) .. ")")
+  local ln = c.ah.prices["2589"].obs[#c.ah.prices["2589"].obs]
+  check(ln.qty == 0 and ln.sold == 5 and ln.soldAt == 50, "Linen: none listed now, its 5 count as sold")
+  -- 13 hours later: a very-long auction could have run out in that time, so nothing is counted
+  rows = { { id = 14047, name = "Runecloth", u = 2250, c = 20, b = 3, s = "Dan" } }
+  scanAt(t0 + 16 * 3600)
+  o = rc.obs[#rc.obs]
+  check(o.sold == 0 and o.early == 0 and o.gap == 13 * 3600, "13 h between scans: Bob's very-long auction may have run out, not counted")
+  check(c.ah.lastScan.listings == 1 and c.ah.lastScan.sellers == 1 and c.ah.lastScan.compared == t0 + 3 * 3600, "the scan says what it compared against and how many listings showed a seller")
+  ns.Now = oldNow
+  AHm.GetNumReplicateItems, AHm.GetReplicateItemInfo, AHm.GetReplicateItemTimeLeft = oldN, oldInfo, oldLeft
+  if FAILED then error("probable sales checks failed") end
+end
 do -- the class trainer's list, read with every filter open, the filters put back after
   local FAILED = false
   local function check(ok, what) print((ok and "PASS " or "FAIL ") .. what); if not ok then FAILED = true end end

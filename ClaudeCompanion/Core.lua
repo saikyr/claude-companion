@@ -7,6 +7,7 @@
 --     chars = { ["Name-Realm"] = <char> },
 --     items = { [itemString] = { id, name, q, ilvl, ..., icon, tip = { {l,lc,r,rc}, ... } } },
 --     cacheStats = { evicted, lastEvict, cap },   -- item cache housekeeping (oldest unused items make room)
+--     ahListings = { [house] = { t, keys = { [priceKey] = "unit,count,band,seller;..." } } },  -- the newest full scan's listings, per auction house (Market.lua), for probable sales
 --   }
 --   <char> = {
 --     key, created, lastSync, syncs,
