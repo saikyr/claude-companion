@@ -167,6 +167,9 @@
 
   // ------------------------------------------------------------------ the client
   // io: { fetch, loadState(), saveState(s), loadCache(), saveCache(c), now(), device: {name, os}, log }
+  // settings only Claude writes (private.claude_put_setting): a computer takes them and never sends them,
+  // so a stale copy in a browser can't overwrite newer cards (#107). The database ignores them too.
+  const CLAUDE_ONLY = /^cc\.claude\.cards$/;
   function client(io) {
     const rpc = async (fn, args) => {
       const r = await io.fetch(`${CONFIG.url}/rest/v1/rpc/${fn}`, {
@@ -210,6 +213,7 @@
     // Settings only go out after one pull, and after joining an account its settings win (adopt).
     function noteLocal(local) {
       Object.entries(local || {}).forEach(([k, v]) => {
+        if (CLAUDE_ONLY.test(k)) return;
         if (state.settings[k] !== v && !(state.pendingSince || {})[k]) (state.pendingSince = state.pendingSince || {})[k] = Math.round(io.now() / 1000);
         if (state.settings[k] === v && state.pendingSince) delete state.pendingSince[k];
       });
@@ -227,7 +231,7 @@
       if (state.pulledOnce) {
         noteLocal(local);
         Object.entries(local || {}).forEach(([k, v]) => {
-          if (state.settings[k] === v) return;
+          if (CLAUDE_ONLY.test(k) || state.settings[k] === v) return;
           const t = (state.pendingSince || {})[k] || Math.round(io.now() / 1000);
           pending.push({ id: 'setting|' + k, char: '*', kind: 'setting', t, mutable: true, data: { k, v, t }, _setting: true });
         });

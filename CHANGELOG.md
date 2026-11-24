@@ -3,6 +3,10 @@
 Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 
 ## 1.5.0 (in progress: every merge to main updates itself)
+- **Claude's cards stay put.** A computer could send an old copy of the From Claude cards back over new ones a minute after Claude wrote them, so new cards never showed. Computers no longer send the cards, and the sync database ignores them from any computer.
+- **"Makes a profit" only counts recipes whose every reagent has a price.** The rest sort last and say which reagent count has no price yet.
+- **Item names in tooltips** use the same quality colours as everywhere else in the app.
+- **Another program on the app's port** (47615): the Mac says so in a dialog instead of opening a page that doesn't load.
 - **Gear advice checked for every class.** Weapon DPS now counts where the weapon hits: in full in the main
   hand, half for an off-hand weapon, and in the Ranged slot only for Hunters. Beast Mastery and Marksmanship
   Hunters were offered high-DPS axes with no stats over Agility staves, and Rogues and Warriors were told a
