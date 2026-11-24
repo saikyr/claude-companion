@@ -165,7 +165,15 @@ check(M.buyList(ctxOf({ '5:1': rec(5, [50, 50, 50, 50, 50, 50]) }, { vsell: { 5:
   check(P.totals.capital === 10100 && P.totals.largest.item === 'Wait' && P.totals.largest.share === 0.3 && P.totals.overItem.join() === 'Wait' && P.totals.overTotal,
     'positions: capital 10,100 of 20,000 gold: over 50% in all and over 10% in Wait (' + JSON.stringify(P.totals) + ')');
   check(P.rows[0].flag === 'sell' && P.rows[P.rows.length - 1].flag === 'hold', 'positions: sell first');
-  check(M.positions({ open, now, lowestOf: () => null, gold: null }).totals.totalShare === null, 'positions: no gold on hand known: no shares, no warnings');
+  const ng = M.positions({ open, now, lowestOf: () => null, gold: null }).totals;
+  check(ng.totalShare === null && ng.overItem.length === 0 && ng.overTotal === false, 'positions: no gold on hand known: no shares, no warnings');
+  // limits are per item: three buys of one item at 8% each are 24% in that item
+  const three = [1, 2, 3].map((k) => ({ id: 'x' + k, item: 'Same', t: now - DAY, units: 1, paid: 800 }));
+  const T3 = M.positions({ open: three, now, lowestOf: () => null, rules: { capItem: 10 }, gold: 10000 }).totals;
+  check(T3.overItem.join() === 'Same' && T3.largest.paid === 2400 && T3.largest.share === 0.24, 'positions: open buys of the same item add up for the limit');
+  // your own listing is the lowest: it says nothing about the market
+  const mine = M.positions({ open: [{ id: 'm', item: 'Mine', t: now - DAY, units: 2, paid: 2000, listedAt: 3000 }], now, lowestOf: () => ({ min: 1500, t: now }), plans: { m: 1400 } }).rows[0];
+  check(mine.ownListing && mine.lowest === null && mine.flag === 'hold' && /your own listing/.test(mine.why), 'positions: the lowest is your own listing: no target or stop from it');
 }
 
 // paper trades: scored at the next full scan's lowest after the cut; open until one exists
@@ -175,6 +183,9 @@ check(M.buyList(ctxOf({ '5:1': rec(5, [50, 50, 50, 50, 50, 50]) }, { vsell: { 5:
   const done = P.trades.find((x) => x.id === 600), open = P.trades.find((x) => x.id === 601), r = P.rules.find((x) => x.rule === 'dip');
   check(done.sold === 120 && done.net === Math.round(120 * 0.95 - 70) && done.ret === +(120 * 0.95 / 70 - 1).toFixed(3) && open.ret === null, 'paper: scored at the next scan; the newest is still open');
   check(r.n === 1 && r.open === 1 && r.net === done.net && r.winShare === 1, 'paper: per rule, scored and waiting apart');
+  // a second pass of the same scan, 20 min later, is not the next scan
+  const sp = rec(602, [100, 100, 100, 100, 70]); sp.obs.push({ src: 'scan', t: T0 + 4 * DAY + 1200, min: 70, med: 70, qty: 3 });
+  check(M.paper([{ t: T0 + 4 * DAY, id: 602, rule: 'dip', price: 70 }], { 602: sp }, 0.05).trades[0].ret === null, 'paper: a reading 20 min after the scan (its second pass) does not score it');
 }
 
 // flip profit per week, Monday 00:00 UTC

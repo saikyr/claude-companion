@@ -477,7 +477,7 @@
       const [t, id, rule, price] = pb.dataset.paper.split('|');
       const list = tradeGet('paper', []), at = list.findIndex((x) => x.t === +t && x.id === +id && x.rule === rule);
       if (at >= 0) list.splice(at, 1); else list.push({ t: +t, id: +id, rule, price: +price });
-      tradeSet('paper', list); BUY_CACHE = null; render(); return;
+      tradeSet('paper', list); render(); return;
     }
     const sp = e.target.closest('[data-spec]');
     if (sp) { STATE.spec = Number(sp.dataset.spec); render(); }
@@ -1319,14 +1319,16 @@
   const paperOf = (ah) => (window.CCMarket ? window.CCMarket.paper(tradeGet('paper', []), ah.prices, 0.05) : null);
   const weeklyOf = (ah) => (window.CCMarket ? window.CCMarket.weekly(flipsOf(ah).done) : []);
   function positionsView(ah) {
-    const P = positionsOf(ah), T = P.totals, R = P.rules;
+    const P = positionsOf(ah);
+    if (!P) return '';
+    const T = P.totals, R = P.rules;
     const pct = (x) => (x == null ? '–' : (Math.round(x * 1000) / 10) + '%');
     const sign = (v) => (v == null ? '<span class="dim">–</span>' : `<span class="${v >= 0 ? 'pos' : 'neg'}">${v < 0 ? '−' : ''}${money(Math.abs(v))}</span>`);
     const inp = (k, label, unit) => `<label class="dim small">${label} <input type="number" min="1" step="1" class="field num-in" data-traderule="${k}" value="${R[k]}"> ${unit}</label>`;
     let h = `<h2>Open positions</h2><div class="toolbar">${inp('holdDays', 'Sell after', 'days')} ${inp('stopPct', 'or when the lowest is', '% under what you paid')} ${inp('capItem', 'Warn above', '% of your gold in one item')} ${inp('capTotal', 'or', '% in all')}</div>`;
     if (!P.rows.length) h += '<div class="empty">No open flips: everything you bought on the AH has sold or is set aside as used.</div>';
     else {
-      h += `<p class="meta">${P.rows.length} open · ${money(T.capital)} paid${T.unrealised != null ? ` · ${sign(T.unrealised)} at today's lowest after the cut` : ''}${T.gold != null ? ` · ${pct(T.totalShare)} of the ${money(T.gold)} you carry${T.largest ? `; largest ${esc(T.largest.item)} ${pct(T.largest.share)}` : ''}` : ''}</p>`;
+      h += `<p class="meta">${P.rows.length} open · ${money(T.capital)} paid${T.unrealised != null ? ` · ${sign(T.unrealised)} if the ${T.priced} with a price sold at today's lowest after the cut` : ''}${T.gold != null ? ` · ${pct(T.totalShare)} of the ${money(T.gold)} you carry${T.largest ? `; largest ${esc(T.largest.item)} ${pct(T.largest.share)}` : ''}` : ''}</p>`;
       if (T.overTotal) h += `<p class="warn">More than ${R.capTotal}% of your gold is in open flips.</p>`;
       if (T.overItem.length) h += `<p class="warn">Over ${R.capItem}% of your gold in one item: ${T.overItem.map(esc).join(', ')}.</p>`;
       const FLAG = { sell: '<span class="neg">Sell at market now</span>', target: '<span class="pos">At your price: sell</span>', hold: '<span class="dim">Hold</span>' };
@@ -1342,15 +1344,15 @@
     }
     const B = buyListOf(ah), I = B && B.index;
     if (I && I.prev) {
-      h += `<h2>Market index</h2><p class="meta">How the lowest price moved from your full scan ${ago(I.prev)} to the one ${ago(I.scan)}, for every item listed at both, by its price before.</p>`;
+      h += `<h2>Market index</h2><p class="meta">How the lowest price moved from your full scan ${ago(I.prevEnd)} to the one ${ago(I.scan)}, for every item listed at both, by its price before.</p>`;
       h += '<div class="table mindex"><div class="thead"><div>Price band</div><div class="c-num">Items</div><div class="c-num">Median change</div><div class="c-num">Cheaper</div><div class="c-num">Dearer</div></div>';
       I.bands.forEach((b) => (h += `<div class="tr"><div class="c-main"><div class="nm">${esc(b.band)}</div>${b.falling ? '<div class="sub neg">falling: buy-list rows here say don\'t hold</div>' : ''}</div><div class="c-num">${b.n}</div><div class="c-num">${b.medianChange == null ? '–' : (b.medianChange > 0 ? '+' : '') + Math.round(b.medianChange * 1000) / 10 + '%'}</div><div class="c-num">${b.cheaper}</div><div class="c-num">${b.dearer}</div></div>`));
       h += '</div><p class="meta">A band is falling when 10 or more items moved, the median is down and 60% or more got cheaper.</p>';
     }
     const PP = paperOf(ah);
     if (PP && PP.trades.length) {
-      h += '<h2>Paper trades</h2><p class="meta">Buy-list rows you marked as paper buys, scored like the backtest: sold at the next full scan\'s lowest after the cut.</p>';
-      h += '<div class="table paperrules"><div class="thead"><div>Rule</div><div class="c-num">Scored</div><div class="c-num">Waiting</div><div class="c-num">Median return</div><div class="c-num">Paper net</div></div>';
+      h += '<h2>Paper trades</h2><p class="meta">Price-rule rows you marked as paper buys on the Buy list, scored like the backtest: bought at that scan\'s lowest, sold at the next full scan\'s lowest after the cut, one unit each.</p>';
+      h += '<div class="table paperrules"><div class="thead"><div>Rule</div><div class="c-num">Scored</div><div class="c-num">Waiting</div><div class="c-num">Median return</div><div class="c-num">Paper net, per unit</div></div>';
       PP.rules.forEach((r) => (h += `<div class="tr"><div class="c-main"><div class="nm">${esc(RULE_WORDS[r.rule] || r.rule)}</div></div><div class="c-num">${r.n}</div><div class="c-num">${r.open}</div><div class="c-num">${r.medianReturn == null ? '–' : (r.medianReturn > 0 ? '+' : '') + Math.round(r.medianReturn * 100) + '%'}</div><div class="c-num">${r.n ? sign(r.net) : '–'}</div></div>`));
       h += '</div>';
     }
@@ -1370,17 +1372,25 @@
     });
     h += '</div>';
     const rows = B.rows.filter((r) => r.offered), paper = new Set(tradeGet('paper', []).map((x) => `${x.t}|${x.id}|${x.rule}`));
-    if (!rows.length) return h + '<div class="empty">Nothing on your AH fits a shown rule at this scan.</div>';
+    // paper buys are for the price rules (bought and resold on the AH); the others have a fixed buyer or value
+    const paperBtn = (r) => (r.rule === 'dip' || r.rule === 'thin' ? ` · <button class="linkbtn" data-paper="${B.scan}|${r.id}|${r.rule}|${r.lowest}">${paper.has(`${B.scan}|${r.id}|${r.rule}`) ? 'Paper buy marked (undo)' : 'Paper buy'}</button>` : '');
+    const trial = B.rows.filter((r) => !r.offered && (r.rule === 'dip' || r.rule === 'thin'));
+    const trialView = () => {
+      if (!trial.length) return '';
+      let t = `<div class="table buylist trial"><div class="tsec">Price rules not shown yet: paper trade them <span>${trial.length}</span></div><div class="thead"><div>Item</div><div>Rule</div><div class="c-num">Lowest</div><div class="c-num">Usually</div><div class="c-num">Under by</div></div>`;
+      trial.slice().sort((a, b) => a.lowest / a.usual - b.lowest / b.usual).slice(0, 30).forEach((r) => (t += `<div class="tr"><div class="c-main"><div class="nm">${anyItemIcon(r.id, { size: 'sm' })} ${itemLink(r.id)}</div><div class="sub">median lowest of ${r.earlier} earlier scans · ${r.listed} listed${paperBtn(r)}</div></div><div class="dim">${RULE_WORDS[r.rule]}</div><div class="c-num">${money(r.lowest)}</div><div class="c-num">${money(r.usual)}</div><div class="c-num">${Math.round((1 - r.lowest / r.usual) * 100)}%</div></div>`));
+      return t + '</div>';
+    };
+    if (!rows.length) return h + '<div class="empty">Nothing on your AH fits a shown rule at this scan.</div>' + trialView();
     h += '<div class="table buylist"><div class="thead"><div>Item</div><div>Then</div><div class="c-num">Lowest</div><div class="c-num">Buy under</div><div class="c-num">You make</div></div>';
     rows.slice(0, 60).forEach((r) => {
       const why = r.rule === 'vendor' ? `a vendor pays ${money(r.buyUnder + 1)}`
         : r.rule === 'disenchant' ? `disenchants into about ${money(r.deValue)} of materials (${esc(r.label)})`
         : r.rule === 'resell' ? `a vendor sells it for ${money(r.vendorPrice)}; list at ${money(r.relist)}. In ${r.held} of ${r.of} earlier scans the lowest, after the cut, was above the vendor's price`
         : `usually ${money(r.usual)} (median lowest of ${r.earlier} earlier scans)${r.falling ? '; falling lately' : ''}. Buy under is break-even if it sells at that again; you make is the backtest's median return, per unit`;
-      const paperOn = paper.has(`${B.scan}|${r.id}|${r.rule}`);
-      h += `<div class="tr"><div class="c-main"><div class="nm">${anyItemIcon(r.id, { size: 'sm' })} ${itemLink(r.id)}</div><div class="sub">${why} · ${r.listed} listed${r.sellShare != null ? ` · ${pct(r.sellShare)} of yours sold` : ''}${r.dontHold ? ` · <span class="neg">the ${esc(r.band)} band is falling: sell at the next scan, don't hold</span>` : ''} · <button class="linkbtn" data-paper="${B.scan}|${r.id}|${r.rule}|${r.lowest}">${paperOn ? 'Paper buy marked (undo)' : 'Paper buy'}</button></div></div><div class="dim">${RULE_WORDS[r.rule]}</div><div class="c-num">${money(r.lowest)}</div><div class="c-num">${money(r.buyUnder)}</div><div class="c-num best">${money(r.net)}</div></div>`;
+      h += `<div class="tr"><div class="c-main"><div class="nm">${anyItemIcon(r.id, { size: 'sm' })} ${itemLink(r.id)}</div><div class="sub">${why} · ${r.listed} listed${r.sellShare != null ? ` · ${pct(r.sellShare)} of yours sold` : ''}${r.dontHold ? ` · <span class="neg">the ${esc(r.band)} band is falling: sell at the next scan, don't hold</span>` : ''}${paperBtn(r)}</div></div><div class="dim">${RULE_WORDS[r.rule]}</div><div class="c-num">${money(r.lowest)}</div><div class="c-num">${money(r.buyUnder)}</div><div class="c-num best">${money(r.net)}</div></div>`;
     });
-    h += '</div><details class="how"><summary>How the buy list works</summary><p>Under the vendor price is certain: a vendor pays a fixed price. Disenchant values use the Classic disenchant table and your AH prices for the materials, so they are an expected value. A vendor sells it for less: how often the lowest price stayed above the vendor\'s, in this item\'s own scans. The two price rules (25% under the usual lowest, few listed far under the rest) are checked against every item\'s scan history: buy at a scan\'s lowest, sell at the next scan\'s lowest after the cut. They are shown only after 30 such cases with a median that made money, and what you make is that median return, not the gap to the usual price. Items with random rolls (of the Owl...) are left out of these two, since one price mixes every roll.</p></details>';
+    h += '</div>' + trialView() + '<details class="how"><summary>How the buy list works</summary><p>Under the vendor price is certain: a vendor pays a fixed price. Disenchant values use the Classic disenchant table and your AH prices for the materials, so they are an expected value. A vendor sells it for less: how often the lowest price stayed above the vendor\'s, in this item\'s own scans. The two price rules (25% under the usual lowest, few listed far under the rest) are checked against every item\'s scan history: buy at a scan\'s lowest, sell at the next scan\'s lowest after the cut. They are shown only after 30 such cases with a median that made money, and what you make is that median return, not the gap to the usual price. Items with random rolls (of the Owl...) are left out of these two, since one price mixes every roll.</p></details>';
     return h;
   }
 

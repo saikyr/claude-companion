@@ -21,6 +21,7 @@
   const MIN_HISTORY = 4;          // earlier scans an item needs before dip / thin can judge it
   const MIN_BACKTEST = 30;        // fired cases a speculative rule needs before it can be offered
   const SCAN_SLACK = 600;         // seconds: an observation this close to the full scan's time belongs to it
+  const SCAN_GAP = 1800;          // a scan's second pass ends within this; a reading later than that is a later scan
 
   // an item's full-scan history, oldest first: one entry per scan, {t, min, med, qty} (qty 0 = none listed); readings
   // within 10 min of the one before belong to the same scan, and the newest of them counts
@@ -77,17 +78,18 @@
   // 10 items moved, the median change is below 0 and 60% or more got cheaper.
   const BANDS = [['<1g', 0, 10000], ['1-5g', 10000, 50000], ['5-20g', 50000, 200000], ['20g+', 200000, Infinity]];
   const bandOf = (c) => (BANDS.find(([, lo, hi]) => c >= lo && c < hi) || BANDS[0])[0];
-  function index(hists, lastScan) {
+  function index(hists, lastScan, skip) {
     if (!lastScan || !lastScan.t) return null;
     const ls = lastScan.t;
     // the full scans: every reading's time, split where 30 minutes pass with none (a scan and its second pass are one)
     const ts = [...new Set([].concat(...hists.map((h) => h.map((x) => x.t))))].filter((t) => t < ls - SCAN_SLACK).sort((a, b) => a - b);
     if (!ts.length) return { scan: ls, prev: null, bands: [], byItem: new Map() };
     let start = ts[ts.length - 1];
-    for (let k = ts.length - 2; k >= 0 && start - ts[k] <= 1800; k--) start = ts[k];
+    for (let k = ts.length - 2; k >= 0 && start - ts[k] <= SCAN_GAP; k--) start = ts[k];
     const prevT = start, prevEnd = ts[ts.length - 1];
     const by = {}, byItem = new Map();
     hists.forEach((h, ix) => {
+      if (skip && skip(ix)) return;
       const cur = h[h.length - 1], prev = h.slice(0, -1).reverse().find((x) => x.t >= prevT && x.t <= prevEnd);
       if (!cur || cur.t < ls - SCAN_SLACK || !cur.min || !prev || !prev.min) return;
       const b = bandOf(prev.min);
@@ -99,7 +101,7 @@
       return { band: b, n, medianChange: med == null ? null : +med.toFixed(3), cheaper, dearer: ch.filter((x) => x > 0).length,
         falling: n >= 10 && med < 0 && cheaper / n >= 0.6 };
     });
-    return { scan: ls, prev: prevT, bands, byItem };
+    return { scan: ls, prev: prevT, prevEnd, bands, byItem };
   }
 
   // ctx: { prices, lastScan, cut, now, vendorBuy(id) (what a vendor sells it for), vendorSell(id) (what a vendor pays),
@@ -116,8 +118,8 @@
     const hists = entries.map(([, p]) => history(p));
     const plain = hists.filter((h, ix) => !rolled.has(entries[ix][1].id));
     const bt = { dip: backtest('dip', plain, cut), thin: backtest('thin', plain, cut) };
-    const ix = index(hists, ls), falling = new Set(ix ? ix.bands.filter((b) => b.falling).map((b) => b.band) : []);
-    out.index = ix && { scan: ix.scan, prev: ix.prev, bands: ix.bands };
+    const ix = index(hists, ls, (i) => rolled.has(entries[i][1].id)), falling = new Set(ix ? ix.bands.filter((b) => b.falling).map((b) => b.band) : []);
+    out.index = ix && { scan: ix.scan, prev: ix.prev, prevEnd: ix.prevEnd, bands: ix.bands };
     const offered = (r) => bt[r].n >= MIN_BACKTEST && bt[r].medianReturn > 0;
     out.rules = [
       { id: 'vendor', name: 'Under the vendor price', evidence: 'certain: a vendor pays a fixed price', offered: true },
@@ -173,26 +175,34 @@
     const rows = arr(ctx.open).map((o) => {
       const unit = o.paid / (o.units || 1), age = (now - o.t) / 86400, lo = ctx.lowestOf ? ctx.lowestOf(o.item) : null;
       const target = (ctx.plans || {})[o.id] || null, stopAt = Math.round(unit * (1 - R.stopPct / 100));
-      const lowest = lo && !lo.none ? lo.min : null;
+      // the AH's lowest may be your own listing of this flip: then it says nothing about the market
+      const mine = o.listedAt != null ? Math.round(o.listedAt / (o.units || 1)) : null;
+      const own = lo && !lo.none && mine != null && Math.abs(lo.min - mine) <= 1;
+      const lowest = lo && !lo.none && !own ? lo.min : null;
       const unrealised = lowest == null ? null : Math.round(lowest * (1 - cut) * o.units - o.paid);
       let flag = 'hold', why = `held ${age.toFixed(1)} of ${R.holdDays} days`;
       if (age > R.holdDays) { flag = 'sell'; why = `held ${age.toFixed(1)} days, past your ${R.holdDays}`; }
       else if (lowest != null && lowest <= stopAt) { flag = 'sell'; why = `lowest is ${Math.round((1 - lowest / unit) * 100)}% under what you paid (your stop: ${R.stopPct}%)`; }
       else if (lowest != null && target && lowest >= target) { flag = 'target'; why = 'the lowest reached your planned price'; }
-      else if (lowest == null) why += lo && lo.none ? '; none listed at the last scan' : '; no AH price';
-      return { id: o.id, item: o.item, t: o.t, units: o.units, paid: o.paid, unit: Math.round(unit), ageDays: +age.toFixed(1), lowest, priceAt: lo ? lo.t : null,
+      else if (lowest == null) why += own ? '; the lowest is your own listing' : lo && lo.none ? '; none listed at the last scan' : '; no AH price';
+      return { id: o.id, item: o.item, t: o.t, units: o.units, paid: o.paid, unit: Math.round(unit), ageDays: +age.toFixed(1), lowest, priceAt: lo ? lo.t : null, ownListing: own,
         unrealised, target, stopAt, flag, why };
     });
-    const capital = rows.reduce((a, r) => a + r.paid, 0), big = rows.reduce((a, r) => (!a || r.paid > a.paid ? r : a), null);
+    const capital = rows.reduce((a, r) => a + r.paid, 0);
+    // limits are per item: every open purchase of the same item together
+    const perItem = {};
+    rows.forEach((r) => { perItem[r.item] = (perItem[r.item] || 0) + r.paid; });
+    const big = Object.entries(perItem).reduce((a, [item, paid]) => (!a || paid > a.paid ? { item, paid } : a), null);
     const gold = ctx.gold == null ? null : ctx.gold, share = (x) => (gold ? +(x / gold).toFixed(3) : null);
     const totals = { capital, unrealised: rows.some((r) => r.unrealised != null) ? rows.reduce((a, r) => a + (r.unrealised || 0), 0) : null,
+      priced: rows.filter((r) => r.unrealised != null).length,
       gold, totalShare: share(capital), largest: big ? { item: big.item, paid: big.paid, share: share(big.paid) } : null };
-    totals.overItem = rows.filter((r) => gold && r.paid / gold > R.capItem / 100).map((r) => r.item);
+    totals.overItem = Object.entries(perItem).filter(([, paid]) => gold && paid / gold > R.capItem / 100).map(([item]) => item);
     totals.overTotal = !!(gold && capital / gold > R.capTotal / 100);
     return { rules: R, rows: rows.sort((a, b) => ({ sell: 0, target: 1, hold: 2 }[a.flag] - { sell: 0, target: 1, hold: 2 }[b.flag]) || b.paid - a.paid), totals };
   }
 
-  // Paper trades (#117): buy-list rows you marked, scored the way the backtest scores a case: bought at that scan's
+  // Paper trades (#117): dip and thin rows you marked (the rules that resell on the AH, before they are shown), scored the way the backtest scores a case: bought at that scan's
   // lowest, sold at the next full scan's lowest after the cut (none listed then: that scan's median). Until a later
   // scan exists a trade is open. trades[] {t (the scan), id, rule, price}; prices = the AH price records.
   function paper(trades, prices, cut) {
@@ -200,7 +210,7 @@
     const hist = {};
     Object.entries(prices || {}).forEach(([k, p]) => { if (p && p.id && !String(k).includes(':')) hist[p.id] = history(p); });
     const list = arr(trades).map((tr) => {
-      const h = hist[tr.id] || [], at = h.find((x) => Math.abs(x.t - tr.t) <= SCAN_SLACK), next = h.find((x) => x.t > tr.t + SCAN_SLACK);
+      const h = hist[tr.id] || [], at = h.find((x) => Math.abs(x.t - tr.t) <= SCAN_SLACK), next = h.find((x) => x.t > tr.t + SCAN_GAP);
       const sell = next ? next.min || (at && at.med) || null : null;
       return Object.assign({}, tr, { sold: sell, soldAt: next ? next.t : null, ret: sell ? +((sell * (1 - cut)) / tr.price - 1).toFixed(3) : null,
         net: sell ? Math.round(sell * (1 - cut) - tr.price) : null });

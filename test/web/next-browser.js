@@ -191,11 +191,12 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   // #115: the buy list: an item listed under what a vendor pays shows as a certain buy; the speculative rules carry
   // their backtest and are shown only when it made money; the Buy list section draws both tables
   const buy = await page.evaluate(() => { const A = window.CC.api, ch = A.CH, ls = ch.ah.lastScan, g = A.GD.items[14047];
-    const keep = ch.ah.prices['14047'];
+    const keep = ch.ah.prices['14047'], keepAll = ch.ah.prices;
+    ch.ah.prices = Object.assign({}, keepAll);
     ch.ah.prices['14047'] = { id: 14047, name: 'Runecloth', obs: [{ t: ls.t, min: 1, med: 1500, qty: 4, src: 'scan' }] };
     const b = A.buyListOf(ch.ah); A.STATE.tab = 'auction'; A.STATE.ahSec = 'buy'; A.render();
     const h = document.querySelector('main').innerHTML, snap = window.CC.snapshot().ah.buyList;
-    if (keep) ch.ah.prices['14047'] = keep; else delete ch.ah.prices['14047'];
+    ch.ah.prices = keepAll;
     A.STATE.tab = 'overview'; A.render();
     return { sell: g && g[6], row: b.rows.find((r) => r.id === 14047 && r.rule === 'vendor'), rules: b.rules, html: h, snap: !!(snap && snap.rules && snap.rows), snapRows: (snap && snap.rows) || [] }; });
   check(buy.sell > 1 && buy.row && buy.row.net === buy.sell - 1 && buy.row.offered, 'buy list: Runecloth listed at 1c is a vendor buy worth the vendor price − 1c (' + JSON.stringify(buy.row) + ')');
@@ -207,25 +208,30 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   // #117: positions: an open flip, its plan typed in the Positions section (synced cc.trade.* key), a paper buy
   // from the buy list, and the snapshot's parts
   const pos = await page.evaluate(() => { const A = window.CC.api, ch = A.CH, ls = ch.ah.lastScan;
-    const keep = { buys: ch.ah.buys, sales: ch.ah.sales, rc: ch.ah.prices['14047'] };
+    const keep = { buys: ch.ah.buys, sales: ch.ah.sales, rc: ch.ah.prices['14047'], prices: ch.ah.prices };
     ch.ah.buys = [{ t: ls.t - 5 * 86400, item: 'Runecloth', price: 2000, count: 2 }]; ch.ah.sales = [];
     ch.ah.prices['14047'] = { id: 14047, name: 'Runecloth', obs: [{ t: ls.t, min: 1, med: 1500, qty: 4, src: 'scan' }] };
     A.STATE.tab = 'auction'; A.STATE.ahSec = 'positions'; A.render();
     const inp = document.querySelector('[data-flipplan]'); inp.value = '0.5'; inp.dispatchEvent(new Event('change', { bubbles: true }));
     const html = document.querySelector('main').innerHTML, P = A.positionsOf(ch.ah);
     const planKey = Object.keys(localStorage).find((k) => k.startsWith('cc.trade.plans.'));
+    // a dip on Runecloth that the backtest doesn't show yet: paper trade it
+    ch.ah.prices = Object.assign({}, ch.ah.prices);   // new data comes as new objects (the buy list is kept per prices object)
+    ch.ah.prices['14047'] = { id: 14047, name: 'Runecloth', obs: [0, 1, 2, 3, 4].map((k) => ({ t: ls.t - (5 - k) * 86400, min: 1000, med: 1000, qty: 40, src: 'scan' })).concat([{ t: ls.t, min: 600, med: 1000, qty: 40, src: 'scan' }]) };
     A.STATE.ahSec = 'buy'; A.render();
-    const btn = [...document.querySelectorAll('[data-paper]')].find((b) => b.dataset.paper.includes('|14047|vendor|'));
+    const vendorPaper = [...document.querySelectorAll('[data-paper]')].some((b) => /\|(vendor|resell|disenchant)\|/.test(b.dataset.paper));
+    const btn = [...document.querySelectorAll('[data-paper]')].find((b) => b.dataset.paper.includes('|14047|dip|'));
     btn.click();
     const paper = A.paperOf(ch.ah), marked = /Paper buy marked/.test(document.querySelector('main').innerHTML), snap = window.CC.snapshot().ah;
     Object.keys(localStorage).filter((k) => k.startsWith('cc.trade.')).forEach((k) => localStorage.removeItem(k));
-    ch.ah.buys = keep.buys; ch.ah.sales = keep.sales; if (keep.rc) ch.ah.prices['14047'] = keep.rc; else delete ch.ah.prices['14047'];
+    ch.ah.buys = keep.buys; ch.ah.sales = keep.sales; ch.ah.prices = keep.prices; if (keep.rc) ch.ah.prices['14047'] = keep.rc; else delete ch.ah.prices['14047'];
     A.STATE.tab = 'overview'; A.render();
-    return { row: P.rows[0], html, planKey, paper: paper.trades, marked, snap: { positions: !!snap.positions, paper: !!snap.paper, weekly: Array.isArray(snap.weekly), index: 'index' in (snap.buyList || {}) } }; });
+    return { row: P.rows[0], html, planKey, paper: paper.trades, marked, vendorPaper, snap: { positions: !!snap.positions, paper: !!snap.paper, weekly: Array.isArray(snap.weekly), index: 'index' in (snap.buyList || {}) } }; });
   check(pos.row && pos.row.flag === 'sell' && pos.row.target === 5000 && pos.row.units === 2 && pos.row.unit === 1000 && /positions/.test(pos.html),
     'positions: a 5-day-old flip says sell at market; the plan typed in (0.5g) is kept (' + JSON.stringify(pos.row) + ')');
   check(pos.planKey && /^cc\.trade\.plans\./.test(pos.planKey), 'positions: plans are a cc. setting, synced between computers');
-  check(pos.paper.length === 1 && pos.paper[0].id === 14047 && pos.paper[0].rule === 'vendor' && pos.paper[0].price === 1 && pos.marked, 'buy list: a paper buy is recorded at the scan\'s lowest and marked');
+  check(pos.paper.length === 1 && pos.paper[0].id === 14047 && pos.paper[0].rule === 'dip' && pos.paper[0].price === 600 && pos.marked && !pos.vendorPaper,
+    'buy list: a dip the backtest doesn\'t show yet can be paper traded, at the scan\'s lowest; vendor, resell and disenchant rows have no paper buy');
   check(pos.snap.positions && pos.snap.paper && pos.snap.weekly && pos.snap.index, 'snapshot ah.positions, ah.paper, ah.weekly, ah.buyList.index');
   // #118: each known recipe's margin, the Professions tab's numbers: a reagent only a vendor sells is priced at the
   // vendor's price (Rune Thread, 50s on Forever), never guessed from its sell price; a reagent with no price is missing
