@@ -13,7 +13,7 @@ Works for any class and spec. English game client only, for now.
 
 **With Claude (Windows or Mac):** create a project in the Claude desktop app, paste the text from
 [SETUP.md](ClaudeCompanion/claude/SETUP.md) (the fenced block; whoever gave you the Companion can send it)
-into the project's instructions, and say **set me up** in a chat. Claude installs it, or gives you one line to
+into **What do you want to work on?** (leave Context empty), and create it (say **set me up** if it doesn't start). Claude installs it, or gives you one line to
 paste into PowerShell or Terminal, then reads your character. Or install it yourself:
 
 1. Download the newest build for your computer (no account needed):
