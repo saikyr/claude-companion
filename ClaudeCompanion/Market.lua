@@ -311,20 +311,43 @@ local function Refresh() if ns.ScanButtonRefresh then ns.ScanButtonRefresh() end
 -- It is not synced (about half a MB); the next scan on this computer compares against it. A listing that is gone
 -- although its time-left band says it could not have run out in the time between the scans ended early: it was
 -- bought or cancelled. If its seller put up a new listing of the same item, it counts as relisted (a cancel);
--- otherwise as a probable sale. Each scan's price reading then carries sold (units), soldAt (median unit price),
--- early (units that ended early), relisted (units), gap (seconds since the scan compared against).
-local LOWER = {}   -- the least time a band can have left, in seconds
-do
+-- otherwise as a probable sale; with no seller shown it can't be told from a relist, so it is counted apart (unknown).
+-- Each scan's price reading then carries sold (units), soldAt (median unit price), early (units that ended
+-- early), relisted, unknown (units), gap (seconds since the scan compared against).
+-- Bands: Forever's auction house is the C_AuctionHouse one (posts take 12, 24 or 48 hours), whose bands are short
+-- (under 30 min), medium (30 min to 2 h), long (2 to 12 h) and very long (12 to 48 h): the least time each can
+-- have left. The game numbers them from 0 (Enum.AuctionHouseTimeLeftBand) or, in older calls, from 1; which one a
+-- scan used is read from the values it returned (a 4 means from 1, a 0 from 0) and kept with its listings.
+local LEAST = { 0, 1800, 7200, 43200 }
+local function lowerOf(base)
+    local t = {}
+    for k, v in ipairs(LEAST) do t[k - 1 + base] = v end
+    return t
+end
+local function BandBase()
+    if scan.bandMax == 4 then return 1 end
+    if scan.bandMin == 0 then return 0 end
     local E = Enum and Enum.AuctionHouseTimeLeftBand
-    if E and E.Short then LOWER[E.Short], LOWER[E.Medium], LOWER[E.Long], LOWER[E.VeryLong] = 0, 1800, 7200, 43200
-    else LOWER[1], LOWER[2], LOWER[3], LOWER[4] = 0, 1800, 7200, 43200 end
+    if E and E.Short then return E.Short end
+    return 1
+end
+-- the auction houses of Booty Bay, Gadgetzan and Everlook are neutral: their listings are their own
+local NEUTRAL = { ["Booty Bay"] = true, ["Gadgetzan"] = true, ["Everlook"] = true }
+local function HouseKey()
+    local h = (ns.House and ns.House(ns.char)) or ns.char.key or "?"
+    local sub = Clean(Call(GetSubZoneText))
+    if sub and NEUTRAL[sub] then return h .. "|neutral", true end
+    return h, false
 end
 local function SellerHash(owner)
     if type(owner) ~= "string" or owner == "" then return "" end
+    local cache = scan.hashes
+    if cache and cache[owner] then return cache[owner] end
     local h = 5381
     for i = 1, #owner do h = (h * 33 + owner:byte(i)) % 1679616 end
     local d, out = "0123456789abcdefghijklmnopqrstuvwxyz", ""
     for _ = 1, 4 do local k = h % 36; out = d:sub(k + 1, k + 1) .. out; h = math.floor(h / 36) end
+    if cache then cache[owner] = out end
     return out
 end
 local function Encode(list)
@@ -332,12 +355,13 @@ local function Encode(list)
     for i, l in ipairs(list) do parts[i] = l.u .. "," .. l.c .. "," .. (l.b or "") .. "," .. l.s end
     return table.concat(parts, ";")
 end
--- compare the previous scan's listings of one item (encoded) with this scan's (list); gap = seconds between them
-local function Probable(prevStr, list, gap)
+-- compare the previous scan's listings of one item (encoded) with this scan's (list); gap = seconds between them;
+-- lower = the previous scan's least time left per band
+local function Probable(prevStr, list, gap, lower)
     local cur, newBy = {}, {}
     for _, l in ipairs(list) do local k = l.u .. "," .. l.c .. "," .. l.s; cur[k] = (cur[k] or 0) + 1 end
     local seen = {}
-    local sold, early, relisted, prices = 0, 0, 0, {}
+    local sold, early, relisted, unknown, prices = 0, 0, 0, 0, {}
     local vanished = {}
     for e in prevStr:gmatch("[^;]+") do
         local u, c, b, sh = e:match("^(%d+),(%d+),(%d*),(%w*)$")
@@ -352,18 +376,20 @@ local function Probable(prevStr, list, gap)
     for k, n in pairs(cur) do left[k] = n - (seen[k] or 0) end
     for k, n in pairs(left) do if n > 0 then local sh = k:match(",([%w]*)$"); if sh and sh ~= "" then newBy[sh] = true end end end
     for _, v in ipairs(vanished) do
-        local lower = v.b and LOWER[v.b]
-        if lower and gap < lower then
+        local least = v.b and lower[v.b]
+        if least and gap < least then
             early = early + v.c
-            if v.s ~= "" and newBy[v.s] then relisted = relisted + v.c
+            if v.s == "" then unknown = unknown + v.c
+            elseif newBy[v.s] then relisted = relisted + v.c
             else sold = sold + v.c; for _ = 1, math.min(v.c, 20) do prices[#prices + 1] = v.u end end
         end
     end
-    return sold, early, relisted, prices
+    return sold, early, relisted, unknown, prices
 end
 
--- run step(i) for i = first..last, a slice per frame, then done()
-local function Sliced(first, last, step, done)
+-- run step(i) for i = first..last, a slice per frame, then done(); the clock is read every `every` steps (50)
+local function Sliced(first, last, step, done, every)
+    every = every or 50
     local i = first
     local clock = type(debugprofilestop) == "function" and debugprofilestop or nil
     local function frame()
@@ -374,7 +400,7 @@ local function Sliced(first, last, step, done)
             step(i)
             i = i + 1; n = n + 1
             if clock then
-                if n % 50 == 0 and clock() - t0 > FRAME_MS then break end
+                if n % every == 0 and clock() - t0 > FRAME_MS then break end
             elseif n >= FRAME_ROWS then break end
         end
         scan.done = i - first
@@ -405,6 +431,10 @@ local function Row(by, i, missing)
     end
     local unit = math.floor(buyout / count)
     local band = Clean(Call(AH.GetReplicateItemTimeLeft, i))
+    if band then
+        if not scan.bandMin or band < scan.bandMin then scan.bandMin = band end
+        if not scan.bandMax or band > scan.bandMax then scan.bandMax = band end
+    end
     local seller = SellerHash(Clean(owner))
     local function add(key, sfx, keepListing)
         local b = by[key]
@@ -425,15 +455,21 @@ local function Store(by, n, missing, again, onDone)
     local now = ns.Now()
     local db = ClaudeCompanionDB
     db.ahListings = db.ahListings or {}
-    local house = (ns.House and ns.House(ns.char)) or ns.char.key or "?"
     if not again then
         scan.t = now
-        -- the listings to compare against: the previous scan of this auction house, from any character of this save
-        scan.prev = db.ahListings[house]
-        scan.listings = { t = now, keys = {} }
-        db.ahListings[house] = scan.listings
+        -- the listings to compare against: the previous scan of this auction house, from any character of this save;
+        -- this scan's own listings replace them only once it is saved in full (closing the AH midway keeps the old)
+        scan.house, scan.neutral = HouseKey()
+        scan.prev = db.ahListings[scan.house]
+        scan.listings = { t = now, keys = {}, base = BandBase() }
     end
     local prev, gap = scan.prev, scan.prev and scan.prev.t and (scan.t - scan.prev.t) or nil
+    local lower = prev and lowerOf(prev.base or 1)
+    local function compare(o, was, list)
+        local sold, early, relisted, unknown, ps = Probable(was, list, gap, lower)
+        o.sold, o.early, o.relisted, o.unknown, o.gap = sold, early, relisted, unknown, gap
+        if sold > 0 then o.soldAt = Median(ps) end
+    end
     local owners, listed = 0, 0
     local prices = ns.char.ah.prices
     local keys = {}
@@ -456,11 +492,7 @@ local function Store(by, n, missing, again, onDone)
         end
         local was = prev and prev.keys and prev.keys[key]
         -- an item with listings still waiting for their details is compared once the second pass has read them
-        if was and gap and not (missing.ids and missing.ids[b.id]) then
-            local sold, early, relisted, ps = Probable(was, b.list, gap)
-            o.sold, o.early, o.relisted, o.gap = sold, early, relisted, gap
-            if sold > 0 then o.soldAt = Median(ps) end
-        end
+        if was and gap and not (missing.ids and missing.ids[b.id]) then compare(o, was, b.list) end
         local lastO = p.obs[#p.obs]
         if again and lastO and lastO.src == "scan" and scan.t and lastO.t >= scan.t then p.obs[#p.obs] = o
         else ns.Push(p.obs, o, ns.LIMITS.priceObs) end
@@ -469,28 +501,29 @@ local function Store(by, n, missing, again, onDone)
         local set = {}
         for _, key in ipairs(keys) do set[key] = true end
         if not again then
-            -- items that were up last scan but are gone now: mark as none listed
-            local prev = ns.char.ah.lastScan
-            if prev and prev.keys then
-                for key in pairs(prev.keys) do
-                    local p = prices[key]
-                    if p and not set[key] then
-                        local o = { t = now, qty = 0, src = "scan" }
-                        -- none listed now: every listing it had is gone; still a sale only if it couldn't have run out
-                        local was = scan.prev and scan.prev.keys and scan.prev.keys[key]
-                        if was and gap and #missing == 0 then
-                            local sold, early, relisted, ps = Probable(was, {}, gap)
-                            o.sold, o.early, o.relisted, o.gap = sold, early, relisted, gap
-                            if sold > 0 then o.soldAt = Median(ps) end
-                        end
-                        ns.Push(p.obs, o, ns.LIMITS.priceObs)
-                    end
+            -- items that were up last scan (this character's, or this auction house's from any character) but are gone
+            -- now: none listed; every listing it had is gone, a sale only where it couldn't have run out
+            local gone = {}
+            for key in pairs((ns.char.ah.lastScan or {}).keys or {}) do if not set[key] then gone[key] = true end end
+            for key in pairs((prev or {}).keys or {}) do if not set[key] then gone[key] = true end end
+            for key in pairs(gone) do
+                local p = prices[key]
+                local id = tonumber(key:match("^(%d+)"))
+                local was = prev and prev.keys and prev.keys[key]
+                if not p and was and id then p = { id = id, suffix = key:match("^%d+:(.+)$"), obs = {} }; prices[key] = p end
+                if p then
+                    local o = { t = now, qty = 0, src = "scan" }
+                    -- an item with a listing still waiting for details may be up after all: compared after the second pass
+                    if was and gap and not (missing.ids and missing.ids[p.id]) then compare(o, was, {}) end
+                    ns.Push(p.obs, o, ns.LIMITS.priceObs)
                 end
             end
+            ClaudeCompanionDB.ahListings[scan.house] = scan.listings
             ns.char.ah.lastScan = { t = now, auctions = n, items = #keys, missingInfo = #missing, keys = set,
                 secs = scan.started and math.floor(GetTime() - scan.started + 0.5) or nil,
                 -- probable sales: the scan compared against, and how many listings showed their seller
-                compared = scan.prev and scan.prev.t or nil, listings = listed, sellers = owners }
+                compared = scan.prev and scan.prev.t or nil, listings = listed, sellers = owners, neutral = scan.neutral or nil,
+                bands = scan.bandMin and { scan.bandMin, scan.bandMax } or nil }
         else
             local ls = ns.char.ah.lastScan
             for key in pairs(set) do ls.keys[key] = true end
@@ -498,7 +531,7 @@ local function Store(by, n, missing, again, onDone)
             ls.items = 0; for _ in pairs(ls.keys) do ls.items = ls.items + 1 end
         end
         onDone()
-    end)
+    end, 1)
 end
 
 local function Finish(by, n, missing)
@@ -519,6 +552,12 @@ local function Finish(by, n, missing)
             Sliced(1, #again, function(k) Row(by2, again[k], still) end, function()
                 -- the reread replaces this scan's reading of a key, so add what the first pass found for it
                 -- (an item's own key and a roll's key often have listings from both passes)
+                -- every first-pass key of an item that had rows waiting (a sibling roll's key too) is compared now
+                for key, b1 in pairs(by) do
+                    if missing.ids and missing.ids[b1.id] and not by2[key] then
+                        by2[key] = { id = b1.id, suffix = b1.suffix, units = {}, list = {}, qty = 0, n = 0, name = b1.name, q = b1.q }
+                    end
+                end
                 for key, b2 in pairs(by2) do
                     local b1 = by[key]
                     if b1 then
@@ -571,6 +610,7 @@ function ns.AHScan()
         return
     end
     scan.state = "scanning"
+    scan.bandMin, scan.bandMax, scan.hashes = nil, nil, {}
     scan.started = GetTime()
     scan.lastUpdate = GetTime()
     scan.phase, scan.done, scan.total = "waiting", 0, nil

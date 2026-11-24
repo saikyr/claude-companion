@@ -204,6 +204,10 @@ check(M.buyList(ctxOf({ '5:1': rec(5, [50, 50, 50, 50, 50, 50]) }, { vsell: { 5:
   const v = M.volume(M.history(p));
   check(v && v.sold === 10 && v.hours === 12 && v.perDay === 20 && v.soldAt === 100 && v.pairs === 2, 'volume: 10 sold in 12 h of scans = 20 a day; a pair a day apart is left out (' + JSON.stringify(v) + ')');
   check(M.volume(M.history(rec(701, [100, 100]))) === null, 'volume: no compared scans, no number');
+  const none = M.buyList({ prices: {}, lastScan: null });
+  check(Array.isArray(none.volume) && none.volume.length === 0 && none.cadence === null, 'no full scan yet: an empty volume list (the snapshot slices it)');
+  const hid = M.buyList(ctxOf({ 700: p }, { ctx: { lastScan: Object.assign({}, lastScan, { compared: lastScan.t - 6 * 3600, listings: 100, sellers: 0 }) } }));
+  check(hid.cadence.sellersHidden, 'cadence: a scan that showed no sellers says sales are not measured');
   const B = M.buyList(ctxOf({ 700: p }, { vsell: { 700: 200 }, ctx: { lastScan: Object.assign({}, lastScan, { compared: lastScan.t - 6 * 3600 }) } }));
   check(B.volume.length === 1 && B.volume[0].id === 700 && rowsOf(B, 'vendor')[0].volume.perDay === 20, 'volume: in the buy list rows and its own list');
   check(B.cadence.measures && B.cadence.gapHours === 6, 'cadence: two scans 6 h apart measure sales');

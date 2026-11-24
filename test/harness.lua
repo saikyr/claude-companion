@@ -904,6 +904,42 @@ do -- probable sales between two full scans (#116): a listing gone before its ti
   o = rc.obs[#rc.obs]
   check(o.sold == 0 and o.early == 0 and o.gap == 13 * 3600, "13 h between scans: Bob's very-long auction may have run out, not counted")
   check(c.ah.lastScan.listings == 1 and c.ah.lastScan.sellers == 1 and c.ah.lastScan.compared == t0 + 3 * 3600, "the scan says what it compared against and how many listings showed a seller")
+  -- bands numbered from 0 (Enum.AuctionHouseTimeLeftBand, the scan returns a 0): very long = 3, long = 2.
+  -- A seller the game doesn't show can't be told from a relist: unknown, not sold. A row still waiting for its
+  -- details holds back only its own item, and an item the house's last scan had (not this character's) still counts.
+  Enum.AuctionHouseTimeLeftBand = { Short = 0, Medium = 1, Long = 2, VeryLong = 3 }
+  local oldLink = AHm.GetReplicateItemLink
+  AHm.GetReplicateItemLink = function() return "|cff1eff00|Hitem:7524::::::::|h[Gossamer Cape of Healing]|h|r" end
+  rows = {
+    { id = 14047, name = "Runecloth", u = 2000, c = 10, b = 3, s = "Alice" },
+    { id = 14047, name = "Runecloth", u = 2100, c = 10, b = 2, s = "Bob" },
+    { id = 14047, name = "Runecloth", u = 2200, c = 10, b = 0, s = "Cara" },
+    { id = 14047, name = "Runecloth", u = 2300, c = 10, b = 3, s = "" },
+    { id = 2589, name = "Linen Cloth", u = 50, c = 5, b = 3, s = "Eve" },
+  }
+  local t1 = t0 + 100 * 3600
+  scanAt(t1)
+  check(ClaudeCompanionDB.ahListings[house].base == 0, "a scan that returned band 0 numbers its bands from 0")
+  c.ah.lastScan.keys = {}   -- as if another character of this house made the last scan
+  local oldInfo2 = AHm.GetReplicateItemInfo
+  rows = { { id = 14047, name = "Runecloth", u = 2200, c = 10, b = 0, s = "Cara" }, { id = 7524, name = "Gossamer Cape of Healing", u = 900, c = 1, b = 3, s = "Fay", wait = true } }
+  AHm.GetReplicateItemInfo = function(i) local r = rows[i + 1]
+    return r.name, 1, r.c, 2, true, 40, 0, 1, 1, r.u * r.c, 0, false, nil, r.s, r.s, 0, r.id, not r.wait end
+  scanAt(t1 + 3 * 3600)
+  o = rc.obs[#rc.obs]
+  check(o.sold == 10 and o.unknown == 10 and o.early == 20, "0-based: Alice's very long gone in 3 h sold; Bob's long one may have run out; no seller shown: unknown (" .. tostring(o.sold) .. "/" .. tostring(o.unknown) .. "/" .. tostring(o.early) .. ")")
+  ln = c.ah.prices["2589"].obs[#c.ah.prices["2589"].obs]
+  check(ln.qty == 0 and ln.sold == 5, "Linen sold out: counted though another item's row was still waiting for details, and though this character's last scan didn't have it")
+  -- a neutral auction house keeps its own listings
+  local oldSub = GetSubZoneText
+  GetSubZoneText = function() return "Booty Bay" end
+  AHm.GetReplicateItemInfo = oldInfo2
+  rows = { { id = 14047, name = "Runecloth", u = 3000, c = 10, b = 3, s = "Gus" } }
+  scanAt(t1 + 5 * 3600)
+  check(c.ah.lastScan.neutral and ClaudeCompanionDB.ahListings[house .. "|neutral"] and rc.obs[#rc.obs].sold == nil, "Booty Bay: its own listings, nothing to compare against yet")
+  GetSubZoneText = oldSub
+  Enum.AuctionHouseTimeLeftBand = nil
+  AHm.GetReplicateItemLink = oldLink
   ns.Now = oldNow
   AHm.GetNumReplicateItems, AHm.GetReplicateItemInfo, AHm.GetReplicateItemTimeLeft = oldN, oldInfo, oldLeft
   if FAILED then error("probable sales checks failed") end

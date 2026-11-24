@@ -30,7 +30,7 @@
     arr(p && p.obs).filter((o) => o && o.src === 'scan' && o.t).sort((a, b) => a.t - b.t).forEach((o) => {
       const last = out[out.length - 1], e = { t: o.t, min: o.qty ? o.min || null : null, med: o.qty ? o.med || o.min || null : null, qty: o.qty || 0 };
       // probable sales since the scan before (the addon compares the two scans' listings, #116)
-      if (o.gap > 0 && o.sold != null) { e.sold = o.sold; e.gap = o.gap; e.soldAt = o.soldAt || null; }
+      if (o.gap > 0 && o.sold != null) { e.sold = o.sold; e.gap = o.gap; e.soldAt = o.soldAt || null; e.unknown = o.unknown || 0; }
       if (last && o.t - last.t < SCAN_SLACK) { e.t = last.t; out[out.length - 1] = e; return; }
       out.push(e);
     });
@@ -44,9 +44,11 @@
   function volume(h) {
     const pairs = h.filter((x) => x.gap > 0 && x.gap < VOLUME_GAP && x.sold != null);
     if (!pairs.length) return null;
-    const sold = pairs.reduce((a, x) => a + x.sold, 0), secs = pairs.reduce((a, x) => a + x.gap, 0);
+    // a lower bound: over a gap of more than 2 h only very long auctions can show a sale, and a listing whose seller
+    // the game didn't show is left out (unknown)
+    const sold = pairs.reduce((a, x) => a + x.sold, 0), secs = pairs.reduce((a, x) => a + x.gap, 0), unknown = pairs.reduce((a, x) => a + (x.unknown || 0), 0);
     const at = []; pairs.forEach((x) => { if (x.sold && x.soldAt) for (let k = 0; k < Math.min(x.sold, 20); k++) at.push(x.soldAt); });
-    return { sold, hours: +(secs / 3600).toFixed(1), perDay: +(sold / (secs / 86400)).toFixed(1), soldAt: median(at), pairs: pairs.length };
+    return { sold, unknown, hours: +(secs / 3600).toFixed(1), perDay: +(sold / (secs / 86400)).toFixed(1), soldAt: median(at), pairs: pairs.length };
   }
 
   // the speculative rules: does it fire at scan i of a history h?
@@ -123,7 +125,7 @@
   //        hasEnchanting, sellShare(name) -> share | null }
   function buyList(ctx) {
     const cut = ctx.cut == null ? 0.05 : ctx.cut, ls = ctx.lastScan;
-    const out = { scan: ls ? ls.t : null, rules: [], rows: [], index: null };
+    const out = { scan: ls ? ls.t : null, rules: [], rows: [], index: null, volume: [], cadence: null };
     if (!ls || !ls.t) return out;
     const all = Object.entries(ctx.prices || {}).filter(([, p]) => p && p.id);
     // one key per item; random rolls have their own keys, and their base key mixes every roll's prices
@@ -173,7 +175,9 @@
       });
     });
     // how far apart the scans are: probable sales need two scans less than 12 h apart
-    out.cadence = { compared: ls.compared || null, gapHours: ls.compared ? +((ls.t - ls.compared) / 3600).toFixed(1) : null, measures: !!(ls.compared && ls.t - ls.compared < VOLUME_GAP) };
+    out.cadence = { compared: ls.compared || null, gapHours: ls.compared ? +((ls.t - ls.compared) / 3600).toFixed(1) : null, measures: !!(ls.compared && ls.t - ls.compared < VOLUME_GAP),
+      // the game showed no sellers: a sale can't be told from a cancel and relist, so none are counted
+      sellersHidden: !!(ls.listings && !ls.sellers) };
     out.volume = entries.map(([, p], i) => { const v = volume(hists[i]); return v && Object.assign({ id: p.id, name: p.name || '#' + p.id }, v); })
       .filter((v) => v && v.sold > 0).sort((a, b) => b.perDay - a.perDay);
     out.rows.forEach((r) => { r.offered = (out.rules.find((x) => x.id === r.rule) || {}).offered; });
