@@ -57,6 +57,49 @@ C.piece(st5, new TextEncoder().encode(restart), true, 'r.txt');
 check(JSON.stringify(st5.npcs['Son of Arkkoroc'].schools.shadow) === JSON.stringify({ n: 2, full: 0, dmg: 300, resisted: 50 }) && st5.lines === 2,
   'a header written again mid-file switches to advanced logging there, and is not counted as a line ' + JSON.stringify(st5.npcs['Son of Arkkoroc'].schools.shadow));
 
+// #90: your death names who hit you in the 10 s before: three hyenas (melee, plain and advanced logging), a fall
+{
+  const meF = 'Player-1-A,"Me",0x511,0x0', hy = (n) => `Creature-0-1-2-3-11360-000${n},"Gordok Hyena",0xa48,0x0`;
+  const other = 'Player-1-B,"Someone",0x548,0x0', ogre = 'Creature-0-1-2-3-11441-0001,"Gordok Brute",0xa48,0x0';
+  const L = ['11/23/2026 07:36:00.0000  COMBAT_LOG_VERSION,22,ADVANCED_LOG_ENABLED,0,BUILD_VERSION,1.15.8,PROJECT_ID,2',
+    `11/23/2026 07:36:20.0000  SWING_DAMAGE,${ogre},${meF},900,0,1,0,0,0,nil,nil,nil,nil`,                 // 44 s before: too early
+    `11/23/2026 07:36:56.0000  SWING_DAMAGE,${hy(1)},${meF},400,0,1,0,0,0,nil,nil,nil,nil`,
+    `11/23/2026 07:36:57.0000  SWING_DAMAGE,${hy(2)},${meF},450,0,1,0,0,0,1,nil,nil,nil`,
+    `11/23/2026 07:36:58.0000  SWING_DAMAGE,${hy(3)},${meF},350,0,1,0,0,0,nil,nil,nil,nil`,
+    `11/23/2026 07:37:00.0000  SPELL_DAMAGE,${hy(1)},${meF},17255,"Savage Bite",0x1,600,0,1,0,0,0,nil,nil,nil,nil`,
+    `11/23/2026 07:37:01.0000  SWING_DAMAGE,${hy(2)},${other},500,0,1,0,0,0,nil,nil,nil,nil`,           // hits someone else
+    `11/23/2026 07:37:02.0000  SWING_DAMAGE,${meF},${hy(2)},200,0,1,0,0,0,nil,nil,nil,nil`,              // you hit it
+    `11/23/2026 07:37:03.5000  SWING_DAMAGE,${hy(3)},${meF},300,50,1,0,0,0,nil,nil,nil,nil`,
+    `11/23/2026 07:37:04.0000  UNIT_DIED,0000000000000000,nil,0x80000000,0x80000000,${meF}`,
+    `11/23/2026 08:00:00.0000  ENVIRONMENTAL_DAMAGE,0000000000000000,nil,0x80000000,0x80000000,${meF},Falling,2500,100,1,0,0,0,nil,nil,nil,nil`,
+    `11/23/2026 08:00:00.1000  UNIT_DIED,0000000000000000,nil,0x80000000,0x80000000,${meF}`].join('\n') + '\n';
+  const sd = C.fresh();
+  C.piece(sd, new TextEncoder().encode(L), true, 'd.txt');
+  const d = sd.deaths[0], h = d && d.by.find((x) => x.npc === 11360);
+  check(sd.deaths.length === 2 && h && h.count === 3 && h.dmg === 2100 && h.hits === 5 && h.name === 'Gordok Hyena' && d.by.length === 1 && d.dmg === 2100,
+    'a death: 3 Gordok Hyenas, 2100 damage in 5 hits in the last 10 s; the Brute 44 s before is left out ' + JSON.stringify(d));
+  check(sd.deaths[1].by.length === 1 && sd.deaths[1].by[0].name === 'Falling' && sd.deaths[1].by[0].kind === 'world' && sd.deaths[1].by[0].dmg === 2500,
+    'a fall: the world, not a creature, and the hyenas from 20 min before are not in it');
+  check(sd.npcs['Gordok Hyena'].taken.dmg === 2100 && sd.npcs['Gordok Hyena'].taken.hits === 5 && sd.npcs['Gordok Brute'].taken.dmg === 900,
+    'damage each creature did to you, in total (a hit on someone else is not yours)');
+  const sm = C.summary(sd);
+  check(sm.deaths.length === 2 && sm.deaths[0].by[0].name === 'Falling' && !JSON.stringify(sm).includes('Someone') && !JSON.stringify(sm).includes('Player-'),
+    'the summary: newest death first, no player names or GUIDs');
+  // advanced logging: the swing's suffix sits after the 17 unit fields
+  const advU = 'Player-1-A,0000000000000000,5000,6000,0,0,0,0,-1,0,0,0,1.5,2.5,16,1.5,58';
+  const A2 = ['11/23/2026 07:36:00.0000  COMBAT_LOG_VERSION,22,ADVANCED_LOG_ENABLED,1,BUILD_VERSION,1.15.8,PROJECT_ID,2',
+    `11/23/2026 07:36:58.0000  SWING_DAMAGE,${hy(1)},${meF},${advU},700,0,1,0,0,0,nil,nil,nil,nil`,
+    `11/23/2026 07:36:59.0000  UNIT_DIED,0000000000000000,nil,0x80000000,0x80000000,${meF}`].join('\n') + '\n';
+  const sa = C.fresh();
+  C.piece(sa, new TextEncoder().encode(A2), true, 'e.txt');
+  check(sa.deaths[0] && sa.deaths[0].by[0].dmg === 700, 'advanced logging: the swing damage read past the unit fields (' + JSON.stringify(sa.deaths[0]) + ')');
+  // read in pieces: the same deaths
+  const bytes = new TextEncoder().encode(L), sp = C.fresh();
+  let done = 0, grow = 0;
+  while (done < bytes.length) { const u = C.piece(sp, bytes.subarray(done, Math.min(bytes.length, done + 50 + grow)), done === 0, 'd.txt'); if (u === 0) { grow += 50; continue; } grow = 0; done += u; }
+  check(JSON.stringify(sp.deaths) === JSON.stringify(sd.deaths), 'read 50 bytes at a time: the same deaths');
+}
+
 const st4 = C.fresh();
 check(C.piece(st4, new TextEncoder().encode('hello\nworld\n'), true, 'x.txt') === -1 && st4.bad['x.txt'], 'a file without the COMBAT_LOG_VERSION header is refused');
 check(Object.keys(st4.npcs).length === 0, 'and nothing is counted from it');

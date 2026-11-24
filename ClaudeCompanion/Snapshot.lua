@@ -517,7 +517,7 @@ local function Addons()
             elseif GetAddOnEnableState then on = Clean(Call(GetAddOnEnableState, me, name)) end
             local enabled
             if type(on) == "number" then enabled = on > 0 elseif type(on) == "boolean" then enabled = on end
-            out[#out + 1] = { name = name, title = type(Clean(title)) == "string" and Clean(title):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "") or nil,
+            out[#out + 1] = { name = name, title = type(Clean(title)) == "string" and Clean(title):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|cn[^:]*:", ""):gsub("|T.-|t", ""):gsub("|r", "") or nil,
                 version = Clean(Call(meta, name, "Version")), enabled = enabled,
                 loaded = Clean(Call(loaded, name)) and true or false, why = Clean(reason) }
         end

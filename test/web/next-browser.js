@@ -292,6 +292,19 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   check(mac.m[0] && mac.m[0].body === '/cast [@mouseover] Renew' && mac.m[0].scope === 'account', 'snapshot macros: name, scope and text');
   check(mac.a && mac.a.length === 2 && mac.a[0].name === 'Clique' && mac.a[0].enabled === false && mac.none === null, 'snapshot addons: enabled or not, null when the build doesn\'t read them');
   check(/Addons/.test(mac.h) && /Clique/.test(mac.h) && /turned off/.test(mac.h), 'Talents & Bars lists the addons, a turned-off one says so');
+  // #90: what killed you, from this computer's combat log: the Grinds tab and the snapshot's combat.deaths
+  const dz = await page.evaluate(() => {
+    const A = window.CC.api, C = window.CC.combat, keep = C.state, st = C.api.fresh();
+    st.npcs['Gordok Hyena'] = { npc: 11360, kills: 0, deaths: 0, schools: {}, taken: { dmg: 2100, hits: 5 } };
+    st.deaths = [{ at: '11/23/2026 07:37:04.0000', by: [{ name: 'Gordok Hyena', npc: 11360, kind: 'creature', count: 3, dmg: 2100, hits: 5 }], dmg: 2100, seconds: 10 }];
+    st.lines = 10; C.state = st;
+    const tab = A.STATE.tab; A.STATE.tab = 'grinds'; A.render(); const h = document.querySelector('main').innerHTML; A.STATE.tab = tab;
+    const snap = window.CC.snapshot().combat;
+    C.state = keep; A.render();
+    return { h, d: snap && snap.deaths, n: snap && snap.npcs[0] };
+  });
+  check(/What killed you/.test(dz.h) && /3× Gordok Hyena 2,100 in 5 hits/.test(dz.h) && /420 a hit/.test(dz.h), 'Grinds tab: what killed you (3 hyenas) and who hits hardest');
+  check(dz.d && dz.d[0].by[0].count === 3 && dz.n && dz.n.taken.dmg === 2100, 'snapshot combat: deaths and damage taken per creature');
   const fl = cons.c.find((x) => x.id === 13512), oil = cons.c.find((x) => x.id === 20749);
   check(fl && fl.bags === 2 && fl.bank === 3 && fl.from === 'game' && fl.use.some((l) => /^Use: Increases damage/.test(l)) && !cons.c.some((x) => x.id === 14047),
     'consumables: a flask in bags and bank, what it does from the game, cloth left out (' + JSON.stringify(fl) + ')');

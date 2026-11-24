@@ -830,7 +830,7 @@
     // the addons installed for this character (#95), enabled ones first
     const addons = (CH.snap || {}).addons;
     if (addons) {
-      const list = arr(addons).slice().sort((a, b) => (b.enabled === true) - (a.enabled === true) || String(a.title || a.name).localeCompare(String(b.title || b.name)));
+      const list = arr(addons).filter((x) => x && x.name).sort((a, b) => (b.enabled === true) - (a.enabled === true) || String(a.title || a.name).localeCompare(String(b.title || b.name)));
       h += `<h2>Addons</h2>${list.length ? `<div class="list addons">${list.map((x) => `<div class="li"><div class="grow"><div>${esc(x.title || x.name)}</div><div class="sub">${esc([x.version, x.enabled === false ? 'turned off' : x.loaded ? 'on' : x.enabled ? 'on, not loaded' : null].filter(Boolean).join(' · '))}</div></div></div>`).join('')}</div>` : '<div class="empty">None read.</div>'}`;
     }
     return h + '</section></div>';
@@ -930,8 +930,33 @@
       });
       h += '</div>';
     }
+    h += deathsView();
     return h;
   };
+  // #90: from this computer's combat log (js/combatlog.js, while /combatlog is on in game): who hit you in the
+  // 10 seconds before each death, and which creatures hit you hardest overall
+  function deathsView() {
+    const st = CC.combat && CC.combat.state, sum = st && CC.combat.api.summary(st);
+    if (!sum) return '';
+    const n = (x) => Number(x || 0).toLocaleString('en-US');
+    let h = '';
+    const deaths = arr(sum.deaths);
+    if (deaths.length) {
+      h += `<h2>What killed you <span class="dim small">the 10 seconds before each death, from this computer's combat log</span></h2><div class="list deaths">`;
+      deaths.forEach((d) => {
+        const who = arr(d.by).map((b) => `${b.count > 1 ? b.count + '× ' : ''}${esc(b.name)} ${n(b.dmg)} in ${b.hits} hit${b.hits === 1 ? '' : 's'}`).join(', ');
+        h += `<div class="li"><div class="grow"><div>${esc(d.at)}</div><div class="sub">${who || 'nothing hit you in those 10 seconds'}</div></div><div class="num">${n(d.dmg)}</div></div>`;
+      });
+      h += '</div>';
+    }
+    const hard = arr(sum.npcs).filter((x) => x.taken && x.taken.hits >= 5).sort((a, b) => b.taken.dmg / b.taken.hits - a.taken.dmg / a.taken.hits).slice(0, 10);
+    if (hard.length) {
+      h += `<h2>Hits you hardest <span class="dim small">damage per hit, creatures with 5 hits or more</span></h2><div class="list">`;
+      hard.forEach((x) => { h += `<div class="li"><div class="grow"><div>${esc(x.name)}</div><div class="sub">${n(x.taken.dmg)} in ${n(x.taken.hits)} hits</div></div><div class="num">${n(Math.round(x.taken.dmg / x.taken.hits))} a hit</div></div>`; });
+      h += '</div>';
+    }
+    return h;
+  }
 
   // ------------------------------------------------------------ quests
   // a reputation value (points from the start of Neutral, as QuestieDB gives them) as a standing index
@@ -1689,6 +1714,8 @@
     render();
     document.dispatchEvent(new CustomEvent('cc:loaded', { detail: { live: STATE.live } }));
   }
+  // the combat log is read after the save: the Grinds tab draws its deaths once it is in
+  document.addEventListener('cc:combatstate', () => { if (CH && STATE.tab === 'grinds') render(); });
   const loadText = (binary, opts) => load(window.CCLua.parse(binary).ClaudeCompanionDB, opts);
   // for view modules in their own files (js/gear.js): they add V.<tab> and use these helpers
   window.CC = {
