@@ -143,6 +143,49 @@ local function Bags()
     return out
 end
 
+---------------------------------------------------------------- item cooldowns
+-- Items you wear or carry that are on cooldown now (Salt Shaker, Hearthstone, on-use trinkets), from the
+-- game's own timers: one row per item, readyAt in Unix seconds. A long cooldown (2 hours or more) stays
+-- listed after it ends while you still have the item, so the app can say "ready now".
+local LONG_CD = 7200
+local function ItemCooldowns()
+    local now, clock = ns.Now(), Call(GetTime) or 0
+    local out, byId = {}, {}
+    local function add(id, link, icon, start, dur)
+        start, dur = Clean(start), Clean(dur)
+        id = Clean(id)
+        if not id then return end
+        byId[id] = byId[id] or "owned"
+        if not start or not dur or start <= 0 or dur <= 30 or byId[id] == "listed" then return end
+        byId[id] = "listed"
+        out[#out + 1] = { id = id, link = link, icon = Clean(icon), duration = math.floor(dur),
+            readyAt = now + math.floor(start + dur - clock + 0.5) }
+    end
+    for slot = 1, 19 do
+        local link = Clean(Call(GetInventoryItemLink, "player", slot))
+        if link then
+            local start, dur = Call(GetInventoryItemCooldown, "player", slot)
+            add(Call(GetInventoryItemID, "player", slot) or tonumber(link:match("item:(%d+)")), link,
+                Call(GetInventoryItemTexture, "player", slot), start, dur)
+        end
+    end
+    for bag = 0, 4 do
+        for s = 1, Clean(Call(CI.GetContainerNumSlots or GetContainerNumSlots, bag)) or 0 do
+            local info = Call(CI.GetContainerItemInfo, bag, s)
+            if type(info) == "table" and Clean(info.itemID) then
+                local start, dur = Call(CI.GetContainerItemCooldown or GetContainerItemCooldown, bag, s)
+                add(info.itemID, Clean(info.hyperlink), info.iconFileID, start, dur)
+            end
+        end
+    end
+    local prev = ns.char and ns.char.snap and ns.char.snap.itemCooldowns
+    for _, r in ipairs(type(prev) == "table" and prev or {}) do
+        if byId[r.id] == "owned" and (r.duration or 0) >= LONG_CD then out[#out + 1] = r end
+    end
+    return out
+end
+ns.ItemCooldowns = ItemCooldowns
+
 ---------------------------------------------------------------- gear sets
 local function GearSets()
     local E = C_EquipmentSet
@@ -692,6 +735,7 @@ local PARTS = {
     { "gearSets", GearSets }, { "talents", Talents }, { "macros", Macros }, { "bindings", KeyBindings },
     { "spellbook", Spellbook }, { "skills", Skills }, { "reputation", Reputation }, { "currencies", Currencies },
     { "quests", QuestLog }, { "completedQuests", CompletedQuests }, { "group", ns.Group }, { "buffs", Buffs },
+    { "itemCooldowns", ItemCooldowns },
 }
 
 -- When PLAYER_LOGOUT fires the game has often already emptied the character: bags, worn gear,
@@ -772,6 +816,10 @@ ns.On("ACTIVE_TALENT_GROUP_CHANGED", function(new, old)
     if not ns.char then return end
     ns.Log("spec", { to = Clean(new), from = Clean(old) })
     C_Timer.After(2, function() Try("snap:actionBars", ns.ActionBars); Try("snap:talents", Talents) end)
+end)
+-- an item used (Hearthstone, Salt Shaker): read its timer without waiting for the next snapshot
+ns.On("BAG_UPDATE_COOLDOWN", function()
+    if ns.char and ns.char.snap then ns.Soon("itemCooldowns", 3, function() Try("snap:itemCooldowns", function() ns.char.snap.itemCooldowns = ItemCooldowns() end) end) end
 end)
 ns.On("CHARACTER_POINTS_CHANGED", function() if ns.char then ns.Soon("talents", 3, Talents) end end)
 ns.On("PLAYER_TALENT_UPDATE", function() if ns.char then ns.Soon("talents", 3, Talents) end end)

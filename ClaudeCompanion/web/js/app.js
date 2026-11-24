@@ -288,7 +288,8 @@
     return o && o.min ? { min: o.min, med: o.min, qty: o.qty, t: o.t, src: o.src } : null;
   }
   // the price to plan with: median of a scan (what it really sells for), else lowest seen
-  // plan with the newest scan; if it found none listed, with the last scan that had some
+  // plan with the newest scan; if it found none listed, with the newest price seen that has one. The addon's
+  // grind loot value uses the same rule (Journal.lua ns.PlanPrice, kept the same; #9)
   const planPrice = (id) => {
     const p = priceOf(id);
     if (p && !p.none) return p.med || p.min;
@@ -423,6 +424,8 @@
     add('taxi', 'Flight paths', taxi.length ? Math.max(...taxi.map((t) => t.last || 0)) : null, 'Talk to a flight master, then Sync', 'character', 30 * 24 * HOUR);
     add('ah', 'AH prices (full scan)', ((CH.ah || {}).lastScan || {}).t, 'Open the AH, press Claude scan, then Sync', 'auction', 2 * 24 * HOUR);
     add('mail', 'Mailbox', (CH.mail || {}).taken, 'Open a mailbox, then Sync', 'bags', 3 * 24 * HOUR);
+    // the game-data pack (drops, quests, items): rebuilt every week and shipped with the app (#20)
+    add('pack', 'Game data (drops, quests, items)', GD && GD.built, 'Rebuilt every Monday; the app updates itself', 'system', 14 * 24 * HOUR);
     return out;
   }
   // Sidebar: how fresh this is. WoW writes the addon's data to disk only on /reload and
@@ -484,8 +487,11 @@
       <div class="card"><span class="k">Bags</span><span class="v">${total - used} free</span><span class="sub">${used}/${total} used</span></div>
       ${lg ? `<div class="card link" data-tab="grinds"><span class="k">Last grind</span><span class="v">${gph(lg.perHour)}/hr</span><span class="sub">${esc(last.name || '')} · ${dur(lg.secs)}</span></div>` : ''}
     </div>`;
+    // every cooldown in one list: items you carry (#16) and professions
+    const cds = cooldowns();
+    if (cds.length) h += `<div class="list cds">${cds.map((c) => `<div class="cd">${icon(c.icon, { size: 'xs' })}<b>${esc(c.name)}</b><span>${c.prof ? esc(c.prof) + ' ' : ''}cooldown, ${cdWhen(c)}</span></div>`).join('')}</div>`;
     // what's out of date and changes the advice below (the full list is on the System tab)
-    const stale = freshness().filter((f) => f.st !== 'ok' && ['snap', 'ah', 'bank'].includes(f.key));
+    const stale = freshness().filter((f) => f.st !== 'ok' && ['snap', 'ah', 'bank', 'pack'].includes(f.key));
     if (stale.length) h += `<div class="list fresh">${stale.map((f) => `<div class="li link" data-tab="${f.tab}"><span class="dot ${f.st}"></span><div class="grow">${esc(f.label)}: ${f.t ? 'saved ' + ago(f.t) : FRESH_LABEL.never}<div class="sub">${esc(f.how)}, so the steps below use current data</div></div></div>`).join('')}</div>`;
     h += window.CC.next ? window.CC.next.html() : '<div class="empty">Loading…</div>';
     return h;
@@ -504,7 +510,17 @@
     return Object.values(groups).map((g) => {
       const c = g[0];
       return { name: g.length > 1 ? `${c.name.split(':')[0]} (${g.length} recipes share this cooldown)` : c.name, icon: iconOf[c.name], ends: Math.max(...g.map((x) => x.ends)), prof: g.map((x) => x.prof).find(Boolean) };
-    }).filter((c) => !prof || c.prof === prof).sort((a, b) => a.ends - b.ends);
+    }).concat(itemCooldowns()).filter((c) => !prof || c.prof === prof).sort((a, b) => a.ends - b.ends);
+  }
+  // Items on cooldown (Salt Shaker, Hearthstone, on-use trinkets), from the game's timers in the snapshot
+  // (#16): prof null, item = its id. A long one stays after it ends while you have the item ("ready now").
+  function itemCooldowns() {
+    // a short one (Hearthstone, a potion) that has ended is just ready: only a long one says "ready now"
+    const now = Date.now() / 1000;
+    return arr((CH.snap || {}).itemCooldowns).filter((r) => r && r.id && r.readyAt && (r.readyAt > now || (r.duration || 0) >= 7200)).map((r) => {
+      const m = /\[([^\]]+)\]/.exec(r.link || '');
+      return { name: (m && m[1]) || ((gdItem(r.id) || [])[0]) || 'Item ' + r.id, icon: r.icon, ends: r.readyAt, prof: null, item: r.id };
+    });
   }
   const cdWhen = (c) => (c.ends > Date.now() / 1000 ? 'ready ' + fmtTime(c.ends) : '<span class="pos">ready now</span>');
 
