@@ -103,6 +103,19 @@ const lit = (s) => '$j$' + s + '$j$';
       `game.item: the rod lists the ${needRod} recipes it is the tool for, and the recipe that makes it`);
     const plans = one(`select game.item('17059')::text`)[0];
     check(plans && plans.recipes.teaches.some((r) => r.spell === 20890), 'game.item: a recipe item says what it teaches and its tools');
+    // #147: a recipe's reagents and its trainer; every permanent enchant and what applies it
+    const sm = one(`select game.recipe('13917')::text`).recipes[0];
+    check(sm && sm.trainerSkill === 230 && sm.reagents.some((g) => g.id === 11175 && g.name === 'Greater Nether Essence' && g.count === 1),
+      `game.recipe: reagents with their counts and the trainer skill (${JSON.stringify(sm && [sm.reagents, sm.trainerSkill])})`);
+    const gs = one(`select game.recipe('Enchant Chest - Greater Stats')::text`).recipes[0];
+    check(gs && gs.trainerSkill === null && gs.taughtBy.length > 0, 'game.recipe: a formula-only recipe has no trainer skill, and says what teaches it');
+    const e913 = one(`select game.enchant('913')::text`);
+    check(e913.total === 1 && e913.enchants[0].match === 'enchant' && /\+65 mana/.test(e913.enchants[0].description) && e913.enchants[0].formulas.some((f) => f.spell === 13917 && f.fits === 'Chest')
+      && /Forever changed some enchants/.test(e913.from), `game.enchant: one enchant by id, its Classic text, the formula and what it fits, labelled (${JSON.stringify(e913.enchants[0])})`);
+    const sig = one(`select game.enchant('Zandalar Signet of Serenity')::text`).enchants[0];
+    check(sig && sig.id === 2604 && sig.items.some((i) => i.id === 20078 && i.fits === 'Shoulder'), 'game.enchant: by the item that applies it');
+    const sp = one(`select game.enchant('Enchant Boots - Spirit')::text`).enchants[0];
+    check(sp && sp.match === 'formula' && sp.formulas.some((f) => f.fits === 'Feet') && sp.formulas.some((f) => f.fits === 'Wrist'), 'game.enchant: one enchant, each formula with its own slot (boots and bracers)');
 
     // tools/game.py (claude/game.py in every build: a friend's Claude has no database) reads the same rows and
     // labels them the same way: every drop row, and the look-ups, against the database
@@ -110,7 +123,8 @@ const lit = (s) => '$j$' + s + '$j$';
 out = {'rates': sorted(json.dumps([r['item_id'], r['kind'], r['source'], r['source_id'], r['zone'], r['rate'], r['label']], ensure_ascii=False) for r in g.rates),
        'item': g.item('Skeleton Finger'), 'npc': g.npc('Skeletal Horror'), 'q': [g.quest(x) for x in ('5803', '5505', '4862', '1159')],
        'strat': g.instance('Stratholme'), 'status': g.status(),
-       'rodItem': g.item('16207'), 'reaver': g.item('17015'), 'rod': g.recipe('Runed Arcanite Rod'), 'r20036': g.recipe('20036'), 'part': g.recipe('Major Intellect')}
+       'rodItem': g.item('16207'), 'reaver': g.item('17015'), 'rod': g.recipe('Runed Arcanite Rod'), 'r20036': g.recipe('20036'), 'part': g.recipe('Major Intellect'),
+       'e913': g.enchant('913'), 'eSig': g.enchant('20078'), 'ePart': g.enchant('Spirit')}
 print(json.dumps(out, ensure_ascii=False, default=jsonable))`;
     const py = JSON.parse(execFileSync('python3', ['-c', PY, path.join(__dirname, '../../tools')], { encoding: 'utf8', maxBuffer: 1 << 28 }));
     const pgRates = JSON.parse(B.query(`select json_agg(x order by x)::text from (select json_build_array(item_id, kind, source, source_id, zone, rate, label)::text x from game.drop_rates) s`))
@@ -142,6 +156,10 @@ print(json.dumps(out, ensure_ascii=False, default=jsonable))`;
     const recSet = (x) => Object.assign({}, x, { recipes: x.recipes.map((r) => JSON.stringify(canon(r))).sort() });
     same('recipes by tool (as a set)', recSet(py.rod), recSet(one(`select game.recipe('Runed Arcanite Rod')::text`)));
     same('recipes by part of a name (as a set)', recSet(py.part), recSet(one(`select game.recipe('Major Intellect')::text`)));
+    same('enchant by id', py.e913, one(`select game.enchant('913')::text`));
+    same('enchant by the item that applies it', py.eSig, one(`select game.enchant('20078')::text`));
+    const enSet = (x) => Object.assign({}, x, { enchants: x.enchants.map((r) => JSON.stringify(canon(r))).sort() });
+    same('enchants by name (as a set)', enSet(py.ePart), enSet(one(`select game.enchant('Spirit')::text`)));
     const dbst = one('select game.status()::text');
     check(py.status.pack === meta.hash && JSON.stringify(canon(py.status.counts)) === JSON.stringify(canon(dbst.counts)) && Date.parse(py.status.built) === Date.parse(dbst.built),
       `game.py status: the pack the database loaded, its counts and build time (${JSON.stringify(py.status.counts)})`);

@@ -14,7 +14,7 @@ const ISSUER = 'https://token.actions.githubusercontent.com';
 const JWKS = createRemoteJWKSet(new URL(ISSUER + '/.well-known/jwks'));
 const AUDIENCE = 'claude-companion-publish';
 const REPO = 'saikyr/claude-companion', OWNER_ID = '93225761';
-const TABLES = new Set(['items', 'drops', 'quests', 'npcs', 'vendors', 'rules', 'recipes']);
+const TABLES = new Set(['items', 'drops', 'quests', 'npcs', 'vendors', 'rules', 'recipes', 'enchants']);
 
 const out = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });

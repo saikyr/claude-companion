@@ -104,17 +104,35 @@ check(len(G.get('teach') or {}) > 1000, f">1,000 crafted items with a recipe ite
 RC = G.get('recipes') or {}
 check((RC.get('20036') or [None] * 3)[:3] == ['Enchant 2H Weapon - Major Intellect', 'Enchanting', [16207]],
       f"Enchant 2H Weapon - Major Intellect needs a Runed Arcanite Rod ({RC.get('20036')})")
-check(RC.get('20890') == ['Dark Iron Reaver', 'Blacksmithing', [5956], 'The Black Anvil', [17059], [17015]],
+check((RC.get('20890') or [])[:6] == ['Dark Iron Reaver', 'Blacksmithing', [5956], 'The Black Anvil', [17059], [17015]],
       f"Dark Iron Reaver: Blacksmith Hammer, The Black Anvil, Plans: Dark Iron Reaver, makes the Reaver ({RC.get('20890')})")
 check((RC.get('18560') or [None] * 4)[3] == 'Moonwell', f"Mooncloth is made at a Moonwell ({RC.get('18560')})")
 # an item with many drop sources keeps the recipe that makes it (Copper Modulator); skill ranks are not recipes
 check(4363 in (RC.get('3926') or [None] * 6)[5] and (RC.get('3926') or [None] * 3)[2] == [5956, 6219],
       f"Copper Modulator: made by its recipe, with a Blacksmith Hammer and an Arclight Spanner ({RC.get('3926')})")
 check(not [v for v in RC.values() if v[0] in ('Mining', 'Herb Gathering', 'Fishing', 'Find Minerals', 'Smelting')], 'skill ranks and tracking are not recipes')
-bad = [k for k, v in RC.items() if not (isinstance(v, list) and len(v) == 6 and v[0] and v[1] and all(str(t) in it for t in v[2]))]
+bad = [k for k, v in RC.items() if not (isinstance(v, list) and len(v) == 8 and v[0] and v[1] and all(str(t) in it for t in v[2])
+                                       and isinstance(v[6], list) and all(len(g) == 2 and g[1] > 0 for g in v[6]) and (v[7] is None or v[7] >= 0))]
 check(not bad, f'recipe rows well formed, every tool an item in the pack ({len(bad)} bad, e.g. {bad[:3]})')
 check(len(RC) > 1250 and n(v for v in RC.values() if v[2]) > 500 and n(v for v in RC.values() if 16207 in v[2]) >= 30,
       f">1,250 recipes, >500 with tools, >=30 needing a Runed Arcanite Rod (got {len(RC)}, {n(v for v in RC.values() if v[2])})")
+# each recipe's reagents and the skill a trainer teaches it at (#147): Superior Mana from a trainer at 230; Greater Stats
+# only from its formula; Charred Wolf Meat comes with Cooking
+check((RC.get('13917') or [None] * 8)[6:] == [[[11175, 1], [11174, 2]], 230], f"Enchant Chest - Superior Mana: its reagents, a trainer at 230 ({RC.get('13917')})")
+check((RC.get('20025') or [None] * 8)[7] is None and (RC.get('20025') or [None] * 5)[4], f"Enchant Chest - Greater Stats: no trainer, a formula teaches it ({RC.get('20025')})")
+check((RC.get('2538') or [None] * 8)[7] == 0, f"Charred Wolf Meat comes with Cooking ({RC.get('2538')})")
+check(n(v for v in RC.values() if v[6]) == len(RC) and n(v for v in RC.values() if v[7] is not None) > 400,
+      f"every recipe has reagents, >400 come from a trainer (got {n(v for v in RC.values() if v[7] is not None)})")
+# every permanent enchant (#147): which formulas and items apply it, each with the items it fits
+EN = G.get('enchants') or {}
+check((EN.get('913') or [None])[0] == 'Superior Mana' and '+65 mana' in (EN.get('913') or ['', ''])[1] and [13917, 4, 31, 1048608] in (EN.get('913') or [0, 0, []])[2],
+      f"enchant 913: Superior Mana, its Classic text, its formula fits chest and robe ({EN.get('913')})")
+check(any(x[0] == 20078 and x[3] == 8 for x in (EN.get('2604') or [0, 0, [], []])[3]), f"enchant 2604: the Zandalar Signet of Serenity applies it to shoulders ({EN.get('2604')})")
+check({x[3] for x in (EN.get('851') or [0, 0, []])[2]} >= {512, 256}, f"enchant 851: one enchant, a bracer formula and a boots formula ({EN.get('851')})")
+check('$' not in (EN.get('803') or ['', ''])[1] and '40' in (EN.get('803') or ['', ''])[1], f"a description's numbers are filled in (Fiery Weapon: {(EN.get('803') or ['', ''])[1]})")
+bad = [k for k, v in EN.items() if not (len(v) == 4 and v[0] and (v[2] or v[3]) and all(str(x[0]) in RC for x in v[2]) and all(str(x[0]) in it for x in v[3]))]
+check(not bad and len(EN) > 140 and not [v for v in EN.values() if re.match(r'(QA|Test |zz)', v[0])],
+      f">140 enchants, each applied by a pack recipe or item, no test enchants ({len(EN)}; {len(bad)} bad, e.g. {bad[:3]})")
 
 # ---------------------------------------------------------------- 4. the player's own game data
 GAME = {'ITEM_MOD_AGILITY_SHORT': 3, 'ITEM_MOD_STRENGTH_SHORT': 4, 'ITEM_MOD_INTELLECT_SHORT': 5,

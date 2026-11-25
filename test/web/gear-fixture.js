@@ -33,9 +33,16 @@ const SLOT = { 1: 'Head', 2: 'Neck', 3: 'Shoulder', 5: 'Chest', 6: 'Waist', 7: '
 const SHADOW = { 1: 14111, 2: 279833, 3: 14112, 5: 14136, 6: 254073, 7: 14144, 8: 14108, 9: 254067, 10: 254101, 11: 7553, 12: 12543, 13: 276744, 14: 270276, 15: 15603, 16: 11922, 17: 11904, 18: 20082 };
 const HEALS = Object.assign({}, SHADOW, { 7: 10807, 9: 254061, 11: 273031, 13: 19990, 14: 11819, 17: 11262, 18: 17745 });
 
+// permanent enchants (#147), by slot, as the item string carries them: the chest's in the save with the game's own
+// "Enchanted:" line, the bracers' known only by id (Classic data names it)
+const ENCHANT = { 5: 913, 9: 1884 };
+
 function saveLua(now, extra) {
-  const item = (id) => `item:${id}::::::::59:::::`;
+  const item = (id, slot) => `item:${id}:${(slot && ENCHANT[slot] && (slot === 9 ? SHADOW[9] === id : true)) ? ENCHANT[slot] : ''}:::::::59:::::`;
   const items = {
+    [item(14136, 5)]: { id: 14136, key: item(14136, 5), name: 'Robe of Winter Night', q: 3, ilvl: 57, req: 52, class: 4, subclass: 1, loc: 'INVTYPE_ROBE', bind: 2,
+      stats: { ITEM_MOD_INTELLECT_SHORT: 12, ITEM_MOD_SHADOW_DAMAGE_DONE_SHORT: 40, ITEM_MOD_FROST_DAMAGE_DONE_SHORT: 40, RESISTANCE0_NAME: 81 },
+      tip: [{ l: 'Robe of Winter Night' }, { l: 'Chest', r: 'Cloth' }, { l: '81 Armor' }, { l: '+12 Intellect' }, { l: 'Enchanted: +65 Mana' }] },
     // in the bags: Theka's Last Breath (a trinket the Holy set doesn't use); in the bank: Devout Mantle
     [item(274641)]: { id: 274641, key: item(274641), name: "Theka's Last Breath", q: 3, ilvl: 47, req: 42, class: 4, subclass: 0, loc: 'INVTYPE_TRINKET', bind: 1,
       stats: { ITEM_MOD_MANA_REGENERATION_SHORT: 6 }, tip: [{ l: "Theka's Last Breath" }, { l: 'Equip: Restores 6 mana per 5 sec.' }] },
@@ -63,7 +70,7 @@ function saveLua(now, extra) {
   // gone: the newest scan found none
   prices['14252:of Healing'] = { id: 14252, name: 'Lunar Coronet of Healing', q: 2, obs: [{ t: scanT - 86400, min: 9000, qty: 1, src: 'scan' }, { t: scanT, qty: 0, src: 'scan' }] };
   const set = (id, name, map) => ({ id, name, icon: 1234, equipped: id === 1, numItems: 17, numEquipped: 17, numInBags: 0, numLost: 0,
-    items: Object.entries(map).map(([slot, x]) => ({ id: x, slot: Number(slot), slotName: SLOT[slot] })) });
+    items: Object.entries(map).map(([slot, x]) => ({ id: x, slot: Number(slot), slotName: SLOT[slot], item: ENCHANT[slot] ? item(x, Number(slot)) : undefined })) });
   const ch = {
     key: 'Testpriest-Realm',
     snap: {
@@ -71,7 +78,7 @@ function saveLua(now, extra) {
       stats: { spellHitRating: 20, spellHitBonus: 2 },
       character: { name: 'Testpriest', race: 'Human', class: 'Priest', classFile: 'PRIEST', faction: 'Alliance', server: 1, level: 59, xp: 75624, xpMax: 209800, money: 1362396,
         where: { zone: 'Stormwind City', map: 1453, x: 50, y: 50 }, hearth: 'Stormwind City' },
-      equipped: Object.entries(SHADOW).map(([slot, id]) => ({ slot: Number(slot), slotName: SLOT[slot], item: item(id), count: 1 })),
+      equipped: Object.entries(SHADOW).map(([slot, id]) => ({ slot: Number(slot), slotName: SLOT[slot], item: item(id, Number(slot)), count: 1 })),
       gearSets: [set(0, 'heals', HEALS), set(1, 'shadow', SHADOW)],
       bags: [{ id: 0, items: [{ slot: 1, item: item(274641), count: 1 }] }],
       skills: [{ name: 'Cloth', rank: 1, skillLineCategoryID: 8 }, { name: 'Daggers', rank: 295, skillLineCategoryID: 6 }, { name: 'Maces', rank: 280, skillLineCategoryID: 6 },

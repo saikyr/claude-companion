@@ -99,6 +99,24 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   check(!/Lunar Coronet of Healing/.test(ah.split('Rolls to search for')[0]), 'an item the newest scan no longer found is left out');
   check(/Rolls to search for/.test(ah) && /of Healing/.test(ah.split('Rolls to search for')[1] || ''), 'rolls worth searching for are listed');
 
+  // ---- enchants (#147): each enchantable slot's enchant, scored; empty ones flagged; the best you can get
+  await page.click('[data-gearview="ench"]');
+  const en = await page.$$eval('.ench .tr', (els) => els.map((e) => e.innerText.replace(/\s+/g, ' ')));
+  check(en.some((r) => /^Chest/.test(r) && /\+65 Mana/.test(r) && /the game/.test(r)), "Enchants: the chest's enchant, named by the game's own line (" + (en.find((r) => /^Chest/.test(r)) || 'none') + ')');
+  check(en.some((r) => /^Wrist/.test(r) && /no enchant/.test(r)), "Enchants: the heals set's bracers have none: flagged");
+  check(en.some((r) => /^Head/.test(r) && /no enchant/.test(r) && /\+\d/.test(r)), 'Enchants: an empty slot shows the best you can get, with its gain');
+  check(!en.some((r) => /^(Neck|Ring|Trinket|Waist)/.test(r)), 'Enchants: slots nothing enchants are left out');
+  check(/slots? ha(s|ve) no enchant/.test(await text('main')), 'Enchants: the empty slots are counted on top');
+  await page.click('[data-gearspec="2"]');
+  const en2 = await page.$$eval('.ench .tr', (els) => els.map((e) => e.innerText.replace(/\s+/g, ' ')));
+  check(en2.some((r) => /^Wrist/.test(r) && /Superior Spirit/.test(r) && /Classic data/.test(r)), 'Enchants (Shadow set): an enchant known only by id is named from Classic data, and says so');
+  await page.click('[data-gearspec="1"]');
+  const ens = await page.evaluate(() => window.CC.gear.summary()[0].enchants);
+  const chest = ens.find((r) => r.slot === 'Chest'), head = ens.find((r) => r.slot === 'Head');
+  check(chest && chest.enchant && chest.enchant.id === 913 && chest.enchant.statsFrom === 'game' && chest.enchant.score > 0, 'snapshot: gear[].enchants names and scores the enchant on each slot');
+  check(head && head.empty === true && head.best && head.best.gain > 0 && head.best.where, 'snapshot: an empty slot with the best enchant you can get and how');
+  check(ens.every((r) => !r.best || (r.best.how && Array.isArray(r.best.reagents))), 'snapshot: each best enchant says how you get it, with its reagents');
+
   // ---- class sets
   await page.click('[data-gearview="sets"]');
   check((await page.$$('.setcard')).length > 0, 'class sets show');
@@ -121,7 +139,8 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
 
   // ---- the snapshot for Claude
   const snapQ = await page.evaluate(() => (window.CC.snapshot().quests || []).find((q) => q.id === 7488));
-  check(snapQ && snapQ.rewards.length === 1 && snapQ.rewards[0].id === 18491 && Array.isArray(snapQ.rewards[0].specs), 'a complete quest the game read with no rewards: the pack\'s reward, scored for every spec');
+  // (the pack's rewards for it: 18491, and since the 25 Nov pack two Forever-only choices as well)
+  check(snapQ && snapQ.rewards.some((r) => r.id === 18491) && snapQ.rewards.every((r) => Array.isArray(r.specs)), 'a complete quest the game read with no rewards: the pack\'s rewards, scored for every spec');
   const sum = await page.evaluate(() => window.CC.gear.summary());
   const holy = sum.find((s) => s.tree === 'Holy');
   // #99: a healer's crit weight comes from their own heals: Greater Heal R5 and Flash Heal R7 at 500 +healing
@@ -248,7 +267,7 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   if (shots) {
     fs.mkdirSync(shots, { recursive: true });
     await page.evaluate(() => { location.hash = 'gear'; window.CC.api.STATE.tab = 'gear'; window.CC.api.STATE.gearView = 'up'; window.CC.api.STATE.gearSlot = 'Shoulder'; window.CC.api.STATE.gearUpAll = null; window.CC.api.render(); });
-    for (const [wd, view] of [[1600, 'up'], [1280, 'up'], [1280, 'ah'], [900, 'up']]) {
+    for (const [wd, view] of [[1600, 'up'], [1280, 'up'], [1280, 'ah'], [1280, 'ench'], [900, 'up'], [900, 'ench']]) {
       await page.setViewportSize({ width: wd, height: 1100 });
       await page.evaluate((v) => { window.CC.api.STATE.gearView = v; window.CC.api.render(); }, view);
       await page.screenshot({ path: path.join(shots, `gear-${view}-${wd}.png`), fullPage: wd === 1280 && view === 'up' });

@@ -20,14 +20,14 @@ B=https://foreverdb.net/data
 } > raw/fdb/list.txt
 curl -sf --retry 3 --parallel --parallel-max 8 -K raw/fdb/list.txt
 
-echo "3/9 VMaNGOS world database (every profession recipe's tools and place; Classic 1.12, frozen since June 2021)"
+echo "3/9 VMaNGOS world database (every profession recipe's tools, place, reagents and trainer, and every permanent enchant; Classic 1.12, frozen since June 2021)"
 # one file of brotalnia/database (the VMaNGOS world dump): only that blob is fetched, about 30 MB
 V=world_full_14_june_2021
 if [ ! -s "raw/$V.7z" ]; then
   rm -rf raw/vmdb; git clone -q --depth 1 --filter=blob:none --no-checkout https://github.com/brotalnia/database raw/vmdb
   git -C raw/vmdb checkout -q HEAD -- "$V.7z" && mv "raw/vmdb/$V.7z" raw/ && rm -rf raw/vmdb
 fi
-python3 -I "$HERE/recipes.py" "raw/$V.7z" out/recipes.json
+python3 -I "$HERE/recipes.py" "raw/$V.7z" out/recipes.json out/enchants.json
 
 echo "4/9 endgametools item pages (weapons, armor and consumables; only pages not fetched in the last 30 days)"
 # every weapon, armor and consumable QuestieDB or ForeverDB knows: Forever's own items (its Tier 0.5 spec sets) are only

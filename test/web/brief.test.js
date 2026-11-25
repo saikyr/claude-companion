@@ -28,7 +28,14 @@ function snapshot(ageMs, extra) {
     character: { name: 'Ana', level: 59, class: 'Priest', race: 'Human', faction: 'Alliance', money: 2079592, where: { zone: 'Stormwind City' }, hearth: 'Stormwind City' },
     gear: [
       { spec: 1, label: 'Holy', active: true, weightsName: 'Holy healing', comparedWith: 'what you wear', upgrades: [1, 2, 3, 4, 5, 6, 7, 8].map(up),
-        preBis: [{ slot: 'Head', name: 'Devout Crown', status: 'missing', where: 'Scholomance' }, { slot: 'Chest', name: 'Robe', status: 'done' }] },
+        preBis: [{ slot: 'Head', name: 'Devout Crown', status: 'missing', where: 'Scholomance' }, { slot: 'Chest', name: 'Robe', status: 'done' }],
+        // #147: the app's enchants: an empty slot, two better ones, one already the best, one whose copy is unknown
+        enchants: [
+          { slot: 'Head', enchant: null, empty: true, best: { name: 'Lesser Arcanum of Rumination', gain: 16, where: 'Quest reward' } },
+          { slot: 'Chest', enchant: { id: 913, name: '+65 Mana' }, empty: false, best: { name: 'Major Mana', gain: 3.7, where: 'Formula' } },
+          { slot: 'Wrist', enchant: null, empty: true, best: { name: 'Healing Power', gain: 24, where: 'Formula' } },
+          { slot: 'Back', enchant: { id: 1888, name: 'Greater Resistance' }, empty: false, best: null },
+          { slot: 'Legs', enchant: 'unknown: not read yet', empty: false, gainUnknown: true, best: { name: 'Arcanum', gain: 16, where: 'Quest' } }] },
       { spec: 2, label: 'Shadow', active: false, weightsName: 'Shadow', upgrades: [up(9)], preBis: [] }],
     quests: [
       { id: 5089, title: "General Drakkisath's Command", level: 60, complete: false, dungeon: 'Blackrock Spire', keep: true, keepWhy: 'dungeon quest', rep: [],
@@ -75,6 +82,10 @@ function snapshot(ageMs, extra) {
     check(b.specs.length === 2 && b.specs[0].spec === 'Holy' && b.specs[1].spec === 'Shadow', 'every spec');
     check(b.specs[0].upgrades.length === 3 && b.specs[0].upgrades[0].gain === 8 && b.specs[0].upgrades[2].gain === 6 && b.specs[0].upgradesTotal >= 5, 'top 3 upgrades by the app\'s gain, with the total');
     check(b.specs[0].preBisMissing.length === 1 && b.specs[0].preBisMissing[0].name === 'Devout Crown', 'pre-BiS still missing');
+    const en = b.specs[0].enchants;
+    check(en && JSON.stringify(en.empty) === '["Head","Wrist"]' && en.better.map((x) => x.slot).join() === 'Wrist,Head,Chest' && en.better[2].now === '+65 Mana' && en.better[0].gain === 24,
+      `enchants: the empty slots and the biggest gains from a better one, the app's numbers (${JSON.stringify(en)})`);
+    check(b.specs[1].enchants == null, 'enchants: none for a snapshot from a build before them');
     await mac.client.pushSnapshot(snapshot(5 * 60e3, { app: { build: 'abc123' }, gear: [{ spec: 1, label: 'Holy', upgrades: [Object.assign(up(1), { where: 'World Drop · From creatures of its level, anywhere; the fastest way is the auction house' })],
       preBis: [{ slot: 'Back', name: 'Amplifying Cloak', status: 'missing', where: 'Boss Drop · Magister Kalendris · Dire Maul · Level 54–60 · 5 players' }] }] }));
     const w = brief();

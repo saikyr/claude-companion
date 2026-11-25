@@ -32,7 +32,7 @@ name something you can't reach, use this instead; this guide wins where they dif
 | They say | For you |
 | --- | --- |
 | the brief (`private.claude_brief`), `private.history`, the snapshot query | `companion-data/snapshot.json` |
-| game facts only from the `game` schema, never the web (`game.item(...)`, `game.npc`, `game.quest`, `game.instance`, `game.recipe`, `game.drop_rates`) | `python3 claude/game.py item <id or name>` (and `npc`, `quest`, `instance`, `recipe`, `drop <item id> <npc id>`, `status`): the same fields, never the web |
+| game facts only from the `game` schema, never the web (`game.item(...)`, `game.npc`, `game.quest`, `game.instance`, `game.recipe`, `game.enchant`, `game.drop_rates`) | `python3 claude/game.py item <id or name>` (and `npc`, `quest`, `instance`, `recipe`, `enchant`, `drop <item id> <npc id>`, `status`): the same fields, never the web |
 | CLAUDE.md | this guide |
 | `tools/check-cards.py`, `tools/check-answer.py` | `claude/check-cards.py`, `claude/check-answer.py` |
 | fix the app in a PR, or file a `from-coaching` issue | tell the player what is missing and why |
