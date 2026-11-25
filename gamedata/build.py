@@ -277,9 +277,6 @@ def cost_text(c):
         if x[0] == 'c': parts.append(f"{x[2]} {CURRENCY.get(x[1]) or f'currency #{x[1]}'}")
         elif x[0] == 'i': parts.append(f"{x[2]}× {f(Q['item'].get(str(x[1])), 1) or (FDB_ITEMS.get(x[1]) or {}).get('n') or f'item #{x[1]}'}")
     return ', '.join(parts) or None
-# the build log shows one page's vendor blocks as read, to check the parser against the page
-for _i in ('249526', '226955'):
-    print(f'vendor blocks of item {_i} as read:', json.dumps({k: (EGT.get(_i) or {}).get(k) for k in ('vend', 'src', 'how')}, ensure_ascii=False)[:900])
 for k, rows in vend.items():
     for r in rows:
         b = egt_vendor(k, r[0])
