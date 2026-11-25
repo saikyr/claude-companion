@@ -93,22 +93,34 @@ def set_stats(text):
 
 
 STANDINGS = ('Friendly', 'Honored', 'Revered', 'Exalted')
-VENDOR_RX = re.compile(r'(?:^| )Vendor (.+?)(?= Vendor |$)')
+COIN = re.compile(r'(Gold|Silver|Copper)\b')
 
 
-def vendors(how):
+def vendors(lines):
     """The page's vendor blocks (#151): "Vendor Alynsia Enchanter · Redridge Mountains 11.2, 71.4 · Alliance 240 Merchant's
-    Favor Requires Azeroth Commerce Authority - Honored · Enchanting (300)", one per vendor, as
-    {vendor block text: {cost: "240 Merchant's Favor" (a price that isn't gold), rep: [faction, standing]}}. The vendor's
-    name is matched by build.py, which knows it (a name can have spaces and a title follows it)."""
+    Favor Requires Azeroth Commerce Authority - Honored · Enchanting (300)", one per vendor, as {text (the block, joined),
+    cost: "240 Merchant's Favor" (a price that isn't gold), rep: [faction, standing]}. A block starts at a line that is
+    "Vendor" or starts "Vendor " (a title such as "Pet Vendor" doesn't), and ends at the next one or at the page's note
+    on a currency ("Merchant's Favor: 312 recipes ..."). The vendor's name is matched by build.py, which knows it (a name
+    can have spaces and a title follows it)."""
+    blocks = []
+    for l in lines:
+        if l == 'Vendor' or l.startswith('Vendor '):
+            blocks.append([l[7:]] if l != 'Vendor' else [])
+        elif blocks and re.match(r"^[^·]+: \d", l):
+            blocks.append(None)                        # the section's notes after the vendors: no block takes them
+        elif blocks and blocks[-1] is not None:
+            blocks[-1].append(l)
     out = []
-    for m in VENDOR_RX.finditer(' '.join(how)):
-        t = m[1]
-        r = re.search(r' Requires (.+?) - (' + '|'.join(STANDINGS) + r')\b', t)
+    for b in blocks:
+        if not b: continue
+        t = ' '.join(b).strip()
+        r = re.search(r'(?:^| )Requires (.+?) - (' + '|'.join(STANDINGS) + r')\b', t)
         head = t[:r.start()] if r else t
-        # the price after the side word (or the coordinates): a number and a name that isn't a coin
-        c = re.search(r'(?:Alliance|Horde|\d)\s+(\d[\d,]*) ((?:[A-Z][\w\'-]*)(?: (?:of |the )?[A-Z][\w\'-]*)*)\s*$', head)
-        cost = f'{c[1]} {c[2]}' if c and not re.match(r'(Gold|Silver|Copper)\b', c[2]) else None
+        # the price: a whole number and a name that isn't a coin (coordinates are "11.2, 71.4", never followed by a name)
+        cost = None
+        for c in re.finditer(r"(?:^|(?<=[\s·]))(\d[\d,]*) ([A-Z][\w'-]*(?: (?:of |the )?[A-Z][\w'-]*)*)", head):
+            if not COIN.match(c[2]): cost = f'{c[1]} {c[2]}'; break
         out.append({'text': t, 'cost': cost, 'rep': [r[1].strip(), r[2]] if r else None})
     return out
 
@@ -159,7 +171,7 @@ def parse(h):
         if l.startswith(stop): break
         if l in noise: continue
         vall.append(l)
-    vend = vendors(vall) if any(l == 'Vendor' or l.startswith('Vendor ') for l in vall) else []
+    vend = vendors(vall)
     for l in how:
         if l.startswith(stop): break
         if l in noise or re.match(r'^Requires level \d+$', l): continue

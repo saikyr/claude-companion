@@ -153,8 +153,9 @@ for iid in sorted(all_ids):
                 row[4] = 26 if eg['slot'] == 'Ranged' and row[12] == 19 else SLOT_INV[eg['slot']]
             cov['gear_tooltip_endgametools'] += 1
         else:
-            # a consumable's tooltip says what it does on Forever (#91); its "Use:" text is no gear stat
-            cov['consumable_tooltip_endgametools'] += 1
+            # a consumable's tooltip says what it does on Forever (#91); its "Use:" text is no gear stat; a recipe's
+            # or a currency-sold item's page is fetched for its vendors (#151)
+            cov['consumable_tooltip_endgametools' if cls in (0, 7) else 'other_tooltip_endgametools'] += 1
     elif cls in GEAR and fd.get('st') is not None and not junk.match(name):
         # endgametools has no page (mostly Season of Discovery gear the Forever client carries but does not
         # drop): ForeverDB's stats, marked so the app can say where they came from

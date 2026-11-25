@@ -136,9 +136,10 @@
     const own = (GD && GD.req || {})[id];
     if (own) rep(own[0], own[1], '');
     // the reputation a vendor on your side asks (pack vend row [9], #151: Alynsia asks Azeroth Commerce Authority
-    // Honored, Beneris the Horde's own faction): the easiest one, when every vendor that names one asks one
-    const mine = vendRows(id).filter((v) => v[9]);
-    if (mine.length) { const v = mine.reduce((a, b) => (b[9][1] < a[9][1] ? b : a)); rep(v[9][0], v[9][1], 'buying it from ' + v[0]); }
+    // Honored, Beneris the Horde's own faction): only when every vendor on your side seen on Forever asks one (one
+    // that asks none is the way round it), then the easiest
+    const mine = vendRows(id).filter((v) => v[5]);
+    if (mine.length && mine.every((v) => v[9])) { const v = mine.reduce((a, b) => (b[9][1] < a[9][1] ? b : a)); rep(v[9][0], v[9][1], 'buying it from ' + v[0]); }
     const g = gdItem(id);
     arr(g && g[10]).forEach((l) => { const m = /^Requires (.+) - (Friendly|Honored|Revered|Exalted)$/.exec(l); if (m) rep(m[1], STANDING.indexOf(m[2]), ''); });
     arr((GD && GD.src[id]) || []).filter((r) => r[0] === 'quest').forEach((r) => { const q = (GD.quests || {})[r[2]]; const rr = q && arr(q.repReq)[0]; if (rr) rep(rr[0], repStanding(rr[1]), 'quest ' + q.t); });
