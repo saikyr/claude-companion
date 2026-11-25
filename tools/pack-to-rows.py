@@ -84,9 +84,35 @@ def rows(gd, rules):
     rule_rows = [{'key': k, 'value': v} for k, v in rules.items()]
     # every profession recipe's tools and place (VMaNGOS, Classic 1.12), with the items that teach it and that it makes
     named = lambda ids: [{'id': i, 'name': at(gd['items'].get(str(i)), 0)} for i in ids or []]
+    # and its reagents (each with how many) and the skill a trainer teaches it at (0: comes with the profession; null: no trainer)
     recipes = [{'spell_id': int(k), 'name': at(r, 0), 'prof': at(r, 1), 'tools': named(at(r, 2)), 'place': at(r, 3, ''),
-                'taught_by': named(at(r, 4)), 'makes': named(at(r, 5))} for k, r in (gd.get('recipes') or {}).items()]
-    return {'items': items, 'drops': drops, 'quests': quests, 'npcs': npcs, 'vendors': vendors, 'rules': rule_rows, 'recipes': recipes}
+                'taught_by': named(at(r, 4)), 'makes': named(at(r, 5)),
+                'reagents': [dict(n, count=c) for n, (_, c) in zip(named([x[0] for x in at(r, 6, [])]), at(r, 6, []))], 'trainer_skill': at(r, 7)}
+               for k, r in (gd.get('recipes') or {}).items()]
+    # every permanent enchant (#147): the formulas and items that apply it, each with the items it fits, in words
+    rec = gd.get('recipes') or {}
+    enchants = [{'id': int(k), 'name': at(e, 0), 'description': at(e, 1, ''),
+                 'formulas': [{'spell': x[0], 'name': at(rec.get(str(x[0])), 0), 'fits': fits(x[1:])} for x in at(e, 2, [])],
+                 'items': [{'id': x[0], 'name': at(gd['items'].get(str(x[0])), 0), 'fits': fits(x[1:])} for x in at(e, 3, [])]}
+                for k, e in (gd.get('enchants') or {}).items()]
+    return {'items': items, 'drops': drops, 'quests': quests, 'npcs': npcs, 'vendors': vendors, 'rules': rule_rows, 'recipes': recipes, 'enchants': enchants}
+
+
+# the items an enchant fits, in words, from its spell's masks [item class, subclass mask, inventory type mask]
+SLOT_WORD = {1: 'Head', 3: 'Shoulder', 5: 'Chest', 20: 'Chest', 6: 'Waist', 7: 'Legs', 8: 'Feet', 9: 'Wrist', 10: 'Hands', 14: 'Shield', 16: 'Back'}
+
+
+def fits(m):
+    cls, sub, inv = (list(m) + [None, 0, 0])[:3]
+    if inv:
+        return ', '.join(dict.fromkeys(SLOT_WORD[b] for b in sorted(SLOT_WORD) if inv & (1 << b))) or 'other'
+    if cls == 4 and sub and sub & (1 << 6): return 'Shield'
+    if cls == 2:
+        if sub == 1378: return 'Two-handed melee weapon'
+        if sub and not sub & ~((1 << 2) | (1 << 3) | (1 << 18)): return 'Bow, gun or crossbow'
+        if sub == 1 << 20: return 'Fishing pole'
+        return 'Weapon'
+    return 'any'
 
 
 def main():

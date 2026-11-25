@@ -13,6 +13,7 @@ chance the app needs for things you haven't seen in game. One owner per kind of 
 | Icon names (file id to name, `web/js/icons.js`, `icons.py`) | **wowdev community listfile** (`github.com/wowdev/wow-listfile`) | Every `interface/icons/*.blp` file. |
 | Drop chances, "seen on Forever" counts, loot lists for non-quest items, crafted-by, icons, fixed-vs-choice quest rewards, reward money | **ForeverDB** (`foreverdb.net/data`) | Player uploads from Forever. The only bulk Forever loot data; rates not measured on Forever are labelled Classic. |
 | Every profession recipe's tools and place, learned or not (`recipes`, `recipes.py`) | **VMaNGOS** world database (`github.com/brotalnia/database`, the 14 June 2021 dump) | No Forever source has them (QuestieDB and ForeverDB carry none; the game tells only for recipes you know, which the addon reads). Classic 1.12, labelled so in the app; checked against Forever in game for Enchant 2H Weapon - Major Intellect (Runed Arcanite Rod). Forever's own new recipes (spell ids over 1,000,000) are not in it. |
+| Every recipe's reagents and trainer skill; every permanent enchant, the formulas and items that apply it and what each fits (`recipes[6..7]`, `enchants`, `recipes.py`) | **VMaNGOS** world database (as above: `spell_template` reagents, `npc_trainer` / `npc_trainer_template`, effect 53 spells and the items that cast them) | Classic 1.12, labelled so. Forever changed some enchants (Enchant Chest - Superior Mana is Superior Intellect there): the app prefers the game's own text (the item's "Enchanted:" line, a known formula's description) and doesn't use Classic numbers for a formula Forever renamed. |
 
 The game always wins in the app: your own tooltips, quest-log rewards and AH scans replace pack data.
 
@@ -30,5 +31,5 @@ Game rules that no source ships per item (standings, reputation thresholds, AH c
 tables) are kept by hand in `web/data/rules.js`, each with its source.
 
 Files: `export_questie.py` (QuestieDB → JSON, running QuestieDB's own loader in a sandboxed Lua),
-`egt_parse.py` (endgametools pages → JSON), `recipes.py` (VMaNGOS dump → each recipe's tools and place), `build.py` (joins everything; the schema is at the top),
+`egt_parse.py` (endgametools pages → JSON), `recipes.py` (VMaNGOS dump → each recipe's tools, place, reagents and trainer skill, and every permanent enchant), `build.py` (joins everything; the schema is at the top),
 `test_pack.py` (shape, known facts, coverage floors, player check), `coverage_md.py` (COVERAGE.md).

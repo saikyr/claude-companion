@@ -66,6 +66,15 @@ local function ReadTradeSkill()
                     end
                 end
             end
+            -- what an enchant formula does, in the game's own words (#147): it makes no item, so this is the only
+            -- place its stats are. Forever changed some (Enchant Chest - Superior Mana is Superior Intellect there)
+            if not r.output then
+                local d = T.GetRecipeDescription and Clean(Call(T.GetRecipeDescription, id))
+                if type(d) ~= "string" or d == "" then
+                    d = Clean(Call((C_Spell and C_Spell.GetSpellDescription) or GetSpellDescription, id))
+                end
+                if type(d) == "string" and d ~= "" then r.desc = d end
+            end
             local cd, isDay, charges, maxCharges = Call(T.GetRecipeCooldown, id)
             cd = Clean(cd)
             if cd and cd > 0 then r.cooldownEnds = now + math.floor(cd); r.dayCooldown = Clean(isDay) end

@@ -98,7 +98,11 @@ C_Container = {
   GetContainerItemInfo = function(b, s) if s == 1 then return { hyperlink = "|cffffffff|Hitem:4338::|h[Mageweave Cloth]|h|r", stackCount = 20, itemID = 4338, quality = 1, iconFileID = 132892, isBound = false } end end,
   ContainerIDToInventoryID = function(b) return 19 + b end }
 NUM_BAG_SLOTS = 4
-C_EquipmentSet = { GetEquipmentSetIDs = function() return { 0, 1 } end, GetEquipmentSetInfo = function(id) return id==0 and "Holy" or "Shadow", 1234, id, id==0, 17, 17, 0, 0, 0 end, GetItemIDs = function() return { [1] = 10041, [5] = -1 } end }
+C_EquipmentSet = { GetEquipmentSetIDs = function() return { 0, 1 } end, GetEquipmentSetInfo = function(id) return id==0 and "Holy" or "Shadow", 1234, id, id==0, 17, 17, 0, 0, 0 end, GetItemIDs = function() return { [1] = 10041, [3] = 10042, [5] = -1 } end,
+  GetItemLocations = function() return { [1] = 1048577, [3] = 2 } end }
+-- (player, bank, bags, voidStorage, slot, bag): worn, slot 1
+-- 2: in the bank
+function EquipmentManager_UnpackLocation(loc) if loc == 1048577 then return true, false, false, false, 1, nil elseif loc == 2 then return true, true, false, false, 3, nil end end
 C_SpecializationInfo = { GetActiveSpecGroup = function() return 2 end, GetSpecialization = function() return 3 end, GetSpecializationInfo = function() return 258, "Shadow", "", 136207 end, GetNumSpecGroups = function() return 2 end }
 C_ClassTalents = { GetActiveConfigID = function() return 77 end }
 C_Traits = { GetConfigInfo = function() return { name = "Shadow", treeIDs = { 1 } } end, GenerateImportString = function() return "ABC" end,
@@ -154,10 +158,12 @@ C_AuctionHouse = { GetBrowseResults = function() return { { itemKey = { itemID =
   PostCommodity = function() end, PostItem = function() end,
   GetNumOwnedAuctions = function() return 1 end, GetOwnedAuctionInfo = function() return { itemLink = "|cff1eff00|Hitem:4338::|h[Mageweave Cloth]|h|r", itemKey = { itemID = 4338 }, quantity = 20, buyoutAmount = 50000, status = 0 } end }
 C_TradeSkillUI = { GetBaseProfessionInfo = function() return { professionName = "Tailoring", skillLevel = 255, maxSkillLevel = 300 } end,
-  GetChildProfessionInfo = function() return nil end, GetAllRecipeIDs = function() return { 18560, 3914 } end,
-  GetRecipeInfo = function(id) return { name = id == 18560 and "Mooncloth" or "Brown Linen Pants", learned = true, icon = 1, craftable = true, numAvailable = 1 } end,
+  GetChildProfessionInfo = function() return nil end, GetAllRecipeIDs = function() return { 18560, 3914, 13917 } end,
+  GetRecipeInfo = function(id) return { name = id == 18560 and "Mooncloth" or id == 13917 and "Enchant Chest - Superior Intellect" or "Brown Linen Pants", learned = true, icon = 1, craftable = true, numAvailable = 1 } end,
   GetRecipeLink = function() return "|Henchant:18560|h[Tailoring: Mooncloth]|h" end,
-  GetRecipeSchematic = function() return { outputItemID = 14342, quantityMin = 1, quantityMax = 1, reagentSlotSchematics = { { quantityRequired = 2, reagents = { { itemID = 14256 } } } } } end,
+  -- an enchant formula makes no item
+  GetRecipeSchematic = function(id) return { outputItemID = id ~= 13917 and 14342 or nil, quantityMin = 1, quantityMax = 1, reagentSlotSchematics = { { quantityRequired = 2, reagents = { { itemID = 14256 } } } } } end,
+  GetRecipeDescription = function(id) if id == 13917 then return "Permanently enchant a piece of chest armor to grant +6 Intellect." end end,
   GetRecipeCooldown = function(id) if id == 18560 then return 300000, true end return 0 end,
   GetRecipeRequirements = function(id) if id == 18560 then return { { name = "Moonwell", met = false }, { name = "Silver Rod", met = true } } end return {} end }
 function GetInboxNumItems() return 1 end
@@ -259,6 +265,22 @@ do -- #145: a recipe's tools and places, and canCraft false while one is missing
   local ok = moon and moon.tools and #moon.tools == 2 and moon.tools[1].name == "Moonwell" and moon.tools[1].met == false and moon.tools[2].met == true
     and moon.canCraft == false and moon.noTools == nil and pants and pants.tools == nil and pants.noTools == true and pants.canCraft == true
   print((ok and "PASS " or "FAIL ") .. "recipes keep their tools; a missing one makes canCraft false (#145)"); if not ok then FAILED = true end
+end
+do -- #147: an enchant formula keeps the game's own description; an item that makes something doesn't need one
+  local tail = ns.char.professions and ns.char.professions.Tailoring
+  local f, moon
+  for _, r in ipairs(tail and tail.recipes or {}) do if r.id == 13917 then f = r elseif r.id == 18560 then moon = r end end
+  local ok = f and f.desc == "Permanently enchant a piece of chest armor to grant +6 Intellect." and f.output == nil and moon and moon.desc == nil
+  print((ok and "PASS " or "FAIL ") .. "an enchant formula keeps the game's description (#147)"); if not ok then FAILED = true end
+end
+do -- #147: a gear set item keeps the copy the set uses (its link, so its enchant), saved like any item
+  local set = ns.char.snap and ns.char.snap.gearSets and ns.char.snap.gearSets[1]
+  local robe
+  local banked
+  for _, x in ipairs(set and set.items or {}) do if x.slot == 1 then robe = x elseif x.slot == 3 then banked = x end end
+  local ok = robe and robe.id == 10041 and robe.item == "item:10041::::::::58:::::" and ClaudeCompanionDB.items[robe.item] ~= nil and not robe.bank
+    and banked and banked.bank == true and banked.item == nil
+  print((ok and "PASS " or "FAIL ") .. "a gear set item keeps the copy it uses (#147)"); if not ok then FAILED = true end
 end
 -- v1.2: disenchant, rep, scan, interaction manager
 Fire("CHAT_MSG_LOOT", "You receive loot: |cff1eff00|Hitem:9999::|h[Green Pants]|h|r.")

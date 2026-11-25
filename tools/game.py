@@ -11,9 +11,10 @@ test/web/game.test.js compares every drop row's label and every look-up below wi
     python3 claude/game.py quest <id or title>      the chain, rewards, rep, and whether to keep it (the dungeon-quest rule)
     python3 claude/game.py instance <zone>          bosses, the best 300 drops (bosses first), its rules
     python3 claude/game.py drop <item id> <npc id>  one drop's rate and label: what a card's src game.drop:<item>:<npc> means
-    python3 claude/game.py recipe <id or name>      recipes by spell, name, tool (Runed Arcanite Rod), what they make or teach them: tools, place
+    python3 claude/game.py recipe <id or name>      recipes by spell, name, tool (Runed Arcanite Rod), what they make or teach them: tools, place, reagents, trainer
+    python3 claude/game.py enchant <id or name>     enchants by id, name, or the formula or item that applies them: Classic text, what each fits
     python3 claude/game.py status                   which pack
-Output is JSON, the same fields as the database's game.item / game.npc / game.quest / game.instance / game.recipe / game.status
+Output is JSON, the same fields as the database's game.item / game.npc / game.quest / game.instance / game.recipe / game.enchant / game.status
 (status has no loadedAt: nothing is loaded here).
 """
 import importlib.util, json, os, re, sys
@@ -23,6 +24,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 # game.recipe_source() (supabase/migrations/*_game_recipes.sql), word for word
 RECIPE_SOURCE = ("VMaNGOS world database (Classic 1.12): a recipe Forever changed can differ; for a recipe the character knows, "
                  "the game's own answer (the now record) wins. Forever's own new recipes are not listed.")
+# game.enchant_source() (supabase/migrations/*_game_enchants.sql), word for word
+ENCHANT_SOURCE = ('VMaNGOS world database (Classic 1.12): Forever changed some enchants (Enchant Chest - Superior Mana is Superior Intellect '
+                  'there); the game\'s own text wins: the item\'s "Enchanted:" line, a known formula\'s description (the snapshot\'s gear[].enchants). '
+                  'Enchants Forever added are not listed.')
 _spec = importlib.util.spec_from_file_location('pack_to_rows', os.path.join(HERE, 'pack-to-rows.py'))
 P = importlib.util.module_from_spec(_spec); _spec.loader.exec_module(P)
 getcontext().prec = 40
@@ -62,6 +67,7 @@ class Game:
         self.npcs = {r['id']: r for r in t['npcs']}
         self.vendors = t['vendors']
         self.recipes = sorted(t['recipes'], key=lambda c: c['spell_id'])
+        self.enchants = sorted(t['enchants'], key=lambda e: e['id'])
         self.rates = [self._rate(d) for d in t['drops']]
         self.counts = {k: len(v) for k, v in t.items()}
 
@@ -128,7 +134,7 @@ class Game:
     def _recipe(c):
         """game.recipe_row"""
         return {'spell': c['spell_id'], 'name': c['name'], 'profession': c['prof'], 'tools': c['tools'], 'place': c['place'] or None,
-                'taughtBy': c['taught_by'], 'makes': c['makes']}
+                'taughtBy': c['taught_by'], 'makes': c['makes'], 'reagents': c['reagents'], 'trainerSkill': c['trainer_skill']}
 
     def recipe(self, p):
         """game.recipe: by spell id, recipe name, a tool / made item / recipe item by name or id (each says what matched);
@@ -146,6 +152,24 @@ class Game:
         hit.sort(key=lambda x: (x[0]['prof'] or '', x[0]['name'] or '', x[0]['spell_id']))
         out = {'recipes': [dict(self._recipe(c), match=m) for c, m in hit[:200]], 'total': len(hit), 'from': RECIPE_SOURCE}
         if not self.recipes: out['note'] = 'the loaded game data has no recipes yet: unknown, not none'
+        return out
+
+    def enchant(self, p):
+        """game.enchant: by enchant id, name, a formula (spell id or name) or an item (id or name) that applies it (each says
+        what matched); else a part of the name"""
+        p = str(p).strip(); lp = p.lower()
+        def match(e):
+            if str(e['id']) == p: return 'enchant'
+            if (e['name'] or '').lower() == lp: return 'name'
+            if any(str(f['spell']) == p or (f['name'] or '').lower() == lp for f in e['formulas']): return 'formula'
+            if any(str(i['id']) == p or (i['name'] or '').lower() == lp for i in e['items']): return 'item'
+            return None
+        hit = [(e, match(e)) for e in self.enchants]
+        hit = [x for x in hit if x[1]] or [(e, 'part of the name') for e in self.enchants if lp in (e['name'] or '').lower()]
+        hit.sort(key=lambda x: (x[0]['name'] or '', x[0]['id']))
+        out = {'enchants': [{'id': e['id'], 'name': e['name'], 'description': e['description'], 'formulas': e['formulas'], 'items': e['items'], 'match': m}
+                            for e, m in hit[:100]], 'total': len(hit), 'from': ENCHANT_SOURCE}
+        if not self.enchants: out['note'] = 'the loaded game data has no enchants yet: unknown, not none'
         return out
 
     def npc(self, p):
@@ -239,7 +263,7 @@ def jsonable(o):
 
 
 def main(argv):
-    cmds = {'item': 1, 'npc': 1, 'quest': 1, 'instance': 1, 'recipe': 1, 'drop': 2, 'status': 0}
+    cmds = {'item': 1, 'npc': 1, 'quest': 1, 'instance': 1, 'recipe': 1, 'enchant': 1, 'drop': 2, 'status': 0}
     if len(argv) < 1 or argv[0] not in cmds or len(argv) - 1 < cmds[argv[0]]:
         print(__doc__.split('\n\n')[1] if '\n\n' in __doc__ else __doc__); return 2
     cmd, args = argv[0], argv[1:]
