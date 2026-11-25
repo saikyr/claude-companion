@@ -524,6 +524,10 @@ label.sel .k { font: 600 var(--f-lbl) var(--ui); text-transform: uppercase; lett
 .slotdet h3 span { text-transform: none; letter-spacing: 0; font-weight: 400; }
 .prelist .thead, .prelist .tr { grid-template-columns: minmax(0, 1fr) 6.5rem 4rem 9.5rem; }
 .laterlist .thead, .laterlist .tr { grid-template-columns: minmax(0, 1fr) 13rem 4rem 4rem; }
+.ench .thead, .ench .tr { grid-template-columns: 8.5rem minmax(0, 1fr) 4rem minmax(0, 1.3fr) 4.5rem; }
+.ench .badge.neg { color: var(--neg); background: rgba(232, 93, 93, .09); }
+.ench-more { padding: 0 var(--sp3) var(--sp2) 9.5rem; }
+.ench-more ul { margin: var(--sp1) 0 0; padding-left: var(--sp4); font-size: var(--f-sm); }
 .prelist .tr.target { background: var(--acc-bg); }
 .prelist .act { display: flex; align-items: center; justify-content: flex-end; gap: var(--sp2); }
 .st { font-size: var(--f-sm); color: var(--t3); white-space: nowrap; }
@@ -557,6 +561,9 @@ ul.whys b { color: var(--t1); font-weight: 600; font-variant-numeric: tabular-nu
   .gopt .thead > :nth-child(2), .gopt .tr > :nth-child(2), .gopt .thead > :nth-child(4), .gopt .tr > :nth-child(4) { display: none; }
   .prelist .thead, .prelist .tr { grid-template-columns: minmax(0, 1fr) 7.5rem; }
   .laterlist .thead, .laterlist .tr { grid-template-columns: minmax(0, 1fr) 8rem; }
+  .ench .thead, .ench .tr { grid-template-columns: 6rem minmax(0, 1fr) minmax(0, 1fr); }
+  .ench .thead > :nth-child(3), .ench .tr > :nth-child(3), .ench .thead > :nth-child(5), .ench .tr > :nth-child(5) { display: none; }
+  .ench-more { padding-left: var(--sp3); }
   .laterlist .thead > :nth-child(3), .laterlist .tr > :nth-child(3), .laterlist .thead > :nth-child(4), .laterlist .tr > :nth-child(4) { display: none; }
   .prelist .thead > :nth-child(2), .prelist .tr > :nth-child(2), .prelist .thead > :nth-child(3), .prelist .tr > :nth-child(3) { display: none; }
   .ahup .thead > :nth-child(5), .ahup .tr > :nth-child(5), .ahup .thead > :nth-child(2), .ahup .tr > :nth-child(2) { display: none; }
