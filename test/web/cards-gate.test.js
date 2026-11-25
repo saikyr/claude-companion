@@ -87,6 +87,8 @@ const CASES = [
   ['a null status', { id: 'st-null', title: 'x', status: null }, ['format'], []],
   ['a step that is not text', { id: 'steps-obj', title: 'x', steps: [{ a: 1 }] }, ['format'], []],
   ['a time that is not ISO', { id: 'iso', title: 'x', created: 'yesterday' }, ['format'], []],
+  ['an updated time hours ahead of now (#150)', { id: 'ahead', title: 'x', updated: new Date(Date.now() + 3 * 3600e3).toISOString() }, ['format'], []],
+  ['a created time a minute ahead (clocks differ a little)', { id: 'ahead-ok', title: 'x', created: new Date(Date.now() + 60e3).toISOString() }, [], []],
   ['an item id that is not a number', { id: 'item-x', title: 'x', items: [{ id: 'x' }] }, ['format'], []],
   ['a huge id in a src', { id: 'huge', title: 'x', facts: [{ label: 'Drop rate', value: '1% (5 kills)', src: 'game.drop:99999999999:202' }] }, ['src'], []],
   ['an impossible date', { id: 'date', title: 'x', expires: '2026-13-01T00:00:00Z' }, ['format'], []],
