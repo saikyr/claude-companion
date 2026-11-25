@@ -163,7 +163,27 @@ async function main() {
     const stale = { id: 'setting|cc.claude.cards', char: '*', kind: 'setting', t: 9e9, mutable: true, data: { k: 'cc.claude.cards', v: 'old build', t: 9e9 } };
     await B.fetch('/rpc/cc_push', { body: JSON.stringify({ p_key: JSON.parse(pc.files.state).key, p_records: [stale] }) });
     check(/new/.test(B.query(`select data->>'v' from public.records where id = 'setting|cc.claude.cards'`)), 'the database ignores cc.claude.cards from a computer (an older build)');
-    delete pcSet['cc.claude.cards'];
+    // #150: a page on the Mac loads an older copy of Claude's cards (settings.json written by another page)
+    // after the cursor has passed Claude's write: the account's copy comes back, on this page and on a new one
+    macSet['cc.claude.cards'] = '{"schema":1,"cards":[{"id":"old-1","kind":"note","title":"old"}]}';
+    await sync(mac, macDb, macSet);
+    check(/new/.test(macSet['cc.claude.cards'] || ''), 'an older copy of Claude\'s cards on a computer is replaced by the account\'s at the next pull (#150)');
+    const macPage = { files: mac.files, client: S.client({ fetch: B.fetch, now: () => Date.parse('2026-11-22T13:00:00Z'),
+      loadState: async () => JSON.parse(mac.files.state), saveState: async (s) => { mac.files.state = JSON.stringify(s); },
+      loadCache: async () => (mac.files.cache ? JSON.parse(mac.files.cache) : null), saveCache: async (c) => { mac.files.cache = JSON.stringify(c); },
+      device: { name: 'MacBook', os: 'mac' } }) };
+    const stateNow = JSON.parse(mac.files.state);
+    const cacheNow = JSON.parse(mac.files.cache); cacheNow.after = Number(B.query('select max(seq) from public.records'));   // the cursor is past Claude's write
+    mac.files.cache = JSON.stringify(cacheNow);
+    stateNow.settings['cc.claude.cards'] = '{"schema":1,"cards":[{"id":"old-1","kind":"note","title":"old"}]}';   // another page wrote sync.json
+    mac.files.state = JSON.stringify(stateNow);
+    const pageSet = Object.assign({}, macSet, { 'cc.claude.cards': '{"schema":1,"cards":[{"id":"old-1","kind":"note","title":"old"}]}' });
+    const rowsBefore = count(), rp = await sync(macPage, macDb, pageSet);
+    check(/new/.test(pageSet['cc.claude.cards'] || '') && /new/.test(rp.settings['cc.claude.cards'] || ''), 'a new page whose files hold an older copy asks the account once and shows Claude\'s current cards (#150)');
+    check(/new/.test(B.query(`select data->>'v' from public.records where id = 'setting|cc.claude.cards'`)) && count() === rowsBefore, 'and sends nothing back');
+    check(/only cc\.claude\.cards/.test(await B.fetch('/rpc/cc_claude_setting', { body: JSON.stringify({ p_key: JSON.parse(mac.files.state).key, p_k: 'cc.weights.v1' }) }).then((r) => r.text())), 'the account copy look-up reads Claude\'s cards only');
+    check(/unknown device/.test(await B.fetch('/rpc/cc_claude_setting', { body: JSON.stringify({ p_key: 'x'.repeat(64), p_k: 'cc.claude.cards' }) }).then((r) => r.text())), 'and needs a device key');
+    delete pcSet['cc.claude.cards']; delete macSet['cc.claude.cards'];
 
     // a running grind replaces its one live row
     pcDb.chars[key].grind = Object.assign({ name: 'g', start: T }, pcDb.chars[key].grind, { kills: 99 });
