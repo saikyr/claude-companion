@@ -121,6 +121,9 @@
     const mm = r && /^([A-Za-z ]+?)(?: (\d+))?$/.exec(r[1] || '');
     return mm ? { prof: mm[1], skill: Number(mm[2] || 0) } : null;
   }
+  // the vendor rows on your side (or that serve both): [npc, zone, x, y, price, seenOnForever, title, side, cost, rep]
+  const mySide = () => ((((CH && CH.snap) || {}).character || {}).faction === 'Horde' ? 'H' : 'A');
+  const vendRows = (id) => arr((GD && GD.vend[id]) || []).filter((v) => !v[7] || v[7] === 'AH' || v[7] === mySide());
   function itemGates(id) {
     const out = [];
     // one gate per faction, the highest standing any source asks (the pack can say Revered where the tooltip says Exalted, #110)
@@ -132,6 +135,11 @@
     };
     const own = (GD && GD.req || {})[id];
     if (own) rep(own[0], own[1], '');
+    // the reputation a vendor on your side asks (pack vend row [9], #151: Alynsia asks Azeroth Commerce Authority
+    // Honored, Beneris the Horde's own faction): only when every vendor on your side seen on Forever asks one (one
+    // that asks none is the way round it), then the easiest
+    const mine = vendRows(id).filter((v) => v[5]);
+    if (mine.length && mine.every((v) => v[9])) { const v = mine.reduce((a, b) => (b[9][1] < a[9][1] ? b : a)); rep(v[9][0], v[9][1], 'buying it from ' + v[0]); }
     const g = gdItem(id);
     arr(g && g[10]).forEach((l) => { const m = /^Requires (.+) - (Friendly|Honored|Revered|Exalted)$/.exec(l); if (m) rep(m[1], STANDING.indexOf(m[2]), ''); });
     arr((GD && GD.src[id]) || []).filter((r) => r[0] === 'quest').forEach((r) => { const q = (GD.quests || {})[r[2]]; const rr = q && arr(q.repReq)[0]; if (rr) rep(rr[0], repStanding(rr[1]), 'quest ' + q.t); });
@@ -149,7 +157,7 @@
   // where one item comes from, in a few words: vendor, else the first source row
   function whereShort(id) {
     const v = arr((GD && GD.vend[id]) || [])[0];
-    if (v) return `sold by ${v[0]}${v[1] ? ', ' + v[1] : ''}`;
+    if (v) return `sold by ${v[0]}${v[1] ? ', ' + v[1] : ''}${v[8] ? ' for ' + v[8] : ''}`;
     const r = arr((GD && GD.src[id]) || [])[0];
     if (!r) return 'no known source';
     return r[0] === 'world' ? r[1] : r[0] === 'quest' ? 'quest reward: ' + questName(r[2]) : `${{ drop: 'drops from', object: 'found in', container: 'inside', craft: 'crafted' }[r[0]] || ''} ${r[1]}${typeof r[7] === 'string' && r[7] ? ', ' + r[7] : ''}`.trim();
@@ -218,7 +226,7 @@
     if (fv.length) out.push({ l: 'Seen on Forever: ' + fv.slice(0, max || 3).map((r) => `${kindWord[r[0]] != null ? kindWord[r[0]] + ' ' : ''}${fmt(r)}${rate(r)}${r[4] ? ' · seen ×' + r[4] : ''}`.trim()).join(', '), lc: '9ad0ff' });
     if (cl.length) out.push({ l: 'Classic data only: ' + cl.slice(0, max || 3).map((r) => `${fmt(r)}${rate(r)}`).join(', '), lc: '8a8f98' });
     const v = (GD && GD.vend[id]) || [];
-    if (v.length) out.push({ l: 'Vendor: ' + v.slice(0, 2).map((x) => `${x[0]}${x[1] ? ' (' + x[1] + ')' : ''}${x[5] ? '' : ' (Classic list)'}`).join(', '), lc: '9ad0ff' });
+    if (v.length) out.push({ l: 'Vendor: ' + v.slice(0, 2).map((x) => `${x[0]}${x[1] ? ' (' + x[1] + ')' : ''}${x[8] ? ' for ' + x[8] : ''}${x[5] ? '' : ' (Classic list)'}`).join(', '), lc: '9ad0ff' });
     // what it needs that its own tooltip doesn't say (the item's own reputation line is in the tooltip already):
     // red when you don't have it yet, quiet when you do
     itemGates(id).filter((x) => x.via || x.kind === 'skill').forEach((x) => out.push({ l: x.text, lc: x.met ? '8a8f98' : 'ff6060' }));
@@ -1081,10 +1089,10 @@
   // what a craft costs (reagents at AH median) against what the result sells for
   // what a craft's reagents cost: AH median, else about 4x a vendor-only reagent's sell price; missing = reagents with no price
   // what a vendor on your side charges for an item: the lowest price ForeverDB saw a vendor ask on Forever
-  // (pack vend rows [npc, zone, x, y, price, seenOnForever, title, side]); null = no vendor sells it, as far as known
+  // (pack vend rows [npc, zone, x, y, price, seenOnForever, title, side, cost, rep]); null = no vendor sells it, as far as known
   function vendorPrice(id) {
-    const side = (((CH && CH.snap) || {}).character || {}).faction === 'Horde' ? 'H' : 'A';
-    const ps = arr((GD && GD.vend[id]) || []).filter((v) => v[5] && v[4] > 0 && (!v[7] || v[7] === side)).map((v) => v[4]);
+    // a row that also asks a currency or items (v[8], #151) isn't a gold price
+    const ps = vendRows(id).filter((v) => v[5] && v[4] > 0 && !v[8]).map((v) => v[4]);
     return ps.length ? Math.min(...ps) : null;
   }
   // a recipe's materials (#118): each reagent at your AH plan price or a vendor's price, whichever is lower;

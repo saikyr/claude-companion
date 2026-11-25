@@ -80,7 +80,8 @@ def rows(gd, rules):
     for k, lst in gd['vend'].items():
         for i, r in enumerate(lst):
             vendors.append({'key': f'{k}:{i}', 'item_id': int(k), 'npc': at(r, 0), 'zone': at(r, 1), 'x': at(r, 2), 'y': at(r, 3),
-                            'price': at(r, 4), 'seen_forever': bool(at(r, 5, 0)), 'sub': at(r, 6, ''), 'side': at(r, 7, '')})
+                            'price': at(r, 4), 'seen_forever': bool(at(r, 5, 0)), 'sub': at(r, 6, ''), 'side': at(r, 7, ''),
+                            'cost': at(r, 8), 'req_rep': at(r, 9)})
     rule_rows = [{'key': k, 'value': v} for k, v in rules.items()]
     # every profession recipe's tools and place (VMaNGOS, Classic 1.12), with the items that teach it and that it makes
     named = lambda ids: [{'id': i, 'name': at(gd['items'].get(str(i)), 0)} for i in ids or []]
