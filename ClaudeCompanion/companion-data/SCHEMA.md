@@ -120,7 +120,7 @@ checked against the newest snapshot, and every other rule refuses, on old cards 
 ### state.json
 
 ```json
-{ "schema": 1, "written": "<ISO>", "cards": { "<card id>": { "state": "done" | "dismissed", "steps": [0, 2], "stepTexts": ["<step 1>", "<step 3>"], "at": "<ISO>" } },
+{ "schema": 1, "written": "<ISO>", "cards": { "<card id>": { "state": "done" | "dismissed", "steps": [0, 2], "at": "<ISO>" } },
   "upload": { "at": "<ISO>", "ok": true, "error": null, "refused": false, "cards": 4, "stale": 0 } }
 ```
 
@@ -130,8 +130,6 @@ sent to the account. `ok` false: nothing was written; `refused` true = the gate 
 `stale` = stored facts whose number has since changed.
 
 No `state` means the card is open (the player can restore a closed card). `steps` are the ticked
-step positions, counting from 0, in the card as it was when they were ticked; `stepTexts` are those steps' text
-(since #150), which is what the app matches: a step Claude moves keeps its tick, a step Claude rewrites loses it. A
-save with no `stepTexts` (older builds) counts only while the card's `updated` is no later than its `at`. A card is open in the app when the player hasn't closed it, its
+step positions, counting from 0. A card is open in the app when the player hasn't closed it, its
 `status` is `open` and it hasn't expired. A dismissed card stays dismissed even if Claude updates it;
 to raise it again, give it a new id.

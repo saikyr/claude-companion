@@ -36,15 +36,6 @@
     if (ex && ex < Date.now() / 1000) return 'expired';
     return 'open';
   }
-  // the steps you ticked on a card as it is now: saved with their text (stepTexts), so a step Claude moves or
-  // rewrites isn't ticked by its old position (#150). An older save has positions only: they count while the card is
-  // no newer than the ticks.
-  function ticked(c, you) {
-    const steps = arr(c.steps);
-    if (Array.isArray(you.stepTexts)) { const t = new Set(you.stepTexts); return new Set(steps.map((s, i) => (t.has(s) ? i : -1)).filter((i) => i >= 0)); }
-    const made = secs(you.at), card = secs(c.updated || c.created);
-    return made != null && card != null && card > made ? new Set() : new Set(arr(you.steps).filter((i) => i < steps.length));
-  }
   // a card's time for "updated ...": never ahead of now (a Claude clock running ahead, #150)
   const shownTime = (c) => { const t = c.updated || c.created; return t && secs(t) > Date.now() / 1000 ? new Date().toISOString() : t; };
   const CLOSED = { done: 'You marked it done', dismissed: 'You dismissed it', withdrawn: 'Claude withdrew it', expired: 'Expired' };
@@ -173,7 +164,7 @@
   function card(c, full) {
     const st = standing(c), you = (S.state.cards || {})[c.id] || {};
     const [kl, ki] = KINDS[kindOf(c)];
-    const ticks = ticked(c, you);
+    const ticks = new Set(arr(you.steps));
     const steps = arr(c.steps);
     const acts = st === 'open'
       ? `<button class="btn" data-card="${esc(c.id)}" data-cact="done">Done</button><button class="btn ghost" data-card="${esc(c.id)}" data-cact="dismissed">Dismiss</button>`
@@ -239,16 +230,14 @@
     const x = e.target.closest('[data-cstep]');
     if (!x) return;
     const id = x.dataset.cstep, i = Number(x.dataset.i);
-    const c = S.cards.find((k) => k.id === id) || {}, steps = arr(c.steps);
-    const ticks = ticked(c, (S.state.cards || {})[id] || {});
+    const ticks = new Set(arr(((S.state.cards || {})[id] || {}).steps));
     if (x.checked) ticks.add(i); else ticks.delete(i);
-    const at = [...ticks].sort((a, b) => a - b);
-    save(id, { steps: at, stepTexts: at.map((k) => steps[k]) });
+    save(id, { steps: [...ticks].sort((a, b) => a - b) });
   });
 
   // overview(): the Overview page's short list (HTML). open(): the open cards for this character, newest
   // first, as Claude wrote them (fields in companion-data/SCHEMA.md, step included), for other pages.
-  CC.cards = { overview, open: () => open().map((c) => Object.assign({}, c)), ticked };
+  CC.cards = { overview, open: () => open().map((c) => Object.assign({}, c)) };
   poll();
   setInterval(poll, 5000);
 })();

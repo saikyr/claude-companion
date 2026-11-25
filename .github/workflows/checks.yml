@@ -76,8 +76,6 @@ jobs:
         run: node test/web/sync.test.js
       - name: Claude's cards through the real backend SQL
         run: node test/web/claude.test.js
-      - name: From Claude cards (ticks follow their step)
-        run: node test/web/cards.test.js
       - name: Claude's brief through the real backend SQL
         run: node test/web/brief.test.js
       - name: Game data in the database, loaded from the real pack (labels, look-ups)
