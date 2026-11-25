@@ -143,6 +143,8 @@ check(len(aly) > 9 and aly[8] == "240 Merchant's Favor" and aly[9] == ['Azeroth 
 check(len(ben) > 9 and ben[8] == "240 Merchant's Favor" and ben[9] == ['Durotar Supply and Logistics', 6],
       f"Beneris sells it for the same at Honored with the Horde trade faction ({ben})")
 VR = [r for lst in (G.get('vend') or {}).values() for r in lst]
+bad = [r[8] for r in VR if len(r) > 8 and r[8] and re.search(r' (Requires|Enchanting|Cooking|Alchemy|Blacksmithing|Leatherworking|Tailoring|Engineering|First Aid|Fishing)$', r[8])]
+check(not bad, f"a vendor's price is the price only, not the profession or Requires after it ({len(bad)}, e.g. {bad[:3]})")
 check(n(r for r in VR if len(r) > 8 and r[8]) > 20, f">20 vendor rows with a cost besides gold (got {n(r for r in VR if len(r) > 8 and r[8])})")
 
 # ---------------------------------------------------------------- 4. the player's own game data

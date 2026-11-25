@@ -119,7 +119,8 @@ def vendors(lines):
         head = t[:r.start()] if r else t
         # the price: a whole number and a name that isn't a coin (coordinates are "11.2, 71.4", never followed by a name)
         cost = None
-        for c in re.finditer(r"(?:^|(?<=[\s·]))(\d[\d,]*) ([A-Z][\w'’-]*(?: (?:of |the )?[A-Z][\w'’-]*)*)", head):
+        # (not the profession after it, "Enchanting (300)", nor a Requires line that names no standing)
+        for c in re.finditer(r"(?:^|(?<=[\s·]))(\d[\d,]*) ((?!Requires\b)[A-Z][\w'’-]*\b(?! \()(?: (?:of |the )?(?!Requires\b)[A-Z][\w'’-]*\b(?! \())*)", head):
             if not COIN.match(c[2]): cost = f'{c[1]} {c[2]}'.replace('’', "'"); break
         out.append({'text': t, 'cost': cost, 'rep': [r[1].strip(), r[2]] if r else None})
     return out
