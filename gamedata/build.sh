@@ -20,6 +20,33 @@ B=https://foreverdb.net/data
 } > raw/fdb/list.txt
 curl -sf --retry 3 --parallel --parallel-max 8 -K raw/fdb/list.txt
 
+# TEMPORARY diagnostic for #151 (reverted before any PR)
+python3 -I - <<'EOF2'
+import json
+it = {x['id']: x for x in json.load(open('raw/fdb/items.json'))}
+for i in (249526, 249525, 249527):
+    print('ITEM', i, json.dumps(it.get(i))[:3000])
+v = json.load(open('raw/fdb/vendors.json'))
+vs = v.items() if isinstance(v, dict) else enumerate(v)
+for k, x in vs:
+    s = x.get('sells') or {}
+    if '249526' in s or 249526 in s:
+        print('VENDOR', k, json.dumps({kk: vv for kk, vv in x.items() if kk != 'sells'})[:600])
+        print('SELLS', json.dumps(s)[:3000])
+src = None
+for i in range(64):
+    d = json.load(open(f'raw/fdb/sources/{i}.json'))
+    if '249526' in d: print('SOURCES', json.dumps(d['249526'])[:2000])
+cur = [x for x in it.values() if 'favor' in str(x.get('n', '')).lower()]
+print('CURRENCY', json.dumps(cur)[:1500])
+EOF2
+curl -s -o /tmp/egt.html https://endgametools.com/en/wow-forever/items/249526; python3 -I -c "
+import re;h=open('/tmp/egt.html',encoding='utf-8',errors='replace').read();t=re.sub(r'<[^>]+>',' ',h);t=re.sub(r'\s+',' ',t)
+for w in ('Requires','Favor','Merchant','Commerce','Cost','Sold'):
+    for m in re.finditer(w,t): print('EGT',w,t[max(0,m.start()-200):m.start()+250]); break"
+curl -s https://endgametools.com/en/wow-forever/items/249526 | grep -o '"[a-zA-Z]*[Cc]ost[a-zA-Z]*"[^,}]*' | head -20
+exit 1
+
 echo "3/9 VMaNGOS world database (every profession recipe's tools, place, reagents and trainer, and every permanent enchant; Classic 1.12, frozen since June 2021)"
 # one file of brotalnia/database (the VMaNGOS world dump): only that blob is fetched, about 30 MB
 V=world_full_14_june_2021
