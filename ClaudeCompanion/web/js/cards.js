@@ -38,6 +38,27 @@
   }
   // a card's time for "updated ...": never ahead of now (a Claude clock running ahead, #150)
   const shownTime = (c) => { const t = c.updated || c.created; return t && secs(t) > Date.now() / 1000 ? new Date().toISOString() : t; };
+  // Ticked steps follow the step's text, not its place (#150): Claude rewrites and reorders a card's steps, and a
+  // tick saved as "step 3" would then mark a different step done. Each tick keeps the hash of its step's text
+  // (`ticked`); `steps` (positions) and `v` (the card's updated time) are saved with it, for Claude to read.
+  // An older record with positions only counts while the card hasn't changed since it was ticked; so does one
+  // whose `ticked` no longer matches its `steps` (an older build, which writes positions only, changed it since).
+  // Two steps with the same text get their own keys (the text's hash, then which time it comes).
+  const stepKeys = (steps) => {
+    const h = window.CCSync && window.CCSync.hash, seen = {};
+    return steps.map((s) => { const t = String(s == null ? '' : s).trim(), k = h ? h(t) : t; seen[k] = (seen[k] || 0) + 1; return seen[k] > 1 ? `${k}#${seen[k]}` : k; });
+  };
+  const legacyOk = (you, c) => (secs(you.at) || 0) >= (secs(c.updated || c.created) || 0);
+  function ticksOf(c) {
+    const you = (S.state.cards || {})[c.id] || {}, steps = arr(c.steps), out = new Set();
+    if (Array.isArray(you.ticked) && you.ticked.length === arr(you.steps).length) {
+      const keys = new Set(you.ticked);
+      stepKeys(steps).forEach((k, i) => { if (keys.has(k)) out.add(i); });
+    } else if (arr(you.steps).length && legacyOk(you, c)) {
+      arr(you.steps).forEach((i) => { if (Number.isInteger(i) && i >= 0 && i < steps.length) out.add(i); });
+    }
+    return out;
+  }
   const CLOSED = { done: 'You marked it done', dismissed: 'You dismissed it', withdrawn: 'Claude withdrew it', expired: 'Expired' };
   const visible = () => S.cards.filter(mine);
   const open = () => visible().filter((c) => standing(c) === 'open');
@@ -98,6 +119,11 @@
     const all = S.state.cards = S.state.cards || {};
     const rec = Object.assign({}, all[id], change, { at: new Date().toISOString() });
     if (rec.state == null) delete rec.state;
+    // Done or Restore on a card Claude rewrote since its positions-only ticks: those ticks are for the old steps
+    const c = S.cards.find((y) => y.id === id), prev = all[id] || {};
+    if (c && !change.steps && arr(prev.steps).length && !(Array.isArray(prev.ticked) && prev.ticked.length === arr(prev.steps).length) && !legacyOk(prev, c)) {
+      delete rec.steps; delete rec.ticked;
+    }
     all[id] = rec;
     S.state.schema = 1;
     S.state.written = rec.at;
@@ -162,9 +188,9 @@
   const para = (t) => String(t).split(/\n\s*\n/).map((p) => `<p>${esc(p.trim())}</p>`).join('');
   const link = (s) => (/^https?:\/\//.test(s.url || '') ? `<a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.label || s.url)}</a>` : esc(s.label || ''));
   function card(c, full) {
-    const st = standing(c), you = (S.state.cards || {})[c.id] || {};
+    const st = standing(c);
     const [kl, ki] = KINDS[kindOf(c)];
-    const ticks = new Set(arr(you.steps));
+    const ticks = ticksOf(c);
     const steps = arr(c.steps);
     const acts = st === 'open'
       ? `<button class="btn" data-card="${esc(c.id)}" data-cact="done">Done</button><button class="btn ghost" data-card="${esc(c.id)}" data-cact="dismissed">Dismiss</button>`
@@ -230,9 +256,13 @@
     const x = e.target.closest('[data-cstep]');
     if (!x) return;
     const id = x.dataset.cstep, i = Number(x.dataset.i);
-    const ticks = new Set(arr(((S.state.cards || {})[id] || {}).steps));
+    const c = S.cards.find((y) => y.id === id);
+    if (!c) return;
+    const ticks = ticksOf(c), steps = arr(c.steps);
     if (x.checked) ticks.add(i); else ticks.delete(i);
-    save(id, { steps: [...ticks].sort((a, b) => a - b) });
+    const at = [...ticks].filter((j) => j < steps.length).sort((a, b) => a - b);
+    const keys = stepKeys(steps);
+    save(id, { steps: at, ticked: at.map((j) => keys[j]), v: c.updated || c.created || null });
   });
 
   // overview(): the Overview page's short list (HTML). open(): the open cards for this character, newest
