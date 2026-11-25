@@ -114,13 +114,13 @@ def vendors(lines):
     out = []
     for b in blocks:
         if not b: continue
-        t = ' '.join(b).strip()
+        t = re.sub(r'\s+', ' ', ' '.join(b)).strip()      # no-break spaces on the page (a number and its name) read as spaces
         r = re.search(r'(?:^| )Requires (.+?) - (' + '|'.join(STANDINGS) + r')\b', t)
         head = t[:r.start()] if r else t
         # the price: a whole number and a name that isn't a coin (coordinates are "11.2, 71.4", never followed by a name)
         cost = None
-        for c in re.finditer(r"(?:^|(?<=[\s·]))(\d[\d,]*) ([A-Z][\w'-]*(?: (?:of |the )?[A-Z][\w'-]*)*)", head):
-            if not COIN.match(c[2]): cost = f'{c[1]} {c[2]}'; break
+        for c in re.finditer(r"(?:^|(?<=[\s·]))(\d[\d,]*) ([A-Z][\w'’-]*(?: (?:of |the )?[A-Z][\w'’-]*)*)", head):
+            if not COIN.match(c[2]): cost = f'{c[1]} {c[2]}'.replace('’', "'"); break
         out.append({'text': t, 'cost': cost, 'rep': [r[1].strip(), r[2]] if r else None})
     return out
 
