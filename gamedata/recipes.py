@@ -3,8 +3,9 @@
 
   python3 -I recipes.py <world_full_*.sql or .7z> <out.json>
 
-Writes {spell id: [spell name, profession, [tool item ids], place name]} for every spell the profession skill
-lines teach (skill_line_ability), learned or not. Tools are the spell's totem1/totem2 (items you carry), the
+Writes {spell id: [spell name, profession, [tool item ids], place name, [item ids it makes]]} for every recipe the
+profession skill lines teach (skill_line_ability), learned or not: the spells that make an item (effect 24) or enchant
+one (53). The skill ranks themselves (Mining, Herb Gathering, Fishing...), Find Minerals and the like are not recipes. Tools are the spell's totem1/totem2 (items you carry), the
 place is its requiresSpellFocus (an object you stand next to), named after the game objects that provide it.
 
 Why VMaNGOS: neither QuestieDB nor ForeverDB carries a recipe's tools, and the game only tells you for recipes you
@@ -61,6 +62,7 @@ def main(src, out):
     for r in inserts(sql, 'spell_template'):
         if r['entry'] in prof and r['build'] <= 5875 and r['build'] >= best.get(r['entry'], {}).get('build', -1):
             best[r['entry']] = r
+    best = {k: r for k, r in best.items() if any(r[f'effect{i}'] in (24, 53) for i in (1, 2, 3))}
     names = defaultdict(Counter)      # spell focus id -> names of the objects that provide it
     for r in inserts(sql, 'gameobject_template'):
         if r['type'] == 8 and r['data0']: names[r['data0']][r['name']] += 1
@@ -69,7 +71,8 @@ def main(src, out):
     for sid, r in sorted(best.items()):
         f = r['requiresSpellFocus']
         if f and f not in place: nofocus[f] += 1
-        res[sid] = [' '.join(r['name'].split()), prof[sid], [t for t in (r['totem1'], r['totem2']) if t], place.get(f, '') if f else '']
+        makes = sorted({r[f'effectItemType{i}'] for i in (1, 2, 3) if r[f'effect{i}'] == 24 and r[f'effectItemType{i}']})
+        res[sid] = [' '.join(r['name'].split()), prof[sid], [t for t in (r['totem1'], r['totem2']) if t], place.get(f, '') if f else '', makes]
     if nofocus: sys.exit(f'spell focus ids with no object name: {dict(nofocus)}')
     with open(out, 'w', encoding='utf-8') as fh: json.dump(res, fh, ensure_ascii=False, separators=(',', ':'))
     print(f'{len(res)} recipes, {sum(1 for v in res.values() if v[2])} with tools, {sum(1 for v in res.values() if v[3])} with a place')

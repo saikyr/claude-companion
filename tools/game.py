@@ -120,7 +120,8 @@ class Game:
                         'questReward': [{'quest': q['id'], 'title': q['title'], 'zone': q['cat']} for q in self.quests.values()
                                         if any(isinstance(e, list) and e[:1] == hid for e in (q['reward'] or []) + (q['choice'] or []) + (q['reward_any'] or []))],
                         'recipes': {k: [self._recipe(c) for c in self.recipes if any(e['id'] == h['id'] for e in c[f])]
-                                    for k, f in (('madeBy', 'makes'), ('teaches', 'taught_by'), ('toolFor', 'tools'))} | {'from': RECIPE_SOURCE}})
+                                    for k, f in (('madeBy', 'makes'), ('teaches', 'taught_by'), ('toolFor', 'tools'))} | {'from': RECIPE_SOURCE}
+                                   if self.recipes else None})
         return out
 
     @staticmethod
@@ -130,13 +131,22 @@ class Game:
                 'taughtBy': c['taught_by'], 'makes': c['makes']}
 
     def recipe(self, p):
-        """game.recipe: by spell id, recipe name, a tool / made item / recipe item by name or id; else a part of a recipe name"""
+        """game.recipe: by spell id, recipe name, a tool / made item / recipe item by name or id (each says what matched);
+        else a part of a recipe name"""
         p = str(p).strip(); lp = p.lower()
-        hit = [c for c in self.recipes if str(c['spell_id']) == p or (c['name'] or '').lower() == lp
-               or any(str(e['id']) == p or (e['name'] or '').lower() == lp for e in c['tools'] + c['makes'] + c['taught_by'])]
-        if not hit: hit = [c for c in self.recipes if lp in (c['name'] or '').lower()]
-        hit.sort(key=lambda c: (c['prof'] or '', c['name'] or '', c['spell_id']))
-        return {'recipes': [self._recipe(c) for c in hit[:200]], 'total': len(hit), 'from': RECIPE_SOURCE}
+        def hits(lst): return any(str(e['id']) == p or (e['name'] or '').lower() == lp for e in lst)
+        def match(c):
+            if str(c['spell_id']) == p: return 'spell'
+            if (c['name'] or '').lower() == lp: return 'name'
+            for k, f in (('tool', 'tools'), ('makes', 'makes'), ('taughtBy', 'taught_by')):
+                if hits(c[f]): return k
+            return None
+        hit = [(c, match(c)) for c in self.recipes]
+        hit = [x for x in hit if x[1]] or [(c, 'part of the name') for c in self.recipes if lp in (c['name'] or '').lower()]
+        hit.sort(key=lambda x: (x[0]['prof'] or '', x[0]['name'] or '', x[0]['spell_id']))
+        out = {'recipes': [dict(self._recipe(c), match=m) for c, m in hit[:200]], 'total': len(hit), 'from': RECIPE_SOURCE}
+        if not self.recipes: out['note'] = 'the loaded game data has no recipes yet: unknown, not none'
+        return out
 
     def npc(self, p):
         rank = {0: 'normal', 1: 'elite', 2: 'rare elite', 3: 'boss', 4: 'rare'}

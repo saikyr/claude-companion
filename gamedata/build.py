@@ -168,6 +168,7 @@ for iid in sorted(all_ids):
     cov['items_fdb_only'] += (not qr)
     cov['items_with_icon'] += bool(row[5])
 
+MAKES = defaultdict(set)      # craft spell -> items it makes (ForeverDB craft rows, all of them)
 # ------------------------------------------------------------------ sources per item
 # Loot (who drops it, drop chance, how often players saw it on Forever): ForeverDB, the only bulk source of
 # Forever loot. QuestieDB lists drops only for quest items, so it adds those, and marks a row as Forever data
@@ -233,6 +234,8 @@ for iid in items:
             nrow = Q['npc'].get(str(v))
             vend.setdefault(iid, []).append([pl[0], pl[1], pl[2], pl[3], price, 1 if (v in vadded or fv.get('fv')) else 0,
                                              f(nrow, 14) or fv.get('sub') or '', f(nrow, 13) or SIDE.get(fv.get('side'), '')])
+    for r in rows:      # before the cut to 15 rows below: an item with many drops keeps its recipe (recipes, further down)
+        if r[0] == 'craft' and r[2]: MAKES[r[2]].add(iid)
     if rows:
         rows.sort(key=lambda r: (r[10] != 'f', r[0] == 'quest', -(r[4] or 0), -(r[3] or 0)))
         src[iid] = rows[:15]
@@ -403,17 +406,14 @@ for iid, rows in src.items():
     if got: teach[iid] = [list(x) for x in got[:3]]
 # recipes[spell id] = [name, profession, [tool item ids], place, [recipe items that teach it], [items it makes]]: every
 # profession recipe, learned or not (out/recipes.json, recipes.py: VMaNGOS, Classic). Tools are items you carry (a
-# Runed Arcanite Rod, a Blacksmith Hammer), the place an object you stand at (an Anvil, a Moonwell). Recipe items and
-# made items are ForeverDB's (above) and the craft rows; a Forever-only recipe (spell id over 1,000,000) has no row.
+# Runed Arcanite Rod, a Blacksmith Hammer), the place an object you stand at (an Anvil, a Moonwell). Recipe items are
+# ForeverDB's (above); made items VMaNGOS's and ForeverDB's craft rows (every row, before the cut to 15); a Forever-only recipe (spell id over 1,000,000) has no row.
 # The game's own answer for a recipe you know (Professions.lua, GetRecipeRequirements) wins in the app.
-MAKES = defaultdict(set)
-for iid, rows in src.items():
-    for r in rows:
-        if r[0] == 'craft' and r[2]: MAKES[r[2]].add(iid)
 recipes = {}
-for k, (name, prof, tools, place) in J('out', 'recipes.json').items():
+for k, (name, prof, tools, place, makes) in J('out', 'recipes.json').items():
     sp = int(k)
-    recipes[sp] = [name, prof, [t for t in tools if t in items], place, sorted(TEACHES.get(sp, ())), sorted(MAKES.get(sp, ()))]
+    recipes[sp] = [name, prof, [t for t in tools if t in items], place, sorted(TEACHES.get(sp, ())),
+                   sorted({m for m in makes if m in items} | MAKES.get(sp, set()))]
 cov['recipes'] = len(recipes)
 cov['recipes_with_tools'] = sum(1 for v in recipes.values() if v[2])
 cov['recipe_tools_not_in_pack'] = sum(1 for k, v in J('out', 'recipes.json').items() for t in v[2] if t not in items)

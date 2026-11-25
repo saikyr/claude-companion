@@ -179,7 +179,8 @@
   // what one recipe needs, in words: { text: 'Runed Arcanite Rod', game: true when the game said so } or null (no data)
   function recipeNeeds(sp) {
     const mine = knownRecipe(sp);
-    if (mine && Array.isArray(mine.tools)) return { text: mine.tools.map((t) => t.name).join(', '), game: true, missing: mine.tools.filter((t) => !t.met).map((t) => t.name) };
+    if (mine && Array.isArray(mine.tools)) return { text: mine.tools.map((t) => t.name).join(', '), game: true };
+    if (mine && mine.noTools) return { text: '', game: true };
     const r = ((GD && GD.recipes) || {})[sp];
     if (!r) return null;
     // "Blacksmith Hammer at The Black Anvil", "a Moonwell", "Runed Arcanite Rod"

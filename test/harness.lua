@@ -257,7 +257,7 @@ do -- #145: a recipe's tools and places, and canCraft false while one is missing
   local moon, pants
   for _, r in ipairs(tail and tail.recipes or {}) do if r.id == 18560 then moon = r elseif r.id == 3914 then pants = r end end
   local ok = moon and moon.tools and #moon.tools == 2 and moon.tools[1].name == "Moonwell" and moon.tools[1].met == false and moon.tools[2].met == true
-    and moon.canCraft == false and pants and pants.tools == nil and pants.canCraft == true
+    and moon.canCraft == false and moon.noTools == nil and pants and pants.tools == nil and pants.noTools == true and pants.canCraft == true
   print((ok and "PASS " or "FAIL ") .. "recipes keep their tools; a missing one makes canCraft false (#145)"); if not ok then FAILED = true end
 end
 -- v1.2: disenchant, rep, scan, interaction manager

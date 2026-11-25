@@ -38,6 +38,8 @@ local function ReadTradeSkill()
             -- the tools and places it needs (a Runed Arcanite Rod, an anvil, a Moonwell: #145), each with whether
             -- you have it; the game's "craftable" doesn't count them, so a missing one makes canCraft false
             local reqs = T.GetRecipeRequirements and Call(T.GetRecipeRequirements, id)
+            -- the game answered and lists nothing: it needs no tool (not the same as an old build that didn't ask)
+            if type(reqs) == "table" and #reqs == 0 then r.noTools = true end
             if type(reqs) == "table" and #reqs > 0 then
                 r.tools = {}
                 for _, q in ipairs(reqs) do
@@ -48,7 +50,7 @@ local function ReadTradeSkill()
                         if not met then r.canCraft = false end
                     end
                 end
-                if #r.tools == 0 then r.tools = nil end
+                if #r.tools == 0 then r.tools = nil; r.noTools = true end
             end
             local sch = Call(T.GetRecipeSchematic, id, false)
             if type(sch) == "table" then

@@ -95,7 +95,10 @@ const lit = (s) => '$j$' + s + '$j$';
     check(rv && rv.tools[0].name === 'Blacksmith Hammer' && rv.place === 'The Black Anvil' && rv.taughtBy.some((t) => t.id === 17059),
       `game.item: the Dark Iron Reaver is made with a Blacksmith Hammer at The Black Anvil, taught by Plans: Dark Iron Reaver (${JSON.stringify(rv)})`);
     const rodItem = one(`select game.item('16207')::text`)[0];
-    const needRod = rod.recipes.filter((r) => r.tools.some((t) => t.id === 16207)).length;
+    const needRod = rod.recipes.filter((r) => r.match === 'tool').length;
+    check(needRod === rod.recipes.filter((r) => r.tools.some((t) => t.id === 16207)).length && rod.recipes.some((r) => r.match === 'name' && r.makes.some((m) => m.id === 16207)) && !rod.note,
+      `game.recipe: each recipe says what matched: ${needRod} need the rod (tool), the rod's own recipe by its name`);
+    check(one(`select game.recipe(' 20036 ')::text`).total === 1 && one(`select game.recipe('%')::text`).total === 0, 'game.recipe: the input is trimmed, and % is a character, not a wildcard');
     check(rodItem && rodItem.recipes.toolFor.length === needRod && rodItem.recipes.toolFor.some((r) => r.spell === 20036) && rodItem.recipes.madeBy.some((r) => r.name === 'Runed Arcanite Rod'),
       `game.item: the rod lists the ${needRod} recipes it is the tool for, and the recipe that makes it`);
     const plans = one(`select game.item('17059')::text`)[0];

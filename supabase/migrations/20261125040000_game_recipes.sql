@@ -2,7 +2,7 @@
 -- learned or not. The pack's `recipes` (gamedata/recipes.py: the VMaNGOS world database, Classic 1.12), loaded like
 -- every other table (tools/pack-to-rows.py, supabase/functions/publish-game). Additive: a new table, the loader and
 -- the finish count taught it, game.item gains `recipes`, and game.recipe looks recipes up.
---   select game.recipe('Runed Arcanite Rod');     -- every recipe that needs the rod
+--   select game.recipe('Runed Arcanite Rod');     -- every recipe that needs the rod (match tool), and the one making it
 --   select game.recipe('20036');                  -- one recipe by spell id (or its name, or what it makes)
 --   select game.item('Runed Arcanite Rod')->0->'recipes'->'toolFor';
 -- A recipe the character knows: the game's own answer (the `now` record, recipes[].tools) wins over these.
@@ -21,21 +21,33 @@ create or replace function game.recipe_row(c game.recipes) returns jsonb languag
   select jsonb_build_object('spell', c.spell_id, 'name', c.name, 'profession', c.prof, 'tools', c.tools, 'place', nullif(c.place, ''),
     'taughtBy', c.taught_by, 'makes', c.makes) $$;
 
--- recipes by spell id, recipe name, a tool's name or id, the item a recipe makes, or the recipe item that teaches it
--- (exact first; a part of a recipe name only when nothing matched exactly). At most 200, by profession and name.
+-- does the loaded pack carry recipes? (a pack built before them has none: say so rather than "nothing needs it")
+create or replace function game.has_recipes() returns boolean language sql stable set search_path = '' as $$
+  select exists (select 1 from game.recipes c join game.live l on c.slot = l.slot and c.pack = l.hash) $$;
+
+-- recipes by spell id, recipe name, a tool, the item a recipe makes, or the recipe item that teaches it, each with
+-- what matched (match: spell, name, tool, makes, taughtBy; or "part of the name" when nothing matched exactly).
+-- game.recipe('Runed Arcanite Rod') is the recipes that need the rod (match tool) and the one that makes it (makes).
+-- At most 200, by profession and name; total counts them all.
 create or replace function game.recipe(p text) returns jsonb language sql stable security definer set search_path = '' as $$
-  with cur as (select hash h, slot s from game.live),
+  with q as (select btrim(p) p, lower(btrim(p)) lp),
+  cur as (select hash h, slot s from game.live),
   r as (select c.* from game.recipes c, cur where c.slot = cur.s and c.pack = cur.h),
-  exact as (
-    select * from r where r.spell_id::text = p or lower(r.name) = lower(p)
-      or exists (select 1 from jsonb_array_elements(r.tools || r.makes || r.taught_by) e where e->>'id' = p or lower(e->>'name') = lower(p))),
+  m as (
+    select r.*, case when r.spell_id::text = q.p then 'spell' when lower(r.name) = q.lp then 'name'
+      when exists (select 1 from jsonb_array_elements(r.tools) e where e->>'id' = q.p or lower(e->>'name') = q.lp) then 'tool'
+      when exists (select 1 from jsonb_array_elements(r.makes) e where e->>'id' = q.p or lower(e->>'name') = q.lp) then 'makes'
+      when exists (select 1 from jsonb_array_elements(r.taught_by) e where e->>'id' = q.p or lower(e->>'name') = q.lp) then 'taughtBy' end mt
+    from r, q),
   hit as (
-    select * from exact
+    select * from m where mt is not null
     union all
-    select * from r where not exists (select 1 from exact) and r.name ilike '%' || p || '%')
-  select jsonb_build_object('recipes', coalesce((select jsonb_agg(game.recipe_row(x) order by x.prof, x.name, x.spell_id)
+    select m.spell_id, m.name, m.prof, m.tools, m.place, m.taught_by, m.makes, m.pack, m.slot, 'part of the name' from m, q
+      where not exists (select 1 from m where mt is not null) and strpos(lower(m.name), q.lp) > 0)
+  select jsonb_build_object('recipes', coalesce((select jsonb_agg(game.recipe_row(row(x.spell_id, x.name, x.prof, x.tools, x.place, x.taught_by, x.makes, x.pack, x.slot)::game.recipes) || jsonb_build_object('match', x.mt) order by x.prof, x.name, x.spell_id)
                                                    from (select * from hit order by prof, name, spell_id limit 200) x), '[]'::jsonb),
-                            'total', (select count(*) from hit), 'from', game.recipe_source()) $$;
+                            'total', (select count(*) from hit), 'from', game.recipe_source())
+         || case when game.has_recipes() then '{}'::jsonb else jsonb_build_object('note', 'the loaded game data has no recipes yet: unknown, not none') end $$;
 
 create or replace function game.item(p text) returns jsonb language sql stable security definer set search_path = '' as $$
   with cur as (select hash h, slot s from game.live),
@@ -61,14 +73,14 @@ create or replace function game.item(p text) returns jsonb language sql stable s
                          from game.quests q, cur where q.slot = cur.s and q.pack = cur.h and (q.reward @> jsonb_build_array(jsonb_build_array(h.id))
                            or q.choice @> jsonb_build_array(jsonb_build_array(h.id)) or q.reward_any @> jsonb_build_array(jsonb_build_array(h.id)))), '[]'::jsonb),
     -- the recipes that make it, that it teaches (a recipe item) and that need it as a tool (a rod, a hammer): Classic data
-    'recipes', jsonb_build_object(
+    'recipes', case when game.has_recipes() then jsonb_build_object(
       'madeBy', coalesce((select jsonb_agg(game.recipe_row(c) order by c.spell_id) from game.recipes c, cur where c.slot = cur.s and c.pack = cur.h
                             and c.makes @> jsonb_build_array(jsonb_build_object('id', h.id))), '[]'::jsonb),
       'teaches', coalesce((select jsonb_agg(game.recipe_row(c) order by c.spell_id) from game.recipes c, cur where c.slot = cur.s and c.pack = cur.h
                             and c.taught_by @> jsonb_build_array(jsonb_build_object('id', h.id))), '[]'::jsonb),
       'toolFor', coalesce((select jsonb_agg(game.recipe_row(c) order by c.spell_id) from game.recipes c, cur where c.slot = cur.s and c.pack = cur.h
                             and c.tools @> jsonb_build_array(jsonb_build_object('id', h.id))), '[]'::jsonb),
-      'from', game.recipe_source()))),
+      'from', game.recipe_source()) end)),
     '[]'::jsonb) from hit h $$;
 
 create or replace function public.game_load(p_pack text, p_table text, p_rows jsonb) returns int
