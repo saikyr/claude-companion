@@ -109,7 +109,7 @@ to it. Every number in `facts[]` carries its `src` (`game.drop:<item>:<npc>`, `g
 `kind = 'ah_obs' and data->>'item' = '<id>'` in `private.history`), and online the database looks each one up and refuses the
 whole list if a number in a new or edited fact doesn't match (a fact you wrote before that has since changed
 is kept and marked `stale` on its card instead), a rate lacks its corpses or Classic label, "profit" isn't flips, a
-farm card has no `risk`, a duo or solo claim isn't measured or "unknown", or a banned tip (layers, `/run`,
+farm card has no `risk`, a card's `created` or `updated` is ahead of the real UTC time, a duo or solo claim isn't measured or "unknown", or a banned tip (layers, `/run`,
 Wowhead) appears. Fix what it names; never reword around it.
 
 **Chat answers: self-check first.** `python3 tools/check-answer.py draft.txt` (the same rules, line by

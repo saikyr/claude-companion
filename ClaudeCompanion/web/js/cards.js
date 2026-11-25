@@ -36,6 +36,17 @@
     if (ex && ex < Date.now() / 1000) return 'expired';
     return 'open';
   }
+  // the steps you ticked on a card as it is now: saved with their text (stepTexts), so a step Claude moves or
+  // rewrites isn't ticked by its old position (#150). An older save has positions only: they count while the card is
+  // no newer than the ticks.
+  function ticked(c, you) {
+    const steps = arr(c.steps);
+    if (Array.isArray(you.stepTexts)) { const t = new Set(you.stepTexts); return new Set(steps.map((s, i) => (t.has(s) ? i : -1)).filter((i) => i >= 0)); }
+    const made = secs(you.at), card = secs(c.updated || c.created);
+    return made != null && card != null && card > made ? new Set() : new Set(arr(you.steps).filter((i) => i < steps.length));
+  }
+  // a card's time for "updated ...": never ahead of now (a Claude clock running ahead, #150)
+  const shownTime = (c) => { const t = c.updated || c.created; return t && secs(t) > Date.now() / 1000 ? new Date().toISOString() : t; };
   const CLOSED = { done: 'You marked it done', dismissed: 'You dismissed it', withdrawn: 'Claude withdrew it', expired: 'Expired' };
   const visible = () => S.cards.filter(mine);
   const open = () => visible().filter((c) => standing(c) === 'open');
@@ -162,12 +173,12 @@
   function card(c, full) {
     const st = standing(c), you = (S.state.cards || {})[c.id] || {};
     const [kl, ki] = KINDS[kindOf(c)];
-    const ticks = new Set(arr(you.steps));
+    const ticks = ticked(c, you);
     const steps = arr(c.steps);
     const acts = st === 'open'
       ? `<button class="btn" data-card="${esc(c.id)}" data-cact="done">Done</button><button class="btn ghost" data-card="${esc(c.id)}" data-cact="dismissed">Dismiss</button>`
       : st === 'done' || st === 'dismissed' ? `<button class="btn ghost" data-card="${esc(c.id)}" data-cact="open">Restore</button>` : '';
-    const meta = [kl, c.where, c.updated || c.created ? 'updated ' + ago(c.updated || c.created) : '', steps.length ? `${steps.filter((_, i) => ticks.has(i)).length}/${steps.length} steps` : '',
+    const meta = [kl, c.where, c.updated || c.created ? 'updated ' + ago(shownTime(c)) : '', steps.length ? `${steps.filter((_, i) => ticks.has(i)).length}/${steps.length} steps` : '',
       st !== 'open' ? CLOSED[st] : c.expires ? 'until ' + A.fmtTime(secs(c.expires)) : ''].filter(Boolean).map(esc).join(' · ');
     const head = `<header><img class="kic" src="${ICON_URL}${ki}.jpg" alt=""><div class="grow"><div class="ttl">${esc(c.title)}</div><div class="sub">${meta}</div></div><div class="acts">${acts}</div></header>`;
     let body = '';
@@ -228,14 +239,16 @@
     const x = e.target.closest('[data-cstep]');
     if (!x) return;
     const id = x.dataset.cstep, i = Number(x.dataset.i);
-    const ticks = new Set(arr(((S.state.cards || {})[id] || {}).steps));
+    const c = S.cards.find((k) => k.id === id) || {}, steps = arr(c.steps);
+    const ticks = ticked(c, (S.state.cards || {})[id] || {});
     if (x.checked) ticks.add(i); else ticks.delete(i);
-    save(id, { steps: [...ticks].sort((a, b) => a - b) });
+    const at = [...ticks].sort((a, b) => a - b);
+    save(id, { steps: at, stepTexts: at.map((k) => steps[k]) });
   });
 
   // overview(): the Overview page's short list (HTML). open(): the open cards for this character, newest
   // first, as Claude wrote them (fields in companion-data/SCHEMA.md, step included), for other pages.
-  CC.cards = { overview, open: () => open().map((c) => Object.assign({}, c)) };
+  CC.cards = { overview, open: () => open().map((c) => Object.assign({}, c)), ticked };
   poll();
   setInterval(poll, 5000);
 })();
