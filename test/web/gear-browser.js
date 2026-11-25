@@ -267,6 +267,23 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
     "a vendor's reputation, your side's vendor only (" + fav.gates.join(' | ') + ')');
   check(fav.lines.some((l) => /^Vendor: .*Alynsia \(Redridge Mountains\) for 240 Merchant's Favor/.test(l)), "a vendor's price in Merchant's Favor (" + fav.lines.join(' | ') + ')');
 
+  // best from what you own (#149): never worse than the set it is compared with (the set's items count even when the
+  // saved bags and bank don't list them); an item the game hadn't loaded when it saved is scored from the pack for
+  // every spec: Glowing Brightwood Staff put in the bags with no saved item data
+  const owned = await page.evaluate(() => window.CC.advice.bestOwnedSnapshot().map((b) => ({ spec: b.spec, neg: b.slots.filter((x) => x.gain < -0.05).map((x) => x.slot + ' ' + x.gain) })));
+  check(owned.length === 2 && owned.every((b) => !b.neg.length), 'best from what you own is never worse than the compared set (' + JSON.stringify(owned) + ')');
+  const staff = await page.evaluate(() => {
+    const sn = window.CC.api.CH.snap;
+    sn.bags[0].items.push({ slot: 2, item: 'item:812::::::::59:::::', count: 1 });
+    sn.taken = (sn.taken || 0) + 1;
+    const v = window.CC.advice.snapshot().find((x) => x.id === 812);
+    const w = window.CC.advice.bestOwnedSnapshot().map((b) => ({ spec: b.spec, best: (b.slots.find((x) => x.slot === 'Weapons') || { best: [] }).best.map((x) => x.id) }));
+    return { v, w };
+  });
+  check(staff.v && staff.v.flag === 'ask' && ['Holy', 'Shadow'].every((n) => staff.v.specs.some((x) => x.spec === n && x.score > 0)),
+    'an item the game hadn\'t loaded: Keep, ask, with a score for every spec (' + JSON.stringify(staff.v) + ')');
+  check(staff.w.some((b) => b.spec === 'Holy' && b.best.includes(812)), 'and it counts in best from what you own (' + JSON.stringify(staff.w) + ')');
+
   check(errors.length === 0, 'no page errors' + (errors.length ? ': ' + errors.slice(0, 3).join(' | ') : ''));
 
   if (shots) {

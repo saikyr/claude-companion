@@ -51,7 +51,11 @@
     arr((A.CH.bank || {}).bags).forEach((b) => arr(b.items).forEach((x) => x && x.item && out.push({ key: x.item, where: 'bank', bag: b.id, slot: x.slot, count: x.count || 1, bound: x.bound, noValue: x.noValue })));
     return out;
   }
-  const statsOf = (key) => { const it = A.item(key); return it && it.stats ? W.fromGame(it.stats, it.tip) : W.fromPack(A.gdItem(it ? it.id : null)); };
+  const idOfKey = (key) => Number(String(key).replace(/^item:/, '').split(':')[0]) || null;
+  const statsOf = (key) => { const it = A.item(key); return it && it.stats ? W.fromGame(it.stats, it.tip) : W.fromPack(A.gdItem(it ? it.id : idOfKey(key))); };
+  // an item you own, as the game saved it, else from the pack by its id: the game hadn't loaded it when it saved
+  // (a new item, a bank slot), but it is still yours, and the compared gear already scores it from the pack (#149)
+  const ownItem = (key) => A.item(key) || (asItem(key) || {}).it || null;
 
   // ---------------------------------------------------------------- per spec
   // can this character wear it (armor / weapon skill, class line), and from which level
@@ -155,7 +159,18 @@
       const it = A.item(o.key);
       const v = { key: o.key, where: [o.where], flag: null, words: '', why: '', specs: [], value: null };
       byKey[o.key] = v;
-      if (!it || !it.name) { v.flag = 'ask'; v.words = 'Keep, ask'; v.why = 'The game hadn\'t loaded this item when it saved: Sync again.'; return; }
+      if (!it || !it.name) {
+        v.flag = 'ask'; v.words = 'Keep, ask'; v.why = 'The game hadn\'t loaded this item when it saved: Sync again.';
+        // its scores still count, from the pack (#149: a staff worn in one set had no score for the other spec)
+        const p = ownItem(o.key);
+        if (p && p.name && (p.class === 2 || p.class === 4)) {
+          v.id = p.id; v.name = p.name;
+          const can = wearable(p, use), st = statsOf(o.key);
+          ctxs.forEach((c) => { const m = measure(c, p, st, use); if (m) v.specs.push(Object.assign({ spec: c.sp.i, name: c.name, set: c.base.label, can, later: can && p.req > lvl ? p.req : null }, m)); });
+          if (o.where === 'worn') { v.flag = null; v.words = 'Worn'; v.why = ''; }
+        }
+        return;
+      }
       v.id = it.id; v.name = it.name;
       const tip = tipText(it);
       const gear = wearable(it, use);
@@ -225,7 +240,7 @@
     const seen = new Set();
     const pool = [];
     C.list.forEach((o) => {
-      const it = A.item(o.key);
+      const it = ownItem(o.key);
       if (!it || !wearable(it, C.use) || it.req > lvl) return;
       const tag = o.key + '@' + o.where + (o.bag != null ? o.bag + ':' + o.slot : o.slot);
       if (seen.has(tag)) return; seen.add(tag);
@@ -234,6 +249,14 @@
       pool.push({ o, it, inv: invOf(it), st, s: W.score(st, ctx.w), unique: /(?:^|\n)Unique/.test(tipText(it)) });
     });
     const worn = ctx.base.worn;
+    // the compared set's own items are yours even when the saved bags and bank don't list them (the bank saved before
+    // you put it there, #149): each is a candidate where the set says it is, so the best is never worse than the set
+    Object.entries(worn).forEach(([n, x]) => {
+      if (!x || !x.id || pool.some((p) => p.it.id === x.id)) return;
+      const key = x.key || 'item:' + x.id, it = ownItem(key);
+      if (!it || !wearable(it, C.use) || it.req > lvl) return;
+      pool.push({ o: { key, where: x.bank ? 'bank' : 'set', slot: Number(n) }, it, inv: invOf(it), st: x.st, s: W.score(x.st, ctx.w), unique: /(?:^|\n)Unique/.test(tipText(it)) });
+    });
     const baseScore = (n) => (worn[n] ? W.score(worn[n].st, ctx.w, n, worn[n].st) : 0);
     // scored in place of what the compared gear has there (the first of a pair), so hit counts up to the cap
     const slotNums = Object.fromEntries(CC.gear.SLOTS.map(([name, nums]) => [name, nums]));
@@ -309,7 +332,7 @@
   }
 
   // ---------------------------------------------------------------- views
-  const whereWord = { worn: 'worn', bags: 'in your bags', bank: 'in your bank' };
+  const whereWord = { worn: 'worn', bags: 'in your bags', bank: 'in your bank', set: 'in your set (not in the saved bags or bank)' };
   function bestOwnedHTML(spec) {
     const b = bestOwned(spec);
     if (!b) return '';
@@ -361,7 +384,7 @@
     const C = compute();
     if (HINT && HINT.C === C) return HINT.map;
     const worn = {};
-    arr(snap().equipped).forEach((e) => { if (e && e.item) { const it = A.item(e.item); worn[e.slot] = { id: it ? it.id : null, st: statsOf(e.item) }; } });
+    arr(snap().equipped).forEach((e) => { if (e && e.item) { const it = ownItem(e.item); worn[e.slot] = { id: it ? it.id : null, st: statsOf(e.item) }; } });
     const ids = new Set(Object.values(worn).map((x) => x.id));
     const active = snap().activeSpec;
     const overlap = (c) => Object.values(c.base.worn).filter((x) => ids.has(x.id)).length;
@@ -371,7 +394,7 @@
       const lvl = char().level || 0, here = Object.assign({}, ctx, { base: { worn }, w: CC.gear.weightsAgainst(ctx.w, worn) });
       C.list.forEach((o) => {
         if (o.where === 'worn') return;
-        const it = A.item(o.key);
+        const it = ownItem(o.key);
         if (!it || !wearable(it, C.use) || it.req > lvl) return;
         const m = measure(here, it, statsOf(o.key), C.use);
         if (m && m.gain > 0.5 && !m.effect && m.target && (!map[m.target] || m.gain > map[m.target].gain)) map[m.target] = { gain: m.gain, key: o.key, name: it.name, spec: ctx.name, where: o.where };
