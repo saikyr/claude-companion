@@ -245,6 +245,26 @@ end
 ns.ItemCooldowns = ItemCooldowns
 
 ---------------------------------------------------------------- gear sets
+-- the link of a set item from its packed location: worn (GetInventoryItemLink) or in a bag (GetContainerItemLink);
+-- bank and lost items give none. EquipmentManager_UnpackLocation returns (player, bank, bags, voidStorage, slot,
+-- bag) on newer clients, (player, bank, bags, slot, bag) on older ones (the fourth value says which) and one table
+-- on the newest.
+local function SetItemLink(loc)
+    loc = Clean(loc)
+    if type(loc) ~= "number" or loc < 0 or not EquipmentManager_UnpackLocation then return nil end
+    local r = { pcall(EquipmentManager_UnpackLocation, loc) }
+    if not r[1] then return nil end
+    local player, bank, bags, slot, bag = r[2], r[3], r[4], r[6], r[7]
+    if type(r[5]) ~= "boolean" then slot, bag = r[5], r[6] end
+    if type(r[2]) == "table" then      -- the newest clients: one table
+        local d = r[2]
+        player, bank, bags, slot, bag = d.isPlayer, d.isBank, d.isBags, d.slot, d.bag
+    end
+    if bank or not player or type(slot) ~= "number" then return nil end
+    if bags then return type(bag) == "number" and Clean(Call(CI.GetContainerItemLink or GetContainerItemLink, bag, slot)) or nil end
+    return Clean(Call(GetInventoryItemLink, "player", slot))
+end
+
 local function GearSets()
     local E = C_EquipmentSet
     if not E then return nil end
@@ -255,9 +275,16 @@ local function GearSets()
         local name, icon, setID, isEquipped, numItems, numEquipped, numInBags, numLost, numIgnored = Call(E.GetEquipmentSetInfo, id)
         local items = {}
         local itemIDs = Call(E.GetItemIDs, id)
+        local locs = E.GetItemLocations and Call(E.GetItemLocations, id)
         if type(itemIDs) == "table" then
             for slot, itemID in pairs(itemIDs) do
-                if Clean(itemID) and itemID > 0 then items[#items + 1] = { slot = slot, slotName = SLOT_NAMES[slot], id = itemID } end
+                if Clean(itemID) and itemID > 0 then
+                    -- the copy the set uses, where the game can say (worn or in your bags): its link carries its
+                    -- enchant (#147), and the item is saved like any other you hold
+                    local link = SetItemLink(type(locs) == "table" and locs[slot])
+                    items[#items + 1] = { slot = slot, slotName = SLOT_NAMES[slot], id = itemID,
+                        item = link and tonumber(link:match("item:(%d+)")) == itemID and ns.NoteItem(link) or nil }
+                end
             end
         end
         local specIndex = E.GetEquipmentSetAssignedSpec and Clean(Call(E.GetEquipmentSetAssignedSpec, id))

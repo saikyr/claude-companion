@@ -311,7 +311,14 @@
       return { key: 'worn', label: 'what you wear now', short: 'what you wear', worn };
     }
     const worn = {};
-    arr(set.items).forEach((x) => { if (x && x.id > 0) { const mine = A.byId(x.id); worn[x.slot] = { id: x.id, key: mine && mine.key, st: ownStats(mine, x.id) }; } });
+    // the copy the set uses when the game said (its link: its enchant, #147), else the copy you wear, else one you have
+    const wearing = {};
+    Object.values((A.CH.snap || {}).equipped || {}).forEach((e) => { if (e && e.item) wearing[idOf(e.item)] = e.item; });
+    arr(set.items).forEach((x) => {
+      if (!x || !(x.id > 0)) return;
+      const key = x.item || wearing[x.id], own = key && A.item(key), mine = own ? Object.assign({ key }, own) : A.byId(x.id);
+      worn[x.slot] = { id: x.id, key: key || (mine && mine.key), st: ownStats(mine, x.id) };
+    });
     const lost = set.numLost ? `; the game listed ${set.numLost} of its items as missing when it saved` : '';
     return { key: String(set.id), label: `your “${set.name}” set (${why}${lost})`, short: `your ${set.name} set`, worn };
   }
@@ -822,7 +829,7 @@
   }
 
   // ---------------------------------------------------------------- the page
-  const VIEWS = [['up', 'By slot'], ['ah', 'Auction House'], ['sets', 'Class sets']];
+  const VIEWS = [['up', 'By slot'], ['ench', 'Enchants'], ['ah', 'Auction House'], ['sets', 'Class sets']];
   const curSpec = () => { const l = specs(); return l.find((s) => s.i === A.STATE.gearSpec) || l.find((s) => s.i === (A.CH.snap || {}).activeSpec) || l[0]; };
 
   V.gear = function () {
@@ -863,8 +870,9 @@
       <button class="card link" data-tab="weights"><span class="k">Stat weights</span><span class="v">${esc(prof.name)}</span><span class="sub" title="${esc(top)}">${esc(why)} · ${esc(top)}</span></button></div>`;
     if (view === 'up') h += `<div class="gearlay">${slotList(P, sel, setSel)}${slotDetail(P, P.slots.find((s) => s.name === sel), lvl, base, KIND_WORD[A.STATE.gearSrc] ? A.STATE.gearSrc : 'all')}</div>`;
     else if (view === 'ah') h += `<div class="toolbar">${setSel}</div>` + ahView(P, lvl);
+    else if (view === 'ench') h += `<div class="toolbar">${setSel}</div>` + (CC.enchants ? CC.enchants.view(w, base) : '');
     else h += setsView(classSets());
-    if (view !== 'sets') h += `<details class="how"><summary>How this works, and what's left out</summary><p>Score = each stat × its weight, added up. Gain = score minus the score of ${esc(base.short)} in that slot (rings and trinkets: the weaker one). Random greens ("of Healing") are scored from their roll's exact stats (foreverchanges.pro, confirmed in game); for each roll, the best base you can wear at your level is shown. Left out: ${Object.entries(P.skipped).map(([k, v]) => `${v.toLocaleString()} ${esc(k)}`).join(' · ')}. A set bonus with stats (resistances, spell power, mana per 5) counts in the gain when an item completes or breaks it (shown as "set +N"); pre-BiS ranks each item on its own. Use and proc effects, and set bonuses that are effects, aren't in the score. Sources follow the item tooltip: Forever data is marked, Classic-only rates say so.</p></details>`;
+    if (view !== 'sets' && view !== 'ench') h += `<details class="how"><summary>How this works, and what's left out</summary><p>Score = each stat × its weight, added up. Gain = score minus the score of ${esc(base.short)} in that slot (rings and trinkets: the weaker one). Random greens ("of Healing") are scored from their roll's exact stats (foreverchanges.pro, confirmed in game); for each roll, the best base you can wear at your level is shown. Left out: ${Object.entries(P.skipped).map(([k, v]) => `${v.toLocaleString()} ${esc(k)}`).join(' · ')}. A set bonus with stats (resistances, spell power, mana per 5) counts in the gain when an item completes or breaks it (shown as "set +N"); pre-BiS ranks each item on its own. Use and proc effects, and set bonuses that are effects, aren't in the score. Sources follow the item tooltip: Forever data is marked, Classic-only rates say so.</p></details>`;
     return h;
   };
 
@@ -905,6 +913,8 @@
           critBonus: w.crit.critBonus, overheal: +w.crit.overheal.toFixed(3), label: w.crit.label };
         const base = baseline(sp, pk);
         out.comparedWith = base.label;
+        // each slot's enchant, scored, empty ones flagged, and the best you can get (js/enchants.js, #147)
+        out.enchants = CC.enchants ? CC.enchants.summary(w, base) : [];
         const P = plan(w, ch.level || capLevel(), base, getPicks(sp));
         const baseIds = new Set(Object.values(base.worn).map((x) => x.id));
         out.worn = P.slots.map((sl) => ({ slot: sl.name, score: +sl.weakest.s.toFixed(1), items: sl.cur.filter((x) => x.id).map((x) => ({ id: x.id, name: A.anyItemName(x.id), score: +x.s.toFixed(1) })) }));
