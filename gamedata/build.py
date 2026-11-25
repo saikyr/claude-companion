@@ -283,6 +283,8 @@ for k, rows in vend.items():
     for r in rows:
         b = egt_vendor(k, r[0])
         r[8] = (b and b['cost']) or cost_text(r[8])
+        if r[4] is None and b and b.get('gold'):         # ForeverDB saw the vendor but not its price: the page's (#157)
+            r[4] = b['gold']; cov['vendor_prices_endgametools'] += 1
         r.append([b['rep'][0], STANDING_NO[b['rep'][1]]] if b and b['rep'] else None)
         cov['vendor_rows_with_cost'] += bool(r[8])
         cov['vendor_rows_with_rep'] += bool(r[9])

@@ -124,6 +124,14 @@
   // the vendor rows on your side (or that serve both): [npc, zone, x, y, price, seenOnForever, title, side, cost, rep]
   const mySide = () => ((((CH && CH.snap) || {}).character || {}).faction === 'Horde' ? 'H' : 'A');
   const vendRows = (id) => arr((GD && GD.vend[id]) || []).filter((v) => !v[7] || v[7] === 'AH' || v[7] === mySide());
+  // money as plain words ("5g", "1g 50s", "75s"), for text that isn't HTML (a snapshot's where)
+  const coinText = (c) => [[10000, 'g'], [100, 's'], [1, 'c']].reduce((a, [d, u]) => { const n = Math.floor(a.r / d); if (n) a.t.push(n + u); a.r -= n * d; return a; }, { r: Math.round(c || 0), t: [] }).t.join(' ') || '0c';
+  // where to buy it on your side, when a vendor Forever players saw sells it: "Buy: Deliana, Dun Morogh, 5g" (#157)
+  function buyLine(id) {
+    const v = vendRows(id).filter((r) => r[5]).sort((a, b) => (a[8] ? 1 : 0) - (b[8] ? 1 : 0) || (a[4] || 0) - (b[4] || 0))[0];
+    if (!v) return null;
+    return `Buy: ${v[0]}${v[1] ? ', ' + v[1] : ''}${v[8] ? ', ' + v[8] : v[4] > 0 ? ', ' + coinText(v[4]) : ', price not known'}`;
+  }
   function itemGates(id) {
     const out = [];
     // one gate per faction, the highest standing any source asks (the pack can say Revered where the tooltip says Exalted, #110)
@@ -1854,7 +1862,7 @@
     load, loadText, V, reload: () => RAW && load(RAW, { live: STATE.live }),
     setChar, get CHARS() { return CHARS; },
     api: { get CH() { return CH; }, get SPELLS() { return SPELLS; }, get RAW() { return RAW; }, get DB() { return DB; }, STATE, GD, esc, arr, money, icon, itemIcon, anyItemIcon, anyItemName, gdItem, gdTip,
-      gdSourceLines, itemGates, recipeLine, planPrice, priceOf, trackerStats, goldOf, lootStrip, ago, dur, fmtTime, flipsOf, sellThrough, buyListOf, positionsOf, paperOf, weeklyOf, cooldowns, craftCost, craftProfit, vendorPrice, specTrees, specLabel, TREE_NAMES, gearIds, item, byId, render, QCOL, deOutcome, placesSeen,
+      gdSourceLines, itemGates, buyLine, coinText, recipeLine, planPrice, priceOf, trackerStats, goldOf, lootStrip, ago, dur, fmtTime, flipsOf, sellThrough, buyListOf, positionsOf, paperOf, weeklyOf, cooldowns, craftCost, craftProfit, vendorPrice, specTrees, specLabel, TREE_NAMES, gearIds, item, byId, render, QCOL, deOutcome, placesSeen,
       itemLink, itemIconOf, itemCell, itemInline, uiIcon, UI_ICON, PROF_ICON, ownedCount, knownRecipe, recipeNeeds },
   };
 

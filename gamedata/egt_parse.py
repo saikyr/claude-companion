@@ -122,7 +122,11 @@ def vendors(lines):
         # (not the profession after it, "Enchanting (300)", nor a Requires line that names no standing)
         for c in re.finditer(r"(?:^|(?<=[\s·]))(\d[\d,]*) ((?!Requires\b)[A-Z][\w'’-]*\b(?! \()(?: (?:of |the )?(?!Requires\b)[A-Z][\w'’-]*\b(?! \())*)", head):
             if not COIN.match(c[2]): cost = f'{c[1]} {c[2]}'.replace('’', "'"); break
-        out.append({'text': t, 'cost': cost, 'rep': [r[1].strip(), r[2]] if r else None})
+        # a gold price ("5 Gold", "1 Gold 50 Silver", "75 Silver"), in copper, for the vendors ForeverDB has no price for (#157)
+        gold = None
+        for g in re.finditer(r'(?:(?<=[\s·])|^)(\d+ (?:Gold|Silver|Copper)(?: \d+ (?:Silver|Copper))*)\b', head):
+            gold = sum(int(n) * {'Gold': 10000, 'Silver': 100, 'Copper': 1}[u] for n, u in re.findall(r'(\d+) (Gold|Silver|Copper)', g[1])); break
+        out.append({'text': t, 'cost': cost, 'gold': gold, 'rep': [r[1].strip(), r[2]] if r else None})
     return out
 
 

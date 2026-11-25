@@ -142,6 +142,9 @@ check(len(aly) > 9 and aly[8] == "240 Merchant's Favor" and aly[9] == ['Azeroth 
       f"Alynsia sells Formula: Enchant 2H Weapon - Mighty Healing Power for 240 Merchant's Favor at Honored ({aly})")
 check(len(ben) > 9 and ben[8] == "240 Merchant's Favor" and ben[9] == ['Durotar Supply and Logistics', 6],
       f"Beneris sells it for the same at Honored with the Horde trade faction ({ben})")
+# a gold price ForeverDB lacks, from the page (#157): Deliana sells Virtuous Epaulets for 5g (the player saw it, 25 Nov)
+de = next((r for r in (G.get('vend') or {}).get('226955') or [] if r[0] == 'Deliana'), None)
+check(de and de[4] == 50000, f"Deliana sells Virtuous Epaulets for 5g ({de})")
 VR = [r for lst in (G.get('vend') or {}).values() for r in lst]
 bad = [r[8] for r in VR if len(r) > 8 and r[8] and re.search(r' (Requires|Enchanting|Cooking|Alchemy|Blacksmithing|Leatherworking|Tailoring|Engineering|First Aid|Fishing)$', r[8])]
 check(not bad, f"a vendor's price is the price only, not the profession or Requires after it ({len(bad)}, e.g. {bad[:3]})")
