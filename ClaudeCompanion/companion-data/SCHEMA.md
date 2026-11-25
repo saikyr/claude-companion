@@ -120,7 +120,7 @@ checked against the newest snapshot, and every other rule refuses, on old cards 
 ### state.json
 
 ```json
-{ "schema": 1, "written": "<ISO>", "cards": { "<card id>": { "state": "done" | "dismissed", "steps": [0, 2], "at": "<ISO>" } },
+{ "schema": 1, "written": "<ISO>", "cards": { "<card id>": { "state": "done" | "dismissed", "steps": [0, 2], "ticked": ["<step key>", "<step key>"], "v": "<card updated>", "at": "<ISO>" } },
   "upload": { "at": "<ISO>", "ok": true, "error": null, "refused": false, "cards": 4, "stale": 0 } }
 ```
 
@@ -130,6 +130,12 @@ sent to the account. `ok` false: nothing was written; `refused` true = the gate 
 `stale` = stored facts whose number has since changed.
 
 No `state` means the card is open (the player can restore a closed card). `steps` are the ticked
-step positions, counting from 0. A card is open in the app when the player hasn't closed it, its
+step positions, counting from 0, in the version of the card the player ticked them on: `v` is that version's
+`updated` (else `created`). The app shows a tick by its step's text (`ticked`: one key per ticked step, a hash
+of the step's text), so a tick stays on its step when Claude rewrites or reorders the steps, and drops when
+Claude changes that step's text. A record with `steps` and no `ticked` (from before #150) counts only while
+the card's `updated` is not newer than its `at`. To read which steps are done on the card as it is now,
+compare `v` with the card's `updated`: the same, `steps` are positions in it; different, the player ticked
+an older version. A card is open in the app when the player hasn't closed it, its
 `status` is `open` and it hasn't expired. A dismissed card stays dismissed even if Claude updates it;
 to raise it again, give it a new id.

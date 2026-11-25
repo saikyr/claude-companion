@@ -178,7 +178,7 @@
       if (!r.ok) { let m = text; try { m = JSON.parse(text).message || text; } catch (e) { /* plain text */ } throw new Error(m); }
       return text ? JSON.parse(text) : null;
     };
-    let state = null, cache = null;
+    let state = null, cache = null, claudeChecked = false;
     const status = { ok: null, error: null, pushed: null, pulled: null, devices: [], busy: false, queued: 0 };
 
     // one at a time: the app window's cycle and a link click must not register this computer twice
@@ -260,6 +260,7 @@
       cache = { account, after: 0, recs: {}, names: {} };
       state.account = account; state.adopt = true; state.pulledOnce = false;
       state.settings = {}; state.settingsT = {}; state.pendingSince = {};
+      claudeChecked = false;
       // this computer's cards.json goes to the new account too
       delete state.live.cards; delete state.cards;
     }
@@ -296,6 +297,21 @@
         }
         if ((r.records || []).length < 2000) break;
       }
+      // Settings only Claude writes: the account's copy is the one to show (#150). This computer keeps them in
+      // files more than one page writes (settings.json, the browser's storage: the app window, a window left
+      // open from before an update, the hidden browser), so a page can load an older copy after the cursor has
+      // passed Claude's last write. Once per page, ask the account for its copy; every pull, put the copy this
+      // computer last had from the account back over a different one here.
+      if (!claudeChecked) {
+        try {
+          const c = await rpc('cc_claude_setting', { p_key: state.key, p_k: 'cc.claude.cards' });
+          if (c && typeof c.v === 'string' && c.k === 'cc.claude.cards') { state.settings[c.k] = c.v; state.settingsT[c.k] = Number(c.t) || 0; }
+          claudeChecked = true;
+        } catch (e) { /* an older backend, or offline: the next pull asks again */ }
+      }
+      Object.entries(state.settings).forEach(([k, v]) => {
+        if (CLAUDE_ONLY.test(k) && typeof v === 'string' && local && local[k] !== v) settings[k] = v;
+      });
       state.adopt = false; state.pulledOnce = true;
       await io.saveState(state);
       if (changed) await io.saveCache(cache);

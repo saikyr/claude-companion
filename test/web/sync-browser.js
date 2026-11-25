@@ -85,6 +85,36 @@ const check = (ok, what) => { console.log((ok ? 'ok   ' : 'FAIL ') + what); if (
   }
   const back = B.query(`select data->>'v' from public.records where id = 'setting|cc.claude.cardsState'`);
   check(back && JSON.parse(back).cards['browser-card'].state === 'done', 'marking it done reaches the account, where Claude reads it');
+  // #150: a ticked step stays on its step when Claude rewrites the card and moves the steps around
+  const put = (list) => B.query(`select private.claude_put_setting('${st.account}', 'cc.claude.cards', '${JSON.stringify({ schema: 1, cards: list }).replace(/'/g, "''")}')`);
+  const base = JSON.parse(cards).cards, iso = (ms) => new Date(Date.now() + ms).toISOString().replace(/\.\d+Z$/, 'Z');
+  put(base.concat([{ id: 'browser-steps', kind: 'note', title: 'Card with steps', updated: iso(-60000), steps: ['Step A', 'Step B', 'Step C'] }]));
+  await page.waitForFunction(() => { window.CC.syncNow(); return !!document.querySelector('[data-cstep="browser-steps"][data-i="1"]'); }, null, { timeout: 20000, polling: 1000 });
+  await page.check('[data-cstep="browser-steps"][data-i="1"]');
+  await page.waitForTimeout(500);
+  put(base.concat([{ id: 'browser-steps', kind: 'note', title: 'Card with steps, rewritten', updated: iso(0), steps: ['New first step', 'Step A', 'Step B', 'Step C'] }]));
+  await page.waitForFunction(() => { window.CC.syncNow(); return /rewritten/.test(document.querySelector('main').textContent); }, null, { timeout: 20000, polling: 1000 });
+  const ticked = await page.$$eval('[data-cstep="browser-steps"]', (xs) => xs.filter((x) => x.checked).map((x) => x.closest('label').textContent.trim()));
+  check(JSON.stringify(ticked) === '["Step B"]', `a ticked step stays ticked on its own text after Claude moves it (${JSON.stringify(ticked)})`);
+  const mine = await page.evaluate(() => JSON.parse(localStorage.getItem('cc.claude.cardsState')).cards['browser-steps']);
+  check(mine && JSON.stringify(mine.steps) === '[1]' && Array.isArray(mine.ticked) && mine.ticked.length === 1 && mine.v, `the saved tick has its position, its step's key and the card's version, for Claude (${JSON.stringify(mine)})`);
+  // an older record with positions only: kept while the card is unchanged, dropped once Claude rewrote it
+  const legacy = async (dt) => {
+    const shown = await page.evaluate(async (dt) => {
+      const c = window.CC.cards.open().find((x) => x.id === 'browser-steps');
+      const s = JSON.parse(localStorage.getItem('cc.claude.cardsState'));
+      s.cards['browser-steps'] = { steps: [0, 1], at: new Date(Date.parse(c.updated) + dt).toISOString() };
+      localStorage.setItem('cc.claude.cardsState', JSON.stringify(s));
+      await fetch('api/cards-state', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CC': '1' }, body: JSON.stringify(s) });
+      return true;
+    }, dt);
+    await page.waitForTimeout(6000);   // the cards page reads both copies every 5 s
+    return shown && page.$$eval('[data-cstep="browser-steps"]', (xs) => xs.filter((x) => x.checked).map((x) => x.closest('label').textContent.trim()));
+  };
+  const older = await legacy(-1000);
+  check(JSON.stringify(older) === '[]', `ticks saved by position on an older version of the card don't mark the new steps (${JSON.stringify(older)})`);
+  const same = await legacy(1000);
+  check(JSON.stringify(same) === '["New first step","Step A"]', `ticks saved by position on this version still show (${JSON.stringify(same)})`);
   // #83: a friend's Claude writes from-claude/cards.json on this computer: the app sends it to the account
   // (the card gate, merged in), so the other computers get it, and says so
   const fc = path.join(dataDir, 'from-claude');
