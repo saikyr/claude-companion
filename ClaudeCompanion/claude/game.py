@@ -11,14 +11,18 @@ test/web/game.test.js compares every drop row's label and every look-up below wi
     python3 claude/game.py quest <id or title>      the chain, rewards, rep, and whether to keep it (the dungeon-quest rule)
     python3 claude/game.py instance <zone>          bosses, the best 300 drops (bosses first), its rules
     python3 claude/game.py drop <item id> <npc id>  one drop's rate and label: what a card's src game.drop:<item>:<npc> means
+    python3 claude/game.py recipe <id or name>      recipes by spell, name, tool (Runed Arcanite Rod), what they make or teach them: tools, place
     python3 claude/game.py status                   which pack
-Output is JSON, the same fields as the database's game.item / game.npc / game.quest / game.instance / game.status
+Output is JSON, the same fields as the database's game.item / game.npc / game.quest / game.instance / game.recipe / game.status
 (status has no loadedAt: nothing is loaded here).
 """
 import importlib.util, json, os, re, sys
 from decimal import Decimal, ROUND_HALF_UP, getcontext
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+# game.recipe_source() (supabase/migrations/*_game_recipes.sql), word for word
+RECIPE_SOURCE = ("VMaNGOS world database (Classic 1.12): a recipe Forever changed can differ; for a recipe the character knows, "
+                 "the game's own answer (the now record) wins. Forever's own new recipes are not listed.")
 _spec = importlib.util.spec_from_file_location('pack_to_rows', os.path.join(HERE, 'pack-to-rows.py'))
 P = importlib.util.module_from_spec(_spec); _spec.loader.exec_module(P)
 getcontext().prec = 40
@@ -57,6 +61,7 @@ class Game:
         self.quests = {r['id']: r for r in t['quests']}
         self.npcs = {r['id']: r for r in t['npcs']}
         self.vendors = t['vendors']
+        self.recipes = sorted(t['recipes'], key=lambda c: c['spell_id'])
         self.rates = [self._rate(d) for d in t['drops']]
         self.counts = {k: len(v) for k, v in t.items()}
 
@@ -113,7 +118,34 @@ class Game:
                         'vendors': [{'npc': v['npc'], 'zone': v['zone'], 'x': v['x'], 'y': v['y'], 'price': v['price'], 'seenOnForever': v['seen_forever'],
                                      'side': v['side']} for v in self.vendors if v['item_id'] == h['id']],
                         'questReward': [{'quest': q['id'], 'title': q['title'], 'zone': q['cat']} for q in self.quests.values()
-                                        if any(isinstance(e, list) and e[:1] == hid for e in (q['reward'] or []) + (q['choice'] or []) + (q['reward_any'] or []))]})
+                                        if any(isinstance(e, list) and e[:1] == hid for e in (q['reward'] or []) + (q['choice'] or []) + (q['reward_any'] or []))],
+                        'recipes': {k: [self._recipe(c) for c in self.recipes if any(e['id'] == h['id'] for e in c[f])]
+                                    for k, f in (('madeBy', 'makes'), ('teaches', 'taught_by'), ('toolFor', 'tools'))} | {'from': RECIPE_SOURCE}
+                                   if self.recipes else None})
+        return out
+
+    @staticmethod
+    def _recipe(c):
+        """game.recipe_row"""
+        return {'spell': c['spell_id'], 'name': c['name'], 'profession': c['prof'], 'tools': c['tools'], 'place': c['place'] or None,
+                'taughtBy': c['taught_by'], 'makes': c['makes']}
+
+    def recipe(self, p):
+        """game.recipe: by spell id, recipe name, a tool / made item / recipe item by name or id (each says what matched);
+        else a part of a recipe name"""
+        p = str(p).strip(); lp = p.lower()
+        def hits(lst): return any(str(e['id']) == p or (e['name'] or '').lower() == lp for e in lst)
+        def match(c):
+            if str(c['spell_id']) == p: return 'spell'
+            if (c['name'] or '').lower() == lp: return 'name'
+            for k, f in (('tool', 'tools'), ('makes', 'makes'), ('taughtBy', 'taught_by')):
+                if hits(c[f]): return k
+            return None
+        hit = [(c, match(c)) for c in self.recipes]
+        hit = [x for x in hit if x[1]] or [(c, 'part of the name') for c in self.recipes if lp in (c['name'] or '').lower()]
+        hit.sort(key=lambda x: (x[0]['prof'] or '', x[0]['name'] or '', x[0]['spell_id']))
+        out = {'recipes': [dict(self._recipe(c), match=m) for c, m in hit[:200]], 'total': len(hit), 'from': RECIPE_SOURCE}
+        if not self.recipes: out['note'] = 'the loaded game data has no recipes yet: unknown, not none'
         return out
 
     def npc(self, p):
@@ -207,7 +239,7 @@ def jsonable(o):
 
 
 def main(argv):
-    cmds = {'item': 1, 'npc': 1, 'quest': 1, 'instance': 1, 'drop': 2, 'status': 0}
+    cmds = {'item': 1, 'npc': 1, 'quest': 1, 'instance': 1, 'recipe': 1, 'drop': 2, 'status': 0}
     if len(argv) < 1 or argv[0] not in cmds or len(argv) - 1 < cmds[argv[0]]:
         print(__doc__.split('\n\n')[1] if '\n\n' in __doc__ else __doc__); return 2
     cmd, args = argv[0], argv[1:]
