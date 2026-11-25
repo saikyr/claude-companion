@@ -9,7 +9,7 @@ beyond splitting the pack's rows into columns; rates and their labels are made b
       writes DIR/pack.json ({hash, built, from, counts}) and DIR/<table>-<n>.json (lists of rows), default dist/game
 
 Tables: items, drops (every source row of `src`: drops, objects, quests, vendors, crafts...), quests, npcs,
-vendors, rules. Keys are stable for one pack: items/quests/npcs by id, drops and vendors by item and position.
+vendors, rules, recipes (every profession recipe's tools and place). Keys are stable for one pack: items/quests/npcs by id, drops and vendors by item and position.
 """
 import argparse, hashlib, json, os, re, sys
 
@@ -82,7 +82,11 @@ def rows(gd, rules):
             vendors.append({'key': f'{k}:{i}', 'item_id': int(k), 'npc': at(r, 0), 'zone': at(r, 1), 'x': at(r, 2), 'y': at(r, 3),
                             'price': at(r, 4), 'seen_forever': bool(at(r, 5, 0)), 'sub': at(r, 6, ''), 'side': at(r, 7, '')})
     rule_rows = [{'key': k, 'value': v} for k, v in rules.items()]
-    return {'items': items, 'drops': drops, 'quests': quests, 'npcs': npcs, 'vendors': vendors, 'rules': rule_rows}
+    # every profession recipe's tools and place (VMaNGOS, Classic 1.12), with the items that teach it and that it makes
+    named = lambda ids: [{'id': i, 'name': at(gd['items'].get(str(i)), 0)} for i in ids or []]
+    recipes = [{'spell_id': int(k), 'name': at(r, 0), 'prof': at(r, 1), 'tools': named(at(r, 2)), 'place': at(r, 3, ''),
+                'taught_by': named(at(r, 4)), 'makes': named(at(r, 5))} for k, r in (gd.get('recipes') or {}).items()]
+    return {'items': items, 'drops': drops, 'quests': quests, 'npcs': npcs, 'vendors': vendors, 'rules': rule_rows, 'recipes': recipes}
 
 
 def main():

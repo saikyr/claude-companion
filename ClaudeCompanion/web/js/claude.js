@@ -331,8 +331,9 @@
           reagents: cc.parts.map((x) => ({ id: x.id, name: A.anyItemName ? A.anyItemName(x.id) : null, need: x.need, each: x.each, from: x.from })),
           cooldownEnds: r.cooldownEnds || null,
           // the tools and places the game says it needs, and the ones you lack (#145); null: the build doesn't read them
-          tools: Array.isArray(r.tools) ? r.tools.map((t) => ({ name: t.name, met: !!t.met })) : null,
-          toolsMissing: Array.isArray(r.tools) ? r.tools.filter((t) => !t.met).map((t) => t.name) : null,
+          // ([] when the game says it needs none: noTools)
+          tools: Array.isArray(r.tools) ? r.tools.map((t) => ({ name: t.name, met: !!t.met })) : r.noTools ? [] : null,
+          toolsMissing: Array.isArray(r.tools) ? r.tools.filter((t) => !t.met).map((t) => t.name) : r.noTools ? [] : null,
           canCraft: r.canCraft == null ? null : !!r.canCraft };
       })).sort((a, b) => (b.profit == null ? -Infinity : b.profit) - (a.profit == null ? -Infinity : a.profit)) : [],
       reputation: arr(s.reputation).filter((r) => r && !r.isHeader).map((r) => ({ name: r.name, standing: r.reaction, value: r.currentStanding })),

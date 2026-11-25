@@ -23,7 +23,7 @@ jobs:
           python-version: '3.12'
       - name: Build the pack (about 10 minutes)
         run: |
-          python3 -m pip install -q lupa
+          python3 -m pip install -q lupa py7zr
           python3 -I -c 'import lupa.lua51'
           sh gamedata/build.sh
       - name: Copy it in, with the in-game drop chances

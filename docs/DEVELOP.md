@@ -18,6 +18,10 @@ every installed app updates from and friends download from.
 - Write what changed for players in `CHANGELOG.md` under the current version.
 - The upload function's source is `supabase/functions/publish-build/index.ts`; deploy it to the sync
   project with `verify_jwt` off (it checks the caller's GitHub OIDC token itself).
+- The game-data loader is `supabase/functions/publish-game/index.ts` (same: `verify_jwt` off). A PR that adds
+  a `game` table (tools/pack-to-rows.py) needs, before it merges: its migration applied live (`game_load` and
+  `game_finish` must know the table, or every pack load ends "incomplete"), then this function redeployed with
+  the table in `TABLES` (or it refuses the table's chunks). Both only add, so the live pack keeps loading.
 
 ## Repo hooks
 

@@ -12,12 +12,13 @@ chance the app needs for things you haven't seen in game. One owner per kind of 
 | Random-suffix rolls: the exact stats of every "of Healing", "of the Owl", ... a base item can roll (`web/data/suffixes.js`, `suffixes.py`) | **foreverchanges.pro** item pages | Marked "Confirmed in game": the numbers the Forever server sends players (client build 1.60.1). On Forever a suffix's numbers depend on the base item, so they come per base. |
 | Icon names (file id to name, `web/js/icons.js`, `icons.py`) | **wowdev community listfile** (`github.com/wowdev/wow-listfile`) | Every `interface/icons/*.blp` file. |
 | Drop chances, "seen on Forever" counts, loot lists for non-quest items, crafted-by, icons, fixed-vs-choice quest rewards, reward money | **ForeverDB** (`foreverdb.net/data`) | Player uploads from Forever. The only bulk Forever loot data; rates not measured on Forever are labelled Classic. |
+| Every profession recipe's tools and place, learned or not (`recipes`, `recipes.py`) | **VMaNGOS** world database (`github.com/brotalnia/database`, the 14 June 2021 dump) | No Forever source has them (QuestieDB and ForeverDB carry none; the game tells only for recipes you know, which the addon reads). Classic 1.12, labelled so in the app; checked against Forever in game for Enchant 2H Weapon - Major Intellect (Runed Arcanite Rod). Forever's own new recipes (spell ids over 1,000,000) are not in it. |
 
 The game always wins in the app: your own tooltips, quest-log rewards and AH scans replace pack data.
 
 ## Rebuild
 
-    pip install lupa
+    pip install lupa py7zr
     sh build.sh                # ~10 min first time (endgametools pages), 2-3 min after
     # then copy work/out/gamedata.js and work/out/suffixes.js to web/data/, work/out/icons.js to web/js/,
     # work/out/COVERAGE.md here; CI checks them (test_pack.py, test/web/data.test.js)
@@ -29,5 +30,5 @@ Game rules that no source ships per item (standings, reputation thresholds, AH c
 tables) are kept by hand in `web/data/rules.js`, each with its source.
 
 Files: `export_questie.py` (QuestieDB → JSON, running QuestieDB's own loader in a sandboxed Lua),
-`egt_parse.py` (endgametools pages → JSON), `build.py` (joins everything; the schema is at the top),
+`egt_parse.py` (endgametools pages → JSON), `recipes.py` (VMaNGOS dump → each recipe's tools and place), `build.py` (joins everything; the schema is at the top),
 `test_pack.py` (shape, known facts, coverage floors, player check), `coverage_md.py` (COVERAGE.md).

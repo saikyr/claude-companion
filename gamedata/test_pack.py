@@ -98,6 +98,23 @@ bon = {b[0]: b[2] for b in (dev or [None, None, []])[2]}
 check(dev and bon.get(3) == [[45, 18]] and bon.get(6) == [[43, 8]] and len(bon.get(2) or []) == 5 and bon.get(4) == [],
       f'Vestments of the Devout bonuses with their stats, a proc with none ({bon})')
 check(len(G.get('teach') or {}) > 1000, f">1,000 crafted items with a recipe item (got {len(G.get('teach') or {})})")
+# every profession recipe's tools and place (#145, VMaNGOS, Classic): the player found in game (25 Nov) that Enchant 2H
+# Weapon - Major Intellect needs a Runed Arcanite Rod; the Dark Iron Reaver a Blacksmith Hammer at the Black Anvil,
+# taught by Plans: Dark Iron Reaver
+RC = G.get('recipes') or {}
+check((RC.get('20036') or [None] * 3)[:3] == ['Enchant 2H Weapon - Major Intellect', 'Enchanting', [16207]],
+      f"Enchant 2H Weapon - Major Intellect needs a Runed Arcanite Rod ({RC.get('20036')})")
+check(RC.get('20890') == ['Dark Iron Reaver', 'Blacksmithing', [5956], 'The Black Anvil', [17059], [17015]],
+      f"Dark Iron Reaver: Blacksmith Hammer, The Black Anvil, Plans: Dark Iron Reaver, makes the Reaver ({RC.get('20890')})")
+check((RC.get('18560') or [None] * 4)[3] == 'Moonwell', f"Mooncloth is made at a Moonwell ({RC.get('18560')})")
+# an item with many drop sources keeps the recipe that makes it (Copper Modulator); skill ranks are not recipes
+check(4363 in (RC.get('3926') or [None] * 6)[5] and (RC.get('3926') or [None] * 3)[2] == [5956, 6219],
+      f"Copper Modulator: made by its recipe, with a Blacksmith Hammer and an Arclight Spanner ({RC.get('3926')})")
+check(not [v for v in RC.values() if v[0] in ('Mining', 'Herb Gathering', 'Fishing', 'Find Minerals', 'Smelting')], 'skill ranks and tracking are not recipes')
+bad = [k for k, v in RC.items() if not (isinstance(v, list) and len(v) == 6 and v[0] and v[1] and all(str(t) in it for t in v[2]))]
+check(not bad, f'recipe rows well formed, every tool an item in the pack ({len(bad)} bad, e.g. {bad[:3]})')
+check(len(RC) > 1250 and n(v for v in RC.values() if v[2]) > 500 and n(v for v in RC.values() if 16207 in v[2]) >= 30,
+      f">1,250 recipes, >500 with tools, >=30 needing a Runed Arcanite Rod (got {len(RC)}, {n(v for v in RC.values() if v[2])})")
 
 # ---------------------------------------------------------------- 4. the player's own game data
 GAME = {'ITEM_MOD_AGILITY_SHORT': 3, 'ITEM_MOD_STRENGTH_SHORT': 4, 'ITEM_MOD_INTELLECT_SHORT': 5,
