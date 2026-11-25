@@ -27,7 +27,8 @@ it = {x['id']: x for x in json.load(open('raw/fdb/items.json'))}
 for i in (249526, 249525, 249527):
     print('ITEM', i, json.dumps(it.get(i))[:3000])
 v = json.load(open('raw/fdb/vendors.json'))
-vs = v.items() if isinstance(v, dict) else enumerate(v)
+print('VTOP', list(v.keys())[:20])
+vs = v['vendors'].items()
 for k, x in vs:
     s = x.get('sells') or {}
     if '249526' in s or 249526 in s:
@@ -37,7 +38,9 @@ src = None
 for i in range(64):
     d = json.load(open(f'raw/fdb/sources/{i}.json'))
     if '249526' in d: print('SOURCES', json.dumps(d['249526'])[:2000])
-cur = [x for x in it.values() if 'favor' in str(x.get('n', '')).lower()]
+for kk in v:
+    if kk != 'vendors': print('VKEY', kk, json.dumps(v[kk])[:1500])
+cur = [x for x in it.values() if 'favor' in str(x.get('n', '')).lower() or 'commerce' in str(x.get('n', '')).lower()]
 print('CURRENCY', json.dumps(cur)[:1500])
 EOF2
 curl -s -o /tmp/egt.html https://endgametools.com/en/wow-forever/items/249526; python3 -I -c "
