@@ -300,8 +300,8 @@
       // Settings only Claude writes: the account's copy is the one to show (#150). This computer keeps them in
       // files more than one page writes (settings.json, the browser's storage: the app window, a window left
       // open from before an update, the hidden browser), so a page can load an older copy after the cursor has
-      // passed Claude's last write. Once per page, ask the account for its copy; every pull, put the copy this
-      // computer last had from the account back over a different one here.
+      // passed Claude's last write. Once per page, ask the account for its copy; every pull after that, put the copy this
+      // page last had from the account back over a different one here.
       if (!claudeChecked) {
         try {
           const c = await rpc('cc_claude_setting', { p_key: state.key, p_k: 'cc.claude.cards' });
@@ -309,7 +309,8 @@
           claudeChecked = true;
         } catch (e) { /* an older backend, or offline: the next pull asks again */ }
       }
-      Object.entries(state.settings).forEach(([k, v]) => {
+      // only once this page has the account's copy: sync.json, which other pages write too, can hold an older one
+      if (claudeChecked) Object.entries(state.settings).forEach(([k, v]) => {
         if (CLAUDE_ONLY.test(k) && typeof v === 'string' && local && local[k] !== v) settings[k] = v;
       });
       state.adopt = false; state.pulledOnce = true;

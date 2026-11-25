@@ -39,14 +39,20 @@
   // Ticked steps follow the step's text, not its place (#150): Claude rewrites and reorders a card's steps, and a
   // tick saved as "step 3" would then mark a different step done. Each tick keeps the hash of its step's text
   // (`ticked`); `steps` (positions) and `v` (the card's updated time) are saved with it, for Claude to read.
-  // An older record with positions only counts while the card hasn't changed since it was ticked.
-  const stepKey = (s) => { const h = window.CCSync && window.CCSync.hash; const t = String(s == null ? '' : s).trim(); return h ? h(t) : t; };
+  // An older record with positions only counts while the card hasn't changed since it was ticked; so does one
+  // whose `ticked` no longer matches its `steps` (an older build, which writes positions only, changed it since).
+  // Two steps with the same text get their own keys (the text's hash, then which time it comes).
+  const stepKeys = (steps) => {
+    const h = window.CCSync && window.CCSync.hash, seen = {};
+    return steps.map((s) => { const t = String(s == null ? '' : s).trim(), k = h ? h(t) : t; seen[k] = (seen[k] || 0) + 1; return seen[k] > 1 ? `${k}#${seen[k]}` : k; });
+  };
+  const legacyOk = (you, c) => (secs(you.at) || 0) >= (secs(c.updated || c.created) || 0);
   function ticksOf(c) {
     const you = (S.state.cards || {})[c.id] || {}, steps = arr(c.steps), out = new Set();
-    if (Array.isArray(you.ticked)) {
+    if (Array.isArray(you.ticked) && you.ticked.length === arr(you.steps).length) {
       const keys = new Set(you.ticked);
-      steps.forEach((s, i) => { if (keys.has(stepKey(s))) out.add(i); });
-    } else if (arr(you.steps).length && (secs(you.at) || 0) >= (secs(c.updated || c.created) || 0)) {
+      stepKeys(steps).forEach((k, i) => { if (keys.has(k)) out.add(i); });
+    } else if (arr(you.steps).length && legacyOk(you, c)) {
       arr(you.steps).forEach((i) => { if (Number.isInteger(i) && i >= 0 && i < steps.length) out.add(i); });
     }
     return out;
@@ -111,6 +117,11 @@
     const all = S.state.cards = S.state.cards || {};
     const rec = Object.assign({}, all[id], change, { at: new Date().toISOString() });
     if (rec.state == null) delete rec.state;
+    // Done or Restore on a card Claude rewrote since its positions-only ticks: those ticks are for the old steps
+    const c = S.cards.find((y) => y.id === id), prev = all[id] || {};
+    if (c && !change.steps && arr(prev.steps).length && !(Array.isArray(prev.ticked) && prev.ticked.length === arr(prev.steps).length) && !legacyOk(prev, c)) {
+      delete rec.steps; delete rec.ticked;
+    }
     all[id] = rec;
     S.state.schema = 1;
     S.state.written = rec.at;
@@ -248,7 +259,8 @@
     const ticks = ticksOf(c), steps = arr(c.steps);
     if (x.checked) ticks.add(i); else ticks.delete(i);
     const at = [...ticks].filter((j) => j < steps.length).sort((a, b) => a - b);
-    save(id, { steps: at, ticked: at.map((j) => stepKey(steps[j])), v: c.updated || c.created || null });
+    const keys = stepKeys(steps);
+    save(id, { steps: at, ticked: at.map((j) => keys[j]), v: c.updated || c.created || null });
   });
 
   // overview(): the Overview page's short list (HTML). open(): the open cards for this character, newest
