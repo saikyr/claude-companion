@@ -1,4 +1,4 @@
-# Game-data coverage (2026-11-25 13:21 UTC)
+# Game-data coverage (2026-11-25 13:37 UTC)
 
 Sources: quests npcs sources: QuestieDB Forever 4377c981ac; item tooltips: endgametools, client build 1.60.1.71091; drop rates icons reward split: ForeverDB (foreverdb.net/data); recipe tools: VMaNGOS world database, 14 June 2021 (Classic 1.12); enchants: VMaNGOS world database, 14 June 2021 (Classic 1.12)
 
