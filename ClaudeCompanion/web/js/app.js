@@ -1116,6 +1116,7 @@
     rows.forEach((x) => { let g = secs.find((y) => y.name === x.sec); if (!g) secs.push((g = { name: x.sec, rows: [] })); g.rows.push(x); });
     if (sort === 'name') secs.sort((a, b) => a.name.localeCompare(b.name));
     const cell = (v, cls) => `<div class="c-num ${cls || ''}">${v == null ? '<span class="dim">–</span>' : v}</div>`;
+    const lacks = (r) => arr(r.tools).filter((t) => t && !t.met).map((t) => t.name);   // a tool or place you don't have (#145)
     h += `<div class="table recipes"><div class="thead"><div>Recipe</div><div>Reagents</div><div class="c-num">Cost</div><div class="c-num">Sells for</div><div class="c-num">Profit</div></div>`;
     secs.forEach((sg) => {
       h += `<div class="tsec">${esc(sg.name)} <span>${sg.rows.length}</span></div>`;
@@ -1125,7 +1126,7 @@
         const d = DIFF[r.difficulty];
         const name = out ? itemName$(out.key) : r.output && gdItem(r.output) ? `<span class="q${gdItem(r.output)[1]}" data-tip="${esc(JSON.stringify(gdTip(r.output)))}">${esc(r.name)}</span>` : esc(r.name);
         h += `<div class="tr" data-tip="${esc(JSON.stringify([{ l: r.name, lc: 'ffffff' }]))}" data-reagents="${esc(JSON.stringify(reagentLines(r, cp)))}">
-          <div class="c-main">${out ? itemIcon(out.key, { size: 'sm' }) : r.output && gdItem(r.output) ? anyItemIcon(r.output, { size: 'sm' }) : icon(r.icon, { size: 'sm' })}<div class="grow"><div class="nm">${name}</div>${d ? `<div class="sub"><span class="diff ${d[0]}"></span>${d[1]}</div>` : ''}</div></div>
+          <div class="c-main">${out ? itemIcon(out.key, { size: 'sm' }) : r.output && gdItem(r.output) ? anyItemIcon(r.output, { size: 'sm' }) : icon(r.icon, { size: 'sm' })}<div class="grow"><div class="nm">${name}</div>${d ? `<div class="sub"><span class="diff ${d[0]}"></span>${d[1]}</div>` : ''}${lacks(r).length ? `<div class="sub neg">Needs ${esc(lacks(r).join(', '))}</div>` : ''}</div></div>
           <div class="c-reag">${reag}</div>
           ${cell(cp && !cp.missing ? money(cp.cost, { short: true }) : null)}${cell(cp ? money(cp.value, { short: true }) : null)}
           ${cell(cp && !cp.missing ? `<span class="${cp.profit >= 0 ? 'pos' : 'neg'}">${cp.profit >= 0 ? '+' : ''}${money(cp.profit, { short: true })}</span>` : null)}

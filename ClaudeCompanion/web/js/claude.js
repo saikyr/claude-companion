@@ -329,7 +329,11 @@
         return { profession: p.name, name: r.name, output: r.output || null, makes: cp ? cp.makes : null,
           cost: cc.cost, missing: cc.missing, value: cp ? cp.value : null, profit: cp && !cc.missing ? cp.profit : null,
           reagents: cc.parts.map((x) => ({ id: x.id, name: A.anyItemName ? A.anyItemName(x.id) : null, need: x.need, each: x.each, from: x.from })),
-          cooldownEnds: r.cooldownEnds || null };
+          cooldownEnds: r.cooldownEnds || null,
+          // the tools and places the game says it needs, and the ones you lack (#145); null: the build doesn't read them
+          tools: Array.isArray(r.tools) ? r.tools.map((t) => ({ name: t.name, met: !!t.met })) : null,
+          toolsMissing: Array.isArray(r.tools) ? r.tools.filter((t) => !t.met).map((t) => t.name) : null,
+          canCraft: r.canCraft == null ? null : !!r.canCraft };
       })).sort((a, b) => (b.profit == null ? -Infinity : b.profit) - (a.profit == null ? -Infinity : a.profit)) : [],
       reputation: arr(s.reputation).filter((r) => r && !r.isHeader).map((r) => ({ name: r.name, standing: r.reaction, value: r.currentStanding })),
       ah: {

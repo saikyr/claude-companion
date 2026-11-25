@@ -143,5 +143,41 @@
     RAID.set(id, yes);
     return yes;
   }
-  CC.quests = { pack, isDone, inLog, forYou, repGap, chain, status, rewardQuests, rewardGone, raid, known: () => state().known };
+  // What a quest you are on still needs you to bring (#144): an item named, as whole words, in the objectives of
+  // a quest in your log (the game's own text and the pack's) or of a later step of its chain for you (pack `next`,
+  // not done). The pack has no item ids for objectives, so names are matched; names under 4 letters never match.
+  // neededFor(name) -> {id, title} of the first such quest, or null.
+  let needMemo = null;
+  function needTexts() {
+    const st = state();
+    if (needMemo && needMemo.key === st.key && needMemo.gd === A.GD) return needMemo;
+    const texts = [], seen = new Set();
+    const walk = (id, d) => {
+      id = Number(id);
+      if (seen.has(id) || d > 25) return;
+      seen.add(id);
+      const q = pack(id);
+      if (!q || (d > 0 && (isDone(id) || !forYou(id)))) return;
+      texts.push({ id, title: q.t || '#' + id, text: arr(q.obj).join(' ').toLowerCase() });
+      arr(q.next).forEach((n) => walk(n, d + 1));
+    };
+    st.log.forEach((lq, id) => {
+      texts.push({ id, title: lq.title || (pack(id) || {}).t || '#' + id, text: arr(lq.objectives).map((o) => String((o && o.text) || '')).join(' ').toLowerCase() });
+      walk(id, 0);
+    });
+    needMemo = { key: st.key, gd: A.GD, texts, hit: new Map() };
+    return needMemo;
+  }
+  function neededFor(name) {
+    const nm = String(name || '').toLowerCase();
+    if (nm.length < 4) return null;
+    const m = needTexts();
+    if (m.hit.has(nm)) return m.hit.get(nm);
+    const re = new RegExp('(^|[^\\p{L}\\p{N}])' + nm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '($|[^\\p{L}\\p{N}])', 'u');
+    const t = m.texts.find((x) => re.test(x.text));
+    const out = t ? { id: t.id, title: t.title } : null;
+    m.hit.set(nm, out);
+    return out;
+  }
+  CC.quests = { pack, isDone, inLog, forYou, repGap, chain, status, rewardQuests, rewardGone, raid, neededFor, known: () => state().known };
 })();

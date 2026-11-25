@@ -35,6 +35,21 @@ local function ReadTradeSkill()
                 category = Clean(info.categoryID) }
             local link = Clean(Call(T.GetRecipeLink, id))
             r.link = link
+            -- the tools and places it needs (a Runed Arcanite Rod, an anvil, a Moonwell: #145), each with whether
+            -- you have it; the game's "craftable" doesn't count them, so a missing one makes canCraft false
+            local reqs = T.GetRecipeRequirements and Call(T.GetRecipeRequirements, id)
+            if type(reqs) == "table" and #reqs > 0 then
+                r.tools = {}
+                for _, q in ipairs(reqs) do
+                    local nm = type(q) == "table" and Clean(q.name)
+                    if type(nm) == "string" and nm ~= "" then
+                        local met = Clean(q.met) and true or false
+                        r.tools[#r.tools + 1] = { name = nm, met = met }
+                        if not met then r.canCraft = false end
+                    end
+                end
+                if #r.tools == 0 then r.tools = nil end
+            end
             local sch = Call(T.GetRecipeSchematic, id, false)
             if type(sch) == "table" then
                 r.output = Clean(sch.outputItemID)

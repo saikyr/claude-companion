@@ -445,6 +445,7 @@ function ns.Capabilities()
     local caps = { api = {}, secret = {}, version = ns.VERSION, checked = ns.Now() }
     for _, name in ipairs(API_NAMES) do caps.api[name] = type(_G[name]) end
     caps.api["C_Traits.GetTraitDescription"] = type(C_Traits and C_Traits.GetTraitDescription)
+    caps.api["C_TradeSkillUI.GetRecipeRequirements"] = type(C_TradeSkillUI and C_TradeSkillUI.GetRecipeRequirements)
     local function probe(label, fn, ...)
         local ok, v = pcall(fn, ...)
         if not ok then caps.secret[label] = "error"

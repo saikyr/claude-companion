@@ -158,7 +158,8 @@ C_TradeSkillUI = { GetBaseProfessionInfo = function() return { professionName = 
   GetRecipeInfo = function(id) return { name = id == 18560 and "Mooncloth" or "Brown Linen Pants", learned = true, icon = 1, craftable = true, numAvailable = 1 } end,
   GetRecipeLink = function() return "|Henchant:18560|h[Tailoring: Mooncloth]|h" end,
   GetRecipeSchematic = function() return { outputItemID = 14342, quantityMin = 1, quantityMax = 1, reagentSlotSchematics = { { quantityRequired = 2, reagents = { { itemID = 14256 } } } } } end,
-  GetRecipeCooldown = function(id) if id == 18560 then return 300000, true end return 0 end }
+  GetRecipeCooldown = function(id) if id == 18560 then return 300000, true end return 0 end,
+  GetRecipeRequirements = function(id) if id == 18560 then return { { name = "Moonwell", met = false }, { name = "Silver Rod", met = true } } end return {} end }
 function GetInboxNumItems() return 1 end
 function GetInboxHeaderInfo() return nil, nil, "Stormwind Auction House", "Auction successful: Mageweave Cloth", 47500, 0, 29.5, 0, false, false end
 function GetInboxInvoiceInfo() return "seller", "Mageweave Cloth", "Buyer", 50000, 50000, 100, 2500 end
@@ -251,6 +252,14 @@ Fire("UNIT_SPELLCAST_SUCCEEDED", "player", "x", 18560)
 Fire("PLAYER_EQUIPMENT_CHANGED", 1)
 Fire("GROUP_ROSTER_UPDATE"); Fire("ACTIVE_TALENT_GROUP_CHANGED", 2, 1)
 RunTimers()
+do -- #145: a recipe's tools and places, and canCraft false while one is missing
+  local tail = ns.char.professions and ns.char.professions.Tailoring
+  local moon, pants
+  for _, r in ipairs(tail and tail.recipes or {}) do if r.id == 18560 then moon = r elseif r.id == 3914 then pants = r end end
+  local ok = moon and moon.tools and #moon.tools == 2 and moon.tools[1].name == "Moonwell" and moon.tools[1].met == false and moon.tools[2].met == true
+    and moon.canCraft == false and pants and pants.tools == nil and pants.canCraft == true
+  print((ok and "PASS " or "FAIL ") .. "recipes keep their tools; a missing one makes canCraft false (#145)"); if not ok then FAILED = true end
+end
 -- v1.2: disenchant, rep, scan, interaction manager
 Fire("CHAT_MSG_LOOT", "You receive loot: |cff1eff00|Hitem:9999::|h[Green Pants]|h|r.")
 -- a party member's cast never reaches the addon (spellcast events are registered for the player only)

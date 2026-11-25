@@ -115,5 +115,18 @@ test('Gear: raid quest rewards are no pre-BiS source (Atiesh, the Qiraji staves,
   assert.ok(c.byId['226955'], 'Virtuous Epaulets (Forever\'s Shadow Tier 0.5, ForeverDB stats, from the Twilight set box) is a source');
 });
 
+// #144: an item a quest you are on still needs, named in its objectives or a later step of its chain for you
+test('items a quest in progress needs: A Supernatural Device in the log keeps the Devout Gloves (Just Compensation)', () => {
+  set({ quests: [{ id: 8922, title: 'A Supernatural Device', complete: false, objectives: [{ text: 'Sealed Blood Container: 0/1' }] }], completedQuests: [8909] });
+  const g = Q.neededFor('Devout Gloves');
+  assert.ok(g && g.title === 'Just Compensation', JSON.stringify(g));
+  assert.ok(Q.neededFor('Devout Belt'), 'the belt too');
+  assert.ok(Q.neededFor('Sealed Blood Container'), 'the log quest\'s own objective');
+  assert.strictEqual(Q.neededFor('Wildheart Gloves'), null, 'the Druid step is not for a Priest');
+  assert.strictEqual(Q.neededFor('Devout Glove'), null, 'whole names only ("Devout Glove" is not in "Devout Gloves")');
+  set({ quests: [], completedQuests: [3801, 3802] });
+  assert.strictEqual(Q.neededFor('Devout Gloves'), null, 'with no quest of the chain in the log, nothing is kept for it');
+});
+
 console.log(failed ? `\n${failed} FAILED` : '\nall passed');
 process.exit(failed ? 1 : 0);
