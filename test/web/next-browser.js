@@ -18,6 +18,10 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
     snap: {
       // BRD's Shadowforge Key done, the first Seal of Ascension done; Onyxia chain started
       completedQuests: [3801, 3802, 4742, 4182, 4183],
+      // in the bags: Theka's Last Breath (Holy scores it higher, but the worn Blessed Prayer Beads has a Use effect the
+      // score doesn't count: Keep, ask) and Virtuous Epaulets, a Shadow upgrade over the worn Felcloth Shoulders (the
+      // Shadow set is on) that the game hadn't loaded when it saved: scored from the pack (#149)
+      bags: [{ id: 0, items: [{ slot: 1, item: 'item:274641::::::::59:::::', count: 1 }, { slot: 2, item: 'item:226955::::::::59:::::', count: 1 }] }],
       quests: [{ id: 5089, title: "General Drakkisath's Command", level: 60, complete: false },
         { id: 4184, title: 'The True Masters', level: 54, complete: true, ready: true },
         { id: 5803, title: "Araj's Scarab", level: 60, complete: false }],
@@ -64,7 +68,7 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   // ---- Ready now
   const ready = await text('main');
   check(/Ready now/.test(ready) && /The True Masters/.test(ready) && /ready to turn in/.test(ready), 'Ready now: a quest ready to turn in');
-  check(/Theka's Last Breath[\s\S]*in your bags/.test(ready), 'Ready now: an upgrade already in your bags');
+  check(/Virtuous Epaulets[\s\S]*in your bags/.test(ready) && !/Theka's Last Breath/.test(ready), 'Ready now: an upgrade already in your bags, not one whose comparison has an effect the score leaves out (' + ready.replace(/\s+/g, ' ').slice(0, 1500) + ')');
 
   // ---- cooldowns: one plain list under its own heading, time left (not a clock time already past)
   const cdRows = await page.$$eval('main .list.cds > .li', (els) => els.map((e) => e.innerText.replace(/\s+/g, ' ')));
@@ -105,7 +109,7 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
     const ups = all.flatMap((x) => (x.ups || []).map((u) => u.id)).concat(all.flatMap((x) => (x.items || []).map((u) => u.id)));
     return { zf: D["Zul'Farrak"] && D["Zul'Farrak"].raid, mc: D['Molten Core'] && D['Molten Core'].raid, aq: ids.has('quest:8802') || inside(8802),
       naxx: [...ids].some((i) => /^zone:Naxxramas/.test(i)) || all.some((x) => (x.quests || []).some((q) => q.quest === 9120)),
-      hakkar: all.some((x) => x.quest === 8183 || (x.quests || []).some((q) => q.quest === 8183)), owned: ups.includes(274641) || ups.includes(16695),
+      hakkar: all.some((x) => x.quest === 8183 || (x.quests || []).some((q) => q.quest === 8183)), owned: ups.includes(274641) || ups.includes(16695) || ups.includes(226955),
       solakar: (all.find((x) => x.id === 'dungeon:Upper Blackrock Spire') || { ups: [] }).ups.some((u) => /Solakar|Gyth/.test(u.boss)) };
   });
   check(never.zf === false && never.mc === true, "Zul'Farrak is a dungeon, Molten Core a raid (rules.js instances)");
@@ -239,7 +243,9 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   const staff = crafts.find((c) => c.name === 'Test Staff'), moon = crafts.find((c) => c.name === 'Mooncloth');
   check(staff && staff.reagents[0].from === 'vendor' && staff.reagents[0].each === 5000 && staff.cost === 10000 && staff.value === Math.round(950000 * 0.95) && staff.profit === staff.value - 10000 && crafts[0] === staff,
     'snapshot crafts: a vendor-priced reagent, the product after the AH cut, the margin, best first (' + JSON.stringify(staff) + ')');
-  check(moon && moon.missing === 1 && moon.profit === null && moon.cooldownEnds, 'snapshot crafts: an unpriced reagent leaves the margin unknown, with the cooldown');
+  // Felcloth: Vi'el, who serves both sides, sells it on Forever (8000c), so it is priced; Mooncloth's own value isn't known
+  check(moon && moon.missing === 0 && moon.reagents[0].from === 'vendor' && moon.reagents[0].each === 8000 && moon.profit === null && moon.cooldownEnds,
+    'snapshot crafts: a reagent a both-sides vendor sells is priced; no value for the product leaves the margin unknown, with the cooldown (' + JSON.stringify(moon) + ')');
   check(moon && moon.toolsMissing.join() === 'Moonwell' && moon.canCraft === false && staff.tools === null && staff.toolsMissing === null,
     'snapshot crafts: the tools a recipe needs and the ones you lack; null when the save has none (#145)');
   // #105: each dungeon row lists every upgrade it drops, with its source, wing and rate; Upper Blackrock Spire's trash
