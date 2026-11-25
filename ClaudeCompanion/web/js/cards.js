@@ -36,6 +36,8 @@
     if (ex && ex < Date.now() / 1000) return 'expired';
     return 'open';
   }
+  // a card's time for "updated ...": never ahead of now (a Claude clock running ahead, #150)
+  const shownTime = (c) => { const t = c.updated || c.created; return t && secs(t) > Date.now() / 1000 ? new Date().toISOString() : t; };
   // Ticked steps follow the step's text, not its place (#150): Claude rewrites and reorders a card's steps, and a
   // tick saved as "step 3" would then mark a different step done. Each tick keeps the hash of its step's text
   // (`ticked`); `steps` (positions) and `v` (the card's updated time) are saved with it, for Claude to read.
@@ -193,7 +195,7 @@
     const acts = st === 'open'
       ? `<button class="btn" data-card="${esc(c.id)}" data-cact="done">Done</button><button class="btn ghost" data-card="${esc(c.id)}" data-cact="dismissed">Dismiss</button>`
       : st === 'done' || st === 'dismissed' ? `<button class="btn ghost" data-card="${esc(c.id)}" data-cact="open">Restore</button>` : '';
-    const meta = [kl, c.where, c.updated || c.created ? 'updated ' + ago(c.updated || c.created) : '', steps.length ? `${steps.filter((_, i) => ticks.has(i)).length}/${steps.length} steps` : '',
+    const meta = [kl, c.where, c.updated || c.created ? 'updated ' + ago(shownTime(c)) : '', steps.length ? `${steps.filter((_, i) => ticks.has(i)).length}/${steps.length} steps` : '',
       st !== 'open' ? CLOSED[st] : c.expires ? 'until ' + A.fmtTime(secs(c.expires)) : ''].filter(Boolean).map(esc).join(' · ');
     const head = `<header><img class="kic" src="${ICON_URL}${ki}.jpg" alt=""><div class="grow"><div class="ttl">${esc(c.title)}</div><div class="sub">${meta}</div></div><div class="acts">${acts}</div></header>`;
     let body = '';

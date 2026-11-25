@@ -1,20 +1,20 @@
 {
  "version": "1.5.0",
- "built": "2026-11-25T09:56:08+00:00",
+ "built": "2026-11-25T12:42:53+00:00",
  "channel": {
   "repo": "saikyr/claude-companion",
   "branch": "stable"
  },
  "from": {
   "branch": "main",
-  "commit": "94bfc1910238c79efc12c1ea0d980119b1242ce5"
+  "commit": "fed4285a3b11052e19bb40980ce2143587fa002c"
  },
- "build": "94bfc1910238",
- "notes": "Cards: every computer shows Claude's current cards; ticks follow the step text (#150) (#153)",
+ "build": "fed4285a3b11",
+ "notes": "Card times ahead of now refused by the gate; the app never shows one (refs #150) (#154)",
  "files": {
   "Bindings.xml": "99dcc8984fdbcbea746275e7a8dbbc34e16c462021640ce70232478fb843fb48",
   "ClaudeCompanion.toc": "14d0dd98487ec0a4ce7faefcf2a5d1f75fecd6a6f8890ed9bf815a59269b7731",
-  "Core.lua": "fb06f15ccd5b0d9298963567fd805d87f30d487918b2810f1fbd2cc773e732f5",
+  "Core.lua": "ef2d5e0aac2b6376a987948ecb96665a74442cbd0b3251d8637a943c3b5c3a67",
   "Drops.lua": "7f08764312b3f625fbbeed6893562240111815ac677d785a954c03618a9c7a9e",
   "Journal.lua": "f39dca32b04e2310bdc7ff562f37cc59c12fd59ca7e56c8f5c92ab39014b4d30",
   "Market.lua": "ee1038dfa2cf5ad8e2f24eaeaf48f9611e00a94b4e0384443163d0aad19a1e48",
@@ -22,12 +22,12 @@
   "Snapshot.lua": "ef991657b8663289e71d7d3b2a55a9855a41b95d41834289e7cc4a305c8ccf84",
   "UI.lua": "57459b56162e803ecd747f8d4f8f9af74c3a284ede3c7ae357c8cc07adac9cb7",
   "claude/COACHING.md": "a67f561cffe743e789abe7f9f229379d1ce3e94baddde1168e82b436c1bb97ca",
-  "claude/FEATURES.md": "9fea37c249c95afbb9bde1a0132aedf729c50036ff7049bae0410fa8393a63be",
+  "claude/FEATURES.md": "52e7055950e8e270a102e19f355e5ed823fb25efedf3cd0e69f2c389f78c2178",
   "claude/GUIDE.md": "b1a6ce95970c437c77ba0affcf703ea25cfd33ed546eac65a6060cf41e1b1ca0",
   "claude/SETUP.md": "3a134118bbc64a858932559ff2c76704adfe0a2e8f86274f002048b81e3e5175",
   "claude/answer_rules.py": "d1e299296ddd21379977e121984d5749db19175ba653a3c8eb8c7ddf10ea81d7",
   "claude/check-answer.py": "9cd8af518bfd799e6034bcb0a13763659a621cbe451aee31c71bea03aa1edf80",
-  "claude/check-cards.py": "6b8dfddbfe351a835197fca9a9e6419f2eb73ba0ddf7b99b0468575d77b7ebf6",
+  "claude/check-cards.py": "2cebdacc2d4e008014e3696711e591341645b6819bc5bca24cff12f3986c072e",
   "claude/game.py": "274351f5ee60592b7ea0b7eb42c9cf944dfd9d49d4d7413db33eec220fe4c131",
   "claude/pack-to-rows.py": "5ac311c558d7ca9a8189adc2c62d94c60ff8d8e62fddb080a091b3ed8001eb60",
   "claude/rules.json": "97074fe765647edf46b31ca5d37721d76b231324cf1a9d9f00caa36dbd4ab6d5",
@@ -36,7 +36,7 @@
   "web/Claude Companion.app/Contents/MacOS/launcher": "65fe025ebb1acad0f786633f5b30f6bdcfa6b49f2912eca1f87385dcec0224c4",
   "web/Claude Companion.app/Contents/Resources/AppIcon.icns": "467ef964fdaff99ca47e80e7aff3d4db96306b984293aeb98251d68d2e4a2fdd",
   "web/Claude Companion.bat": "8f5cf6c1ff6a95ad5e0ebfc10951ef451cccf5b1e9a6d1fc7574600cfd01a2fc",
-  "web/channel.json": "48b4e88d46731f01897a49fad7ba6ef76f90dcf632785ff573b31b2c91592cb8",
+  "web/channel.json": "e70a8f6dee35e7a0c9b8ad59a74f3240e9f5b03a987c0f94c4ae300ed48fa2bf",
   "web/css/app.css": "535b8bef8a435e8af520cca7e6c5763e96c2f0ead3786dfb63e40591cbe78280",
   "web/data/gamedata.js": "cace7f6ca71c6154894edd07ca390355b2053c52e1d3542c34a8a68da67040be",
   "web/data/rules.js": "5d97d9a68d83902c9d85fe84b28b61a9e3d540a0978f8aac26fbf494787d1ebb",
@@ -47,7 +47,7 @@
   "web/index.html": "853ec1334e9c5efd5db39fd8e39b696b90683776594c8c4b2857e4dfa43632dd",
   "web/js/advice.js": "8c45c50cac63778eb9337a34a8bb3c7fe61145eebc411c55f50c89daa1b18e37",
   "web/js/app.js": "74be2c0644279497985ecc05670c37ecffe620d2d484355958f2a198c06315ee",
-  "web/js/cards.js": "d4ce7d0702c4139b757e4e2b99968790d98478a238b64e9894ea4198e8edd006",
+  "web/js/cards.js": "1302c4c0e31defe1a8815a5d2d0b730230f2ae661dc6dc83c449d25b861c9999",
   "web/js/claude.js": "782ad43a8384d94bee1929991a67e4c6fb838bdee85d995f066fd9a85cfc9f08",
   "web/js/combatlog.js": "9eb8d8bbd076b0fddaa7ae09fe5f61ba75c010506045f8541f3446748b443a21",
   "web/js/enchants.js": "b598fb56733ba219ece8a2e55989c14373a6145d901b6e94cdb620e91f3c3b2a",

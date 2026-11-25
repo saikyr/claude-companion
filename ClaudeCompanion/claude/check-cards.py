@@ -9,7 +9,7 @@
 #   python3 tools/check-cards.py path/to/cards.json      -> "ok, N cards" or the problems, exit 1
 import json, os, re, sys
 from decimal import Decimal
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from answer_rules import card_rules
 
@@ -23,6 +23,16 @@ KEYS = {'id', 'kind', 'title', 'summary', 'status', 'created', 'updated', 'expir
 def iso(v):
     try: datetime.fromisoformat(str(v).replace('Z', '+00:00')); return True
     except ValueError: return False
+
+
+def ahead(v):
+    """more than 10 minutes after now (a time with no zone is UTC, as in the database)"""
+    t = datetime.fromisoformat(str(v).replace('Z', '+00:00'))
+    if t.tzinfo is None: t = t.replace(tzinfo=timezone.utc)
+    return t > datetime.now(timezone.utc) + timedelta(minutes=10)
+
+
+def now_utc(): return datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 
 
 def check(d):
@@ -43,6 +53,8 @@ def check(d):
         if c.get('status', 'open') not in STATUS: bad.append(f'{at}: status must be one of {sorted(STATUS)}')
         for k in ('created', 'updated', 'expires'):
             if c.get(k) is not None and not iso(c[k]): bad.append(f'{at}: {k} is not an ISO time')
+        for k in ('created', 'updated'):      # Claude's own clock: a time ahead of now sorts the card wrong everywhere (#150)
+            if c.get(k) is not None and iso(c[k]) and ahead(c[k]): bad.append(f'{at}: {k} is in the future: use the real UTC time now ({now_utc()})')
         for k in ('summary', 'character', 'where', 'body', 'risk'):
             if c.get(k) is not None and not isinstance(c[k], str): bad.append(f'{at}: {k} must be text')
         for k in ('steps', 'facts', 'items', 'sources'):
