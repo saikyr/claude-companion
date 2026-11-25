@@ -23,6 +23,7 @@ ONE OWNER PER FIELD (see README.md for the why):
   NPCs: name, levels, rank, zone, spawn points ......................... QuestieDB Forever (points already in Forever map coordinates)
   Reputation an item needs (to buy or use it) .......................... ForeverDB (the item's own requirement)
   Which recipe item teaches a crafted item, and the skill to learn it ... ForeverDB (the recipe's taught spell = the craft's spell)
+  Every profession recipe's tools and place (rods, hammers, anvils) .... VMaNGOS world database (Classic 1.12, labelled so)
 The game itself always wins in the app: your quest log rewards, your tooltips, your AH scans.
 """
 import json, os, re, sys, time
@@ -400,6 +401,24 @@ teach = {}
 for iid, rows in src.items():
     got = sorted({(rid, (FDB_ITEMS[rid].get('rs') or [0, 0])[1]) for r in rows if r[0] == 'craft' for rid in TEACHES.get(r[2], ())})
     if got: teach[iid] = [list(x) for x in got[:3]]
+# recipes[spell id] = [name, profession, [tool item ids], place, [recipe items that teach it], [items it makes]]: every
+# profession recipe, learned or not (out/recipes.json, recipes.py: VMaNGOS, Classic). Tools are items you carry (a
+# Runed Arcanite Rod, a Blacksmith Hammer), the place an object you stand at (an Anvil, a Moonwell). Recipe items and
+# made items are ForeverDB's (above) and the craft rows; a Forever-only recipe (spell id over 1,000,000) has no row.
+# The game's own answer for a recipe you know (Professions.lua, GetRecipeRequirements) wins in the app.
+MAKES = defaultdict(set)
+for iid, rows in src.items():
+    for r in rows:
+        if r[0] == 'craft' and r[2]: MAKES[r[2]].add(iid)
+recipes = {}
+for k, (name, prof, tools, place) in J('out', 'recipes.json').items():
+    sp = int(k)
+    recipes[sp] = [name, prof, [t for t in tools if t in items], place, sorted(TEACHES.get(sp, ())), sorted(MAKES.get(sp, ()))]
+cov['recipes'] = len(recipes)
+cov['recipes_with_tools'] = sum(1 for v in recipes.values() if v[2])
+cov['recipe_tools_not_in_pack'] = sum(1 for k, v in J('out', 'recipes.json').items() for t in v[2] if t not in items)
+cov['recipes_with_recipe_item'] = sum(1 for v in recipes.values() if v[4])
+cov['craft_spells_without_tool_data'] = len([sp for sp in MAKES if sp not in recipes])
 cov['items_needing_rep'] = len(req)
 cov['crafted_items_with_recipe_item'] = len(teach)
 cov['crafted_items'] = sum(1 for rows in src.values() if any(r[0] == 'craft' for r in rows))
@@ -409,8 +428,9 @@ pack = {
     'v': 2, 'built': int(time.time()),
     'from': {'quests_npcs_sources': 'QuestieDB Forever ' + QMAN['questiedb_commit'][:10],
              'item_tooltips': 'endgametools, client build ' + (builds.most_common(1)[0][0] if builds else '?'),
-             'drop_rates_icons_reward_split': 'ForeverDB (foreverdb.net/data)'},
-    'items': items, 'src': src, 'quests': quests, 'vend': vend, 'npcs': npcs, 'req': req, 'teach': teach, 'stat': STAT,
+             'drop_rates_icons_reward_split': 'ForeverDB (foreverdb.net/data)',
+             'recipe_tools': 'VMaNGOS world database, 14 June 2021 (Classic 1.12)'},
+    'items': items, 'src': src, 'quests': quests, 'vend': vend, 'npcs': npcs, 'req': req, 'teach': teach, 'recipes': recipes, 'stat': STAT,
     'sets': {sid: v for sid, v in sets.items()},
     # group size of the dungeon / raid an item drops in, from endgametools ("5 players", "10 players")
     'size': {int(k): v['size'] for k, v in EGT.items() if v.get('size')},

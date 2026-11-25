@@ -232,6 +232,14 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
     'crafted item: its recipe and where the recipe is sold (' + craft.join(' | ') + ')');
   check(craft.includes('Needs Honored with Thorium Brotherhood for Plans: Dark Iron Reaver (you: none)'), "crafted item: the recipe's reputation, with yours");
   check(craft.includes('Needs Blacksmithing 320 to craft it (you: none)'), 'crafted item: the skill to craft it');
+  // its tools and place, learned or not (#145; pack recipes, Classic data): on the item, on its recipe, on the tool
+  check(craft.includes('To craft it: needs Blacksmith Hammer at The Black Anvil (Classic data)'), 'crafted item: the tools and place its recipe needs');
+  const plans = await page.evaluate(() => window.CC.api.gdSourceLines(17059).map((l) => l.l));
+  check(plans.includes('Teaches Dark Iron Reaver: needs Blacksmith Hammer at The Black Anvil (Classic data)'), 'recipe item: what it teaches and its tools (' + plans.join(' | ') + ')');
+  const rodL = await page.evaluate(() => window.CC.api.gdSourceLines(16207).map((l) => l.l));
+  check(rodL.some((l) => /^Tool for \d{2,} Enchanting recipes \(Classic data\)$/.test(l)), 'a tool: how many recipes need it (' + rodL.join(' | ') + ')');
+  const moon = await page.evaluate(() => window.CC.api.gdSourceLines(14342).map((l) => l.l));
+  check(moon.includes('To craft it: needs a Moonwell (Classic data)') || moon.some((l) => /^To craft it: needs .*Moonwell$/.test(l)), 'a place alone: a Moonwell (' + moon.join(' | ') + ')');
   const gates = await page.evaluate(() => window.CC.api.itemGates(19447).map((g) => g.short));   // Formula: Enchant Bracer - Healing (Revered: Forever's tooltip, #129)
   check(gates.includes('Revered with Argent Dawn (you: Neutral)'), "an item's own reputation need, against yours (" + gates.join(' | ') + ')');
 

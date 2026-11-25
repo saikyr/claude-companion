@@ -3,6 +3,7 @@
 Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 
 ## 1.5.0 (in progress: every merge to main updates itself)
+- **Tools for every recipe.** Recipes you haven't learned now say what they need too: a crafted item's tooltip says "To craft it: needs Blacksmith Hammer at The Black Anvil", a recipe item what it teaches and needs, and a tool how many recipes use it (the Runed Arcanite Rod: 30 Enchanting recipes). This is Classic data and says so; once you know a recipe, the game's own answer is used. Forever's own new recipes aren't covered until you learn them. Claude can look up every recipe that needs a given tool (#145). Takes effect with the next game-data rebuild.
 - **Recipe tools.** Each known recipe now says which tools or places it needs (a Runed Arcanite Rod, an anvil) and which you lack, and isn't counted as craftable while one is missing (#145). Type /reload in game.
 - **Turn-ins are kept.** Bag advice no longer says to sell an item a quest you are on still needs, such as Devout Gloves for Just Compensation: it says Keep and names the quest (#144).
 - **Gray loot counts at vendor price.** The in-game grind line and the app's gold per hour no longer price gray items at an AH listing (one junk greatsword listed at 22g read as 22g of loot); grays only ever go to a vendor (#131).

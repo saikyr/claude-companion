@@ -83,13 +83,31 @@ const lit = (s) => '$j$' + s + '$j$';
     check(scara.dungeonQuest && /Scholomance/.test(scara.keep.dungeon) && scara.keep.step.id === 5505, `game.quest: Araj's Scarab is kept for the Scholomance key (${JSON.stringify(scara.keep)})`);
     const scholo = one(`select game.instance('Scholomance')::text`);
     check(scholo.dropsTotal > 300 && scholo.drops.length === 300 && scholo.drops[0].boss === true, `game.instance: the best 300 of ${scholo.dropsTotal} drops, bosses first, with the total`);
+    // recipes (#145): every profession recipe's tools and place, learned or not (VMaNGOS, Classic, labelled so)
+    const rod = one(`select game.recipe('Runed Arcanite Rod')::text`);
+    const mi = rod.recipes.find((r) => r.spell === 20036);
+    check(rod.total >= 30 && mi && mi.name === 'Enchant 2H Weapon - Major Intellect' && mi.profession === 'Enchanting' && /Classic/.test(rod.from),
+      `game.recipe: every recipe that needs a Runed Arcanite Rod (${rod.total}), Enchant 2H Weapon - Major Intellect among them, labelled Classic`);
+    const one20036 = one(`select game.recipe('20036')::text`);
+    check(one20036.total === 1 && JSON.stringify(one20036.recipes[0].tools) === JSON.stringify([{ id: 16207, name: 'Runed Arcanite Rod' }]), 'game.recipe: one recipe by spell id, its tool by id and name');
+    const reaver = one(`select game.item('17015')::text`)[0];
+    const rv = reaver && reaver.recipes.madeBy[0];
+    check(rv && rv.tools[0].name === 'Blacksmith Hammer' && rv.place === 'The Black Anvil' && rv.taughtBy.some((t) => t.id === 17059),
+      `game.item: the Dark Iron Reaver is made with a Blacksmith Hammer at The Black Anvil, taught by Plans: Dark Iron Reaver (${JSON.stringify(rv)})`);
+    const rodItem = one(`select game.item('16207')::text`)[0];
+    const needRod = rod.recipes.filter((r) => r.tools.some((t) => t.id === 16207)).length;
+    check(rodItem && rodItem.recipes.toolFor.length === needRod && rodItem.recipes.toolFor.some((r) => r.spell === 20036) && rodItem.recipes.madeBy.some((r) => r.name === 'Runed Arcanite Rod'),
+      `game.item: the rod lists the ${needRod} recipes it is the tool for, and the recipe that makes it`);
+    const plans = one(`select game.item('17059')::text`)[0];
+    check(plans && plans.recipes.teaches.some((r) => r.spell === 20890), 'game.item: a recipe item says what it teaches and its tools');
 
     // tools/game.py (claude/game.py in every build: a friend's Claude has no database) reads the same rows and
     // labels them the same way: every drop row, and the look-ups, against the database
     const PY = `import sys, json; sys.path.insert(0, sys.argv[1]); from game import Game, jsonable; g = Game()
 out = {'rates': sorted(json.dumps([r['item_id'], r['kind'], r['source'], r['source_id'], r['zone'], r['rate'], r['label']], ensure_ascii=False) for r in g.rates),
        'item': g.item('Skeleton Finger'), 'npc': g.npc('Skeletal Horror'), 'q': [g.quest(x) for x in ('5803', '5505', '4862', '1159')],
-       'strat': g.instance('Stratholme'), 'status': g.status()}
+       'strat': g.instance('Stratholme'), 'status': g.status(),
+       'rodItem': g.item('16207'), 'reaver': g.item('17015'), 'rod': g.recipe('Runed Arcanite Rod'), 'r20036': g.recipe('20036'), 'part': g.recipe('Major Intellect')}
 print(json.dumps(out, ensure_ascii=False, default=jsonable))`;
     const py = JSON.parse(execFileSync('python3', ['-c', PY, path.join(__dirname, '../../tools')], { encoding: 'utf8', maxBuffer: 1 << 28 }));
     const pgRates = JSON.parse(B.query(`select json_agg(x order by x)::text from (select json_build_array(item_id, kind, source, source_id, zone, rate, label)::text x from game.drop_rates) s`))
@@ -114,6 +132,13 @@ print(json.dumps(out, ensure_ascii=False, default=jsonable))`;
     const ps = py.strat, ds = one(`select game.instance('Stratholme')::text`);
     same('instance (bosses, rules, unlocks, total)', [ps.bosses, ps.rules, ps.unlocks, ps.dropsTotal], [ds.bosses, ds.rules, ds.unlocks, ds.dropsTotal]);
     same('instance drops (as a set)', ps.drops.map((d) => JSON.stringify(canon(d))).sort(), ds.drops.map((d) => JSON.stringify(canon(d))).sort());
+    same('item with recipes (a tool)', py.rodItem, one(`select game.item('16207')::text`));
+    same('item with recipes (crafted)', py.reaver, one(`select game.item('17015')::text`));
+    same('recipe by spell id', py.r20036, one(`select game.recipe('20036')::text`));
+    // the order of equal-profession recipes by name is the database's collation: compared as sets
+    const recSet = (x) => Object.assign({}, x, { recipes: x.recipes.map((r) => JSON.stringify(canon(r))).sort() });
+    same('recipes by tool (as a set)', recSet(py.rod), recSet(one(`select game.recipe('Runed Arcanite Rod')::text`)));
+    same('recipes by part of a name (as a set)', recSet(py.part), recSet(one(`select game.recipe('Major Intellect')::text`)));
     const dbst = one('select game.status()::text');
     check(py.status.pack === meta.hash && JSON.stringify(canon(py.status.counts)) === JSON.stringify(canon(dbst.counts)) && Date.parse(py.status.built) === Date.parse(dbst.built),
       `game.py status: the pack the database loaded, its counts and build time (${JSON.stringify(py.status.counts)})`);

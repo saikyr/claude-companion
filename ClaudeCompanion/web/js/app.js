@@ -161,12 +161,53 @@
     const cs = craftSkill(id);
     return cs ? `Recipe: from a ${cs.prof} trainer` : null;
   }
+  // every profession recipe's tools and place, learned or not (#145): pack recipes[spell] = [name, profession,
+  // [tool item ids], place, [recipe items that teach it], [items it makes]] (VMaNGOS, Classic 1.12). For a recipe you
+  // know, the game's own answer (Professions.lua, recipes[].tools) wins. Forever's own new recipes have no row.
+  let RECIPE_IX = null;
+  function recipeIx() {
+    if (RECIPE_IX && RECIPE_IX.gd === GD) return RECIPE_IX;
+    RECIPE_IX = { gd: GD, made: {}, teach: {}, tool: {} };
+    const add = (m, id, sp) => { (m[id] = m[id] || []).push(sp); };
+    for (const [k, r] of Object.entries((GD && GD.recipes) || {})) {
+      const sp = Number(k);
+      arr(r[5]).forEach((id) => add(RECIPE_IX.made, id, sp)); arr(r[4]).forEach((id) => add(RECIPE_IX.teach, id, sp)); arr(r[2]).forEach((id) => add(RECIPE_IX.tool, id, sp));
+    }
+    return RECIPE_IX;
+  }
+  const knownRecipe = (sp) => { for (const p of Object.values((CH && CH.professions) || {})) { const r = arr(p.recipes).find((x) => x.id === sp); if (r) return r; } return null; };
+  // what one recipe needs, in words: { text: 'Runed Arcanite Rod', game: true when the game said so } or null (no data)
+  function recipeNeeds(sp) {
+    const mine = knownRecipe(sp);
+    if (mine && Array.isArray(mine.tools)) return { text: mine.tools.map((t) => t.name).join(', '), game: true, missing: mine.tools.filter((t) => !t.met).map((t) => t.name) };
+    const r = ((GD && GD.recipes) || {})[sp];
+    if (!r) return null;
+    // "Blacksmith Hammer at The Black Anvil", "a Moonwell", "Runed Arcanite Rod"
+    const tools = arr(r[2]).map((t) => anyItemName(t)).join(' and ');
+    const place = r[3] ? (/^The /.test(r[3]) ? r[3] : (/^[AEIOU]/.test(r[3]) ? 'an ' : 'a ') + r[3]) : '';
+    return { text: tools && place ? tools + ' at ' + place : tools || place, game: false };
+  }
+  function recipeToolLines(id) {
+    if (!GD || !GD.recipes) return [];
+    const ix = recipeIx(), out = [];
+    const say = (sp) => { const n = recipeNeeds(sp); return n ? (n.text ? 'needs ' + n.text : 'needs no tools') + (n.game ? '' : ' (Classic data)') : null; };
+    const made = arr(ix.made[id]).map(say).filter(Boolean);
+    if (made.length) out.push({ l: 'To craft it: ' + [...new Set(made)].join('; '), lc: '9ad0ff' });
+    arr(ix.teach[id]).forEach((sp) => { const w = say(sp); if (w) out.push({ l: `Teaches ${GD.recipes[sp][0]}: ${w}`, lc: '9ad0ff' }); });
+    const tool = arr(ix.tool[id]);
+    if (tool.length) {
+      const profs = [...new Set(tool.map((sp) => GD.recipes[sp][1]))];
+      out.push({ l: `Tool for ${tool.length} ${profs.length === 1 ? profs[0] + ' ' : ''}recipe${tool.length === 1 ? '' : 's'} (Classic data)`, lc: '8a8f98' });
+    }
+    return out;
+  }
   function gdSourceLines(id, max, skipQuests) {
     const all = (GD && GD.src[id]) || [];
     const out = [];
     const qs = all.filter((r) => r[0] === 'quest');
     if (qs.length && !skipQuests) out.push({ l: 'Quest reward: ' + [...new Set(qs.map((r) => questName(r[2])))].slice(0, 2).join(', '), lc: '9ad0ff' });
     if (all.some((r) => r[0] === 'craft')) { const cs = craftSkill(id), rl = recipeLine(id); out.push({ l: `Crafted${cs ? ' (' + cs.prof + ')' : ''}${rl ? ' · ' + rl : ''}`, lc: '9ad0ff' }); }
+    out.push(...recipeToolLines(id));
     const rows = all.filter((r) => r[0] !== 'quest' && r[0] !== 'craft');
     const fv = rows.filter((r) => r[10] === 'f'), cl = rows.filter((r) => r[10] === 'c');
     const kindWord = { drop: 'drops from', object: 'found in', container: 'inside', quest: 'reward from', craft: 'crafted', vendor: 'sold by', world: '' };
