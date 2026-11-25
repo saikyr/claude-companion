@@ -3,6 +3,8 @@
 Dates are UTC, 2026. The addon version is in `ClaudeCompanion.toc` / `Core.lua`.
 
 ## 1.5.0 (in progress: every merge to main updates itself)
+- **Recipe tools.** Each known recipe now says which tools or places it needs (a Runed Arcanite Rod, an anvil) and which you lack, and isn't counted as craftable while one is missing (#145). Type /reload in game.
+- **Turn-ins are kept.** Bag advice no longer says to sell an item a quest you are on still needs, such as Devout Gloves for Just Compensation: it says Keep and names the quest (#144).
 - **Gray loot counts at vendor price.** The in-game grind line and the app's gold per hour no longer price gray items at an AH listing (one junk greatsword listed at 22g read as 22g of loot); grays only ever go to a vendor (#131).
 - **Reputation gates at the right standing.** Recipes and rep gear showed the standing one step too low (Honored as Friendly), and Friendly-only recipes showed no gate; they now match Forever's tooltips (#129).
 - **Where things are inside dungeons.** The addon now notes which part of a dungeon you saw each creature, quest giver and quest object in (the area name the game shows, like Hordemar City), and the app puts that with your boss kills and quest items, per dungeon. Claude's snapshot has it, and next to each quest in your log, where its objectives were found, so a dungeon prep can say where to look. It fills in as you play (your past boss kills and quest loot already count). Needs a /reload in game.

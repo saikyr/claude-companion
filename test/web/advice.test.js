@@ -171,6 +171,15 @@ test('snapshot lists flagged items with their reasons', () => {
   assert(!s.find((x) => x.name === 'Lost Letter'), 'kept items are not listed');
 });
 
+test('an item a quest in progress needs is kept and named, even when it would sell (#144)', () => {
+  ctx.CC.quests = { neededFor: (name) => (name === 'Silk Robe' ? { id: 1, title: 'Bring the Robe' } : null) };
+  CH.snap.taken++;
+  const v = flag(6);
+  delete ctx.CC.quests; CH.snap.taken++;
+  assert.strictEqual(v.flag, 'keep');
+  assert.match(v.words, /Keep: for Bring the Robe/);
+  assert.strictEqual(flag(6).flag, 'ah', 'without the quest it sells again');
+});
 test('quest rewards you do not own are scored per spec by the same engine', () => {
   const r = ADV.rate(20);
   assert.strictEqual(r.name, 'Reward Helm');
