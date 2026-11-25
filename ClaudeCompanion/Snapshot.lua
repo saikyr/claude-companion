@@ -246,7 +246,7 @@ ns.ItemCooldowns = ItemCooldowns
 
 ---------------------------------------------------------------- gear sets
 -- the link of a set item from its packed location: worn (GetInventoryItemLink) or in a bag (GetContainerItemLink);
--- bank and lost items give none. EquipmentManager_UnpackLocation returns (player, bank, bags, voidStorage, slot,
+-- bank and lost items give none (a bank item: nil, true, so the app doesn't take another copy's enchant for it). EquipmentManager_UnpackLocation returns (player, bank, bags, voidStorage, slot,
 -- bag) on newer clients, (player, bank, bags, slot, bag) on older ones (the fourth value says which) and one table
 -- on the newest.
 local function SetItemLink(loc)
@@ -260,7 +260,8 @@ local function SetItemLink(loc)
         local d = r[2]
         player, bank, bags, slot, bag = d.isPlayer, d.isBank, d.isBags, d.slot, d.bag
     end
-    if bank or not player or type(slot) ~= "number" then return nil end
+    if bank then return nil, true end
+    if not player or type(slot) ~= "number" then return nil end
     if bags then return type(bag) == "number" and Clean(Call(CI.GetContainerItemLink or GetContainerItemLink, bag, slot)) or nil end
     return Clean(Call(GetInventoryItemLink, "player", slot))
 end
@@ -281,8 +282,8 @@ local function GearSets()
                 if Clean(itemID) and itemID > 0 then
                     -- the copy the set uses, where the game can say (worn or in your bags): its link carries its
                     -- enchant (#147), and the item is saved like any other you hold
-                    local link = SetItemLink(type(locs) == "table" and locs[slot])
-                    items[#items + 1] = { slot = slot, slotName = SLOT_NAMES[slot], id = itemID,
+                    local link, inBank = SetItemLink(type(locs) == "table" and locs[slot])
+                    items[#items + 1] = { slot = slot, slotName = SLOT_NAMES[slot], id = itemID, bank = inBank or nil,
                         item = link and tonumber(link:match("item:(%d+)")) == itemID and ns.NoteItem(link) or nil }
                 end
             end

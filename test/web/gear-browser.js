@@ -139,7 +139,8 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
 
   // ---- the snapshot for Claude
   const snapQ = await page.evaluate(() => (window.CC.snapshot().quests || []).find((q) => q.id === 7488));
-  check(snapQ && snapQ.rewards.length === 1 && snapQ.rewards[0].id === 18491 && Array.isArray(snapQ.rewards[0].specs), 'a complete quest the game read with no rewards: the pack\'s reward, scored for every spec');
+  // (the pack's rewards for it: 18491, and since the 25 Nov pack two Forever-only choices as well)
+  check(snapQ && snapQ.rewards.some((r) => r.id === 18491) && snapQ.rewards.every((r) => Array.isArray(r.specs)), 'a complete quest the game read with no rewards: the pack\'s rewards, scored for every spec');
   const sum = await page.evaluate(() => window.CC.gear.summary());
   const holy = sum.find((s) => s.tree === 'Holy');
   // #99: a healer's crit weight comes from their own heals: Greater Heal R5 and Flash Heal R7 at 500 +healing

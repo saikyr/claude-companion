@@ -312,12 +312,15 @@
     }
     const worn = {};
     // the copy the set uses when the game said (its link: its enchant, #147), else the copy you wear, else one you have
-    const wearing = {};
-    Object.values((A.CH.snap || {}).equipped || {}).forEach((e) => { if (e && e.item) wearing[idOf(e.item)] = e.item; });
+    // (the copy you wear only when you wear one copy of it and the set has one: a bank copy, or two of one weapon, aren't
+    // that copy; another copy's key is only a guess at its enchant, guess: true)
+    const wearing = {}, inSet = {};
+    Object.values((A.CH.snap || {}).equipped || {}).forEach((e) => { if (e && e.item) { const i = idOf(e.item); wearing[i] = wearing[i] === undefined ? e.item : null; } });
+    arr(set.items).forEach((x) => { if (x && x.id > 0) inSet[x.id] = (inSet[x.id] || 0) + 1; });
     arr(set.items).forEach((x) => {
       if (!x || !(x.id > 0)) return;
-      const key = x.item || wearing[x.id], own = key && A.item(key), mine = own ? Object.assign({ key }, own) : A.byId(x.id);
-      worn[x.slot] = { id: x.id, key: key || (mine && mine.key), st: ownStats(mine, x.id) };
+      const key = x.item || (inSet[x.id] === 1 && !x.bank ? wearing[x.id] : null), own = key && A.item(key), mine = own ? Object.assign({ key }, own) : A.byId(x.id);
+      worn[x.slot] = { id: x.id, key: key || (mine && mine.key), guess: !key || undefined, bank: x.bank || undefined, st: ownStats(mine, x.id) };
     });
     const lost = set.numLost ? `; the game listed ${set.numLost} of its items as missing when it saved` : '';
     return { key: String(set.id), label: `your “${set.name}” set (${why}${lost})`, short: `your ${set.name} set`, worn };

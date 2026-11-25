@@ -98,10 +98,11 @@ C_Container = {
   GetContainerItemInfo = function(b, s) if s == 1 then return { hyperlink = "|cffffffff|Hitem:4338::|h[Mageweave Cloth]|h|r", stackCount = 20, itemID = 4338, quality = 1, iconFileID = 132892, isBound = false } end end,
   ContainerIDToInventoryID = function(b) return 19 + b end }
 NUM_BAG_SLOTS = 4
-C_EquipmentSet = { GetEquipmentSetIDs = function() return { 0, 1 } end, GetEquipmentSetInfo = function(id) return id==0 and "Holy" or "Shadow", 1234, id, id==0, 17, 17, 0, 0, 0 end, GetItemIDs = function() return { [1] = 10041, [5] = -1 } end,
-  GetItemLocations = function() return { [1] = 1048577 } end }
+C_EquipmentSet = { GetEquipmentSetIDs = function() return { 0, 1 } end, GetEquipmentSetInfo = function(id) return id==0 and "Holy" or "Shadow", 1234, id, id==0, 17, 17, 0, 0, 0 end, GetItemIDs = function() return { [1] = 10041, [3] = 10042, [5] = -1 } end,
+  GetItemLocations = function() return { [1] = 1048577, [3] = 2 } end }
 -- (player, bank, bags, voidStorage, slot, bag): worn, slot 1
-function EquipmentManager_UnpackLocation(loc) if loc == 1048577 then return true, false, false, false, 1, nil end end
+-- 2: in the bank
+function EquipmentManager_UnpackLocation(loc) if loc == 1048577 then return true, false, false, false, 1, nil elseif loc == 2 then return true, true, false, false, 3, nil end end
 C_SpecializationInfo = { GetActiveSpecGroup = function() return 2 end, GetSpecialization = function() return 3 end, GetSpecializationInfo = function() return 258, "Shadow", "", 136207 end, GetNumSpecGroups = function() return 2 end }
 C_ClassTalents = { GetActiveConfigID = function() return 77 end }
 C_Traits = { GetConfigInfo = function() return { name = "Shadow", treeIDs = { 1 } } end, GenerateImportString = function() return "ABC" end,
@@ -275,8 +276,10 @@ end
 do -- #147: a gear set item keeps the copy the set uses (its link, so its enchant), saved like any item
   local set = ns.char.snap and ns.char.snap.gearSets and ns.char.snap.gearSets[1]
   local robe
-  for _, x in ipairs(set and set.items or {}) do if x.slot == 1 then robe = x end end
-  local ok = robe and robe.id == 10041 and robe.item == "item:10041::::::::58:::::" and ClaudeCompanionDB.items[robe.item] ~= nil
+  local banked
+  for _, x in ipairs(set and set.items or {}) do if x.slot == 1 then robe = x elseif x.slot == 3 then banked = x end end
+  local ok = robe and robe.id == 10041 and robe.item == "item:10041::::::::58:::::" and ClaudeCompanionDB.items[robe.item] ~= nil and not robe.bank
+    and banked and banked.bank == true and banked.item == nil
   print((ok and "PASS " or "FAIL ") .. "a gear set item keeps the copy it uses (#147)"); if not ok then FAILED = true end
 end
 -- v1.2: disenchant, rep, scan, interaction manager

@@ -93,6 +93,27 @@ test('stat lines in each form the game and the pack write them', () => {
   assert.strictEqual(p('Permanently enchant a piece of chest armor to give +65 mana.'), '{"mana":65}');
   assert.strictEqual(p('Permanently enchant a Melee Weapon to do 1 additional point of damage.'), '{"wdmg":1}');
 });
+test("the game's short enchant names, number before or after, several stats at once (review of #147)", () => {
+  const p = (t) => JSON.stringify(E.parse(t).st);
+  assert.strictEqual(p('Enchanted: Healing and Spell Damage +8'), '{"45":8}');
+  assert.strictEqual(p('Enchanted: +8 Healing and Spell Damage'), '{"45":8}');
+  assert.strictEqual(p('Enchanted: +30 Spell Damage and Healing'), '{"45":30}');
+  assert.strictEqual(p('Enchanted: Mana Regen +4/Stamina +10/Healing +24'), '{"7":10,"41":24,"43":4}');
+  assert.strictEqual(p('Enchanted: Ranged Attack Power +24/Stamina +10/Hit +1%'), '{"7":10,"39":24,"117":1}');
+  assert.strictEqual(p('Enchanted: Spell Damage +15/Spell Critical +1%'), '{"21":1,"42":15}');
+  assert.strictEqual(p('Enchanted: Attack Power +26/Critical +1%'), '{"38":26,"116":1}');
+  assert.strictEqual(p('Enchanted: Spell Hit +1%/Healing and Spell Damage +18'), '{"18":1,"45":18}');
+  assert.strictEqual(p('Enchanted: Mana Regen 4 per 5 sec.'), '{"43":4}');
+  assert.strictEqual(p('Enchanted: +2% Block'), '{"120":2}');
+});
+test('a name-only line the Classic data names otherwise is renamed on Forever, not given Classic numbers', () => {
+  const saved = CH.professions; CH.professions = {};
+  const r = E.info(913, 'Superior Intellect');
+  assert.strictEqual(r.from, 'changed'); assert.strictEqual(r.any, false);
+  assert.strictEqual(E.info(1888, 'Greater Resistance').from, 'classic', 'the Classic name: Classic numbers');
+  assert.strictEqual(E.info(2544, 'Arcanum of Focus').from, 'classic', "the item's name");
+  CH.professions = saved;
+});
 test('procs, speed and skills are effects, never stats', () => {
   const c = E.parse('Permanently enchant a melee weapon so that often when attacking in melee it heals for 75 to 125 and increases Strength by 100 for 15 sec.');
   assert.deepStrictEqual([JSON.stringify(c.st), c.effect], ['{}', true], 'Crusader: the 100 Strength is a proc');
@@ -177,6 +198,21 @@ test('weapon damage counts as DPS at the weapon speed; the snapshot says where e
   assert.strictEqual(s.find((r) => r.slot === 'Wrist').enchant, null);
   assert.strictEqual(s.find((r) => r.slot === 'Wrist').empty, true);
   assert.match(s.find((r) => r.slot === 'Wrist').best.where, /Formula: Enchant Bracer - Healing Power/);
+});
+test('an enchant on now with unknown stats: gains over it are unknown, not counted from nothing', () => {
+  const legs = E.summary(w, base).find((r) => r.slot === 'Legs');
+  assert.strictEqual(legs.enchant.name, 'Spellthread'); assert.strictEqual(legs.gainUnknown, true); assert.strictEqual(legs.isBest, false);
+  assert.strictEqual(E.summary(w, base).find((r) => r.slot === 'Chest').gainUnknown, undefined);
+});
+test('an enchant on now that nothing beats is the best', () => {
+  const s = E.summary(w, { worn: { 15: { id: 102, key: 'item:102:1888' } } });
+  assert.strictEqual(s[0].isBest, true);
+});
+test('a set copy only guessed (another copy, or in the bank) is unknown, not its enchant or empty', () => {
+  const s = E.summary(w, { worn: { 9: { id: 101, key: 'item:101', guess: true } } });
+  assert.match(s[0].enchant, /^unknown/); assert.strictEqual(s[0].empty, false); assert.strictEqual(s[0].gainUnknown, true);
+  const b = E.summary(w, { worn: { 9: { id: 101, key: 'item:101', guess: true, bank: true } } });
+  assert.match(b[0].enchant, /in your bank/);
 });
 test("an item whose copy the game didn't name: its enchant is unknown, not empty", () => {
   const s = E.summary(w, { worn: { 9: { id: 101, key: undefined } } });

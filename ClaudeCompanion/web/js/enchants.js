@@ -34,21 +34,21 @@
   const RULES = [
     [/\+?(\d+) to all stats|all stats \+?(\d+)|\+(\d+) all stats/, (m) => ALL(Object.values(BASE), num(m))],
     [/\+?(\d+) (?:to )?all resistances|resistances? to all (?:schools of magic|magic schools) by (\d+)|(\d+) resistance to all magic schools|all resistances \+?(\d+)/, (m) => ALL(Object.values(RES), num(m))],
-    [/\+?(\d+) to (?:your |all )?healing and (?:spell )?damage|(?:healing and (?:spell )?damage|(?:spell )?damage and healing)[a-z ]{0,45}?(\d+)|\+?(\d+) spell power|spell power \+?(\d+)/, (m) => ({ 45: num(m) })],
+    [/\+?(\d+) (?:to (?:your |all )?)?(?:healing and (?:spell )?damage|(?:spell )?damage and healing)|(?:healing and (?:spell )?damage|(?:spell )?damage and healing)[a-z ]{0,45}?\+?(\d+)|\+?(\d+) spell power|spell power \+?(\d+)/, (m) => ({ 45: num(m) })],
     [/up to (\d+) damage to spells|\+?(\d+) spell damage|spell damage \+?(\d+)/, (m) => ({ 42: num(m) })],
     [/healing[a-z'+ ]{0,50}?(\d+)|(\d+) (?:points of )?healing/, (m) => ({ 41: num(m) })],
     [new RegExp(S6 + ' damage (?:by )?(?:up to )?\\+?(\\d+)|(\\d+) additional ' + S6 + ' damage when casting|\\+(\\d+) ' + S6 + ' (?:spell )?damage'), (m) => (m[1] ? { [SCHOOL[m[1]]]: Number(m[2]) } : m[4] ? { [SCHOOL[m[4]]]: Number(m[3]) } : { [SCHOOL[m[6]]]: Number(m[5]) })],
-    [/(\d+) mana (?:every|per) 5 sec|mana per 5 (?:sec\.? )?\+?(\d+)|\+(\d+) mp5/, (m) => ({ 43: num(m) })],
+    [/(\d+) mana (?:every|per) 5 sec|mana per 5 (?:sec\.? )?\+?(\d+)|\+(\d+) mp5|mana regen(?:eration)? \+?(\d+)(?: (?:mana )?per 5 sec\.?)?/, (m) => ({ 43: num(m) })],
     [/(\d+) health (?:every|per) 5 sec/, (m) => ({ 46: num(m) })],
     [/\+?(\d+) ranged attack power|ranged attack power (?:by )?\+?(\d+)/, (m) => ({ 39: num(m) })],
     [/\+?(\d+) attack power|attack power (?:by )?\+?(\d+)/, (m) => ({ 38: num(m) })],
     [/(\d+) (?:shield )?block value|block value (?:by )?\+?(\d+)/, (m) => ({ 48: num(m) })],
-    [/\+?([\d.]+)% chance to block|block (?:chance )?\+?([\d.]+)%/, (m) => ({ 120: num(m) })],
+    [/\+?([\d.]+)% (?:chance to )?block|block (?:chance )?\+?([\d.]+)%/, (m) => ({ 120: num(m) })],
     [/\+?([\d.]+)% (?:chance to )?dodge|dodge \+?([\d.]+)%/, (m) => ({ 118: num(m) })],
-    [/\+?([\d.]+)% chance to hit with spells|chance to hit with spells by ([\d.]+)%/, (m) => ({ 18: num(m) })],
-    [/(?:chance to land a )?critical strike with spells by ([\d.]+)%|\+?([\d.]+)% (?:chance to )?(?:critical strike|crit) with spells/, (m) => ({ 21: num(m) })],
-    [/(?:chance to land a )?critical strike by ([\d.]+)%|\+?([\d.]+)% (?:chance to )?(?:critical strike|crit)/, (m) => ({ 116: num(m) })],
-    [/\+?([\d.]+)% chance to hit|chance to hit by ([\d.]+)%|\+?([\d.]+)% hit/, (m) => ({ 117: num(m) })],
+    [/\+?([\d.]+)% chance to hit with spells|chance to hit with spells by ([\d.]+)%|spell hit \+?([\d.]+)%|\+?([\d.]+)% spell hit/, (m) => ({ 18: num(m) })],
+    [/(?:chance to land a )?critical strike with spells by ([\d.]+)%|\+?([\d.]+)% (?:chance to )?(?:critical strike|crit) with spells|spell crit(?:ical)?(?: strike)? \+?([\d.]+)%|\+?([\d.]+)% spell crit(?:ical)?(?: strike)?/, (m) => ({ 21: num(m) })],
+    [/(?:chance to land a )?critical strike by ([\d.]+)%|\+?([\d.]+)% (?:chance to )?(?:critical strike|crit)|crit(?:ical)?(?: strike)? \+?([\d.]+)%/, (m) => ({ 116: num(m) })],
+    [/\+?([\d.]+)% chance to hit|chance to hit by ([\d.]+)%|\+?([\d.]+)% hit|\bhit \+?([\d.]+)%/, (m) => ({ 117: num(m) })],
     [new RegExp('\\+?(\\d+) (?:to )?' + B + '|' + B + '(?: value)? (?:by |\\+)(\\d+)'), (m) => (m[2] ? { [BASE[m[2]]]: Number(m[1]) } : { [BASE[m[3]]]: Number(m[4]) })],
     [new RegExp('\\+?(\\d+) ' + R5 + ' resistance|resistance to ' + R5 + ' by (\\d+)|' + R5 + ' resistance \\+?(\\d+)'), (m) => (m[2] ? { [RES[m[2]]]: Number(m[1]) } : m[3] ? { [RES[m[3]]]: Number(m[4]) } : { [RES[m[5]]]: Number(m[6]) })],
     [/\+?(\d+) defense|defense (?:value|skill)?[a-z ,]{0,80}?by (\d+)|defense \+?(\d+)/, (m) => ({ 12: num(m) })],
@@ -130,7 +130,22 @@
   }
   function info(eid, line) {
     const e = ENCH()[eid];
-    if (line) { const p = parse(line); if (p.any || !e) return Object.assign({ name: line, from: p.any ? 'game' : 'unknown' }, p); }
+    // the game's line: its stats, unless it is the Classic name word for word and the Classic text says more (the line
+    // is a short name: "Healing and Spell Damage +18/Spell Hit +1%" may hold more than the parser reads from a name)
+    const same = (n) => !!n && String(n).toLowerCase() === String(line).toLowerCase();
+    if (line) {
+      const p = parse(line);
+      if (!e) return Object.assign({ name: line, from: p.any ? 'game' : 'unknown' }, p);
+      if (p.any) {
+        const c = parse(e[1]);
+        if (same(e[0]) && Object.keys(c.st).some((k) => !(k in p.st))) return Object.assign({ name: line, from: 'classic' }, c);
+        return Object.assign({ name: line, from: 'game' }, p);
+      }
+      // a line with no numbers that is neither the Classic name nor an item's that applies it: Forever renamed it, so
+      // the Classic numbers may not be its own (Superior Mana is Superior Intellect there)
+      if (!same(e[0]) && !itemsOf(e).some((id) => same(A.anyItemName(id))) && !spellsOf(e).some((sp) => same(String(classicName(sp) || '').replace(/^Enchant [^-]+ - /, ''))))
+        return { name: line, st: {}, effect: false, any: false, from: 'changed' };
+    }
     // an enchant only an item applies is called what the item is ("Lesser Arcanum of Rumination", not the spell's
     // "Lesser Arcane Amalgamation"; "Light Armor Kit", not "Armor +8")
     const name = line || (e && (!e[2].length && e[3].length ? A.anyItemName(e[3][0][0]) : e[0])) || `enchant ${eid}`;
@@ -159,6 +174,8 @@
     return o;
   }
   const UNKNOWN = "not read yet: this copy of the item isn't in your saved items (open your bags or bank in game, then Sync)";
+  const BANKED = "in your bank: the game doesn't say which copy the set uses there, so its enchant is unknown (put it in your bags)";
+  const unknownText = (x) => (x.bank ? BANKED : UNKNOWN);
   const SLOT_NAME = { 1: 'Head', 3: 'Shoulder', 5: 'Chest', 6: 'Waist', 7: 'Legs', 8: 'Feet', 9: 'Wrist', 10: 'Hands', 15: 'Back', 16: 'Main hand', 17: 'Off hand', 18: 'Ranged' };
 
   // ---------------------------------------------------------------- every enchant you could put on an item
@@ -216,12 +233,15 @@
       const eid = idOfKey(x.key), line = gameLine(x.key);
       const cur = eid ? Object.assign({ id: eid }, info(eid, line)) : null;
       const curSt = cur ? scoreSt(cur.st, x) : {};
-      const curS = cur ? W.score(curSt, w, name, curSt) : 0;
-      opts.forEach((c) => { c.s = W.score(scoreSt(c.st, x), w, name, curSt); c.d = c.s - curS; });
+      const curS = cur ? W.score(curSt, w, name, {}) : 0;
+      // an enchant on now whose worth isn't known (no stats read, or an effect only): gains over it are unknown
+      const unsure = !x.key || x.guess || (cur && !cur.any);
+      // the hit model's total counts items only, not enchants, so an enchant replaces no hit there
+      opts.forEach((c) => { c.s = W.score(scoreSt(c.st, x), w, name, {}); c.d = c.s - curS; });
       opts.sort((a, b) => b.s - a.s || (b.have || 0) - (a.have || 0));
       const ok = opts.filter((c) => !c.raid);
       const best = ok.find((c) => c.any && c.s > 0) || null;
-      rows.push({ raidBest: opts.find((c) => c.raid && c.any && c.s > ((best && best.s) || 0)) || null, slot: Number(slot), name, x, cur, curS, known: !!x.key, empty: !!x.key && !eid,
+      rows.push({ unsure, raidBest: opts.find((c) => c.raid && c.any && c.s > ((best && best.s) || 0)) || null, slot: Number(slot), name, x, cur, curS, known: !!x.key && !x.guess, empty: !!x.key && !x.guess && !eid,
         best, bestNow: opts.find((c) => c.have && c.any && c.s > 0) || null, options: opts });
     });
     return rows.sort((a, b) => ORDER.indexOf(a.name) - ORDER.indexOf(b.name));
@@ -257,11 +277,11 @@
   function summary(w, base) {
     return plan(w, base).map((r) => ({
       slot: r.name, item: { id: r.x.id, name: A.anyItemName(r.x.id) },
-      enchant: !r.known ? 'unknown: ' + UNKNOWN : r.cur ? { id: r.cur.id, name: r.cur.name, stats: r.cur.st, scored: r.cur.any, effect: r.cur.effect, statsFrom: r.cur.from, score: +r.curS.toFixed(1) } : null,
+      enchant: !r.known ? 'unknown: ' + unknownText(r.x) : r.cur ? { id: r.cur.id, name: r.cur.name, stats: r.cur.st, scored: r.cur.any, effect: r.cur.effect, statsFrom: r.cur.from, score: +r.curS.toFixed(1) } : null,
       empty: r.empty,
       best: one(r.best, null), bestYouCanApplyNow: one(r.bestNow, null), bestFromRaids: one(r.raidBest, undefined),
-      isBest: !!(r.cur && r.best && r.best.d <= 0.05),
-      gainUnknown: !r.known || undefined,
+      isBest: !!(r.cur && !r.unsure && (!r.best || r.best.d <= 0.05)),
+      gainUnknown: r.unsure || undefined,
     }));
   }
 
@@ -271,20 +291,20 @@
   function view(w, base) {
     const rows = plan(w, base);
     if (!A.GD.enchants) return '<div class="empty">This game-data pack has no enchants yet: it updates itself within a day.</div>';
-    const empty = rows.filter((r) => r.empty), gain = rows.filter((r) => r.best && r.best.d > 0.05);
+    const empty = rows.filter((r) => r.empty), gain = rows.filter((r) => r.best && !r.unsure && r.best.d > 0.05);
     let h = `<p class="meta">Every slot of ${esc(base.short)} that can take a permanent enchant: what is on it, its score with these weights, and the best you can get.
       ${empty.length ? `<b class="neg">${empty.length} slot${empty.length > 1 ? 's have' : ' has'} no enchant:</b> ${empty.map((r) => esc(r.name)).join(', ')}.` : 'No enchantable slot is empty.'}
       ${gain.length ? `${gain.length} could take a better one.` : ''}</p>`;
     h += '<div class="table ench"><div class="thead"><div>Slot</div><div>Enchant now</div><div class="c-num">Score</div><div>Best you can get</div><div class="c-num">Gain</div></div>';
     rows.forEach((r) => {
-      const cur = !r.known ? `<span class="dim">${esc(UNKNOWN)}</span>`
+      const cur = !r.known ? `<span class="dim">${esc(unknownText(r.x))}</span>`
         : r.cur ? `<b>${esc(r.cur.name)}</b><div class="sub">${esc(statText(r.cur.st) || (r.cur.effect ? 'an effect (not scored)' : 'stats unknown'))} · ${esc(FROM_WORD[r.cur.from])}</div>`
           : '<span class="badge neg">no enchant</span>';
       const b = r.best;
       const best = b ? `<b>${esc(b.name)}</b><div class="sub">${esc(statsOf(b))} · ${esc(howText(b))}</div>${b.reagents && b.reagents.length ? `<div class="sub">Reagents: ${esc(reagentText(b.reagents))}</div>` : ''}`
-        + (r.bestNow && r.bestNow !== b ? `<div class="sub">Best you can apply now: <b>${esc(r.bestNow.name)}</b> ${fmt(r.bestNow.d)}</div>` : '') : '<span class="dim">nothing outside raids scores for these weights</span>';
-      const rb = r.raidBest ? `<div class="sub">From raids: <b>${esc(r.raidBest.name)}</b> ${r.known ? fmt(r.raidBest.d) : ''} <span class="badge">raid</span> · ${esc(howText(r.raidBest))}</div>` : '';
-      h += `<div class="tr"><div>${esc(r.name)}<div class="sub">${A.itemLink(r.x.id)}</div></div><div>${cur}</div><div class="c-num">${r.cur ? r.curS.toFixed(1) : '—'}</div><div>${best}${rb}</div><div class="c-num ${b && b.d > 0.05 && r.known ? 'pos' : 'dim'}">${!b ? '—' : !r.known ? '?' : b.d > 0.05 ? fmt(b.d) : 'best'}</div></div>`;
+        + (r.bestNow && r.bestNow !== b ? `<div class="sub">Best you can apply now: <b>${esc(r.bestNow.name)}</b> ${r.unsure ? '' : fmt(r.bestNow.d)}</div>` : '') : '<span class="dim">nothing outside raids scores for these weights</span>';
+      const rb = r.raidBest ? `<div class="sub">From raids: <b>${esc(r.raidBest.name)}</b> ${!r.unsure ? fmt(r.raidBest.d) : ''} <span class="badge">raid</span> · ${esc(howText(r.raidBest))}</div>` : '';
+      h += `<div class="tr"><div>${esc(r.name)}<div class="sub">${A.itemLink(r.x.id)}</div></div><div>${cur}</div><div class="c-num">${r.cur ? r.curS.toFixed(1) : '—'}</div><div>${best}${rb}</div><div class="c-num ${b && b.d > 0.05 && !r.unsure ? 'pos' : 'dim'}">${!b ? '—' : r.unsure ? '?' : b.d > 0.05 ? fmt(b.d) : 'best'}</div></div>`;
       const more = r.options.filter((c) => c !== b).slice(0, SHOW);
       if (more.length) h += `<details class="ench-more"><summary class="dim small">${r.options.length - 1} other enchant${r.options.length > 2 ? 's' : ''} for ${esc(r.name)}</summary><ul>${more.map((c) => `<li>${esc(c.name)} ${c.any ? fmt(c.d) : '<span class="dim">(not scored)</span>'}${c.raid ? ' <span class="badge">raid</span>' : ''} <span class="dim">· ${esc(statsOf(c))} · ${esc(howText(c))}</span></li>`).join('')}</ul></details>`;
     });
