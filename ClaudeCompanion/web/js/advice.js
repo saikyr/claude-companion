@@ -177,6 +177,14 @@
       if ((it.class === 2 || it.class === 4) && [4, 19].includes(invOf(it))) { v.flag = 'keep'; v.words = 'Keep: shirt or tabard'; return; }
       const ups = v.specs.filter((s) => s.can && s.gain > 0.5);
       const now = ups.filter((s) => !s.later), later = ups.filter((s) => s.later);
+      // a quest you are on needs it handed in (Devout Gloves for Just Compensation, #144): never sold, and not worn away
+      const need = CC.quests && CC.quests.neededFor ? CC.quests.neededFor(it.name) : null;
+      if (need) {
+        v.flag = 'keep'; v.quest = need;
+        v.words = `Keep: for ${need.title}` + (now.length ? ` (also an upgrade for ${now.map((s) => s.name).join(' and ')})` : '');
+        v.why = `${need.title} (or a later step of its chain) asks you to bring it.`;
+        return;
+      }
       // an effect the score can't count (a trinket's Use, a proc) on either side: say so, don't decide
       const unsure = now.filter((s) => s.effect);
       if (now.length && unsure.length === now.length) { v.flag = 'ask'; v.words = 'Keep, ask'; v.why = `Scores higher for ${unsure.map((s) => s.name).join(' and ')}, but a Use or proc effect isn't counted (this item's or ${A.anyItemName(unsure[0].vs.id)}'s).`; return; }
@@ -398,7 +406,8 @@
     // for the Claude snapshot
     snapshot() {
       const C = compute();
-      return Object.values(C.byKey).filter((v) => v.flag && v.flag !== 'keep').map((v) => ({ id: v.id || null, name: v.name || null, where: [...new Set(v.where)], flag: v.flag, words: v.words, why: v.why || null,
+      return Object.values(C.byKey).filter((v) => v.flag && (v.flag !== 'keep' || v.quest)).map((v) => ({ id: v.id || null, name: v.name || null, where: [...new Set(v.where)], flag: v.flag, words: v.words, why: v.why || null,
+        quest: v.quest || undefined,
         value: v.amount || null, deFrom: v.flag === 'de' && v.value ? v.value.deFrom || null : undefined, specs: v.specs.filter((s) => s.gain != null && !s.same).map((s) => ({ spec: s.name, score: +s.s.toFixed(1), gain: +s.gain.toFixed(1), canWear: s.can, level: s.later || null, setBonus: s.setBonus || undefined })) }));
     },
     bestOwnedSnapshot() {

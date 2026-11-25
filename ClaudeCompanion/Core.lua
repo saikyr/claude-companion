@@ -27,7 +27,7 @@ ns.VERSION = "1.5.0"
 ns.SCHEMA = 1
 -- the source commit of this build: tools/publish-stable.py writes it here; "dev" in a checkout.
 -- The app compares it with the build it runs itself, to say when the game still needs a /reload.
-ns.BUILD = "1c5632cfba43"
+ns.BUILD = "f8f8a78f504d"
 
 BINDING_HEADER_CLAUDECOMPANION = "Claude Companion"
 BINDING_NAME_CLAUDECOMPANION_TOGGLE = "Open or close Claude window"
@@ -445,6 +445,7 @@ function ns.Capabilities()
     local caps = { api = {}, secret = {}, version = ns.VERSION, checked = ns.Now() }
     for _, name in ipairs(API_NAMES) do caps.api[name] = type(_G[name]) end
     caps.api["C_Traits.GetTraitDescription"] = type(C_Traits and C_Traits.GetTraitDescription)
+    caps.api["C_TradeSkillUI.GetRecipeRequirements"] = type(C_TradeSkillUI and C_TradeSkillUI.GetRecipeRequirements)
     local function probe(label, fn, ...)
         local ok, v = pcall(fn, ...)
         if not ok then caps.secret[label] = "error"
