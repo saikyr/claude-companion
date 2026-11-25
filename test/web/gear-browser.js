@@ -261,6 +261,11 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   check(moon.includes('To craft it: needs a Moonwell (Classic data)') || moon.some((l) => /^To craft it: needs .*Moonwell$/.test(l)), 'a place alone: a Moonwell (' + moon.join(' | ') + ')');
   const gates = await page.evaluate(() => window.CC.api.itemGates(19447).map((g) => g.short));   // Formula: Enchant Bracer - Healing (Revered: Forever's tooltip, #129)
   check(gates.includes('Revered with Argent Dawn (you: Neutral)'), "an item's own reputation need, against yours (" + gates.join(' | ') + ')');
+  // a vendor's own price and reputation (#151): Forever's Formula: Enchant Chest - Greater Stats from Alynsia (the Alliance one)
+  const fav = await page.evaluate(() => ({ gates: window.CC.api.itemGates(249526).map((g) => g.text), lines: window.CC.api.gdSourceLines(249526).map((l) => l.l) }));
+  check(fav.gates.includes('Needs Honored with Azeroth Commerce Authority for buying it from Alynsia (you: none)') && !fav.gates.some((g) => /Durotar/.test(g)),
+    "a vendor's reputation, your side's vendor only (" + fav.gates.join(' | ') + ')');
+  check(fav.lines.some((l) => /^Vendor: .*Alynsia \(Redridge Mountains\) for 240 Merchant's Favor/.test(l)), "a vendor's price in Merchant's Favor (" + fav.lines.join(' | ') + ')');
 
   check(errors.length === 0, 'no page errors' + (errors.length ? ': ' + errors.slice(0, 3).join(' | ') : ''));
 

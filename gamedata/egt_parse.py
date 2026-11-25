@@ -92,6 +92,27 @@ def set_stats(text):
     return None
 
 
+STANDINGS = ('Friendly', 'Honored', 'Revered', 'Exalted')
+VENDOR_RX = re.compile(r'(?:^| )Vendor (.+?)(?= Vendor |$)')
+
+
+def vendors(how):
+    """The page's vendor blocks (#151): "Vendor Alynsia Enchanter · Redridge Mountains 11.2, 71.4 · Alliance 240 Merchant's
+    Favor Requires Azeroth Commerce Authority - Honored · Enchanting (300)", one per vendor, as
+    {vendor block text: {cost: "240 Merchant's Favor" (a price that isn't gold), rep: [faction, standing]}}. The vendor's
+    name is matched by build.py, which knows it (a name can have spaces and a title follows it)."""
+    out = []
+    for m in VENDOR_RX.finditer(' '.join(how)):
+        t = m[1]
+        r = re.search(r' Requires (.+?) - (' + '|'.join(STANDINGS) + r')\b', t)
+        head = t[:r.start()] if r else t
+        # the price after the side word (or the coordinates): a number and a name that isn't a coin
+        c = re.search(r'(?:Alliance|Horde|\d)\s+(\d[\d,]*) ((?:[A-Z][\w\'-]*)(?: (?:of |the )?[A-Z][\w\'-]*)*)\s*$', head)
+        cost = f'{c[1]} {c[2]}' if c and not re.match(r'(Gold|Silver|Copper)\b', c[2]) else None
+        out.append({'text': t, 'cost': cost, 'rep': [r[1].strip(), r[2]] if r else None})
+    return out
+
+
 def parse(h):
     L = lines_of(h)
     if 'Item ID' not in L or 'Copied' not in L:
@@ -125,13 +146,20 @@ def parse(h):
         for k, v in (got or {}).items():
             st[k] = st.get(k, 0) + v
     # "How to get it": the dungeon or raid line says "Level 46–55 · 5 players"; raids say 10/20/40
-    how = L[L.index('How to get it') + 1:] if 'How to get it' in L else []
-    how = how[:how.index('Keep going')] if 'Keep going' in how else how[:12]
+    how_all = L[L.index('How to get it') + 1:] if 'How to get it' in L else []
+    how = how_all[:how_all.index('Keep going')] if 'Keep going' in how_all else how_all[:12]
     stop = ('Bosses and quests from the', 'From the WoW Forever client', 'Where to find it', 'Keep going',
             'In the BiS list of', 'Worth getting on the leveling route', 'Numbers from', 'Which one:',
             'Where it comes from, after', 'Who gives it, and where')   # endgametools' page layout of 22 Nov 2026
     noise = {'(Wowhead)', '↗', 'Copy the name for the auction house', 'Copied', 'The recipe →'}
     src = []
+    # every vendor block, before the 12-line cut (an item sold by two vendors runs past it)
+    vall = []
+    for l in how_all:
+        if l.startswith(stop): break
+        if l in noise: continue
+        vall.append(l)
+    vend = vendors(vall) if any(l == 'Vendor' or l.startswith('Vendor ') for l in vall) else []
     for l in how:
         if l.startswith(stop): break
         if l in noise or re.match(r'^Requires level \d+$', l): continue
@@ -143,7 +171,8 @@ def parse(h):
             'slot': kv.get('Slot'), 'type': kv.get('Type'), 'il': num(kv.get('Item level')),
             'rl': num(kv.get('Requires level')), 'bind': bind, 'sell': sell, 'build': kv.get('Client build'),
             'st': st, 'unparsed': unparsed,
-            'setst': {m[2]: g for m in map(SET_RX.match, tip) if m for g in [set_stats(m[2])] if g}, 'size': size, 'how': ' · '.join(src)}
+            'setst': {m[2]: g for m in map(SET_RX.match, tip) if m for g in [set_stats(m[2])] if g}, 'size': size, 'how': ' · '.join(src),
+            **({'vend': vend} if vend else {})}
 
 
 out, missing = {}, []

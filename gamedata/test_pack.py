@@ -134,6 +134,17 @@ bad = [k for k, v in EN.items() if not (len(v) == 4 and v[0] and (v[2] or v[3]) 
 check(not bad and len(EN) > 140 and not [v for v in EN.values() if re.match(r'(QA|Test |zz)', v[0])],
       f">140 enchants, each applied by a pack recipe or item, no test enchants ({len(EN)}; {len(bad)} bad, e.g. {bad[:3]})")
 
+# what a vendor asks besides gold (#151): Forever's Formula: Enchant Chest - Greater Stats (249526) sells for 240 Merchant's
+# Favor, at Honored with each side's trade faction (Alynsia, Alliance; Beneris, Horde); a row with a cost shows no gold price
+VD = {v[0]: v for v in (G.get('vend') or {}).get('249526') or []}
+aly, ben = VD.get('Alynsia') or [None] * 10, VD.get('Beneris') or [None] * 10
+check(len(aly) > 9 and aly[8] == "240 Merchant's Favor" and aly[9] == ['Azeroth Commerce Authority', 6],
+      f"Alynsia sells Formula: Enchant Chest - Greater Stats for 240 Merchant's Favor at Honored ({aly})")
+check(len(ben) > 9 and ben[8] == "240 Merchant's Favor" and ben[9] == ['Durotar Supply and Logistics', 6],
+      f"Beneris sells it for the same at Honored with the Horde trade faction ({ben})")
+VR = [r for lst in (G.get('vend') or {}).values() for r in lst]
+check(n(r for r in VR if len(r) > 8 and r[8]) > 20, f">20 vendor rows with a cost besides gold (got {n(r for r in VR if len(r) > 8 and r[8])})")
+
 # ---------------------------------------------------------------- 4. the player's own game data
 GAME = {'ITEM_MOD_AGILITY_SHORT': 3, 'ITEM_MOD_STRENGTH_SHORT': 4, 'ITEM_MOD_INTELLECT_SHORT': 5,
         'ITEM_MOD_SPIRIT_SHORT': 6, 'ITEM_MOD_STAMINA_SHORT': 7, 'ITEM_MOD_SPELL_HEALING_DONE_SHORT': 41,
