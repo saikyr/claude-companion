@@ -29,7 +29,7 @@ if [ ! -s "raw/$V.7z" ]; then
 fi
 python3 -I "$HERE/recipes.py" "raw/$V.7z" out/recipes.json out/enchants.json
 
-echo "4/9 endgametools item pages (weapons, armor and consumables; only pages not fetched in the last 30 days)"
+echo "4/9 endgametools item pages (weapons, armor, consumables, and what Forever vendors sell for a currency or as a recipe; only pages not fetched in the last 30 days)"
 # every weapon, armor and consumable QuestieDB or ForeverDB knows: Forever's own items (its Tier 0.5 spec sets) are only
 # in ForeverDB; consumables (potions, elixirs, flasks, food, scrolls, oils) for what they do on Forever (#91)
 python3 -I - "$W" <<'EOF'
@@ -41,6 +41,13 @@ oil = re.compile(r'((Wizard|Mana|Shadow|Frost) Oil|Sharpening Stone|Weightstone)
 ids = {k for k, v in items.items() if len(v) > 11 and (v[11] in (0, 2, 4) or (v[11] == 7 and oil.search(str(v[0] or ''))))}
 ids |= {str(it['id']) for it in json.load(open(os.path.join(w, 'raw', 'fdb', 'items.json')))
         if it.get('c') in (0, 2, 4) or (it.get('c') == 7 and oil.search(str(it.get('n') or '')))}
+# and everything a vendor Forever players saw sells for a currency or as a recipe: its page names each vendor's price
+# (240 Merchant's Favor) and the reputation that vendor asks (#151), which ForeverDB doesn't carry
+fdbi = {it['id']: it for it in json.load(open(os.path.join(w, 'raw', 'fdb', 'items.json')))}
+for v in json.load(open(os.path.join(w, 'raw', 'fdb', 'vendors.json')))['vendors'].values():
+    if not v.get('fv'): continue
+    for k, sv in (v.get('sells') or {}).items():
+        if (sv or {}).get('c') or (fdbi.get(int(k)) or {}).get('c') == 9: ids.add(str(k))
 old = time.time() - 30 * 86400
 with open(os.path.join(w, 'raw', 'egt', 'list.txt'), 'w') as f:
     n = 0

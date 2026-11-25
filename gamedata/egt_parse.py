@@ -92,6 +92,40 @@ def set_stats(text):
     return None
 
 
+STANDINGS = ('Friendly', 'Honored', 'Revered', 'Exalted')
+COIN = re.compile(r'(Gold|Silver|Copper)\b')
+
+
+def vendors(lines):
+    """The page's vendor blocks (#151): "Vendor Alynsia Enchanter · Redridge Mountains 11.2, 71.4 · Alliance 240 Merchant's
+    Favor Requires Azeroth Commerce Authority - Honored · Enchanting (300)", one per vendor, as {text (the block, joined),
+    cost: "240 Merchant's Favor" (a price that isn't gold), rep: [faction, standing]}. A block starts at a line that is
+    "Vendor" or starts "Vendor " (a title such as "Pet Vendor" doesn't), and ends at the next one or at the page's note
+    on a currency ("Merchant's Favor: 312 recipes ..."). The vendor's name is matched by build.py, which knows it (a name
+    can have spaces and a title follows it)."""
+    blocks = []
+    for l in lines:
+        if l == 'Vendor' or l.startswith('Vendor '):
+            blocks.append([l[7:]] if l != 'Vendor' else [])
+        elif blocks and re.match(r"^[^·]+: \d", l):
+            blocks.append(None)                        # the section's notes after the vendors: no block takes them
+        elif blocks and blocks[-1] is not None:
+            blocks[-1].append(l)
+    out = []
+    for b in blocks:
+        if not b: continue
+        t = re.sub(r'\s+', ' ', ' '.join(b)).strip()      # no-break spaces on the page (a number and its name) read as spaces
+        r = re.search(r'(?:^| )Requires (.+?) - (' + '|'.join(STANDINGS) + r')\b', t)
+        head = t[:r.start()] if r else t
+        # the price: a whole number and a name that isn't a coin (coordinates are "11.2, 71.4", never followed by a name)
+        cost = None
+        # (not the profession after it, "Enchanting (300)", nor a Requires line that names no standing)
+        for c in re.finditer(r"(?:^|(?<=[\s·]))(\d[\d,]*) ((?!Requires\b)[A-Z][\w'’-]*\b(?! \()(?: (?:of |the )?(?!Requires\b)[A-Z][\w'’-]*\b(?! \())*)", head):
+            if not COIN.match(c[2]): cost = f'{c[1]} {c[2]}'.replace('’', "'"); break
+        out.append({'text': t, 'cost': cost, 'rep': [r[1].strip(), r[2]] if r else None})
+    return out
+
+
 def parse(h):
     L = lines_of(h)
     if 'Item ID' not in L or 'Copied' not in L:
@@ -125,13 +159,20 @@ def parse(h):
         for k, v in (got or {}).items():
             st[k] = st.get(k, 0) + v
     # "How to get it": the dungeon or raid line says "Level 46–55 · 5 players"; raids say 10/20/40
-    how = L[L.index('How to get it') + 1:] if 'How to get it' in L else []
-    how = how[:how.index('Keep going')] if 'Keep going' in how else how[:12]
+    how_all = L[L.index('How to get it') + 1:] if 'How to get it' in L else []
+    how = how_all[:how_all.index('Keep going')] if 'Keep going' in how_all else how_all[:12]
     stop = ('Bosses and quests from the', 'From the WoW Forever client', 'Where to find it', 'Keep going',
             'In the BiS list of', 'Worth getting on the leveling route', 'Numbers from', 'Which one:',
             'Where it comes from, after', 'Who gives it, and where')   # endgametools' page layout of 22 Nov 2026
     noise = {'(Wowhead)', '↗', 'Copy the name for the auction house', 'Copied', 'The recipe →'}
     src = []
+    # every vendor block, before the 12-line cut (an item sold by two vendors runs past it)
+    vall = []
+    for l in how_all:
+        if l.startswith(stop): break
+        if l in noise: continue
+        vall.append(l)
+    vend = vendors(vall)
     for l in how:
         if l.startswith(stop): break
         if l in noise or re.match(r'^Requires level \d+$', l): continue
@@ -143,7 +184,8 @@ def parse(h):
             'slot': kv.get('Slot'), 'type': kv.get('Type'), 'il': num(kv.get('Item level')),
             'rl': num(kv.get('Requires level')), 'bind': bind, 'sell': sell, 'build': kv.get('Client build'),
             'st': st, 'unparsed': unparsed,
-            'setst': {m[2]: g for m in map(SET_RX.match, tip) if m for g in [set_stats(m[2])] if g}, 'size': size, 'how': ' · '.join(src)}
+            'setst': {m[2]: g for m in map(SET_RX.match, tip) if m for g in [set_stats(m[2])] if g}, 'size': size, 'how': ' · '.join(src),
+            **({'vend': vend} if vend else {})}
 
 
 out, missing = {}, []

@@ -153,8 +153,9 @@ for iid in sorted(all_ids):
                 row[4] = 26 if eg['slot'] == 'Ranged' and row[12] == 19 else SLOT_INV[eg['slot']]
             cov['gear_tooltip_endgametools'] += 1
         else:
-            # a consumable's tooltip says what it does on Forever (#91); its "Use:" text is no gear stat
-            cov['consumable_tooltip_endgametools'] += 1
+            # a consumable's tooltip says what it does on Forever (#91); its "Use:" text is no gear stat; a recipe's
+            # or a currency-sold item's page is fetched for its vendors (#151)
+            cov['consumable_tooltip_endgametools' if cls in (0, 7) else 'other_tooltip_endgametools'] += 1
     elif cls in GEAR and fd.get('st') is not None and not junk.match(name):
         # endgametools has no page (mostly Season of Discovery gear the Forever client carries but does not
         # drop): ForeverDB's stats, marked so the app can say where they came from
@@ -231,10 +232,11 @@ for iid in items:
         for v in lst(f(qr, 14)):
             pl = place('npc', v) or [f'NPC #{v}', '', None, None]
             fv = FDB_VENDORS.get(str(v)) or {}
-            price = ((fv.get('sells') or {}).get(str(iid)) or {}).get('p')
+            sold = (fv.get('sells') or {}).get(str(iid)) or {}
+            price = sold.get('p')
             nrow = Q['npc'].get(str(v))
             vend.setdefault(iid, []).append([pl[0], pl[1], pl[2], pl[3], price, 1 if (v in vadded or fv.get('fv')) else 0,
-                                             f(nrow, 14) or fv.get('sub') or '', f(nrow, 13) or SIDE.get(fv.get('side'), '')])
+                                             f(nrow, 14) or fv.get('sub') or '', f(nrow, 13) or SIDE.get(fv.get('side'), ''), sold.get('c')])
     for r in rows:      # before the cut to 15 rows below: an item with many drops keeps its recipe (recipes, further down)
         if r[0] == 'craft' and r[2]: MAKES[r[2]].add(iid)
     if rows:
@@ -251,7 +253,40 @@ for vid, v in FDB_VENDORS.items():
         if siid in items and not any(r[0] == (place('npc', vid) or [v.get('n')])[0] for r in vend.get(siid, [])):
             nrow = Q['npc'].get(str(vid))       # QuestieDB owns NPC facts (title, who it serves) when it has the NPC
             vend.setdefault(siid, []).append([v.get('n'), v.get('zone'), v.get('x'), v.get('y'), sv.get('p'), 1 if v.get('fv') else 0,
-                                              f(nrow, 14) or v.get('sub') or '', f(nrow, 13) if nrow else SIDE.get(v.get('side'), '')])
+                                              f(nrow, 14) or v.get('sub') or '', f(nrow, 13) if nrow else SIDE.get(v.get('side'), ''), sv.get('c')])
+# what each vendor asks besides gold (#151): [8] the price in a currency or items ("240 Merchant's Favor"), [9] the
+# reputation that vendor asks, [faction, standing 5 Friendly .. 8 Exalted]. From the item's endgametools page (the
+# Forever client's vendor data), by the vendor's name; a price ForeverDB has and the page doesn't is named with the
+# currency names those pages use (ForeverDB gives currencies by id: 3402 is Merchant's Favor), or the item it costs.
+STANDING_NO = {'Friendly': 5, 'Honored': 6, 'Revered': 7, 'Exalted': 8}
+def egt_vendor(iid, name):
+    for b in (EGT.get(str(iid)) or {}).get('vend') or []:
+        if name and (b['text'] == name or b['text'].startswith(name + ' ')): return b
+    return None
+CURRENCY = {}
+for k, rows in vend.items():
+    for r in rows:
+        b, c = egt_vendor(k, r[0]), r[8]
+        if b and b['cost'] and isinstance(c, list) and len(c) == 1 and c[0][0] == 'c':
+            n, _, what = b['cost'].partition(' ')
+            if n.replace(',', '') == str(c[0][2]): CURRENCY.setdefault(c[0][1], what)
+def cost_text(c):
+    parts = []
+    for x in c if isinstance(c, list) else []:
+        if not (isinstance(x, list) and len(x) == 3): continue
+        if x[0] == 'c': parts.append(f"{x[2]} {CURRENCY.get(x[1]) or f'currency #{x[1]}'}")
+        elif x[0] == 'i': parts.append(f"{x[2]}× {f(Q['item'].get(str(x[1])), 1) or (FDB_ITEMS.get(x[1]) or {}).get('n') or f'item #{x[1]}'}")
+    return ', '.join(parts) or None
+# the build log shows one page's vendor blocks as read, to check the parser against the page
+print('vendor blocks of item 249526 as read:', json.dumps((EGT.get('249526') or {}).get('vend'), ensure_ascii=False)[:600])
+for k, rows in vend.items():
+    for r in rows:
+        b = egt_vendor(k, r[0])
+        r[8] = (b and b['cost']) or cost_text(r[8])
+        r.append([b['rep'][0], STANDING_NO[b['rep'][1]]] if b and b['rep'] else None)
+        cov['vendor_rows_with_cost'] += bool(r[8])
+        cov['vendor_rows_with_rep'] += bool(r[9])
+        while len(r) > 8 and r[-1] is None: r.pop()      # most rows ask gold only: no trailing nulls in the pack
 for k in vend:
     vend[k] = sorted(vend[k], key=lambda r: -r[5])[:4]
 cov['items_with_vendor'] = len(vend)

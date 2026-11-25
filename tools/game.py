@@ -122,7 +122,7 @@ class Game:
                         'sources': [{'kind': r['kind'], 'from': r['source'], 'id': r['source_id'], 'zone': r['zone'], 'boss': r['boss'],
                                      'rate': r['rate'], 'label': r['label']} for r in best],
                         'vendors': [{'npc': v['npc'], 'zone': v['zone'], 'x': v['x'], 'y': v['y'], 'price': v['price'], 'seenOnForever': v['seen_forever'],
-                                     'side': v['side']} for v in self.vendors if v['item_id'] == h['id']],
+                                     'side': v['side'], 'cost': v.get('cost'), 'needsRep': v.get('req_rep')} for v in self.vendors if v['item_id'] == h['id']],
                         'questReward': [{'quest': q['id'], 'title': q['title'], 'zone': q['cat']} for q in self.quests.values()
                                         if any(isinstance(e, list) and e[:1] == hid for e in (q['reward'] or []) + (q['choice'] or []) + (q['reward_any'] or []))],
                         'recipes': {k: [self._recipe(c) for c in self.recipes if any(e['id'] == h['id'] for e in c[f])]
