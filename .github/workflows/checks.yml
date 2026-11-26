@@ -82,6 +82,8 @@ jobs:
         run: node test/web/game.test.js
       - name: The answer rules, in Python and in the Postgres card gate, on the same cases
         run: node test/web/cards-gate.test.js
+      - name: Card steps (#163 game checks, who ticked, Claude's order, what a save changed)
+        run: node test/web/cardsteps.test.js
       - name: The weekly correction audit (tools/audit.py, docs/COACHING.md)
         run: python3 test/audit_test.py
       - name: The combat-log reader on sample logs (js/combatlog.js)
@@ -105,6 +107,8 @@ jobs:
         run: node test/web/next-browser.js
       - name: More than one character (picker, shared AH prices)
         run: node test/web/chars-browser.js
+      - name: From Claude tab in a browser (order, ticks by Claude and the game, cards that close themselves)
+        run: node test/web/cards-browser.js
       - name: Local server API (server.py)
         run: node test/web/server-api.test.js 47999 /tmp/f/_forever_/Interface/AddOns/ClaudeCompanion/companion-data
       - name: Server rules (hidden browser)
