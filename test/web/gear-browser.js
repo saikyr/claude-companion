@@ -267,6 +267,23 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
     "a vendor's reputation, your side's vendor only (" + fav.gates.join(' | ') + ')');
   check(fav.lines.some((l) => /^Vendor: .*Alynsia \(Redridge Mountains\) for 240 Merchant's Favor/.test(l)), "a vendor's price in Merchant's Favor (" + fav.lines.join(' | ') + ')');
 
+  // the worn wand counts (#162): a wand gain is over the wand worn (or in the compared set: Holy's is 17745), never over an empty Ranged slot
+  const rng = await page.evaluate(() => window.CC.snapshot().gear.filter((g) => g.worn).map((g) => {
+    const w = (g.worn || []).find((x) => x.slot === 'Ranged') || {};
+    return { spec: g.label, ids: (w.items || []).map((x) => x.id), score: w.score, bad: (g.upgrades || []).filter((u) => u.slot === 'Ranged' && Math.abs(u.gain - (u.score - w.score)) > 0.11).map((u) => u.name) };
+  }));
+  check(rng.length && rng.every((r) => r.ids.length === 1 && [20082, 17745].includes(r.ids[0]) && r.score > 0 && !r.bad.length), 'the worn wand is in worn and wand gains are over it (' + JSON.stringify(rng) + ')');
+
+  // a set with nothing in Ranged counts the wand you wear (#162: a wand looted after the set was saved)
+  const noWand = await page.evaluate(() => {
+    const sets = window.CC.api.CH.snap.gearSets, keep = sets.map((g) => g.items);
+    sets.forEach((g) => { g.items = g.items.filter((x) => x.slot !== 18); });
+    const out = window.CC.snapshot().gear.map((g) => ({ cw: g.comparedWith, ids: (((g.worn || []).find((x) => x.slot === 'Ranged') || {}).items || []).map((x) => x.id) }));
+    sets.forEach((g, i) => { g.items = keep[i]; });
+    return out;
+  });
+  check(noWand.every((r) => r.ids.length === 1 && r.ids[0] === 20082 && /counts what you wear/.test(r.cw)), "a set's empty slot counts what you wear (" + JSON.stringify(noWand) + ')');
+
   // any one quest that gives it will do (#160): Band of Piety comes from the four Superior Armaments of Battle quests,
   // Friendly up, so it needs Friendly with Argent Dawn (not Exalted) and its where names that quest and its cost
   const pie = await page.evaluate(() => ({ gates: window.CC.api.itemGates(22681).map((g) => g.text), line: window.CC.api.questLine(22681) }));

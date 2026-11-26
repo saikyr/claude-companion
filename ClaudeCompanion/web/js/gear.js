@@ -322,8 +322,18 @@
       const key = x.item || (inSet[x.id] === 1 && !x.bank ? wearing[x.id] : null), own = key && A.item(key), mine = own ? Object.assign({ key }, own) : A.byId(x.id);
       worn[x.slot] = { id: x.id, key: key || (mine && mine.key), guess: !key || undefined, bank: x.bank || undefined, st: ownStats(mine, x.id) };
     });
+    // a slot the set has nothing in counts what you wear there (#162: a wand looted after the set was saved isn't in it,
+    // and a gain over an empty Ranged slot overstated every wand by the worn one's score)
+    Object.values((A.CH.snap || {}).equipped || {}).forEach((e) => {
+      if (!e || !e.item || worn[e.slot]) return;
+      const i = idOf(e.item);
+      // not a second copy of an item the set already has (a ring or trinket it holds in the other slot), and no off-hand with the set's two-hander
+      if (Object.values(worn).some((x) => x.id === i) || (e.slot === 17 && worn[16] && wornInv(worn[16]) === TWO_HAND)) return;
+      worn[e.slot] = { id: i, key: e.item, st: ownStats(A.item(e.item), i), fromWorn: true };
+    });
     const lost = set.numLost ? `; the game listed ${set.numLost} of its items as missing when it saved` : '';
-    return { key: String(set.id), label: `your “${set.name}” set (${why}${lost})`, short: `your ${set.name} set`, worn };
+    const filled = Object.values(worn).some((x) => x.fromWorn) ? '; a slot it has nothing in counts what you wear' : '';
+    return { key: String(set.id), label: `your “${set.name}” set (${why}${lost}${filled})`, short: `your ${set.name} set`, worn };
   }
 
   // ---------------------------------------------------------------- where an item comes from
