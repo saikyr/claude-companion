@@ -465,8 +465,18 @@ img.kic { width: var(--ic-sm); height: var(--ic-sm); border-radius: var(--r-sm);
 .steps label { display: flex; align-items: flex-start; gap: var(--sp2); padding: var(--sp1) var(--sp2); border-radius: var(--r-sm); cursor: pointer; }
 .steps label:hover { background: var(--hover); }
 .steps input { margin: 0.2rem 0 0; accent-color: var(--acc); flex: none; }
-.steps span::before { content: counter(st) ". "; color: var(--t3); font-variant-numeric: tabular-nums; }
-.steps li.done span { color: var(--t3); text-decoration: line-through; }
+.steps .stx::before { content: counter(st) ". "; color: var(--t3); font-variant-numeric: tabular-nums; }
+.steps li.done .stx { color: var(--t3); text-decoration: line-through; }
+.steps label .tag { flex: none; margin-left: auto; }
+.steps .chk { padding: 0 var(--sp2) var(--sp1) calc(var(--sp2) * 2 + 1rem); color: var(--t3); font-size: var(--f-sm); }
+/* the From Claude tab in Claude's order (#163): Start here, Next, After that, the rest, Older folded */
+.csec { margin: var(--sp4) 0 var(--sp2); font: 600 var(--f-lbl) var(--ui); text-transform: uppercase; letter-spacing: .08em; color: var(--t3); }
+.tag.cplace { margin-right: var(--sp1); }
+.tag.cplace.p-start { color: var(--acc); background: var(--s2); font-weight: 600; }
+.cold > summary { list-style: none; cursor: pointer; display: flex; align-items: baseline; gap: var(--sp3); }
+.cold > summary::-webkit-details-marker { display: none; }
+.cold > summary .csec::before { content: "▸ "; }
+.cold[open] > summary .csec::before { content: "▾ "; }
 .csrc { font-size: var(--f-lbl); color: var(--t3); }
 .csrc a { color: var(--t2); }
 .list.cov { margin-bottom: var(--sp4); border: 1px solid var(--line); border-radius: var(--r); background: var(--s1); }

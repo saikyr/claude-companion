@@ -90,7 +90,7 @@ select q->>'title' quest, r->>'name' item, r->>'how' how, r->'specs' specs, q->'
 select computer, to_timestamp(t) saved, data from private.history
  where account = '<account>' and kind = 'now' order by t desc limit 1;
 
--- history: kinds journal, session, grind, run, note, history, de, ah_obs, ah_sale, ah_buy, ah_post, live, now, setting
+-- history: kinds journal, session, grind, run, note, history, de, ah_obs, ah_sale, ah_buy, ah_post, live, now, setting, claude_wake (what each new save changed)
 select * from private.history where account = '<account>' and kind = 'grind' order by t desc;
 ```
 
@@ -119,7 +119,9 @@ line) must print `ok` before an answer with numbers, rates, gold or plans is sen
   Every computer of the account shows them at its next sync. Only that key can be written.
 - On one computer (a friend): write `companion-data/from-claude/cards.json` (temp file, then rename).
 - What the player did with them: `select data->>'v' from private.history where account = '<account>' and id = 'setting|cc.claude.cardsState';`
-  (or `from-claude/state.json`). Claude reads it, never writes it.
+  (or `from-claude/state.json`). Claude reads it, never writes it. Easier: the snapshot's `cards[]` (every step done or not, by whom, and its
+  game check). Order a plan with `order` / `group`, give steps `doneWhen` checks so the app ticks them itself, and
+  read `kind = 'claude_wake'` for what each save changed ([COACHING.md](docs/COACHING.md) §3, #163).
 
 ## Changing the code
 

@@ -131,7 +131,7 @@ online) still happens.
 
 **Claude's access** (optional; the app doesn't need it): reading the snapshot and history, writing
 cards, all in [../CLAUDE.md](../CLAUDE.md). Kinds in `private.history`: journal, session, grind, run,
-note, history, de, ah_obs, ah_sale, ah_buy, ah_post, live, setting, snapshot.
+note, history, de, ah_obs, ah_sale, ah_buy, ah_post, live, setting, snapshot, claude_wake.
 
 **Schema:** `supabase/migrations/` (`supabase/README.md`). Client: `js/sync.js`.
 Tests run the real migration files on a plain Postgres (`test/sql/backend.js`; CI has a Postgres
