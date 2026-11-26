@@ -251,6 +251,9 @@
       bagAdvice: CC.advice ? CC.advice.snapshot() : [],
       // the Now page's ranked next steps (js/next.js), Hybrid order; each gain is the app's own score per spec
       nextSteps: CC.next ? CC.next.snapshot() : [],
+      // the From Claude cards as the app shows them (js/cards.js, #163): where each stands, its place in Claude's order,
+      // each step done or not and by whom (you, the game's check, Claude), each check and whether it passes now
+      cards: CC.cards && CC.cards.snapshot ? CC.cards.snapshot() : [],
       bestOwned: CC.advice ? CC.advice.bestOwnedSnapshot() : [],
       weightProfiles: window.CCWeights ? window.CCWeights.custom((s.character || {}).classFile).map((p) => ({ id: p.id, name: p.name, from: p.from, weights: p.w })) : [],
       // enchant (weapons, from the game): id and the tooltip text it adds; temp = an oil, stone or poison now on it
@@ -375,11 +378,18 @@
       post('api/snapshot', body).catch(() => {});
       // and online, for Claude (js/sync.js; its next cycle sends it if it changed)
       CC.lastSnapshot = snap;
+      // what this save changed (js/cardsteps.js): js/sync.js sends it as a claude_wake record when the game saved again
+      try {
+        const ST = window.CCSteps, GD = A.GD || {};
+        CC.lastDigest = ST ? ST.digestOf(ST.contextOf(A.CH), snap.cards) : null;
+        CC.wakeNames = (k, id) => (k === 'quest' ? ((GD.quests || {})[id] || {}).t || null : A.anyItemName(id, null));
+      } catch (e) { console.warn('wake digest', e); CC.lastDigest = null; }
       if (CC.syncNow) CC.syncNow();
     }, 500);
   };
   document.addEventListener('cc:loaded', write);
   document.addEventListener('cc:combat', write);   // new combat-log counts (js/combatlog.js) read after the load
+  document.addEventListener('cc:cards', write);    // a card ticked, closed or changed (js/cards.js): the snapshot's cards[]
   // settings changed in the app (a gear pick, own weights) reach the hidden browser too
   if (!BACKGROUND && location.protocol.startsWith('http')) settingsReady.then(() => setInterval(saveSettings, 10000));
   CC.snapshot = build;
