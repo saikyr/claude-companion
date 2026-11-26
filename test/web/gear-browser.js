@@ -267,6 +267,14 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
     "a vendor's reputation, your side's vendor only (" + fav.gates.join(' | ') + ')');
   check(fav.lines.some((l) => /^Vendor: .*Alynsia \(Redridge Mountains\) for 240 Merchant's Favor/.test(l)), "a vendor's price in Merchant's Favor (" + fav.lines.join(' | ') + ')');
 
+  // any one quest that gives it will do (#160): Band of Piety comes from the four Superior Armaments of Battle quests,
+  // Friendly up, so it needs Friendly with Argent Dawn (not Exalted) and its where names that quest and its cost
+  const pie = await page.evaluate(() => ({ gates: window.CC.api.itemGates(22681).map((g) => g.text), line: window.CC.api.questLine(22681) }));
+  check(pie.gates.some((g) => /^Needs Friendly with Argent Dawn for quest Superior Armaments of Battle - Friend of the Dawn/.test(g)) && !pie.gates.some((g) => /Exalted/.test(g)),
+    'a quest reward needs the easiest quest\'s reputation (' + pie.gates.join(' | ') + ')');
+  check(/^Quest: Superior Armaments of Battle - Friend of the Dawn, Quartermaster Miranda Breechlock, Eastern Plaguelands, for 30 Insignias of the Dawn and 30 Insignias of the Crusade, one of 6 items \(3 more quests give it\)$/.test(pie.line || ''),
+    'a quest reward\'s where: the easiest quest, its giver, its cost (' + pie.line + ')');
+
   // a vendor on your side sells it (#157): Deliana in Dun Morogh sells the Virtuous pieces a set container also gives;
   // the item is a vendor item, with where to buy it (the price once the pack has it)
   const vir = await page.evaluate(() => ({ line: window.CC.api.buyLine(226955),
