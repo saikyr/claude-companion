@@ -49,10 +49,10 @@ begin
         where c ? k2 and jsonb_typeof(c->k2) <> 'array'),
       case when jsonb_typeof(c->'steps') = 'array' and exists (select 1 from jsonb_array_elements(c->'steps') x where jsonb_typeof(x) <> 'string') then 'steps must be a list of text' end,
       -- #163: Claude's order, ticks and the steps' game checks (tools/check-cards.py, js/cardsteps.js CHECK)
-      case when jsonb_typeof(c->'order') not in ('null') and (jsonb_typeof(c->'order') <> 'number' or (c->>'order') !~ '^\d{1,4}$')
+      case when jsonb_typeof(c->'order') not in ('null') and (jsonb_typeof(c->'order') <> 'number' or (c->'order')::text !~ '^[0-9]{1,4}$')
         then 'order is a whole number from 0 to 9999 (lowest shows first)' end,
       case when c ? 'stepsDone' and (jsonb_typeof(c->'stepsDone') <> 'array'
-        or exists (select 1 from jsonb_array_elements(c->'stepsDone') x where jsonb_typeof(x) <> 'number' or case when (x #>> '{}') ~ '^\d{1,4}$' then (x #>> '{}')::int >= n_steps else true end)
+        or exists (select 1 from jsonb_array_elements(c->'stepsDone') x where jsonb_typeof(x) <> 'number' or case when x::text ~ '^[0-9]{1,4}$' then x::text::int >= n_steps else true end)
         or (select count(*) <> count(distinct x::text) from jsonb_array_elements(c->'stepsDone') x))
         then 'stepsDone is a list of step positions (from 0, each once, below ' || n_steps || ')' end,
       case when c ? 'doneWhen' and (jsonb_typeof(c->'doneWhen') <> 'array' or jsonb_array_length(c->'doneWhen') > n_steps)
@@ -60,7 +60,11 @@ begin
         when jsonb_typeof(c->'doneWhen') = 'array' then (select string_agg('doneWhen ' || (o - 1) || ': a check is quest:<id>, item:<id> or item:<id>x<count>, rep:<faction>>=<standing>, level:<n> or skill:<profession>>=<n>', '; ')
           from jsonb_array_elements(c->'doneWhen') with ordinality w(x, o)
          where jsonb_typeof(x) <> 'null' and (jsonb_typeof(x) <> 'string'
-           or (x #>> '{}') !~ '^(quest:\d{1,9}|item:\d{1,9}(x\d{1,4})?|rep:.+>=(Hated|Hostile|Unfriendly|Neutral|Friendly|Honored|Revered|Exalted)|level:\d{1,2}|skill:.+>=\d{1,3})$')) end,
+           or (x #>> '{}') !~ '^(quest:[0-9]{1,9}|item:[0-9]{1,9}(x[0-9]{1,4})?|rep:[^\n]+>=(Hated|Hostile|Unfriendly|Neutral|Friendly|Honored|Revered|Exalted)|level:[0-9]{1,2}|skill:[^\n]+>=[0-9]{1,3})$')) end,
+      -- the checks read the save of the character played last: a card with checks says whose they are
+      case when jsonb_typeof(c->'doneWhen') = 'array' and exists (select 1 from jsonb_array_elements(c->'doneWhen') x where jsonb_typeof(x) <> 'null')
+        and (jsonb_typeof(c->'character') is distinct from 'string' or btrim(c->>'character') = '')
+        then 'a card with doneWhen checks needs character (the checks read that character''s save)' end,
       case when jsonb_typeof(c->'facts') = 'array' and exists (select 1 from jsonb_array_elements(c->'facts') x
         where jsonb_typeof(x) <> 'object' or jsonb_typeof(x->'label') is distinct from 'string' or jsonb_typeof(x->'value') is distinct from 'string'
            or exists (select 1 from jsonb_object_keys(x) fk where fk not in ('label', 'value', 'note', 'src'))) then 'each fact needs label and value (text), and may have note and src' end,

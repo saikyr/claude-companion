@@ -68,7 +68,7 @@ numbers, rates, gold or plans go through `python3 tools/check-answer.py` first.
   `updated` times. Withdraw what no longer applies instead of leaving it open.
 - Give each step a `doneWhen` check wherever the save can prove it (`quest:<id>`, `item:<id>x<n>`,
   `rep:<faction>>=<standing>`, `level:<n>`, `skill:<profession>>=<n>`): the app ticks it itself at his next save
-  and closes the card when every step is done. Use `stepsDone` for a step you saw done that no check covers.
+  and closes the card when every step is done. A card with checks names its `character`. Use `stepsDone` for a step you saw done that no check covers.
 - Before updating cards, read what happened: the snapshot's `cards[]` (each step done or not, by him, the game
   or you, and each check now) and the `claude_wake` records since your last cards (quests done, items, level,
   rep, steps ticked, cards closed: SCHEMA.md, "What changed in game"). Never re-tick a step he unticked.

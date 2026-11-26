@@ -339,20 +339,22 @@
     // what changed in game since the save before (#163): a claude_wake record each time the game saved again with
     // something new (quests done, items gained or lost, level, reputation, card steps ticked, cards closed), for
     // Claude to read (`kind = 'claude_wake'` in private.history). The save before is this computer's last digest
-    // (state.wake). Its id is the character and the save's time, so two computers seeing the same save send one.
+    // (state.wake, one per character: playing an alt in between loses nothing). Its id is the character and the
+    // save's time, so two computers seeing the same save send one.
     // steps: js/cardsteps.js (digestOf, wakeOf).
     async function pushWake(digest, names) {
       const W = root.CCSteps || (typeof require === 'function' ? require('./cardsteps.js') : null);
       if (!digest || !W || !digest.name || !digest.t) return null;
       await ready();
-      const prev = state.wake;
-      if (prev && prev.name === digest.name && digest.t <= prev.t) return null;
+      if (!state.wake || typeof state.wake !== 'object' || state.wake.name) state.wake = {};
+      const prev = state.wake[digest.name];
+      if (prev && digest.t <= prev.t) return null;
       const w = prev ? W.wakeOf(prev, digest, names) : null;
       if (w) {
         const t = Math.round(digest.t);
         await rpc('cc_push', { p_key: state.key, p_records: [{ id: `claude_wake|${digest.name}|${t}`, char: '*', kind: 'claude_wake', t, data: w, mutable: false }] });
       }
-      state.wake = digest; await io.saveState(state);
+      state.wake[digest.name] = digest; await io.saveState(state);
       return w;
     }
 

@@ -96,7 +96,7 @@ cards within 5 seconds.
 Keep them easy to follow: a plan of several cards gets one `group` and each card an `order` (lowest first: the
 tab shows Start here, Next, After that). Give each step a `doneWhen` check where the save can prove it
 (`quest:<id>`, `item:<id>x<n>`, `rep:<faction>>=<standing>`, `level:<n>`, `skill:<profession>>=<n>`): the app
-ticks it itself and closes the card when every step is done. `stepsDone` ticks a step you saw done. Before you
+ticks it itself and closes the card when every step is done (a card with checks names its `character`). `stepsDone` ticks a step you saw done. Before you
 update cards, read `cards[]` in `snapshot.json`: every step as the app shows it, who ticked it, and each check.
 Never re-tick a step the player unticked.
 

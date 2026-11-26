@@ -66,7 +66,9 @@
     return ctxMemo.v;
   };
   const recOf = (c) => (S.state.cards || {})[c.id] || {};
-  const stepsNow = (c) => ST.stepsOf(c, ticksOf(c), recOf(c), ctx(), hash());
+  // a card's game checks read the save of the character it names (the gate asks for one with doneWhen): a card for
+  // any character would be ticked by whichever one was played last
+  const stepsNow = (c) => ST.stepsOf(c, ticksOf(c), recOf(c), c.character ? ctx() : null, hash());
   const version = (c) => c.updated || c.created || null;
   // Claude's done is Claude's, yours is yours; finished = every step done, the last ones in game (the app closed it)
   const CLOSED = { done: 'You marked it done', finished: 'Finished: every step done', dismissed: 'You dismissed it', withdrawn: 'Claude withdrew it', expired: 'Expired' };
@@ -169,7 +171,7 @@
     if (checking || !A.CH || !A.CH.snap || (A.STATE && A.STATE.viewingOther) || !ctx()) return;
     const todo = [];
     visible().forEach((c) => {
-      if (standing(c) !== 'open' || !arr(c.doneWhen).some((x) => typeof x === 'string')) return;
+      if (standing(c) !== 'open' || !c.character || !arr(c.doneWhen).some((x) => typeof x === 'string')) return;
       const steps = stepsNow(c), rec = recOf(c), had = new Set(arr(rec.auto));
       const fresh = steps.some((x) => x.met === true && !had.has(x.key));
       const finished = steps.length > 0 && steps.every((x) => x.done) && steps.some((x) => x.by === 'game') && rec.reopened !== version(c);
@@ -301,7 +303,7 @@
     if (Object.keys(kinds).length > 1) h += `<div class="chips">${Object.entries(kinds).map(([k, n]) => `<button data-ckind="${k}" class="${S.kind === k ? 'on' : ''}">${KINDS[k][0]} <span>${n}</span></button>`).join('')}</div>`;
     // in Claude's order: Start here, Next, After that (cards with an order), then the rest newest first; cards
     // without an order that Claude hasn't touched for a week fold away under Older
-    const list = ST.ordered(openList, all).filter((x) => !S.kind || kindOf(x.card) === S.kind);
+    const list = ST.ordered(openList.filter((c) => !S.kind || kindOf(c) === S.kind), all);
     if (!list.length) return h + '<div class="empty">All caught up: nothing open from Claude.</div>';
     const old = Date.now() / 1000 - OLD_DAYS * 86400;
     // a card with no time at all isn't old: its age isn't known
@@ -334,7 +336,8 @@
       e.preventDefault();
       const id = b.dataset.card, c = S.cards.find((y) => y.id === id), how = b.dataset.cact;
       // Restore on a card the app closed: it stays open until Claude changes the card
-      save(id, how === 'open' ? { state: null, by: null, reopened: recOf({ id }).by === 'app' && c ? version(c) : null } : { state: how, by: null });
+      // (any Restore: one after Done on a card the app had closed before must not be closed again at once)
+      save(id, how === 'open' ? { state: null, by: null, reopened: c ? version(c) : null } : { state: how, by: null });
       return;
     }
     const v = e.target.closest('[data-cview]');

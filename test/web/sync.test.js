@@ -285,7 +285,7 @@ async function main() {
       const ch = (t, quests, level) => ({ snap: { taken: t, character: { name: 'Wakey', level }, completedQuests: quests } });
       const wakes = () => Number(B.query(`select count(*) from private.history where kind = 'claude_wake' and account = '${pc.client.state.account}'`));
       const d1 = W.digestOf(W.contextOf(ch(1000, [1], 50)), []), d2 = W.digestOf(W.contextOf(ch(2000, [1, 2], 51)), []);
-      check(await pc.client.pushWake(d1) === null && wakes() === 0 && JSON.parse(pc.files.state).wake.t === 1000, 'the first save is only remembered');
+      check(await pc.client.pushWake(d1) === null && wakes() === 0 && JSON.parse(pc.files.state).wake.Wakey.t === 1000, 'the first save is only remembered');
       await mac.client.pushWake(d1);
       const w = await pc.client.pushWake(d2, (k, id) => (k === 'quest' ? 'Quest ' + id : null));
       const row = JSON.parse(B.query(`select json_build_object('id', id, 't', t, 'data', data) from private.history where kind = 'claude_wake' and account = '${pc.client.state.account}'`));
@@ -295,6 +295,11 @@ async function main() {
       check(wakes() === 1, 'the other computer seeing the same save adds no second record');
       check(await pc.client.pushWake(d1) === null && await pc.client.pushWake(W.digestOf(W.contextOf(ch(3000, [1, 2], 51)), [])) === null && wakes() === 1,
         'an older save, or a new one where nothing changed: no record');
+      // an alt played in between: each character keeps its own save before
+      const alt = { snap: { taken: 3500, character: { name: 'Altie', level: 10 }, completedQuests: [9] } };
+      await pc.client.pushWake(W.digestOf(W.contextOf(alt), []));
+      await pc.client.pushWake(W.digestOf(W.contextOf(ch(4000, [1, 2, 3], 51)), []));
+      check(wakes() === 2, 'after playing an alt, the next save of the first character still sends what changed');
     }
     // a retired account: its computers are refused
     B.query(`update public.accounts set retired = true where id = '${third.client.state.account}'`);

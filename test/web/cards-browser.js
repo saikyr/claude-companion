@@ -21,11 +21,11 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   const cards = { schema: 1, cards: [
     { id: 'new-note', title: 'A new note', updated: iso(60) },
     { id: 'old-note', title: 'An old note', updated: iso(10 * 86400) },
-    { id: 'no-time', title: 'A card with no time' },
-    { id: 'v2', kind: 'quest', title: 'Virtuous: step two', order: 20, group: 'Virtuous plan', updated: iso(3600),
+    { id: 'no-time', title: 'A card with no time', steps: ['Finish the Command'], doneWhen: ['quest:5089'] },
+    { id: 'v2', kind: 'quest', title: 'Virtuous: step two', order: 20, group: 'Virtuous plan', character: 'Testpriest', updated: iso(3600),
       steps: ['Hand in the Command', 'Ask Claude', 'Get Honored with the Argent Dawn'], stepsDone: [1],
       doneWhen: ['quest:5089', null, 'rep:Argent Dawn>=Honored'] },
-    { id: 'v1', kind: 'quest', title: 'Virtuous: step one', order: 10, group: 'Virtuous plan', updated: iso(3600),
+    { id: 'v1', kind: 'quest', title: 'Virtuous: step one', order: 10, group: 'Virtuous plan', character: 'Testpriest', updated: iso(3600),
       steps: ["Have Theka's Last Breath", 'Finish the Command'], doneWhen: ['item:274641', 'quest:5089'] },
     { id: 'ah', kind: 'flip', title: 'Sell the staff', order: 30, updated: iso(7200) },
   ] };
@@ -55,6 +55,7 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   await page.waitForSelector('[data-tab="claude"]', { timeout: 60000 });
   await page.click('[data-tab="claude"]');
   await page.waitForSelector('main .ccard', { timeout: 30000 });
+  const steps = async (id) => page.$$eval(`main [data-cstep="${id}"]`, (els) => els.map((e) => ({ on: e.checked, t: e.closest('li').innerText.replace(/\s+/g, ' ').trim() })));
   const rec = (id) => ((posts.length ? posts[posts.length - 1] : { cards: {} }).cards || {})[id] || {};
 
   // ---- v1: both steps done in game -> the app closes it as finished
@@ -67,13 +68,13 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   check(heads[0] === 'Start here' && heads[1] === 'Next' && heads[2] === 'Other suggestions' && /^Older 1/.test(heads[3] || ''), `sections in Claude's order (${heads})`);
   const titles = await page.$$eval('main .ccard .ttl', (els) => els.map((e) => e.innerText));
   check(titles[0] === 'Virtuous: step two' && titles[1] === 'Sell the staff' && titles[2] === 'A new note', `cards in order (${titles.slice(0, 3)})`);
+  check(!(rec('no-time').auto || []).length && !(await steps('no-time'))[0].on, "a card for any character isn't ticked by the game: the save is one character's");
   check(titles[3] === 'A card with no time', `a card with no time isn't folded as old (${titles[3]})`);
   check(await page.$eval('main details.cold', (d) => !d.open && /An old note/.test(d.textContent)), "a card Claude hasn't touched for a week folds away under Older");
   const meta = await page.$eval('main .ccard', (e) => e.querySelector('header .sub').innerText);
   check(/Virtuous plan 2 of 2/.test(meta) && /2\/3 steps/.test(meta), `a plan card says its place in the plan and steps done (${meta})`);
 
   // ---- who ticked each step
-  const steps = async (id) => page.$$eval(`main [data-cstep="${id}"]`, (els) => els.map((e) => ({ on: e.checked, t: e.closest('li').innerText.replace(/\s+/g, ' ').trim() })));
   let s = await steps('v2');
   check(s[0].on && /done in game/.test(s[0].t), `a quest step done in game (${s[0].t})`);
   check(s[1].on && /ticked by Claude/.test(s[1].t), `a step Claude ticked (${s[1].t})`);

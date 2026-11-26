@@ -388,8 +388,8 @@
     }, 500);
   };
   document.addEventListener('cc:loaded', write);
-  document.addEventListener('cc:combat', write);
-  document.addEventListener('cc:cards', write);    // a card ticked, closed or changed (js/cards.js): the snapshot's cards[]   // new combat-log counts (js/combatlog.js) read after the load
+  document.addEventListener('cc:combat', write);   // new combat-log counts (js/combatlog.js) read after the load
+  document.addEventListener('cc:cards', write);    // a card ticked, closed or changed (js/cards.js): the snapshot's cards[]
   // settings changed in the app (a gear pick, own weights) reach the hidden browser too
   if (!BACKGROUND && location.protocol.startsWith('http')) settingsReady.then(() => setInterval(saveSettings, 10000));
   CC.snapshot = build;

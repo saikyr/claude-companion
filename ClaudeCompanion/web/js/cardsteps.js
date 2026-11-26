@@ -12,7 +12,7 @@
   const arr = (x) => (Array.isArray(x) ? x : x && typeof x === 'object' ? Object.keys(x).sort((a, b) => a - b).map((k) => x[k]) : []);
   const STANDING = ['', 'Hated', 'Hostile', 'Unfriendly', 'Neutral', 'Friendly', 'Honored', 'Revered', 'Exalted'];
   // the grammar, here and in tools/check-cards.py CHECK and the database gate (private.check_cards)
-  const CHECK = /^(?:quest:(\d{1,9})|item:(\d{1,9})(?:x(\d{1,4}))?|rep:(.+?)>=(Hated|Hostile|Unfriendly|Neutral|Friendly|Honored|Revered|Exalted)|level:(\d{1,2})|skill:(.+?)>=(\d{1,3}))$/;
+  const CHECK = /^(?:quest:([0-9]{1,9})|item:([0-9]{1,9})(?:x([0-9]{1,4}))?|rep:([^\n]+?)>=(Hated|Hostile|Unfriendly|Neutral|Friendly|Honored|Revered|Exalted)|level:([0-9]{1,2})|skill:([^\n]+?)>=([0-9]{1,3}))$/;
 
   function parse(s) {
     const m = CHECK.exec(String(s == null ? '' : s));
