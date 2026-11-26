@@ -106,6 +106,26 @@ Ascension, with 1 of 3 gems, and without finding Bijou's Belongings.
 5. **One card.** The steps above on one From Claude card, in order, short enough to check mid-fight.
 6. **After the run:** answer "what did I miss that gates anything" first, then the fix.
 
+### Plan and route cards
+
+These rules come from a 26 Nov plan that passed more than 30 review rounds. The rounds checked its facts,
+not whether its steps made sense to play, and he threw it out (#164).
+
+1. **Route for speed.** Group steps by area and order them by pathing. A gear or unlock reward that is
+   ready never waits behind unrelated steps. A step with no gate goes early only if it gives a reward.
+2. **"Would a player do this here, now?"** Ask this of every step. A pickup goes on the trip that uses it:
+   Eva's Scholomance quest goes on the Scholomance trip, because she stands at its door.
+3. **Bring and bank lists.** List only what this trip uses, each item with a few words on where it is used.
+   Check his bags first, and never say "bank" for something already in them. Each later card names its own items.
+4. **No gear advice on plan cards.** No "equip X", trinket swaps or what to wear: gear choices belong to the
+   app's gear side. List an item only when a goal needs it to work, such as the Argent Dawn Commission
+   for Scourgestones.
+5. **Mark OPTIONAL.** A step that is only a dungeon run for a drop, or that isn't on the goal's path,
+   starts with "OPTIONAL" and says why it is there.
+6. **Four live cards at most:** Start here (the roadmap), Now, Next, After that. Withdraw a card once
+   another replaces it; never leave old ones for him to sort through.
+7. **Risky boss events get their own run** when he asks, for example the Ysida timer.
+
 ## 6. Routing (the coordinator)
 
 The coordinator has nothing to answer from: memory holds no game facts. It sends every game, gold, gear,
