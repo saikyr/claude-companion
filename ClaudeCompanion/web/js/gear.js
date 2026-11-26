@@ -381,6 +381,9 @@
     if (pvpSource(id)) return 'pvp';
     if (/^World Drop/.test(how)) return 'world';
     if (size || /^(Boss Drop|Dungeon)/.test(how)) return 'dungeon';
+    // a vendor on your side that Forever players saw selling it: buyable now, whatever else gives it (#157: Deliana sells
+    // the Virtuous pieces a set container also gives)
+    if (A.buyLine && A.buyLine(id)) return 'vendor';
     if (/^Quest/.test(how) || rows.some((r) => r[0] === 'quest' || r[0] === 'container')) return 'quest';
     if (/^Profession/.test(how) || rows.some((r) => r[0] === 'craft')) return 'crafted';
     if (/^Vendor/.test(how) || (A.GD.vend || {})[id]) return 'vendor';
@@ -388,7 +391,7 @@
     return 'world';
   }
   // a random-suffix roll drops from any creature of its level: its base's drop list says nothing about the roll
-  const whereOf = (c) => (c.roll ? `Random-suffix ${c.g[1] === 3 ? 'blue' : 'green'} · drops from creatures of its level, or the AH` : (c.kind === 'crafted' && A.recipeLine(c.id) && `${c.how ? c.how.split(' · Learnt from')[0] + ' · ' : ''}${A.recipeLine(c.id)}`) || c.how || ((A.gdSourceLines(c.id, 1, false)[0] || {}).l) || (c.boe ? 'BoE: not seen on your AH yet' : ''));
+  const whereOf = (c) => (c.kind === 'vendor' && A.buyLine && A.buyLine(c.id)) || (c.roll ? `Random-suffix ${c.g[1] === 3 ? 'blue' : 'green'} · drops from creatures of its level, or the AH` : (c.kind === 'crafted' && A.recipeLine(c.id) && `${c.how ? c.how.split(' · Learnt from')[0] + ' · ' : ''}${A.recipeLine(c.id)}`) || c.how || ((A.gdSourceLines(c.id, 1, false)[0] || {}).l) || (c.boe ? 'BoE: not seen on your AH yet' : ''));
 
   // ---------------------------------------------------------------- candidates
   // The fixed-stat items Forever is known to have, and every roll of the random-suffix ones. Cached per

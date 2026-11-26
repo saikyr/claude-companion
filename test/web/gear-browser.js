@@ -267,6 +267,13 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
     "a vendor's reputation, your side's vendor only (" + fav.gates.join(' | ') + ')');
   check(fav.lines.some((l) => /^Vendor: .*Alynsia \(Redridge Mountains\) for 240 Merchant's Favor/.test(l)), "a vendor's price in Merchant's Favor (" + fav.lines.join(' | ') + ')');
 
+  // a vendor on your side sells it (#157): Deliana in Dun Morogh sells the Virtuous pieces a set container also gives;
+  // the item is a vendor item, with where to buy it (the price once the pack has it)
+  const vir = await page.evaluate(() => ({ line: window.CC.api.buyLine(226955),
+    ups: window.CC.snapshot().gear.flatMap((g) => (g.upgrades || []).filter((u) => u.id === 226955).map((u) => [u.source, u.where])
+      .concat((g.preBis || []).filter((u) => u.id === 226955).map((u) => ['vendor', u.where]))) }));   // preBis entries carry no source
+  check(/^Buy: Deliana, Dun Morogh, /.test(vir.line || '') && vir.ups.length && vir.ups.every(([src, w]) => src === 'vendor' && w === vir.line),
+    'an item a vendor on your side sells: Buy, the vendor, where, the price (' + JSON.stringify(vir) + ')');
   // best from what you own (#149): never worse than the set it is compared with (the set's items count even when the
   // saved bags and bank don't list them); an item the game hadn't loaded when it saved is scored from the pack for
   // every spec: Glowing Brightwood Staff put in the bags with no saved item data
