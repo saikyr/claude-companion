@@ -21,6 +21,7 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   const cards = { schema: 1, cards: [
     { id: 'new-note', title: 'A new note', updated: iso(60) },
     { id: 'old-note', title: 'An old note', updated: iso(10 * 86400) },
+    { id: 'no-time', title: 'A card with no time' },
     { id: 'v2', kind: 'quest', title: 'Virtuous: step two', order: 20, group: 'Virtuous plan', updated: iso(3600),
       steps: ['Hand in the Command', 'Ask Claude', 'Get Honored with the Argent Dawn'], stepsDone: [1],
       doneWhen: ['quest:5089', null, 'rep:Argent Dawn>=Honored'] },
@@ -66,6 +67,7 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   check(heads[0] === 'Start here' && heads[1] === 'Next' && heads[2] === 'Other suggestions' && /^Older 1/.test(heads[3] || ''), `sections in Claude's order (${heads})`);
   const titles = await page.$$eval('main .ccard .ttl', (els) => els.map((e) => e.innerText));
   check(titles[0] === 'Virtuous: step two' && titles[1] === 'Sell the staff' && titles[2] === 'A new note', `cards in order (${titles.slice(0, 3)})`);
+  check(titles[3] === 'A card with no time', `a card with no time isn't folded as old (${titles[3]})`);
   check(await page.$eval('main details.cold', (d) => !d.open && /An old note/.test(d.textContent)), "a card Claude hasn't touched for a week folds away under Older");
   const meta = await page.$eval('main .ccard', (e) => e.querySelector('header .sub').innerText);
   check(/Virtuous plan 2 of 2/.test(meta) && /2\/3 steps/.test(meta), `a plan card says its place in the plan and steps done (${meta})`);

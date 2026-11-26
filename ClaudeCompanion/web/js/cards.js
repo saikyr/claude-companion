@@ -304,7 +304,8 @@
     const list = ST.ordered(openList, all).filter((x) => !S.kind || kindOf(x.card) === S.kind);
     if (!list.length) return h + '<div class="empty">All caught up: nothing open from Claude.</div>';
     const old = Date.now() / 1000 - OLD_DAYS * 86400;
-    const isOld = (x) => !x.place && (secs(x.card.updated || x.card.created) || 0) < old;
+    // a card with no time at all isn't old: its age isn't known
+    const isOld = (x) => { const t = secs(x.card.updated || x.card.created); return !x.place && t != null && t < old; };
     const sections = [
       ['Start here', list.filter((x) => x.place === 'start')],
       ['Next', list.filter((x) => x.place === 'next')],
