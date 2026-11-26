@@ -125,7 +125,6 @@
   const mySide = () => ((((CH && CH.snap) || {}).character || {}).faction === 'Horde' ? 'H' : 'A');
   const vendRows = (id) => arr((GD && GD.vend[id]) || []).filter((v) => !v[7] || v[7] === 'AH' || v[7] === mySide());
   // money as plain words ("5g", "1g 50s", "75s"), for text that isn't HTML (a snapshot's where)
-  const coinText = (c) => [[10000, 'g'], [100, 's'], [1, 'c']].reduce((a, [d, u]) => { const n = Math.floor(a.r / d); if (n) a.t.push(n + u); a.r -= n * d; return a; }, { r: Math.round(c || 0), t: [] }).t.join(' ') || '0c';
   // where to buy it on your side, when a vendor Forever players saw sells it: "Buy: Deliana, Dun Morogh, 5g" (#157)
   function buyLine(id) {
     const v = vendRows(id).filter((r) => r[5]).sort((a, b) => (a[8] ? 1 : 0) - (b[8] ? 1 : 0) || (a[4] || 0) - (b[4] || 0))[0];
