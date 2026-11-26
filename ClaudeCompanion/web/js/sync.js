@@ -336,6 +336,26 @@
       return true;
     }
 
+    // what changed in game since the save before (#163): a claude_wake record each time the game saved again with
+    // something new (quests done, items gained or lost, level, reputation, card steps ticked, cards closed), for
+    // Claude to read (`kind = 'claude_wake'` in private.history). The save before is this computer's last digest
+    // (state.wake). Its id is the character and the save's time, so two computers seeing the same save send one.
+    // steps: js/cardsteps.js (digestOf, wakeOf).
+    async function pushWake(digest, names) {
+      const W = root.CCSteps || (typeof require === 'function' ? require('./cardsteps.js') : null);
+      if (!digest || !W || !digest.name || !digest.t) return null;
+      await ready();
+      const prev = state.wake;
+      if (prev && prev.name === digest.name && digest.t <= prev.t) return null;
+      const w = prev ? W.wakeOf(prev, digest, names) : null;
+      if (w) {
+        const t = Math.round(digest.t);
+        await rpc('cc_push', { p_key: state.key, p_records: [{ id: `claude_wake|${digest.name}|${t}`, char: '*', kind: 'claude_wake', t, data: w, mutable: false }] });
+      }
+      state.wake = digest; await io.saveState(state);
+      return w;
+    }
+
     // a Claude's cards.json on this computer (a friend's Claude has no database, #83): sent to the account
     // through the card gate (public.cc_put_cards, merged card by card, newest wins), so the other computers
     // get them in cc.claude.cards. Sent when the file changed, and again after a refusal (a newer snapshot
@@ -372,7 +392,7 @@
     }
 
     return {
-      ready, push, pull, pushSnapshot, pushCards, linkCode, link, isOff, setOff, status,
+      ready, push, pull, pushSnapshot, pushWake, pushCards, linkCode, link, isOff, setOff, status,
       get state() { return state; }, get cache() { return cache; },
       view: (own) => view(own, cache, state && state.device),
     };
@@ -425,6 +445,8 @@
         const raw = A.RAW;
         if (raw && raw.chars) await C.push(raw, settingsNow());
         if (CC.lastSnapshot) await C.pushSnapshot(CC.lastSnapshot);
+        // what the new save changed, for Claude (its own failure doesn't stop the sync)
+        if (CC.lastDigest) { try { await C.pushWake(CC.lastDigest, CC.wakeNames); } catch (e) { console.warn('claude_wake', e); } }
         // after the snapshot: the card gate checks the cards' numbers against it
         // (its own failure, an older backend say, is the cards' and doesn't stop the sync)
         const cardsFile = await fetch('api/cards', { cache: 'no-store' }).then((x) => (x.status === 200 ? x.text() : null)).catch(() => null);

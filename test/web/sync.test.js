@@ -275,6 +275,27 @@ async function main() {
       check(!(await quiet.client.isOff()) && Number(B.query(`select count(*) from public.records where device_id = '${quiet.client.state.device}'`)) > 0,
         'turned back on, it registers and sends what waited');
     }
+    // what a new save changed, for Claude (#163): one claude_wake record per new save with something new, the
+    // first save only remembered, an older or unchanged save nothing; two computers seeing one save send one record
+    {
+      const W = require('../../ClaudeCompanion/web/js/cardsteps.js');
+      const pc = computer(B.fetch, 'WakePC', 'pc'), mac = computer(B.fetch, 'WakeMac', 'mac');
+      await sync(pc, clone(base), null); await sync(mac, clone(base), null);
+      await mac.client.link((await pc.client.linkCode()).code);
+      const ch = (t, quests, level) => ({ snap: { taken: t, character: { name: 'Wakey', level }, completedQuests: quests } });
+      const wakes = () => Number(B.query(`select count(*) from private.history where kind = 'claude_wake' and account = '${pc.client.state.account}'`));
+      const d1 = W.digestOf(W.contextOf(ch(1000, [1], 50)), []), d2 = W.digestOf(W.contextOf(ch(2000, [1, 2], 51)), []);
+      check(await pc.client.pushWake(d1) === null && wakes() === 0 && JSON.parse(pc.files.state).wake.t === 1000, 'the first save is only remembered');
+      await mac.client.pushWake(d1);
+      const w = await pc.client.pushWake(d2, (k, id) => (k === 'quest' ? 'Quest ' + id : null));
+      const row = JSON.parse(B.query(`select json_build_object('id', id, 't', t, 'data', data) from private.history where kind = 'claude_wake' and account = '${pc.client.state.account}'`));
+      check(w && wakes() === 1 && row.id === 'claude_wake|Wakey|2000' && row.t === 2000 && JSON.stringify(row.data.questsDone) === '[{"id":2,"title":"Quest 2"}]' && row.data.level.to === 51,
+        `a new save with a quest done sends one claude_wake record (${JSON.stringify(row)})`);
+      await mac.client.pushWake(d2);
+      check(wakes() === 1, 'the other computer seeing the same save adds no second record');
+      check(await pc.client.pushWake(d1) === null && await pc.client.pushWake(W.digestOf(W.contextOf(ch(3000, [1, 2], 51)), [])) === null && wakes() === 1,
+        'an older save, or a new one where nothing changed: no record');
+    }
     // a retired account: its computers are refused
     B.query(`update public.accounts set retired = true where id = '${third.client.state.account}'`);
     let refused = false; try { await third.client.pull(null); } catch (e) { refused = /unknown device/.test(e.message); }

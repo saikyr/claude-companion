@@ -62,6 +62,17 @@ the gate (CLAUDE.md, "Writing"). Chat gives the short version and points to the 
 fails the gate later, rewrite or withdraw it. Never leave bad numbers in front of him. Chat answers with
 numbers, rates, gold or plans go through `python3 tools/check-answer.py` first.
 
+**Keep the cards in order and current** (#163). He gets lost in a pile of cards, so:
+- A plan of several cards gets one `group` ("Virtuous plan") and every open card that is part of what he should
+  do next gets an `order` (lowest first): the tab shows Start here, Next, After that. Don't fake an order with
+  `updated` times. Withdraw what no longer applies instead of leaving it open.
+- Give each step a `doneWhen` check wherever the save can prove it (`quest:<id>`, `item:<id>x<n>`,
+  `rep:<faction>>=<standing>`, `level:<n>`, `skill:<profession>>=<n>`): the app ticks it itself at his next save
+  and closes the card when every step is done. Use `stepsDone` for a step you saw done that no check covers.
+- Before updating cards, read what happened: the snapshot's `cards[]` (each step done or not, by him, the game
+  or you, and each check now) and the `claude_wake` records since your last cards (quests done, items, level,
+  rep, steps ticked, cards closed: SCHEMA.md, "What changed in game"). Never re-tick a step he unticked.
+
 ## 4. Never a risky tip
 
 - No in-game scripts (`/run`, `/script`), no menu paths or slash commands you haven't checked, and no

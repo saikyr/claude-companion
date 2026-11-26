@@ -85,6 +85,8 @@ that must hold go in CI or in the database (for example `private.claude_put_sett
     node test/web/merge.test.js
     # Claude's cards through the real backend SQL (needs a local Postgres: PGHOST/PGPORT/PGUSER)
     node test/web/claude.test.js
+    # From Claude cards (#163): the step engine in node, then the From Claude tab in Chromium
+    node test/web/cardsteps.test.js && node test/web/cards-browser.js
     python3 test/update_test.py
 
     # the first-install zips (CI runs the installers on Windows and macOS: installers.yml)
