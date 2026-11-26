@@ -124,12 +124,32 @@
   // the vendor rows on your side (or that serve both): [npc, zone, x, y, price, seenOnForever, title, side, cost, rep]
   const mySide = () => ((((CH && CH.snap) || {}).character || {}).faction === 'Horde' ? 'H' : 'A');
   const vendRows = (id) => arr((GD && GD.vend[id]) || []).filter((v) => !v[7] || v[7] === 'AH' || v[7] === mySide());
-  // money as plain words ("5g", "1g 50s", "75s"), for text that isn't HTML (a snapshot's where)
   // where to buy it on your side, when a vendor Forever players saw sells it: "Buy: Deliana, Dun Morogh, 5g" (#157)
   function buyLine(id) {
     const v = vendRows(id).filter((r) => r[5]).sort((a, b) => (a[8] ? 1 : 0) - (b[8] ? 1 : 0) || (a[4] || 0) - (b[4] || 0))[0];
     if (!v) return null;
     return `Buy: ${v[0]}${v[1] ? ', ' + v[1] : ''}${v[8] ? ', ' + v[8] : v[4] > 0 ? ', ' + coinText(v[4]) : ', price not known'}`;
+  }
+  // the easiest quest that gives an item (#160: the four Superior Armaments of Battle quests each give Band of Piety,
+  // from Friendly up): no reputation asked first, then the lowest standing. { id, q, standing (null = none), cost
+  // (the objective's "For 30 Insignias of the Dawn and 30 Insignias of the Crusade"), any (the reward is one of
+  // several items the pack can't tell apart as fixed or chosen), count (how many quests give it) } or null
+  function questRoute(id) {
+    const qs = [...new Set(arr((GD && GD.src[id]) || []).filter((r) => r[0] === 'quest').map((r) => r[2]))]
+      .map((qid) => ({ id: qid, q: (GD.quests || {})[qid] })).filter((x) => x.q);
+    if (!qs.length) return null;
+    qs.forEach((x) => { const rr = arr(x.q.repReq)[0]; x.faction = rr ? rr[0] : null; x.standing = rr ? repStanding(rr[1]) : null; });
+    const best = qs.reduce((a, b) => ((b.standing || 0) < (a.standing || 0) ? b : a));
+    const m = /^For (.+?) you may\b/.exec(arr(best.q.obj)[0] || '');
+    return { ...best, cost: m ? m[1] : null, any: !arr(best.q.reward).length && !arr(best.q.choice).length && arr(best.q.rewardAny).some(([i]) => i === id), count: qs.length };
+  }
+  // "Quest: Superior Armaments of Battle - Friend of the Dawn, Quartermaster Miranda Breechlock, Eastern Plaguelands,
+  // for 30 Insignias of the Dawn and 30 Insignias of the Crusade, one of 6 items (3 more quests give it)"
+  function questLine(id) {
+    const r = questRoute(id);
+    if (!r) return null;
+    const giver = arr(r.q.from)[0], n = arr(r.q.rewardAny).length;
+    return `Quest: ${r.q.t}${giver ? ', ' + giver[1] + (giver[2] ? ', ' + giver[2] : '') : r.q.cat ? ', ' + r.q.cat : ''}${r.cost ? ', for ' + r.cost : ''}${r.any ? `, one of ${n} items` : ''}${r.count > 1 ? ` (${r.count - 1} more quest${r.count > 2 ? 's' : ''} give it)` : ''}`;
   }
   function itemGates(id) {
     const out = [];
@@ -149,7 +169,9 @@
     if (mine.length && mine.every((v) => v[9])) { const v = mine.reduce((a, b) => (b[9][1] < a[9][1] ? b : a)); rep(v[9][0], v[9][1], 'buying it from ' + v[0]); }
     const g = gdItem(id);
     arr(g && g[10]).forEach((l) => { const m = /^Requires (.+) - (Friendly|Honored|Revered|Exalted)$/.exec(l); if (m) rep(m[1], STANDING.indexOf(m[2]), ''); });
-    arr((GD && GD.src[id]) || []).filter((r) => r[0] === 'quest').forEach((r) => { const q = (GD.quests || {})[r[2]]; const rr = q && arr(q.repReq)[0]; if (rr) rep(rr[0], repStanding(rr[1]), 'quest ' + q.t); });
+    // a reward quest's reputation: any one quest that gives it will do, so the easiest one (#160), and none when one asks none
+    const qr = questRoute(id);
+    if (qr && qr.standing) rep(qr.faction, qr.standing, 'quest ' + qr.q.t);
     const cs = craftSkill(id);
     if (cs && cs.skill) out.push({ kind: 'skill', prof: cs.prof, skill: cs.skill, via: '', craft: true, have: mySkill(cs.prof) });
     recipesOf(id).forEach((rc) => { const rq = (GD.req || {})[rc.id]; if (rq) rep(rq[0], rq[1], rc.name); });
@@ -1861,7 +1883,7 @@
     load, loadText, V, reload: () => RAW && load(RAW, { live: STATE.live }),
     setChar, get CHARS() { return CHARS; },
     api: { get CH() { return CH; }, get SPELLS() { return SPELLS; }, get RAW() { return RAW; }, get DB() { return DB; }, STATE, GD, esc, arr, money, icon, itemIcon, anyItemIcon, anyItemName, gdItem, gdTip,
-      gdSourceLines, itemGates, buyLine, coinText, recipeLine, planPrice, priceOf, trackerStats, goldOf, lootStrip, ago, dur, fmtTime, flipsOf, sellThrough, buyListOf, positionsOf, paperOf, weeklyOf, cooldowns, craftCost, craftProfit, vendorPrice, specTrees, specLabel, TREE_NAMES, gearIds, item, byId, render, QCOL, deOutcome, placesSeen,
+      gdSourceLines, itemGates, buyLine, questLine, questRoute, coinText, recipeLine, planPrice, priceOf, trackerStats, goldOf, lootStrip, ago, dur, fmtTime, flipsOf, sellThrough, buyListOf, positionsOf, paperOf, weeklyOf, cooldowns, craftCost, craftProfit, vendorPrice, specTrees, specLabel, TREE_NAMES, gearIds, item, byId, render, QCOL, deOutcome, placesSeen,
       itemLink, itemIconOf, itemCell, itemInline, uiIcon, UI_ICON, PROF_ICON, ownedCount, knownRecipe, recipeNeeds },
   };
 
