@@ -73,6 +73,24 @@ numbers, rates, gold or plans go through `python3 tools/check-answer.py` first.
   or you, and each check now) and the `claude_wake` records since your last cards (quests done, items, level,
   rep, steps ticked, cards closed: SCHEMA.md, "What changed in game"). Never re-tick a step he unticked.
 
+**Hourly card refresh** (his pick, 26 Nov: cards rewrite themselves after he plays). Nothing in the app or
+the database wakes Claude when a save syncs, so the coaching project runs a scheduled task every hour
+("Hourly card refresh", in one dedicated coaching thread) that does this:
+1. The watermark is the larger of the `t` of his stored cards (`select t from private.history where account =
+   '<account>' and id = 'setting|cc.claude.cards'`) and the `last_wake_t` line in project memory file
+   `card-refresh.md`.
+2. Read the saves since: `select t, at, data from private.history where account = '<account>' and kind =
+   'claude_wake' and t > <watermark> order by t`. None: stop there, silently (no message, no checklist).
+3. Otherwise read the brief, the snapshot's `cards[]` and those records, and rewrite only the cards they
+   affect, as above (order, withdraw what no longer applies, keep ids, never re-tick a step he unticked).
+   The whole list passes `tools/check-cards.py` and goes through `claude_put_setting`; a refusal is fixed,
+   never reworded around.
+4. Save `last_wake_t` = the newest record handled to `card-refresh.md`, also when no card needed a change.
+5. Only when a card changed, tell the coordinator in one line per card. Never ask him anything.
+
+If the task stops firing (it shows in the task list) or its thread is gone, the coordinator asks a new thread
+to create it again with the same schedule and these steps.
+
 ## 4. Never a risky tip
 
 - No in-game scripts (`/run`, `/script`), no menu paths or slash commands you haven't checked, and no
@@ -116,6 +134,26 @@ Ascension, with 1 of 3 gems, and without finding Bijou's Belongings.
    spec. They stay in his log (the dungeon-quest rule), but he doesn't hold up the group for them.
 5. **One card.** The steps above on one From Claude card, in order, short enough to check mid-fight.
 6. **After the run:** answer "what did I miss that gates anything" first, then the fix.
+
+### Plan and route cards
+
+These rules come from a 26 Nov plan that passed more than 30 review rounds. The rounds checked its facts,
+not whether its steps made sense to play, and he threw it out (#164).
+
+1. **Route for speed.** Group steps by area and order them by pathing. A gear or unlock reward that is
+   ready never waits behind unrelated steps. A step with no gate goes early only if it gives a reward.
+2. **"Would a player do this here, now?"** Ask this of every step. A pickup goes on the trip that uses it:
+   Eva's Scholomance quest goes on the Scholomance trip, because she stands at its door.
+3. **Bring and bank lists.** List only what this trip uses, each item with a few words on where it is used.
+   Check his bags first, and never say "bank" for something already in them. Each later card names its own items.
+4. **No gear advice on plan cards.** No "equip X", trinket swaps or what to wear: gear choices belong to the
+   app's gear side. List an item only when a goal needs it to work, such as the Argent Dawn Commission
+   for Scourgestones.
+5. **Mark OPTIONAL.** A step that is only a dungeon run for a drop, or that isn't on the goal's path,
+   starts with "OPTIONAL" and says why it is there.
+6. **Four live cards at most:** Start here (the roadmap), Now, Next, After that. Withdraw a card once
+   another replaces it; never leave old ones for him to sort through.
+7. **Risky boss events get their own run** when he asks, for example the Ysida timer.
 
 ## 6. Routing (the coordinator)
 
