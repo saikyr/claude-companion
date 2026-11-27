@@ -124,6 +124,8 @@ const CASES = [
   ['a list entry that is not there', { id: 'byname-none', title: 'Trolls', facts: [{ label: 'Kills', value: '80', src: 'snapshot#grind.recent[name=trolls].kills' }] }, [], ['value']],
   ['a run picked by its name', { id: 'byname-run', title: 'Run', facts: [{ label: 'Kills', value: '200', src: 'snapshot#runs[name=Stratholme].kills' }] }, [], []],
   ['an unclosed entry pick', { id: 'byname-fmt', title: 'x', facts: [{ label: 'Kills', value: '80', src: 'snapshot#grind.recent[name=cultists.kills' }] }, ['src'], []],
+  ['an AH price from an item search before #170 (a fraction of the price)', { id: 'ah-old-search', title: 'Dawn Armor price', facts: [{ label: 'Pattern on your AH', value: '25.33g', src: 'ah:252892@1795369300#min' }] }, [], ['value']],
+  ['an AH price from an item search read per item (#170)', { id: 'ah-new-search', title: 'Dawn Armor price', facts: [{ label: 'Pattern on your AH', value: '76g', src: 'ah:252892@1795369400#min' }] }, [], []],
   ['an AH price src without the scan time', { id: 'ah-fmt', title: 'Destiny price', facts: [{ label: 'Destiny on your AH', value: '235g', src: 'ah:647#min' }] }, ['src'], []],
   ['an AH price src with a leading zero', { id: 'ah-zero', title: 'Destiny price', facts: [{ label: 'Destiny on your AH', value: '235g', src: 'ah:0647@1795369186#min' }] }, ['src'], []],
   ['profit with only flips#sold', { id: 'sold', title: 'Flip profit', facts: [{ label: 'Sold', value: '90g', src: 'flips#sold' }] }, ['profit'], []],
@@ -181,6 +183,10 @@ function pyRules(card) {
     // one AH scan of Destiny (item 647), as the app syncs it (kind ah_obs)
     B.query(`insert into public.records (account_id, id, device_id, char_key, kind, t, data) values ('${account}', 'Ana-Realm|ah_obs|1795369186|x', null, 'Ana-Realm', 'ah_obs', 1795369186,
       '{"t": 1795369186, "item": 647, "key": "647", "min": 2350000, "med": 2999999, "n": 13, "qty": 13, "src": "scan"}');`);
+    // item searches of Pattern: Dawn Armor (#170): one from before the fix (a third of the price, no stack), one after
+    B.query(`insert into public.records (account_id, id, device_id, char_key, kind, t, data) values
+      ('${account}', 'Ana-Realm|ah_obs|1795369300|s', null, 'Ana-Realm', 'ah_obs', 1795369300, '{"t": 1795369300, "item": 252892, "key": "252892", "min": 253333, "qty": 3, "src": "search"}'),
+      ('${account}', 'Ana-Realm|ah_obs|1795369400|s', null, 'Ana-Realm', 'ah_obs', 1795369400, '{"t": 1795369400, "item": 252892, "key": "252892", "min": 760000, "qty": 3, "src": "search", "stack": 1}');`);
     const pgRules = (card) => JSON.parse(B.query(`select private.check_cards('${account}', ${lit(JSON.stringify({ schema: 1, cards: [card] }))}::jsonb)::text`));
 
     for (const [name, card, both, pgOnly] of CASES) {
