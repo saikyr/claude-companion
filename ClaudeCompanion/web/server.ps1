@@ -411,7 +411,8 @@ function Install-Update {
 # ---------------------------------------------------------------- Claude updates the cards (#169, same as server.py)
 # Opt-in, per computer. After a save worth it the page posts it (POST /api/claude {action: 'save'}); this server
 # starts the player's own Claude Code (signed in with their own Claude plan) hidden in the addon folder: it reads
-# the folder, writes only companion-data\from-claude\ (--restricted: no commands, no web), and leaves the whole card
+# the folder, writes only companion-data\from-claude\ ($runArgs, plus --restricted where the installed Claude Code has
+# it: no commands, no web), and leaves the whole card
 # list in cards.draft.json. When it exits the draft becomes cards.json, which the page sends through the account's
 # card gate; a refusal goes back to the same session (--resume), at most twice. One run at a time, RUN_CAP a day.
 # Everything it keeps: companion-data\claude-run\ (SCHEMA.md, "Claude updates the cards").
@@ -420,12 +421,19 @@ $runStateFile = Join-Path $runDir 'state.json'
 $runCap = 24; $runTimeout = 900; $runFixes = 2; $runGateWait = 180; $runTurns = 40
 $runPrompt = 'The game saved. Follow claude/REFRESH.md exactly.'
 $runFix = 'The card check refused your cards (now companion-data/from-claude/cards.json). Read companion-data/claude-run/run.json (refusal), fix exactly what it names, and write the whole list to companion-data/from-claude/cards.draft.json again.'
-$runArgs = @('--restricted', '--strict-mcp-config', '--tools', 'Read,Glob,Grep,Write,Edit',
+# The same flags as server.py RUN_ARGS (why each: there). --restricted (Claude Code 2.1.248) only where --help lists
+# it; a Claude Code without one of these gets no run and the System tab says which flag (Get-ClaudeFlags)
+$runArgs = @('--setting-sources=', '--strict-mcp-config', '--disable-slash-commands', '--tools', 'Read,Glob,Grep,Write,Edit',
+             '--disallowedTools', 'Bash', 'PowerShell', 'WebFetch', 'WebSearch',
              '--allowedTools', 'Read(./**)', 'Edit(./companion-data/from-claude/cards.draft.json)',
              '--permission-mode', 'dontAsk', '--max-turns', "$runTurns", '--output-format', 'json')
+# what --help must name; --max-turns works but --help doesn't list it, so only a run's "unknown option" tells
+$runNeed = @($runArgs | Where-Object { $_.StartsWith('--') } | ForEach-Object { $_.Split('=')[0] } | Where-Object { $_ -ne '--max-turns' }) + @('dontAsk')
+$runExtra = '--restricted'
 # a key in the environment would bill an API account instead of the player's plan (claude -p always uses one)
 foreach ($k in @('ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN')) { Remove-Item -LiteralPath "Env:$k" -ErrorAction SilentlyContinue }
-$run = @{ proc = $null; job = $null; started = [DateTime]::MinValue; queue = $null; gate = $null; signed = $null; signedAt = [DateTime]::MinValue }
+$run = @{ proc = $null; job = $null; started = [DateTime]::MinValue; queue = $null; gate = $null; signed = $null; signedAt = [DateTime]::MinValue
+          flagsKey = $null; flags = $null }
 $runNext = [DateTime]::MinValue
 function Utc-Now { [DateTime]::UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'") }
 function Write-RunJson([string]$f, $o) {
@@ -466,14 +474,53 @@ function Test-SignedIn([switch]$Force) {
     $script:run.signed = $ok; $script:run.signedAt = Get-Date
     $ok
 }
+function Invoke-ClaudeText([string]$exe, [string]$a) {
+    # `claude <a>`, hidden, at most 30 s (this loop serves every request): its output, or $null
+    try {
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = $env:ComSpec; $psi.Arguments = '/d /s /c "' + (Quote-Arg $exe) + ' ' + $a + ' 2>&1"'
+        $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true; $psi.RedirectStandardOutput = $true; $psi.WorkingDirectory = $addonDir
+        $p = [System.Diagnostics.Process]::Start($psi)
+        $read = $p.StandardOutput.ReadToEndAsync()
+        if ($p.WaitForExit(30000)) { if ($p.ExitCode -eq 0) { return [string]$read.Result } }
+        else { & taskkill.exe /PID $p.Id /T /F 2>$null | Out-Null }
+    } catch { }
+    $null
+}
+function Test-HelpHas([string]$text, [string]$word) { $text -cmatch ('(?<![\w-])' + [regex]::Escape($word) + '(?![\w-])') }
+function Get-ClaudeFlags([string]$exe) {
+    # which of the run's flags the installed Claude Code knows, from its --help; kept until the program changes
+    $key = $exe
+    try { $i = Get-Item -LiteralPath $exe; $key = "$exe|$($i.LastWriteTimeUtc.Ticks)|$($i.Length)" } catch { }
+    if ($script:run.flagsKey -eq $key) { return $script:run.flags }
+    $out = @{ version = $null; missing = $null; restricted = $false }
+    $h = Invoke-ClaudeText $exe '--help'
+    if ($h -and $h.Contains('--print')) {
+        $out.missing = @($runNeed | Where-Object { -not (Test-HelpHas $h $_) })
+        $out.restricted = Test-HelpHas $h $runExtra
+    }
+    $v = Invoke-ClaudeText $exe '--version'
+    if ($v -and $v -match '\d+\.\d+\.\d+') { $out.version = $Matches[0] }
+    $script:run.flagsKey = $key; $script:run.flags = $out
+    $out
+}
+function Get-TooOld($version, $flags) {
+    $v = if ($version) { $version } else { '(version unknown)' }
+    "Claude Code $v on this computer is too old for the card updates: it has no " + (@($flags) -join ', ') + '. System tab, Update Claude Code'
+}
 function Get-RunStatus([switch]$Check) {
     $st = Get-RunState; $exe = Find-Claude
     $today = $st['today']; $day = (Utc-Now).Substring(0, 10)
-    @{ on = [bool]$st['on']; claude = [bool]$exe; signedIn = $(if ($exe) { Test-SignedIn -Force:$Check } else { $null })
+    $out = @{ on = [bool]$st['on']; claude = [bool]$exe; signedIn = $(if ($exe) { Test-SignedIn -Force:$Check } else { $null })
        running = $null -ne $script:run.proc; started = $(if ($script:run.proc) { $st['started'] } else { $null })
        queued = $null -ne $script:run.queue; checking = $null -ne $script:run.gate; last = $st['last']
        runs = $(if ($today -and $today.date -eq $day) { [int]$today.n } else { 0 }); cap = $runCap
-       digests = $(if ($st['digests']) { $st['digests'] } else { @{} }) }
+       digests = $(if ($st['digests']) { $st['digests'] } else { @{} }); tooOld = $null }
+    if ($exe -and $out.signedIn) {
+        $f = Get-ClaudeFlags $exe
+        if ($f.missing -and @($f.missing).Count) { $out.tooOld = @{ version = $f.version; missing = @($f.missing) } }
+    }
+    $out
 }
 function Test-SyncOff { $o = Read-Json (Join-Path $dataDir 'sync.json'); [bool]($o -and $o.off) }
 function Add-RunJob($job) {
@@ -510,6 +557,8 @@ function Start-ClaudeRun($job) {
     $exe = Find-Claude
     if (-not $exe) { & $last 'Claude Code is not installed on this computer (System tab: Connect)'; return }
     if (Test-SyncOff) { & $last 'sync is off on this computer: the cards are checked online, so turn sync on'; return }
+    $flags = Get-ClaudeFlags $exe
+    if ($flags.missing -and @($flags.missing).Count) { & $last (Get-TooOld $flags.version $flags.missing); return }
     $day = (Utc-Now).Substring(0, 10)
     $today = if ($st['today'] -and $st['today'].date -eq $day) { @{ date = $day; n = [int]$st['today'].n } } else { @{ date = $day; n = 0 } }
     if ($today.n -ge $runCap -and $job.why -ne 'refused') { & $last "$runCap runs today already: the next one waits for tomorrow (UTC)"; return }
@@ -518,7 +567,7 @@ function Start-ClaudeRun($job) {
     if ($job.why -ne 'refused' -and (Test-Path -LiteralPath $draft)) { Remove-Item -LiteralPath $draft -Force }
     if ($job.why -ne 'refused') { Update-CardsNow }
     Write-RunJson (Join-Path $runDir 'run.json') @{ schema = 1; now = (Utc-Now); why = $job.why; wake = $job.wake; refusal = $job.refusal; fix = [int]$job.fixes }
-    $all = @($exe, '-p', $(if ($job.resume) { $runFix } else { $runPrompt })) + $runArgs
+    $all = @($exe, '-p', $(if ($job.resume) { $runFix } else { $runPrompt })) + $(if ($flags.restricted) { @($runExtra) } else { @() }) + $runArgs
     if ($job.resume) { $all += @('--resume', $job.resume) }
     $out = Join-Path $runDir 'out.json'; $err = Join-Path $runDir 'err.txt'
     $psi = New-Object System.Diagnostics.ProcessStartInfo
@@ -528,7 +577,7 @@ function Start-ClaudeRun($job) {
     $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true; $psi.WorkingDirectory = $addonDir
     try { $p = [System.Diagnostics.Process]::Start($psi) } catch { & $last ('Claude Code did not start: ' + $_.Exception.Message); return }
     $today.n++
-    $st['today'] = $today; $st['started'] = (Utc-Now)
+    $st['today'] = $today; $st['started'] = (Utc-Now); $st['claude'] = @{ version = $flags.version; restricted = [bool]$flags.restricted }
     Write-RunJson $runStateFile $st
     $script:run.proc = $p; $script:run.job = $job; $script:run.started = Get-Date
 }
@@ -572,7 +621,10 @@ function Complete-ClaudeRun {
     } elseif ($p.ExitCode -ne 0 -or $isError) {
         $why = if ($resText) { $resText } else { $err }
         $why = $why.Trim(); if ($why.Length -gt 300) { $why = $why.Substring(0, 300) }
-        $last.error = if ($signedOut) { 'signed out of Claude: System tab, Connect' } elseif ($why) { 'Claude stopped: ' + $why } else { "Claude stopped: exit $($p.ExitCode)" }
+        $unknown = @([regex]::Matches($err, "unknown option '([^']+)'") | ForEach-Object { $_.Groups[1].Value })
+        # --help named it but the run didn't take it: ask again before the next run
+        if ($unknown.Count) { $script:run.flagsKey = $null }
+        $last.error = if ($unknown.Count) { Get-TooOld $(if ($st['claude']) { $st['claude'].version } else { $null }) $unknown } elseif ($signedOut) { 'signed out of Claude: System tab, Connect' } elseif ($why) { 'Claude stopped: ' + $why } else { "Claude stopped: exit $($p.ExitCode)" }
     }
     $last.ok = -not $last.ContainsKey('error'); $last.wrote = $wrote
     $st['last'] = $last; Write-RunJson $runStateFile $st
@@ -635,12 +687,16 @@ function Save-RunDigest($b) {
 }
 function Connect-Claude {
     # the player's own sign-in, in a window they can see: install Claude Code first if it isn't here
+    # installed: update it first (a version without a flag the run needs gets no run: Get-ClaudeFlags); the sign-in
+    # only when it isn't signed in
     $exe = Find-Claude
-    $login = if ($exe) { "& '" + $exe.Replace("'", "''") + "' auth login" } else { 'irm https://claude.ai/install.ps1 | iex; & (Join-Path $env:USERPROFILE ''.local\bin\claude.exe'') auth login' }
-    $cmd = "Write-Host 'Claude Companion: signing in to Claude, for the cards updates.'; " + $login
+    $signed = $exe -and (Test-SignedIn -Force)
+    $q = if ($exe) { "& '" + $exe.Replace("'", "''") + "'" } else { $null }
+    $login = if ($signed) { "$q update" } elseif ($exe) { "$q update; $q auth login" } else { 'irm https://claude.ai/install.ps1 | iex; & (Join-Path $env:USERPROFILE ''.local\bin\claude.exe'') auth login' }
+    $cmd = "Write-Host 'Claude Companion: $(if ($signed) { 'updating Claude Code' } else { 'signing in to Claude' }), for the cards updates.'; " + $login
     $enc = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($cmd))
     Start-Process -FilePath $psExe -ArgumentList @('-NoExit', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', $enc) | Out-Null
-    $script:run.signedAt = [DateTime]::MinValue
+    $script:run.signedAt = [DateTime]::MinValue; $script:run.flagsKey = $null
     @{ ok = $true }
 }
 function Invoke-ClaudePost($b) {

@@ -66,6 +66,8 @@
       h += `<p>${S.claude ? 'Claude Code is here but not signed in.' : 'Needs Claude Code on this computer.'} Connect ${S.claude ? 'opens' : 'installs it (no admin rights needed) and opens'} the sign-in to your Claude account, once.</p>
         <div class="toolbar"><button class="btn" data-crun="connect">Connect</button></div>`;
     } else {
+      if (S.tooOld) h += `<p class="neg">Claude Code ${esc(S.tooOld.version || '')} on this computer is too old for the card updates (it has no ${esc(S.tooOld.missing.join(', '))}): no run starts until it is updated.</p>
+        <div class="toolbar"><button class="btn" data-crun="connect">Update Claude Code</button></div>`;
       const state = S.running ? 'Updating your cards now…' : S.queued ? 'Waiting to update your cards…' : S.checking ? 'Checking the new cards…' : lastLine(S.last);
       h += S.on
         ? `<p>On · ${state} · ${S.runs} of ${S.cap} runs today</p>
@@ -83,7 +85,7 @@
       if (b.dataset.crun === 'run') await saveCards();
       const r = await post({ action: b.dataset.crun });
       if (b.dataset.crun === 'connect') {
-        msg = r && r.ok ? 'A window opened: follow it to sign in, then come back here.' : esc((r && r.error) || 'It did not open.');
+        msg = r && r.ok ? (S && S.signedIn ? 'A window opened: it updates Claude Code, then come back here.' : 'A window opened: follow it to sign in, then come back here.') : esc((r && r.error) || 'It did not open.');
         checked = 0;
       } else if (r) S = r;
     } catch (err) { msg = `<span class="neg">${esc(err.message || err)}</span>`; }
