@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build the random-suffix roll table (web/data/suffixes.js) from foreverchanges.pro.
 
-  python3 -I suffixes.py <gamedata.js> <cache dir> <out suffixes.js>
+  python3 -I suffixes.py <gamedata.js> <cache dir> <out suffixes.js> [<previous suffixes.js> <previous gamedata.js>]
 
 A green or blue item "of Healing", "of the Owl", ... gets its stats from the suffix it rolled, and on
 Forever the numbers for one suffix depend on the base item. foreverchanges.pro/item/<id> lists every
@@ -11,7 +11,9 @@ armor piece in the pack that has no fixed stats of its own (those are the ones t
 
 ONE OWNER: random-suffix rolls come only from foreverchanges.pro. Pages are cached in <cache dir>, so a
 re-run only fetches what's missing. Lines it can't turn into stats are listed at the end; the build
-fails if a page has a suffix list it can't read.
+fails if a page has a suffix list it can't read. A page that can't be fetched (foreverchanges.pro answers a few
+with a redirect loop) keeps what the previous build read for it (its rolls, or none when the previous build checked it and it rolls
+none), said in the log; the build fails only for a page the previous build never checked.
 
 Output (window.GAMEDATA_SUFFIX):
   { v: 1, built, from, names: [suffix name, ...], items: { "<base id>": [[index into names, [[stat id, value], ...]], ...] } }
@@ -20,14 +22,34 @@ Stat ids are the pack's (gamedata/build.py STAT).
 import concurrent.futures as cf, html, json, os, re, sys, time, urllib.request
 
 PACK, CACHE, OUT = sys.argv[1], sys.argv[2], sys.argv[3]
+PREV = {}
+if len(sys.argv) > 4 and os.path.exists(sys.argv[4]):
+    try:
+        p = open(sys.argv[4], encoding='utf-8').read()
+        p = json.loads(p[p.index('{'):p.rindex('}') + 1])
+        PREV = {k: [[p['names'][n], st] for n, st in rows] for k, rows in p['items'].items()}
+    except (ValueError, KeyError, IndexError) as e:
+        print(f'previous suffixes.js unreadable ({e}): nothing to keep', file=sys.stderr)
 os.makedirs(CACHE, exist_ok=True)
 s = open(PACK, encoding='utf-8').read()
 GD = json.loads(s[s.index('{'):s.rindex('}') + 1])
 
 # a BoE green/blue weapon or armor piece (not a shirt, tabard, bag or ammo) with no fixed stats besides armor/resistances
-bases = sorted((int(k) for k, g in GD['items'].items()
-                if g[9] in (2, 4) and g[1] in (2, 3) and g[7] == 2 and g[11] == 'e' and (g[2] or 0) >= 5
-                and g[4] not in (0, 4, 18, 19, 24) and not any(st < 100 for st, _ in (g[8] or []))))
+def base_ids(gd):
+    return sorted((int(k) for k, g in gd['items'].items()
+                   if g[9] in (2, 4) and g[1] in (2, 3) and g[7] == 2 and g[11] == 'e' and (g[2] or 0) >= 5
+                   and g[4] not in (0, 4, 18, 19, 24) and not any(st < 100 for st, _ in (g[8] or []))))
+
+
+bases = base_ids(GD)
+# the bases the previous build checked: one with no rolls in the previous suffixes.js rolled none
+PREV_BASES = set()
+if PREV and len(sys.argv) > 5 and os.path.exists(sys.argv[5]):
+    try:
+        p = open(sys.argv[5], encoding='utf-8').read()
+        PREV_BASES = set(base_ids(json.loads(p[p.index('{'):p.rindex('}') + 1])))
+    except (ValueError, KeyError, IndexError, TypeError) as e:
+        print(f'previous gamedata.js unreadable ({e}): only previous rolls are kept', file=sys.stderr)
 
 # "+13 Stamina" -> pack stat id (gamedata/build.py STAT)
 NAMES = {
@@ -76,11 +98,15 @@ def fetch(i):
     return i, ''
 
 
-items, failed, bad = {}, [], []
+items, failed, bad, kept = {}, [], [], []
 with cf.ThreadPoolExecutor(4) as ex:
     for i, body in ex.map(fetch, bases):
         if not body:
-            failed.append(i)
+            if str(i) in PREV or i in PREV_BASES:
+                if str(i) in PREV: items[str(i)] = PREV[str(i)]
+                kept.append(i)
+            else:
+                failed.append(i)
             continue
         sec = re.search(r'<section class="it-from it-suffixes".*?</section>', body, re.S)
         if not sec:
@@ -104,8 +130,12 @@ ix = {n: i for i, n in enumerate(names)}
 items = {k: [[ix[n], st] for n, st in rows] for k, rows in items.items()}
 pack = {'v': 1, 'built': int(time.time()), 'from': 'foreverchanges.pro item pages, "Confirmed in game" (client build 1.60.1)', 'names': names, 'items': items}
 open(OUT, 'w', encoding='utf-8').write('window.GAMEDATA_SUFFIX=' + json.dumps(pack, separators=(',', ':'), ensure_ascii=False) + ';\n')
-print(f'{len(bases)} bases checked, {len(items)} roll a suffix, {sum(len(v) for v in items.values())} rolls, {len(names)} suffix names; fetch failed: {len(failed)}')
+print(f'{len(bases)} bases checked, {len(items)} roll a suffix, {sum(len(v) for v in items.values())} rolls, {len(names)} suffix names; fetch failed: {len(failed) + len(kept)}'
+      + (f' ({len(kept)} kept as the previous build read them: {kept[:20]})' if kept else ''))
 if unread:
     print('lines not turned into stats:', json.dumps(sorted(unread.items(), key=lambda x: -x[1])[:40]))
+# a few pages a site can't serve are kept; most of them failing is an outage, never hidden behind last week's table
+if len(kept) > max(20, len(bases) // 20):
+    sys.exit(f'{len(kept)} of {len(bases)} pages could not be fetched: foreverchanges.pro is down or blocking the build')
 if bad or failed:
     sys.exit(f'unreadable suffix lists: {sorted(set(bad))[:20]}; failed fetches: {failed[:20]}')

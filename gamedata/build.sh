@@ -71,7 +71,7 @@ python3 -I "$HERE/test_pack.py" out/gamedata.js ${SAVEDVARIABLES:+"$SAVEDVARIABL
 echo "7/9 coverage report: $W/out/COVERAGE.md"
 python3 -I "$HERE/coverage_md.py" out/coverage.json out/COVERAGE.md
 echo "8/9 random-suffix rolls (foreverchanges.pro; only pages not cached yet): $W/out/suffixes.js (copy to web/data/)"
-python3 -I "$HERE/suffixes.py" out/gamedata.js raw/fc out/suffixes.js
+python3 -I "$HERE/suffixes.py" out/gamedata.js raw/fc out/suffixes.js "$HERE/../ClaudeCompanion/web/data/suffixes.js" "$HERE/../ClaudeCompanion/web/data/gamedata.js"
 echo "9/9 icon names (wowdev community listfile): $W/out/icons.js (copy to web/js/)"
 curl -sfL --retry 3 -o raw/listfile.csv https://github.com/wowdev/wow-listfile/releases/latest/download/community-listfile.csv
 python3 -I "$HERE/icons.py" raw/listfile.csv out/icons.js
