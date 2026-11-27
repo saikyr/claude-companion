@@ -15,7 +15,8 @@ local function Key(itemID, suffix)
 end
 
 local lastObs = {}
-local function Observe(itemID, suffix, unitPrice, qty, src, extra)
+-- own: fields for this one observation (an item search's `stack`, the item's stack size its price was read with, #170)
+local function Observe(itemID, suffix, unitPrice, qty, src, extra, own)
     itemID, unitPrice = Clean(itemID), Clean(unitPrice)
     if not ns.char or not itemID or not unitPrice or unitPrice <= 0 then return end
     local key = Key(itemID, Clean(suffix))
@@ -35,6 +36,7 @@ local function Observe(itemID, suffix, unitPrice, qty, src, extra)
         return
     end
     local o = { t = now, min = unitPrice, qty = Clean(qty), src = src }
+    if own then for k, v in pairs(own) do o[k] = v end end
     lastObs[key] = o
     p.last = now
     ns.Push(p.obs, o, ns.LIMITS.priceObs)
@@ -72,16 +74,28 @@ if AH then
         if cheapest then Observe(itemID, nil, cheapest, qty, "search") end
     end)
 
+    -- how many of an item stack in one bag slot (nil = the game doesn't say yet)
+    local function MaxStack(itemID, link)
+        local m = C_Item and C_Item.GetItemMaxStackSizeByID and Clean(Call(C_Item.GetItemMaxStackSizeByID, itemID))
+        if not m and GetItemInfo then m = Clean(select(8, Call(GetItemInfo, link or itemID))) end
+        return m
+    end
+
     ns.On("ITEM_SEARCH_RESULTS_UPDATED", function(itemKey)
         if type(itemKey) ~= "table" or ns.IsSecret(itemKey) then return end
         local n = Clean(Call(AH.GetNumItemSearchResults, itemKey)) or 0
         local cheapest, qty, link = nil, 0, nil
+        -- an item that doesn't stack: one search row groups that many auctions at one price, and its buyout is one
+        -- auction's (#170: a pattern listed three times read a third of its price). A stack's buyout is the stack's.
+        -- Not known yet: the row can't be read per item, so no price is recorded.
+        local stack = MaxStack(Clean(itemKey.itemID))
         for i = 1, math.min(n, 50) do
             local r = Call(AH.GetItemSearchResultInfo, itemKey, i)
             if type(r) == "table" then
                 local buy, q = Clean(r.buyoutAmount), Clean(r.quantity) or 1
-                if buy and q > 0 then
-                    local up = math.floor(buy / q)
+                if not stack then stack = MaxStack(Clean(itemKey.itemID), Clean(r.itemLink)) end
+                if buy and q > 0 and stack then
+                    local up = stack == 1 and buy or math.floor(buy / q)
                     if not cheapest or up < cheapest then cheapest = up; link = Clean(r.itemLink) end
                 end
                 qty = qty + q
@@ -89,7 +103,7 @@ if AH then
         end
         if cheapest then
             if link then ns.NoteItem(link) end
-            Observe(itemKey.itemID, itemKey.itemSuffix, cheapest, qty, "search", { link = link })
+            Observe(itemKey.itemID, itemKey.itemSuffix, cheapest, qty, "search", { link = link }, { stack = stack })
         end
     end)
 
