@@ -85,7 +85,7 @@ the backend has the batch.
 
 **Offline.** Nothing waits in memory: the save itself is the queue. If a push fails, the marks don't
 move and the next save sends everything since. The app always works from the local save; the other
-computers' history is cached in `companion-data/sync-cache.json`, so it shows offline too.
+computers' history is cached in `companion-data/sync-cache.json`, so it shows offline too (every synced record of the account: up to 400 MB, the one file the local server takes over 20 MB).
 
 **Pull cursor.** Each row gets a sequence number (`seq`) when it is written, and a pull asks for rows
 after the highest one it has. Pushes and joins of one account take a lock on that account for their

@@ -114,6 +114,9 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   }
   text = await page.$eval('main', (e) => e.innerText);
   check(/Your Claude sign-in on this computer has expired/.test(text) && /Reconnect/.test(text) && !/OAuth access token/.test(text), 'an expired sign-in: a Reconnect button, not the raw error');
+  const snapRun = await page.evaluate(() => (window.CC.snapshot() || {}).claudeRun);
+  check(snapRun && snapRun.signedIn === false && snapRun.signin && snapRun.signin.needed && /access token has expired/.test(snapRun.signin.why || ''),
+    `and the snapshot says so (claudeRun), so Claude can see it online (${JSON.stringify(snapRun)})`);
   const nRe = posts.filter((p) => p.action === 'connect').length;
   await page.click('main [data-crun="connect"]');
   await page.waitForTimeout(800);

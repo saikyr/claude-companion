@@ -21,6 +21,8 @@
     .then((r) => { if (!r.ok) throw new Error('the local server did not save the cards for Claude'); });
   const status = (check) => fetch('api/claude' + (check ? '?check=1' : ''), { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
   let S = null, msg = '', checked = 0;
+  // the last status this page read, for the snapshot (js/claude.js claudeRun): what the System tab shows
+  CC.runState = () => S;
 
   // after each snapshot: the server keeps each character's last digest, so the change is from the save before
   // (on this computer), whichever window or the hidden browser saw it
