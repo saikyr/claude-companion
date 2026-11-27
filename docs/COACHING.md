@@ -90,6 +90,10 @@ FEATURES.md). As a backup for when no such computer is on, the coaching project 
 4. Save `last_wake_t` = the newest record handled to `card-refresh.md`, also when no card needed a change.
 5. Only when a card changed, tell the coordinator in one line per card. Never ask him anything.
 
+Whether the app's background Claude is working on a computer: the snapshot's `claudeRun` (SCHEMA.md; `on`,
+`signedIn`, `last` with `ok` / `error`, `signin.needed` when its Claude sign-in expired and the System tab shows
+Reconnect). Quote it with the snapshot's age; a failing run is a `from-coaching` issue, not something to fix here.
+
 If the task stops firing (it shows in the task list) or its thread is gone, the coordinator asks a new thread
 to create it again with the same schedule and these steps.
 
