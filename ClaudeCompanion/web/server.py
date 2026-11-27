@@ -721,30 +721,101 @@ def run_state():
 def run_save(st): write_json(RUN_STATE, st)
 
 
+# Older Claude Code could sign you out when a short command (`claude auth status`) exited during a token refresh: the
+# server rotated the refresh token and the new one was never saved (Claude Code 2.1.301 and 2.1.317 fixed it). A run
+# then fails with "401 OAuth access token has expired". So: `claude auth status` runs at most once per server start
+# and when the System tab waits for a sign-in, it is never killed, and an older Claude Code is updated first.
+RUN_MIN = (2, 1, 317)
+AUTH_FAILED = ('failed to authenticate', 'not logged in', 'please run /login', 'login expired', 'invalid api key', 'oauth token',
+               'access token has expired', 'token has expired', 'token revoked', 'authentication_error', 'claude auth login')
+
+
+def ver_tuple(v):
+    try: return tuple(int(x) for x in str(v).split('.')[:3])
+    except (TypeError, ValueError): return None
+
+
+def cred_stamp():
+    # when the stored sign-in last changed (Windows and Linux keep it in a file; macOS in the keychain: None)
+    cfg = (run_state().get('claude') or {}).get('config') or os.environ.get('CLAUDE_CONFIG_DIR') or os.path.expanduser('~/.claude')
+    try: return os.path.getmtime(os.path.join(cfg, '.credentials.json'))
+    except OSError: return None
+
+
+def auth_status(exe):
+    # `claude auth status`, never killed (a kill during a token refresh is what signed people out): after 60 s the
+    # answer is "not known yet" and the command finishes on its own
+    p = subprocess.Popen([exe, 'auth', 'status'], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL,
+                         text=True, env=claude_env())
+    try: out, _ = p.communicate(timeout=60)
+    except subprocess.TimeoutExpired:
+        threading.Thread(target=p.communicate, daemon=True).start()
+        return None
+    try: d = json.loads(out or '{}')
+    except ValueError: d = {}
+    if d.get('configDirectory'):
+        st = run_state(); c = st.get('claude') if isinstance(st.get('claude'), dict) else {}
+        if c.get('config') != d['configDirectory']: c['config'] = d['configDirectory']; st['claude'] = c; run_save(st)
+    return bool(d.get('loggedIn')) and p.returncode == 0
+
+
 def signed_in(force=False):
-    # `claude auth status` says whether the player is signed in (cached a minute)
+    # signed in to Claude on this computer? A run that failed to sign in marks it (state.json `signin`) until the sign-in
+    # changes (Reconnect) or a run works. Otherwise `claude auth status`, asked once per server start, and again only
+    # while the System tab waits for a sign-in (force)
     exe = claude_exe()
     if not exe: return None
+    need = run_state().get('signin')
+    if isinstance(need, dict) and need.get('needed'):
+        stamp = cred_stamp()
+        changed = stamp is not None and stamp != need.get('cred')
+        # no file to watch (macOS): after Reconnect, the keychain's answer
+        if not changed and stamp is None and force and need.get('connect') and auth_status(exe): changed = True
+        if not changed: return False
+        st = run_state(); st.pop('signin', None); run_save(st)
+        with _run_lock: _run['signed'], _run['signedAt'] = True, time.time()
+        return True
     with _run_lock:
-        # force (the System tab, while it waits for the sign-in) only while not signed in
-        if not (force and _run['signed'] is not True) and time.time() - _run['signedAt'] < 60: return _run['signed']
-    try:
-        r = subprocess.run([exe, 'auth', 'status'], capture_output=True, text=True, timeout=10, env=claude_env())
-        ok = bool(json.loads(r.stdout or '{}').get('loggedIn')) and r.returncode == 0
-    except Exception: ok = False
+        if _run['signedAt'] and not (force and _run['signed'] is not True): return _run['signed']
+    ok = auth_status(exe)
     with _run_lock: _run['signed'], _run['signedAt'] = ok, time.time()
     return ok
 
 
-def run_status(check=False):
+def sign_in_needed(why):
     st = run_state()
+    st['signin'] = {'needed': True, 'at': utc_now(), 'why': why[:300], 'cred': cred_stamp()}
+    run_save(st)
+    with _run_lock: _run['signed'], _run['signedAt'] = False, time.time()
+
+
+def claude_update(exe, version):
+    # an older Claude Code than RUN_MIN: `claude update`, hidden, at most once a day for a version (the player's own
+    # install; Claude Code updates itself the same way when it runs in a terminal)
+    st = run_state(); c = st.get('claude') if isinstance(st.get('claude'), dict) else {}
+    tried = c.get('update') or {}
+    if tried.get('from') == version and str(tried.get('at') or '')[:10] == utc_now()[:10]: return
+    c['update'] = {'at': utc_now(), 'from': version}; st['claude'] = c; run_save(st)
+    try:
+        r = subprocess.run([exe, 'update'], capture_output=True, text=True, timeout=600, env=claude_env(), stdin=subprocess.DEVNULL)
+        res = {'ok': r.returncode == 0, 'out': ((r.stdout or '') + (r.stderr or '')).strip()[-300:]}
+    except Exception as e: res = {'ok': False, 'out': str(e)[:300]}
+    with _run_lock: _run['flagsKey'] = None
+    st = run_state(); c = st.get('claude') if isinstance(st.get('claude'), dict) else {}
+    c['update'] = dict(c.get('update') or {}, **res); st['claude'] = c; run_save(st)
+    print(f'claude update from {version}: {res}', flush=True)
+
+
+def run_status(check=False):
     exe = claude_exe()
+    signed = signed_in(check) if exe else None   # first (it may clear `signin`), and outside the lock: auth status can take a while
+    st = run_state()
     today = st.get('today') or {}
     with _run_lock:
-        out = {'on': bool(st.get('on')), 'claude': bool(exe), 'signedIn': signed_in(check) if exe else None,
+        out = {'on': bool(st.get('on')), 'claude': bool(exe), 'signedIn': signed,
                'running': _run['proc'] is not None, 'started': st.get('started') if _run['proc'] else None,
                'queued': _run['queue'] is not None, 'checking': _run['gate'] is not None,
-               'last': st.get('last'), 'tooOld': None, 'runs': today.get('n', 0) if today.get('date') == utc_now()[:10] else 0, 'cap': RUN_CAP,
+               'last': st.get('last'), 'tooOld': None, 'signin': st.get('signin') if isinstance(st.get('signin'), dict) else None, 'runs': today.get('n', 0) if today.get('date') == utc_now()[:10] else 0, 'cap': RUN_CAP,
                'digests': st.get('digests') or {}}
     if exe and out['signedIn']:
         f = claude_flags(exe)
@@ -797,7 +868,13 @@ def run_start(job):
     exe = claude_exe()
     if not exe: return last('Claude Code is not installed on this computer (System tab: Connect)')
     if sync_off(): return last('sync is off on this computer: the cards are checked online, so turn sync on')
+    if (st.get('signin') or {}).get('needed'): return last('signed out of Claude on this computer: System tab, Reconnect')
     flags = claude_flags(exe)
+    v = ver_tuple(flags['version'])
+    if v and v < RUN_MIN:
+        claude_update(exe, flags['version'])
+        flags = claude_flags(exe)
+        st = run_state()
     if flags['missing']: return last(too_old(flags['version'], flags['missing']))
     day = utc_now()[:10]
     today = st.get('today') if (st.get('today') or {}).get('date') == day else {'date': day, 'n': 0}
@@ -820,7 +897,7 @@ def run_start(job):
         return last(f'Claude Code did not start: {e}')
     today['n'] += 1
     st['today'], st['started'] = today, utc_now()
-    st['claude'] = {'version': flags['version'], 'restricted': flags['restricted']}
+    st['claude'] = dict(st.get('claude') if isinstance(st.get('claude'), dict) else {}, version=flags['version'], restricted=flags['restricted'])
     run_save(st)
     with _run_lock: _run.update(proc=proc, job=job, started=time.time(), files=(out, err))
     print(f'claude run started ({job.get("why")})', flush=True)
@@ -838,7 +915,8 @@ def run_finish():
     text = (str(res.get('result') or '') + ' ' + err).lower()
     last = {'at': utc_now(), 'started': run_state().get('started'), 'why': job.get('why'), 'code': proc.returncode,
             'session': res.get('session_id'), 'turns': res.get('num_turns'), 'denied': len(res.get('permission_denials') or [])}
-    signed_out = any(x in text for x in ('/login', 'not logged in', 'login expired', 'invalid api key', 'oauth token'))
+    failed = proc.returncode != 0 or bool(res.get('is_error'))
+    signed_out = failed and (res.get('api_error_status') in (401, 403) and any(x in text for x in AUTH_FAILED) or any(x in text for x in AUTH_FAILED[:3]))
     draft, wrote = os.path.join(CARDS_DIR, 'cards.draft.json'), False
     if proc.returncode == 0 and not res.get('is_error') and os.path.exists(draft):
         try:
@@ -866,17 +944,19 @@ def run_finish():
             # --help named it but the run didn't take it: ask again before the next run
             with _run_lock: _run['flagsKey'] = None
             last['error'] = too_old((run_state().get('claude') or {}).get('version'), unknown)
-        elif signed_out: last['error'] = 'signed out of Claude: System tab, Connect'
+        elif signed_out: last['error'] = 'signed out of Claude on this computer: System tab, Reconnect'
         else: last['error'] = 'Claude stopped: ' + (str(res.get('result') or err).strip()[:300] or f'exit {proc.returncode}')
     last['ok'], last['wrote'] = 'error' not in last, wrote
     st = run_state(); st['last'] = last; run_save(st)
     with _run_lock:
         _run.update(proc=None, job=None, files=None)
-        if signed_out: _run['signed'], _run['signedAt'] = False, time.time()
         if wrote:
             # the page sends the new file through the gate; no window open: the hidden browser does it
             _run['gate'] = {'since': last['at'], 'until': time.time() + RUN_GATE_WAIT, 'session': last['session'], 'fixes': job.get('fixes', 0)}
             PAGE['force'] = True
+    if signed_out: sign_in_needed(str(res.get('result') or err).strip())
+    elif not failed and (run_state().get('signin') or {}).get('needed'):
+        st = run_state(); st.pop('signin', None); run_save(st)
     print(f'claude run ended: {last}', flush=True)
 
 
@@ -935,6 +1015,8 @@ def run_save_digest(body):
 def claude_connect():
     # the player's own sign-in, in a window they can see: install Claude Code first if it isn't here
     exe = claude_exe()
+    st = run_state()
+    if isinstance(st.get('signin'), dict): st['signin']['connect'] = utc_now(); run_save(st)
     if sys.platform == 'darwin':
         import shlex
         # installed: update it first (a version without a flag the run needs gets no run: claude_flags); the sign-in

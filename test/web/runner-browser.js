@@ -103,10 +103,25 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   await page.click('main [data-crun="run"]');
   await page.waitForTimeout(800);
   check(posts.slice(before).some((p) => p.cards) && posts.slice(before).some((p) => p.action === 'run'), 'Update now: the cards, then a run');
-  Object.assign(S, { running: false, last: { at: new Date().toISOString(), ok: false, why: 'asked', error: 'signed out of Claude: System tab, Connect' } });
+  Object.assign(S, { running: false, last: { at: new Date().toISOString(), ok: false, why: 'asked', error: 'signed out of Claude on this computer: System tab, Reconnect' } });
   await page.click('[data-tab="claude"]'); await page.click('[data-tab="system"]');
   await page.waitForFunction(() => /signed out of Claude/.test(document.querySelector('main').innerText), null, { timeout: 10000 }).catch(() => {});
   check(/Last run .*signed out of Claude/.test(await page.$eval('main', (e) => e.innerText)), 'a run that failed says why');
+  // ---- the sign-in expired (a run said so): Reconnect, not the raw error
+  Object.assign(S, { signedIn: false, signin: { needed: true, at: new Date().toISOString(), why: 'Failed to authenticate. API Error: 401 OAuth access token has expired.' } });
+  for (let i = 0; i < 20 && !/sign-in on this computer has expired/.test(await page.$eval('main', (e) => e.innerText)); i++) {
+    await page.click('[data-tab="claude"]'); await page.click('[data-tab="system"]'); await page.waitForTimeout(1000);
+  }
+  text = await page.$eval('main', (e) => e.innerText);
+  check(/Your Claude sign-in on this computer has expired/.test(text) && /Reconnect/.test(text) && !/OAuth access token/.test(text), 'an expired sign-in: a Reconnect button, not the raw error');
+  const nRe = posts.filter((p) => p.action === 'connect').length;
+  await page.click('main [data-crun="connect"]');
+  await page.waitForTimeout(800);
+  check(posts.filter((p) => p.action === 'connect').length === nRe + 1, 'Reconnect opens the sign-in');
+  Object.assign(S, { signedIn: true, signin: null });
+  for (let i = 0; i < 20 && !(await page.$('main [data-crun="run"]')); i++) {
+    await page.click('[data-tab="claude"]'); await page.click('[data-tab="system"]'); await page.waitForTimeout(1000);
+  }
   // ---- a Claude Code too old for the run's flags: says which, and Update Claude Code (Connect, which updates it)
   Object.assign(S, { tooOld: { version: '2.1.200', missing: ['--setting-sources'] } });
   for (let i = 0; i < 20 && !/too old/.test(await page.$eval('main', (e) => e.innerText)); i++) {

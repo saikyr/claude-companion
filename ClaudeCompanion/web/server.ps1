@@ -430,10 +430,15 @@ $runArgs = @('--setting-sources=', '--strict-mcp-config', '--disable-slash-comma
 # what --help must name; --max-turns works but --help doesn't list it, so only a run's "unknown option" tells
 $runNeed = @($runArgs | Where-Object { $_.StartsWith('--') } | ForEach-Object { $_.Split('=')[0] } | Where-Object { $_ -ne '--max-turns' }) + @('dontAsk')
 $runExtra = '--restricted'
+# The same as server.py RUN_MIN / AUTH_FAILED: an older Claude Code is updated before a run (it could lose the sign-in
+# when `claude auth status` stopped during a token refresh), and the words that say a run could not sign in
+$runMin = [version]'2.1.317'
+$authFailed = @('failed to authenticate', 'not logged in', 'please run /login', 'login expired', 'invalid api key', 'oauth token',
+                'access token has expired', 'token has expired', 'token revoked', 'authentication_error', 'claude auth login')
 # a key in the environment would bill an API account instead of the player's plan (claude -p always uses one)
 foreach ($k in @('ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN')) { Remove-Item -LiteralPath "Env:$k" -ErrorAction SilentlyContinue }
 $run = @{ proc = $null; job = $null; started = [DateTime]::MinValue; queue = $null; gate = $null; signed = $null; signedAt = [DateTime]::MinValue
-          flagsKey = $null; flags = $null }
+          flagsKey = $null; flags = $null; auth = $null; updating = $null }
 $runNext = [DateTime]::MinValue
 function Utc-Now { [DateTime]::UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'") }
 function Write-RunJson([string]$f, $o) {
@@ -455,24 +460,65 @@ function Find-Claude {
     }
     $null
 }
+function Get-CredStamp {
+    # when the stored sign-in last changed (%USERPROFILE%\.claude\.credentials.json, or where auth status says)
+    $st = Get-RunState
+    $cfg = if ($st['claude'] -and $st['claude'].config) { [string]$st['claude'].config } elseif ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $env:USERPROFILE '.claude' }
+    $f = Join-Path $cfg '.credentials.json'
+    if (Test-Path -LiteralPath $f) { return [string](Get-Item -LiteralPath $f).LastWriteTimeUtc.Ticks }
+    $null
+}
+function Test-AuthStatus([string]$exe) {
+    # `claude auth status`, hidden and never killed (a kill during a token refresh is what signed people out). It
+    # answers 'yes', 'no', or $null while it still runs (this loop serves every request: it waits 10 s at most, once)
+    $a = $script:run.auth
+    if (-not $a) {
+        try {
+            $psi = New-Object System.Diagnostics.ProcessStartInfo
+            $psi.FileName = $env:ComSpec; $psi.Arguments = '/d /s /c "' + (Quote-Arg $exe) + ' auth status"'
+            $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true; $psi.RedirectStandardOutput = $true
+            $p = [System.Diagnostics.Process]::Start($psi)
+            $a = @{ p = $p; read = $p.StandardOutput.ReadToEndAsync() }; $script:run.auth = $a
+            [void]$p.WaitForExit(10000)
+        } catch { return 'no' }
+    }
+    if (-not $a.p.HasExited) { return $null }
+    $script:run.auth = $null
+    $d = $null; try { $d = $a.read.Result | ConvertFrom-Json } catch { }
+    if ($d -and $d.configDirectory) {
+        $st = Get-RunState; $c = @{}
+        if ($st['claude']) { $st['claude'].PSObject.Properties | ForEach-Object { $c[$_.Name] = $_.Value } }
+        if ($c.config -ne [string]$d.configDirectory) { $c.config = [string]$d.configDirectory; $st['claude'] = $c; Write-RunJson $runStateFile $st }
+    }
+    if (($a.p.ExitCode -eq 0) -and $d -and [bool]$d.loggedIn) { 'yes' } else { 'no' }
+}
 function Test-SignedIn([switch]$Force) {
+    # as server.py signed_in: a run that failed to sign in marks it (state.json signin) until the sign-in changes
+    # (Reconnect) or a run works; otherwise auth status, once per server start and while the System tab waits (Force)
     $exe = Find-Claude
     if (-not $exe) { return $null }
-    # cached a minute; Force (the System tab, while it waits for the sign-in) only while not signed in
-    if (-not ($Force -and $script:run.signed -ne $true) -and ((Get-Date) - $script:run.signedAt).TotalSeconds -lt 60) { return $script:run.signed }
-    $ok = $false
-    # at most 10 s: this loop serves every request
-    try {
-        $psi = New-Object System.Diagnostics.ProcessStartInfo
-        $psi.FileName = $env:ComSpec; $psi.Arguments = '/d /s /c "' + (Quote-Arg $exe) + ' auth status"'
-        $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true; $psi.RedirectStandardOutput = $true
-        $p = [System.Diagnostics.Process]::Start($psi)
-        $read = $p.StandardOutput.ReadToEndAsync()
-        if ($p.WaitForExit(10000)) { $ok = ($p.ExitCode -eq 0) -and [bool](($read.Result | ConvertFrom-Json).loggedIn) }
-        else { & taskkill.exe /PID $p.Id /T /F 2>$null | Out-Null }
-    } catch { $ok = $false }
-    $script:run.signed = $ok; $script:run.signedAt = Get-Date
-    $ok
+    $st = Get-RunState; $need = $st['signin']
+    if ($need -and $need.needed) {
+        $stamp = Get-CredStamp
+        $changed = ($null -ne $stamp) -and ($stamp -ne [string]$need.cred)
+        if (-not $changed -and $null -eq $stamp -and $Force -and $need.connect) { $changed = (Test-AuthStatus $exe) -eq 'yes' }
+        if (-not $changed) { return $false }
+        $st.Remove('signin'); Write-RunJson $runStateFile $st
+        $script:run.signed = $true; $script:run.signedAt = Get-Date
+        return $true
+    }
+    if ($script:run.signedAt -ne [DateTime]::MinValue -and -not ($Force -and $script:run.signed -ne $true)) { return $script:run.signed }
+    $r = Test-AuthStatus $exe
+    if ($null -eq $r) { return $script:run.signed }   # not known yet: the next status asks again
+    $script:run.signed = $r -eq 'yes'; $script:run.signedAt = Get-Date
+    $script:run.signed
+}
+function Set-SignInNeeded([string]$why) {
+    $st = Get-RunState
+    if ($why.Length -gt 300) { $why = $why.Substring(0, 300) }
+    $st['signin'] = @{ needed = $true; at = (Utc-Now); why = $why; cred = (Get-CredStamp) }
+    Write-RunJson $runStateFile $st
+    $script:run.signed = $false; $script:run.signedAt = Get-Date
 }
 function Invoke-ClaudeText([string]$exe, [string]$a) {
     # `claude <a>`, hidden, at most 30 s (this loop serves every request): its output, or $null
@@ -509,13 +555,15 @@ function Get-TooOld($version, $flags) {
     "Claude Code $v on this computer is too old for the card updates: it has no " + (@($flags) -join ', ') + '. System tab, Update Claude Code'
 }
 function Get-RunStatus([switch]$Check) {
-    $st = Get-RunState; $exe = Find-Claude
+    $exe = Find-Claude
+    $signed = if ($exe) { Test-SignedIn -Force:$Check } else { $null }   # first: it may clear signin
+    $st = Get-RunState
     $today = $st['today']; $day = (Utc-Now).Substring(0, 10)
-    $out = @{ on = [bool]$st['on']; claude = [bool]$exe; signedIn = $(if ($exe) { Test-SignedIn -Force:$Check } else { $null })
+    $out = @{ on = [bool]$st['on']; claude = [bool]$exe; signedIn = $signed
        running = $null -ne $script:run.proc; started = $(if ($script:run.proc) { $st['started'] } else { $null })
        queued = $null -ne $script:run.queue; checking = $null -ne $script:run.gate; last = $st['last']
        runs = $(if ($today -and $today.date -eq $day) { [int]$today.n } else { 0 }); cap = $runCap
-       digests = $(if ($st['digests']) { $st['digests'] } else { @{} }); tooOld = $null }
+       digests = $(if ($st['digests']) { $st['digests'] } else { @{} }); tooOld = $null; signin = $(if ($st['signin']) { $st['signin'] } else { $null }) }
     if ($exe -and $out.signedIn) {
         $f = Get-ClaudeFlags $exe
         if ($f.missing -and @($f.missing).Count) { $out.tooOld = @{ version = $f.version; missing = @($f.missing) } }
@@ -557,7 +605,24 @@ function Start-ClaudeRun($job) {
     $exe = Find-Claude
     if (-not $exe) { & $last 'Claude Code is not installed on this computer (System tab: Connect)'; return }
     if (Test-SyncOff) { & $last 'sync is off on this computer: the cards are checked online, so turn sync on'; return }
+    if ($st['signin'] -and $st['signin'].needed) { & $last 'signed out of Claude on this computer: System tab, Reconnect'; return }
     $flags = Get-ClaudeFlags $exe
+    # an older Claude Code than $runMin: `claude update`, hidden, at most once a day for a version; the run waits for it
+    $v = $null; try { $v = [version]$flags.version } catch { }
+    $tried = if ($st['claude'] -and $st['claude'].update) { $st['claude'].update } else { $null }
+    if ($v -and $v -lt $runMin -and -not ($tried -and $tried.from -eq $flags.version -and ([string]$tried.at).StartsWith((Utc-Now).Substring(0, 10)))) {
+        $c = @{}; if ($st['claude']) { $st['claude'].PSObject.Properties | ForEach-Object { $c[$_.Name] = $_.Value } }
+        $c.update = @{ at = (Utc-Now); from = $flags.version }; $st['claude'] = $c; Write-RunJson $runStateFile $st
+        try {
+            $psi = New-Object System.Diagnostics.ProcessStartInfo
+            $psi.FileName = $env:ComSpec; $psi.Arguments = '/d /s /c "' + (Quote-Arg $exe) + ' update > ' + (Quote-Arg (Join-Path $runDir 'update.txt')) + ' 2>&1"'
+            $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true; $psi.WorkingDirectory = $addonDir
+            if (-not (Test-Path $runDir)) { New-Item -ItemType Directory -Path $runDir -Force | Out-Null }
+            $script:run.updating = @{ p = [System.Diagnostics.Process]::Start($psi); started = Get-Date }
+            $script:run.queue = $job   # runs once the update is done
+            return
+        } catch { }
+    }
     if ($flags.missing -and @($flags.missing).Count) { & $last (Get-TooOld $flags.version $flags.missing); return }
     $day = (Utc-Now).Substring(0, 10)
     $today = if ($st['today'] -and $st['today'].date -eq $day) { @{ date = $day; n = [int]$st['today'].n } } else { @{ date = $day; n = 0 } }
@@ -577,7 +642,8 @@ function Start-ClaudeRun($job) {
     $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true; $psi.WorkingDirectory = $addonDir
     try { $p = [System.Diagnostics.Process]::Start($psi) } catch { & $last ('Claude Code did not start: ' + $_.Exception.Message); return }
     $today.n++
-    $st['today'] = $today; $st['started'] = (Utc-Now); $st['claude'] = @{ version = $flags.version; restricted = [bool]$flags.restricted }
+    $st['today'] = $today; $st['started'] = (Utc-Now); $c = @{}; if ($st['claude']) { $st['claude'].PSObject.Properties | ForEach-Object { $c[$_.Name] = $_.Value } }
+    $c.version = $flags.version; $c.restricted = [bool]$flags.restricted; $st['claude'] = $c
     Write-RunJson $runStateFile $st
     $script:run.proc = $p; $script:run.job = $job; $script:run.started = Get-Date
 }
@@ -592,10 +658,16 @@ function Complete-ClaudeRun {
     $last = @{ at = (Utc-Now); started = $st['started']; why = $job.why; code = $p.ExitCode
                session = $(if ($res) { $res.session_id } else { $null }); turns = $(if ($res) { $res.num_turns } else { $null })
                denied = $(if ($res -and $res.permission_denials) { @($res.permission_denials).Count } else { 0 }) }
-    $signedOut = $false
-    foreach ($x in @('/login', 'not logged in', 'login expired', 'invalid api key', 'oauth token')) { if ($text.Contains($x)) { $signedOut = $true } }
     $draft = Join-Path $cardsDir 'cards.draft.json'; $wrote = $false
     $isError = $res -and $res.is_error
+    $failed = ($p.ExitCode -ne 0) -or $isError
+    $authStatus = if ($res -and $res.api_error_status) { [int]$res.api_error_status } else { 0 }
+    $signedOut = $false
+    if ($failed) {
+        for ($k = 0; $k -lt $authFailed.Count; $k++) {
+            if ($text.Contains($authFailed[$k]) -and ($k -lt 3 -or $authStatus -eq 401 -or $authStatus -eq 403)) { $signedOut = $true }
+        }
+    }
     if ($p.ExitCode -eq 0 -and -not $isError -and (Test-Path -LiteralPath $draft)) {
         try {
             $bytes = [System.IO.File]::ReadAllBytes($draft)
@@ -624,12 +696,13 @@ function Complete-ClaudeRun {
         $unknown = @([regex]::Matches($err, "unknown option '([^']+)'") | ForEach-Object { $_.Groups[1].Value })
         # --help named it but the run didn't take it: ask again before the next run
         if ($unknown.Count) { $script:run.flagsKey = $null }
-        $last.error = if ($unknown.Count) { Get-TooOld $(if ($st['claude']) { $st['claude'].version } else { $null }) $unknown } elseif ($signedOut) { 'signed out of Claude: System tab, Connect' } elseif ($why) { 'Claude stopped: ' + $why } else { "Claude stopped: exit $($p.ExitCode)" }
+        $last.error = if ($unknown.Count) { Get-TooOld $(if ($st['claude']) { $st['claude'].version } else { $null }) $unknown } elseif ($signedOut) { 'signed out of Claude on this computer: System tab, Reconnect' } elseif ($why) { 'Claude stopped: ' + $why } else { "Claude stopped: exit $($p.ExitCode)" }
     }
     $last.ok = -not $last.ContainsKey('error'); $last.wrote = $wrote
     $st['last'] = $last; Write-RunJson $runStateFile $st
     $script:run.proc = $null; $script:run.job = $null
-    if ($signedOut) { $script:run.signed = $false; $script:run.signedAt = Get-Date }
+    if ($signedOut) { Set-SignInNeeded $(if ($resText) { $resText } else { $err.Trim() }) }
+    elseif (-not $failed -and $st['signin']) { $st = Get-RunState; $st.Remove('signin'); Write-RunJson $runStateFile $st }
     if ($wrote) {
         # the page sends the new file through the gate; no window open: the hidden browser does it
         $script:run.gate = @{ since = $last.at; until = (Get-Date).AddSeconds($runGateWait); session = $last.session; fixes = [int]$job.fixes }
@@ -659,6 +732,20 @@ function Check-RunGate {
     if ($up.refused -and $g.session -and $g.fixes -lt $runFixes) { Add-RunJob @{ why = 'refused'; refusal = $up.error; resume = $g.session; fixes = $g.fixes + 1 } }
 }
 function Check-ClaudeRun {
+    $u = $script:run.updating
+    if ($u) {
+        # never killed: a stopped update can leave Claude Code half replaced. After 10 minutes the run stops waiting
+        if (-not $u.p.HasExited -and ((Get-Date) - $u.started).TotalSeconds -lt 600) { return }
+        $st = Get-RunState
+        if ($st['claude'] -and $st['claude'].update) {
+            $out = ''; try { $out = [System.IO.File]::ReadAllText((Join-Path $runDir 'update.txt')).Trim() } catch { }
+            if ($out.Length -gt 300) { $out = $out.Substring($out.Length - 300) }
+            $st['claude'].update | Add-Member -NotePropertyName ok -NotePropertyValue ($u.p.HasExited -and $u.p.ExitCode -eq 0) -Force
+            $st['claude'].update | Add-Member -NotePropertyName out -NotePropertyValue $out -Force
+            Write-RunJson $runStateFile $st
+        }
+        $script:run.updating = $null; $script:run.flagsKey = $null
+    }
     $p = $script:run.proc
     if ($p) {
         if (-not $p.HasExited) {
@@ -690,6 +777,8 @@ function Connect-Claude {
     # installed: update it first (a version without a flag the run needs gets no run: Get-ClaudeFlags); the sign-in
     # only when it isn't signed in
     $exe = Find-Claude
+    $st = Get-RunState
+    if ($st['signin']) { $st['signin'] | Add-Member -NotePropertyName connect -NotePropertyValue (Utc-Now) -Force; Write-RunJson $runStateFile $st }
     $signed = $exe -and (Test-SignedIn -Force)
     $q = if ($exe) { "& '" + $exe.Replace("'", "''") + "'" } else { $null }
     $login = if ($signed) { "$q update" } elseif ($exe) { "$q update; $q auth login" } else { 'irm https://claude.ai/install.ps1 | iex; & (Join-Path $env:USERPROFILE ''.local\bin\claude.exe'') auth login' }

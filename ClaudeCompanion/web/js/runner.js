@@ -62,7 +62,12 @@
     }
     let h = '<h2>Claude updates your cards</h2><p class="meta">After a save that changes something on a card (a quest done, a level, a step you tick, an item a step counts), your own Claude rewrites your From Claude cards in the background, here on this computer, with your Claude plan (Pro or above). It reads only this addon folder and writes only its cards.</p>';
     if (!S) h += '<p class="dim">Checking…</p>';
-    else if (!S.claude || S.signedIn === false) {
+    else if (S.claude && S.signedIn === false && S.signin) {
+      // a run could not sign in: the sign-in on this computer expired or was revoked
+      h += `<p class="neg">Your Claude sign-in on this computer has expired, so your cards can't be updated.</p>
+        <p class="meta">Reconnect opens the sign-in to your Claude account in a window; the updates go on by themselves after it.</p>
+        <div class="toolbar"><button class="btn" data-crun="connect">Reconnect</button>${S.on ? '<button class="btn ghost" data-crun="off">Turn off</button>' : ''}</div>`;
+    } else if (!S.claude || S.signedIn === false) {
       h += `<p>${S.claude ? 'Claude Code is here but not signed in.' : 'Needs Claude Code on this computer.'} Connect ${S.claude ? 'opens' : 'installs it (no admin rights needed) and opens'} the sign-in to your Claude account, once.</p>
         <div class="toolbar"><button class="btn" data-crun="connect">Connect</button></div>`;
     } else {

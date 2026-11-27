@@ -3,7 +3,14 @@
 // `auth status`, and a `-p` run rewrites the card list the way claude/REFRESH.md asks, recording how it was started.
 const fs = require('fs'), path = require('path');
 const args = process.argv.slice(2);
-if (args[0] === 'auth' && args[1] === 'status') { process.stdout.write(JSON.stringify({ loggedIn: true, authMethod: 'claude.ai' })); process.exit(0); }
+// what the test watches outside the addon folder: how often `auth status` and `update` ran, and the sign-in's file
+const os = require('os'), fakeCfg = path.join(os.tmpdir(), 'cc-fake-claude-cfg');
+const note = (what) => { fs.mkdirSync(fakeCfg, { recursive: true }); fs.appendFileSync(path.join(fakeCfg, 'calls.txt'), what + '\n'); };
+if (args[0] === 'auth' && args[1] === 'status') {
+  note('auth status');
+  process.stdout.write(JSON.stringify({ loggedIn: true, authMethod: 'claude.ai', configDirectory: fakeCfg })); process.exit(0);
+}
+if (args[0] === 'update') { note('update'); process.stdout.write('Successfully updated\n'); process.exit(0); }
 // Its --help lists what 2.1.332 lists (not --max-turns, which works but is hidden). claude-run/fake-help (written by the test) makes it an older Claude Code: `old` has no --restricted (before 2.1.248),
 // `older` no --setting-sources either, `liar` lists --restricted in --help but refuses it in a run
 const mode = (() => { try { return fs.readFileSync(path.join('companion-data', 'claude-run', 'fake-help'), 'utf8').trim(); } catch (e) { return ''; } })();
@@ -16,6 +23,12 @@ if (args[0] === '--help') {
     .filter((f) => !((mode === 'old' || mode === 'older') && f.startsWith('--restricted')) && !(mode === 'older' && f.startsWith('--setting-sources')));
   process.stdout.write('Usage: claude [options] [command] [prompt]\n\nOptions:\n' + flags.map((f) => '  ' + f).join('\n') + '\n');
   process.exit(0);
+}
+// claude-run/fake-auth: a run whose sign-in expired, as Claude Code answers it
+if (fs.existsSync(path.join('companion-data', 'claude-run', 'fake-auth'))) {
+  process.stdout.write(JSON.stringify({ type: 'result', is_error: true, api_error_status: 401, session_id: 'fake-session', num_turns: 1,
+    result: 'Failed to authenticate. API Error: 401 OAuth access token has expired. Re-authenticate to continue.' }));
+  process.exit(1);
 }
 if (mode === 'liar' && args.includes('--restricted')) { process.stderr.write("error: unknown option '--restricted'\n"); process.exit(1); }
 if (args[0] !== '-p') { process.stderr.write('unexpected: ' + args.join(' ')); process.exit(2); }
