@@ -105,17 +105,39 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   check(en.some((r) => /^Chest/.test(r) && /\+65 Mana/.test(r) && /the game/.test(r)), "Enchants: the chest's enchant, named by the game's own line (" + (en.find((r) => /^Chest/.test(r)) || 'none') + ')');
   check(en.some((r) => /^Wrist/.test(r) && /no enchant/.test(r)), "Enchants: the heals set's bracers have none: flagged");
   check(en.some((r) => /^Head/.test(r) && /no enchant/.test(r) && /\+\d/.test(r)), 'Enchants: an empty slot shows the best you can get, with its gain');
-  check(!en.some((r) => /^(Neck|Ring|Trinket|Waist)/.test(r)), 'Enchants: slots nothing enchants are left out');
+  check(!en.some((r) => /^(Ring|Trinket|Finger|Waist)/.test(r)), 'Enchants: slots nothing enchants are left out');
+  // Forever's own formulas (#175): the neck takes a necklace enchant, scored from the formula's tooltip, with where it's sold
+  check(en.some((r) => /^Neck/.test(r) && /Healing Power/.test(r) && /Formula: Enchant Necklace - Healing Power/.test(r) && /sold by (Alynsia|Beneris)/.test(r) && /Enchanting 210 to learn/.test(r)),
+    'Enchants: the neck takes Forever\'s Necklace - Healing Power, with its vendor and skill (' + (en.find((r) => /^Neck/.test(r)) || 'none') + ')');
+  check(en.some((r) => /^Off hand/.test(r) && /— Wisdom \+6 Intellect, \+5 Spirit/.test(r)), 'Enchants: a held off-hand takes Forever\'s Off-Hand - Wisdom (' + (en.find((r) => /^Off hand/.test(r)) || 'none') + ')');
   check(/slots? ha(s|ve) no enchant/.test(await text('main')), 'Enchants: the empty slots are counted on top');
   await page.click('[data-gearspec="2"]');
   const en2 = await page.$$eval('.ench .tr', (els) => els.map((e) => e.innerText.replace(/\s+/g, ' ')));
   check(en2.some((r) => /^Wrist/.test(r) && /Superior Spirit/.test(r) && /Classic data/.test(r)), 'Enchants (Shadow set): an enchant known only by id is named from Classic data, and says so');
+  check(en2.some((r) => /^Wrist/.test(r) && /Greater Spellpower/.test(r) && /\+16 spell power/i.test(r)), 'Enchants (Shadow set): the best for the bracers is Forever\'s Greater Spellpower (' + (en2.find((r) => /^Wrist/.test(r)) || 'none') + ')');
   await page.click('[data-gearspec="1"]');
   const ens = await page.evaluate(() => window.CC.gear.summary()[0].enchants);
   const chest = ens.find((r) => r.slot === 'Chest'), head = ens.find((r) => r.slot === 'Head');
   check(chest && chest.enchant && chest.enchant.id === 913 && chest.enchant.statsFrom === 'game' && chest.enchant.score > 0, 'snapshot: gear[].enchants names and scores the enchant on each slot');
   check(head && head.empty === true && head.best && head.best.gain > 0 && head.best.where, 'snapshot: an empty slot with the best enchant you can get and how');
   check(ens.every((r) => !r.best || (r.best.how && Array.isArray(r.best.reagents))), 'snapshot: each best enchant says how you get it, with its reagents');
+  // a staff (#175 review): Forever's 2H formulas are offered next to the Classic weapon ones that share a short name
+  const staffF = await page.evaluate(() => window.CC.enchants.candidates({ id: 812 }).filter((c) => c.formula).map((c) => c.formula.name));
+  check(staffF.includes('Enchant 2H Weapon - Mighty Healing Power') && staffF.includes('Enchant 2H Weapon - Strength') && staffF.includes('Enchant Weapon - Strength') && !staffF.some((n) => /Necklace|Bracer/.test(n)),
+    'Enchants: a staff takes Forever\'s 2H formulas, also one named like a Classic weapon formula (' + staffF.filter((n) => /Strength|Mighty/.test(n)).join(', ') + ')');
+  const neck = ens.find((r) => r.slot === 'Neck');
+  check(neck && neck.best && neck.best.how === 'formula' && neck.best.taughtBy && neck.best.taughtBy.id === 249503 && neck.best.stats[41] === 11 && neck.best.stats[42] === 4 && neck.best.learnSkill === 210,
+    'snapshot: the neck\'s best is Forever\'s formula, with its stats and skill (' + JSON.stringify(neck && neck.best) + ')');
+  // with Forever's reagents in the pack (fench, ForeverDB): the reagents and what they cost at your prices
+  const withF = await page.evaluate(() => {
+    const GD = window.CC.api.GD, had = GD.fench;
+    GD.fench = Object.assign({}, had || {}, { 1249058: ['Enchant Necklace - Healing Power', 'Healing Spells +11, Damage Spells +4', [249503], [[11175, 3], [11178, 5]], [], 210] });
+    const n = window.CC.gear.summary()[0].enchants.find((r) => r.slot === 'Neck');
+    GD.fench = had;
+    return n && n.best;
+  });
+  check(withF && withF.reagentsFrom === 'forever' && withF.reagents.length === 2 && withF.reagents[0].id === 11175 && withF.reagents[0].need === 3 && withF.materials && typeof withF.materials.cost === 'number' && withF.materials.from === 'ForeverDB (Forever)',
+    'snapshot: a Forever formula\'s reagents from ForeverDB, and their cost (' + JSON.stringify(withF && { r: withF.reagents, m: withF.materials }) + ')');
 
   // ---- class sets
   await page.click('[data-gearview="sets"]');
