@@ -111,7 +111,8 @@ sent" and goes when it's turned back on. What was already online stays online.
 `search_path`), which check the device key. The app ships only the publishable key. The Supabase
 advisor lists those functions as "callable without signing in" (by design: the device key is the
 credential) and "RLS enabled, no policy" (by design: no direct table access). Limits per call: 1000
-records, 64 KB per record; 2 million records per account (a counter on the account); new computers:
+records, 64 KB per record (a session, grind or run 1 MB, a snapshot or `now` 2 MB; a refused record is named,
+`bad record <id>: <why>`, and the app sets it aside and sends the rest, `js/sync.js`); 2 million records per account (a counter on the account); new computers:
 20 an hour per IP, 5000 an hour in all. The IP is Cloudflare's `cf-connecting-ip`, which Cloudflare sets
 itself (seen in the project's edge logs), not the caller. The API roles have no table grants at all.
 An account marked `retired` is closed: its computers' calls are refused and Claude's view leaves it out.
@@ -195,8 +196,9 @@ saves the player's done / dismissed / ticked steps to `from-claude/state.json` a
 **Claude updates your cards after each save** (#169, opt-in per computer). The page tells the local server about
 each save (`js/runner.js`: the save's digest and, when `js/cardsteps.js` `worthRun` says the change matters, every
 card as written); the server (`server.py` / `server.ps1`, the same flags, checked by `test/contract.test.js`) starts
-the player's own `claude -p` in the addon folder, `--restricted` to reading the folder and writing
-`companion-data/from-claude/`, with `claude/REFRESH.md` as its instructions. Its `cards.draft.json` becomes
+the player's own `claude -p` in the addon folder, limited to reading the folder and writing
+`companion-data/from-claude/` (`RUN_ARGS`, each flag checked against `claude --help` first; `--restricted` on top where
+the installed Claude Code has it), with `claude/REFRESH.md` as its instructions. Its `cards.draft.json` becomes
 `cards.json`, and the page sends that through the gate (`js/sync.js` `pushCards`, `public.cc_put_cards`); the
 server reads the answer from `from-claude/state.json` `upload` and sends a refusal back to the same session
 (`--resume`). The hidden browser (above) sends it when no app window is open. State: `companion-data/claude-run/`.

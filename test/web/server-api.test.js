@@ -94,8 +94,10 @@ const post = (u, body, h) => fetch(base + u, { method: 'POST', headers: Object.a
   check(written.cards[0].title === 'Plan (updated, save)' && written.cards[1].id === 'other', 'with what Claude wrote');
   check(fake.job.why === 'save' && JSON.stringify(fake.job.wake) === JSON.stringify(wake) && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/.test(fake.job.now), 'run.json says why, what the save changed, and now');
   const a = fake.args, has = (...xs) => xs.every((x) => a.includes(x));
-  check(a[0] === '-p' && /claude\/REFRESH\.md/.test(a[1]) && has('--restricted', '--strict-mcp-config', '--permission-mode', 'dontAsk', '--output-format', 'json') &&
-    a[a.indexOf('--tools') + 1] === 'Read,Glob,Grep,Write,Edit' && has('Read(./**)', 'Edit(./companion-data/from-claude/cards.draft.json)') && !a.some((x) => /Bash|PowerShell|WebFetch/.test(x)) &&
+  const denied = a.indexOf('--disallowedTools');
+  check(a[0] === '-p' && /claude\/REFRESH\.md/.test(a[1]) && has('--restricted', '--setting-sources=', '--strict-mcp-config', '--disable-slash-commands', '--permission-mode', 'dontAsk', '--output-format', 'json') &&
+    a[a.indexOf('--tools') + 1] === 'Read,Glob,Grep,Write,Edit' && has('Read(./**)', 'Edit(./companion-data/from-claude/cards.draft.json)') &&
+    a.slice(denied + 1, denied + 5).join(' ') === 'Bash PowerShell WebFetch WebSearch' && a.every((x, i) => !/Bash|PowerShell|WebFetch|WebSearch/.test(x) || (i > denied && i < denied + 5)) &&
     !a.some((x) => ['Read', 'Glob', 'Grep', 'Edit', 'Write'].includes(x)),
     `Claude Code runs with REFRESH.md, no commands, no web, reading only the addon folder and writing only the draft (${a.join(' ')})`);
   check(path.resolve(fake.cwd) === path.resolve(dataDir, '..'), `in the addon folder (${fake.cwd})`);
@@ -138,6 +140,33 @@ const post = (u, body, h) => fetch(base + u, { method: 'POST', headers: Object.a
   cs = await until((st) => st.last && /sync is off/.test(st.last.error || ''), 15);
   check(/sync is off/.test(cs.last.error || '') && cs.runs === 4, `sync off: no run, and the System tab says why (${cs.last.error})`);
   await post('api/sync', syncState);
+  // an older Claude Code (--restricted came in 2.1.248): asked again once the program changes (its file's time here)
+  const asVersion = async (mode) => {
+    const f = path.join(run, 'fake-help');
+    if (mode) fs.writeFileSync(f, mode); else fs.rmSync(f, { force: true });
+    const t = new Date(Date.now() + Math.round(Math.random() * 1e6));
+    for (const x of ['fake-claude.js', 'fake-claude.cmd']) fs.utimesSync(path.join(__dirname, '..', 'fixtures', x), t, t);
+  };
+  await asVersion('old');
+  let n = cs.runs;
+  await cpost({ action: 'run' });
+  cs = await until((st) => st.runs === n + 1 && st.last && st.last.why === 'asked' && !st.running);
+  const oldArgs = JSON.parse(fs.readFileSync(path.join(run, 'fake-args.json'), 'utf8')).args;
+  check(cs.last.code === 0 && !oldArgs.includes('--restricted') && oldArgs.includes('--setting-sources=') && oldArgs.includes('dontAsk') && !cs.tooOld,
+    `a Claude Code without --restricted still runs, with the same limits from the flags it has (${oldArgs.join(' ')})`);
+  await post('api/cards-state', JSON.stringify({ schema: 1, cards: {}, upload: { at: new Date().toISOString(), ok: true, refused: false, cards: 2 } }));
+  await until((st) => !st.checking);
+  await asVersion('older');
+  n = cs.runs;
+  await cpost({ action: 'run' });
+  cs = await until((st) => st.last && /too old/.test(st.last.error || ''), 15);
+  check(cs.runs === n && /Claude Code 2\.1\.200 .*too old.*--setting-sources.*Update Claude Code/.test(cs.last.error) && cs.tooOld && cs.tooOld.missing.join() === '--setting-sources',
+    `one without a flag the run needs: no run, and the System tab says which flag and how to fix it (${cs.last.error})`);
+  await asVersion('liar');
+  await cpost({ action: 'run' });
+  cs = await until((st) => st.runs === n + 1 && st.last && !st.running && /too old/.test(st.last.error || ''));
+  check(/has no --restricted/.test(cs.last.error) && !cs.tooOld, `a run that stops at an unknown option says so plainly (${cs.last.error})`);
+  await asVersion('');
   await cpost({ action: 'off' });
   console.log(failed ? `\n${failed} FAILED` : '\nall passed');
   process.exit(failed ? 1 : 0);

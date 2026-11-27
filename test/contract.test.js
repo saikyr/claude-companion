@@ -65,6 +65,8 @@ const pyArgs = strs((/RUN_ARGS = \[([\s\S]*?)\]\n/.exec(pyText) || [, ''])[1]).c
 const psArgs = strs((/\$runArgs = @\(([\s\S]*?)\)\n/.exec(psText) || [, ''])[1]).concat([one(/\$runTurns = (\d+)/, psText, '$runTurns')]);
 check(pyArgs.length > 10 && JSON.stringify(pyArgs) === JSON.stringify(psArgs),
   `server.py and server.ps1 start Claude Code with the same flags (${pyArgs.join(' ')})`);
+check(one(/RUN_EXTRA = '([^']+)'/, pyText, 'RUN_EXTRA') === one(/\$runExtra = '([^']+)'/, psText, '$runExtra') && /--max-turns/.test(one(/(RUN_NEED = [^\n]+)/, pyText, 'RUN_NEED')) &&
+  /--max-turns/.test(one(/(\$runNeed = [^\n]+)/, psText, '$runNeed')), 'and the same extra flag where Claude Code has it, and the same flags checked against its --help');
 const pyNums = (/RUN_CAP, RUN_TIMEOUT, RUN_FIXES, RUN_GATE_WAIT, RUN_TURNS = ([^\n]+)/.exec(pyText) || [, ''])[1].replace(/\s/g, '');
 const psNums = ['runCap', 'runTimeout', 'runFixes', 'runGateWait', 'runTurns'].map((k) => one(new RegExp('\\$' + k + ' = (\\d+)'), psText, k)).join(',');
 check(pyNums.split(',').map((x) => String(eval(x))).join(',') === psNums, `and the same limits: runs a day, timeout, fixes, check wait, turns (${psNums})`);

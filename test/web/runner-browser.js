@@ -107,6 +107,18 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   await page.click('[data-tab="claude"]'); await page.click('[data-tab="system"]');
   await page.waitForFunction(() => /signed out of Claude/.test(document.querySelector('main').innerText), null, { timeout: 10000 }).catch(() => {});
   check(/Last run .*signed out of Claude/.test(await page.$eval('main', (e) => e.innerText)), 'a run that failed says why');
+  // ---- a Claude Code too old for the run's flags: says which, and Update Claude Code (Connect, which updates it)
+  Object.assign(S, { tooOld: { version: '2.1.200', missing: ['--setting-sources'] } });
+  for (let i = 0; i < 20 && !/too old/.test(await page.$eval('main', (e) => e.innerText)); i++) {
+    await page.click('[data-tab="claude"]'); await page.click('[data-tab="system"]'); await page.waitForTimeout(1000);
+  }
+  text = await page.$eval('main', (e) => e.innerText);
+  check(/Claude Code 2\.1\.200 on this computer is too old .*--setting-sources/.test(text) && /Update Claude Code/.test(text), 'a Claude Code too old for the run: says which flag it lacks');
+  const nConnect = posts.filter((p) => p.action === 'connect').length;
+  await page.click('main [data-crun="connect"]');
+  await page.waitForFunction(() => /it updates Claude Code/.test(document.querySelector('main').innerText), null, { timeout: 10000 }).catch(() => {});
+  check(posts.filter((p) => p.action === 'connect').length === nConnect + 1 && /it updates Claude Code/.test(await page.$eval('main', (e) => e.innerText)), 'Update Claude Code asks the server to update it');
+  delete S.tooOld;
   if (shots) await page.screenshot({ path: path.join(shots, 'runner.png'), fullPage: true });
   await page.click('main [data-crun="off"]');
   await page.waitForSelector('main [data-crun="on"]', { timeout: 10000 });

@@ -179,7 +179,7 @@
       return text ? JSON.parse(text) : null;
     };
     let state = null, cache = null, claudeChecked = false;
-    const status = { ok: null, error: null, pushed: null, pulled: null, devices: [], busy: false, queued: 0 };
+    const status = { ok: null, error: null, pushed: null, pulled: null, devices: [], busy: false, queued: 0, refused: [] };
 
     // one at a time: the app window's cycle and a link click must not register this computer twice
     let readying = null;
@@ -236,12 +236,30 @@
           pending.push({ id: 'setting|' + k, char: '*', kind: 'setting', t, mutable: true, data: { k, v, t }, _setting: true });
         });
       }
+      // a record the backend refused, as it was then, is set aside: one record can't hold back every newer one
+      // (the backend names it: "bad record <id>: <why>"). It goes again once its data changes.
+      const aside = state.refused || (state.refused = {});
+      for (let i = pending.length - 1; i >= 0; i--) {
+        const r = pending[i], a = aside[r.id];
+        if (a && a.h === hash(JSON.stringify(r.data))) pending.splice(i, 1);
+      }
       pending.sort((a, b) => a.t - b.t);
       status.queued = pending.length;
       let sent = 0;
       for (let i = 0; i < pending.length; i += BATCH) {
         const batch = pending.slice(i, i + BATCH);
-        await rpc('cc_push', { p_key: state.key, p_records: batch.map(({ id, char, kind, t, data, mutable }) => ({ id, char, kind, t, data, mutable: !!mutable })) });
+        try {
+          await rpc('cc_push', { p_key: state.key, p_records: batch.map(({ id, char, kind, t, data, mutable }) => ({ id, char, kind, t, data, mutable: !!mutable })) });
+        } catch (e) {
+          const m = /^bad record (.+?): (.+)$/.exec(String((e && e.message) || ''));
+          const at = m ? pending.findIndex((r, j) => j >= i && j < i + BATCH && r.id === m[1]) : -1;
+          if (at < 0) throw e;
+          aside[m[1]] = { h: hash(JSON.stringify(pending[at].data)), why: m[2], kind: pending[at].kind, at: new Date(io.now()).toISOString() };
+          pending.splice(at, 1);
+          await io.saveState(state);
+          i -= BATCH;   // the same batch again, without it
+          continue;
+        }
         for (const r of batch) {
           if (r._setting) { state.settings[r.data.k] = r.data.v; state.settingsT[r.data.k] = r.data.t; if (state.pendingSince) delete state.pendingSince[r.data.k]; }
           else if (r.mutable) state.live[r.id] = hash(JSON.stringify(r.data));
@@ -252,6 +270,7 @@
         await io.saveState(state);
       }
       status.pushed = new Date(io.now()).toISOString();
+      status.refused = Object.entries(aside).map(([id, a]) => Object.assign({ id }, a));
       return sent;
     }
 
@@ -495,6 +514,7 @@
       : st.ok ? `Synced · sent ${when(st.pushed)} · checked ${when(st.pulled)}` : 'Starting…';
     let h = `<h2>Sync between computers</h2><p class="meta">Your history (journal, grinds, runs, AH prices and sales, settings) is kept online and shared by your computers. Your bags, gear, quests and the rest of what you have now come from whichever computer saved last.</p>
       <p>${state}${st.queued ? ` · ${st.queued} waiting to send` : ''}</p>
+      ${(st.refused || []).length ? `<p class="meta"><span class="neg">${st.refused.length} record${st.refused.length === 1 ? '' : 's'} not taken online</span>: ${st.refused.slice(0, 3).map((r) => esc(r.kind + ' (' + r.why + ')')).join('; ')}. The rest is sent.</p>` : ''}
       ${devs ? `<div class="list">${devs}</div>` : ''}
       <div class="toolbar linkbar"><button class="btn ghost" data-sync="code">Link another computer</button>
       <span class="row"><input class="field code" id="cc-link-code" placeholder="Code from the other computer" maxlength="12" autocomplete="off" spellcheck="false" value="${esc(codeTyped)}"><button class="btn" data-sync="join">Join</button></span></div>
