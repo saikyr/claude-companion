@@ -121,6 +121,10 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   check(chest && chest.enchant && chest.enchant.id === 913 && chest.enchant.statsFrom === 'game' && chest.enchant.score > 0, 'snapshot: gear[].enchants names and scores the enchant on each slot');
   check(head && head.empty === true && head.best && head.best.gain > 0 && head.best.where, 'snapshot: an empty slot with the best enchant you can get and how');
   check(ens.every((r) => !r.best || (r.best.how && Array.isArray(r.best.reagents))), 'snapshot: each best enchant says how you get it, with its reagents');
+  // a staff (#175 review): Forever's 2H formulas are offered next to the Classic weapon ones that share a short name
+  const staffF = await page.evaluate(() => window.CC.enchants.candidates({ id: 812 }).filter((c) => c.formula).map((c) => c.formula.name));
+  check(staffF.includes('Enchant 2H Weapon - Mighty Healing Power') && staffF.includes('Enchant 2H Weapon - Strength') && staffF.includes('Enchant Weapon - Strength') && !staffF.some((n) => /Necklace|Bracer/.test(n)),
+    'Enchants: a staff takes Forever\'s 2H formulas, also one named like a Classic weapon formula (' + staffF.filter((n) => /Strength|Mighty/.test(n)).join(', ') + ')');
   const neck = ens.find((r) => r.slot === 'Neck');
   check(neck && neck.best && neck.best.how === 'formula' && neck.best.taughtBy && neck.best.taughtBy.id === 249503 && neck.best.stats[41] === 11 && neck.best.stats[42] === 4 && neck.best.learnSkill === 210,
     'snapshot: the neck\'s best is Forever\'s formula, with its stats and skill (' + JSON.stringify(neck && neck.best) + ')');

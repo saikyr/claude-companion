@@ -15,12 +15,14 @@ python3 -I "$HERE/export_questie.py" questiedb out
 echo "2/9 ForeverDB (icons, drop chances, reward split, Forever's enchanting recipes)"
 B=https://foreverdb.net/data
 { for f in items vendors zones; do echo "url = $B/$f.json"; echo "output = raw/fdb/$f.json"; done
-  # Forever's own enchanting recipes: the formulas it added (Enchant Necklace - Healing Power) and the reagents it changed (#175)
-  mkdir -p raw/fdb/professions; echo "url = $B/professions/enchanting.json"; echo "output = raw/fdb/professions/enchanting.json"
   for d in sources questguides; do mkdir -p raw/fdb/$d
     for i in $(seq 0 63); do echo "url = $B/$d/$i.json"; echo "output = raw/fdb/$d/$i.json"; done; done
 } > raw/fdb/list.txt
 curl -sf --retry 3 --parallel --parallel-max 8 -K raw/fdb/list.txt
+# Forever's own enchanting recipes: the formulas it added (Enchant Necklace - Healing Power) and the reagents it changed
+# (#175). Not required: without it the pack has no fench and the app says reagents are unknown
+mkdir -p raw/fdb/professions
+curl -sf --retry 3 -o raw/fdb/professions/enchanting.json "$B/professions/enchanting.json" || { echo "   ForeverDB enchanting.json not fetched: the pack has no fench"; rm -f raw/fdb/professions/enchanting.json; }
 
 echo "3/9 VMaNGOS world database (every profession recipe's tools, place, reagents and trainer, and every permanent enchant; Classic 1.12, frozen since June 2021)"
 # one file of brotalnia/database (the VMaNGOS world dump): only that blob is fetched, about 30 MB

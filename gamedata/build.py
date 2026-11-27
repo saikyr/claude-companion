@@ -46,7 +46,12 @@ for i in range(64):
     FDB_SRC.update(J('raw', 'fdb', 'sources', f'{i}.json'))
     FDB_QG.update(J('raw', 'fdb', 'questguides', f'{i}.json'))
 FDB_V = J('raw', 'fdb', 'vendors.json')
-FDB_ENCH = J('raw', 'fdb', 'professions', 'enchanting.json').get('recipes') or [] if os.path.exists(P('raw', 'fdb', 'professions', 'enchanting.json')) else []
+def fdb_ench():      # optional (#175): a missing or malformed file leaves the pack without fench, never stops the build
+    try: d = J('raw', 'fdb', 'professions', 'enchanting.json')
+    except (OSError, ValueError): return []
+    r = d.get('recipes') if isinstance(d, dict) else None
+    return r if isinstance(r, list) else []
+FDB_ENCH = fdb_ench()
 
 
 def f(row, i):
@@ -463,9 +468,12 @@ for iid, v in items.items(): ITEM_BY_NAME.setdefault(v[0], iid)
 fench = {}
 for r in FDB_ENCH:
     if not isinstance(r, dict) or not isinstance(r.get('s'), int) or not str(r.get('n') or '').startswith('Enchant '): continue
-    reag = [[a, b] for a, b in (x for x in r.get('r') or [] if isinstance(x, list) and len(x) == 2) if isinstance(a, int) and isinstance(b, int) and b > 0]
-    fench[r['s']] = [r['n'], r.get('fx') or '', sorted(i for i in ((r.get('src') or {}).get('items') or []) if i in items), reag,
-                     [ITEM_BY_NAME[t] for t in r.get('tools') or [] if t in ITEM_BY_NAME], r.get('req')]
+    L = lambda v: v if isinstance(v, list) else []
+    reag = [[a, b] for a, b in (x for x in L(r.get('r')) if isinstance(x, list) and len(x) == 2) if isinstance(a, int) and isinstance(b, int) and b > 0]
+    srci = (r.get('src') or {}).get('items') if isinstance(r.get('src'), dict) else None
+    fench[r['s']] = [r['n'], r.get('fx') if isinstance(r.get('fx'), str) else '', sorted(i for i in L(srci) if isinstance(i, int) and i in items), reag,
+                     [ITEM_BY_NAME[t] for t in L(r.get('tools')) if isinstance(t, str) and t in ITEM_BY_NAME], r.get('req') if isinstance(r.get('req'), int) else None]
+    cov['fench_tools_not_in_pack'] = cov.get('fench_tools_not_in_pack', 0) + sum(1 for t in L(r.get('tools')) if not (isinstance(t, str) and t in ITEM_BY_NAME))
 cov['fench'] = len(fench)
 cov['fench_forever_only'] = sum(1 for k in fench if k not in recipes)
 cov['fench_reagents_not_in_pack'] = len({a for v in fench.values() for a, _ in v[3] if a not in items})

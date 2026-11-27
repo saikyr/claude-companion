@@ -184,7 +184,8 @@
   // enchanting recipe ForeverDB saw on Forever, the new ones and the Classic ones whose reagents changed
   const NOFENCH = {}, FENCH = () => (A.GD && A.GD.fench) || NOFENCH;
   const fenchReagents = (sp) => { const f = FENCH()[sp]; return f && arr(f[3]).length ? arr(f[3]).map(([id, need]) => ({ id, need })) : null; };
-  const fenchTools = (sp) => { const f = FENCH()[sp]; return f ? arr(f[4]).map((t) => ({ name: A.anyItemName(t) })) : null; };
+  // its tools, when ForeverDB names any (none named: the Classic recipe's stand)
+  const fenchTools = (sp) => { const f = FENCH()[sp]; return f && arr(f[4]).length ? arr(f[4]).map((t) => ({ name: A.anyItemName(t) })) : null; };
   // every formula item Forever added that Classic data doesn't teach: { id, name, sp (its spell, when ForeverDB has
   // it), text (what it gives, the formula's own tooltip, else ForeverDB's words), from }. One per name: Forever lists
   // some twice (Formula: Enchant 2H Weapon - Spellblasting 274394 and 238305); the copy with a tooltip and a source wins.
@@ -192,6 +193,7 @@
   function foreverFormulas() {
     if (FF && FFgd === A.GD && FFfe === FENCH()) return FF;
     FFgd = A.GD; FFfe = FENCH(); FF = [];
+    if (!A.GD) return FF;
     const items = (A.GD && A.GD.items) || {}, rec = A.GD.recipes || {}, bySp = {};
     const classic = new Set(Object.values(rec).filter((r) => r[1] === 'Enchanting').map((r) => String(r[0]).toLowerCase()));
     Object.values(rec).forEach((r) => arr(r[4]).forEach((id) => classic.add('#' + id)));
@@ -257,14 +259,16 @@
     });
     // formulas Forever added that you don't know yet (#175): by the slot in their name, what their tooltip says, and the
     // reagents ForeverDB lists (none yet in a pack built before #175: reagents unknown, not none)
-    const have = new Set(out.map((c) => String(c.name).toLowerCase()));
+    // one formula once: by its full name ("Enchant 2H Weapon - Strength" is not Classic's "Enchant Weapon - Strength",
+    // which fits a two-hander too)
+    const have = new Set(out.filter((c) => c.formula).map((c) => String(c.formula.name).toLowerCase()));
     foreverFormulas().forEach((f) => {
       const short = f.name.replace(/^Enchant .+? - /, '');
-      if (have.has(short.toLowerCase()) || !fitsMask(nameFit(f.name), kind)) return;
+      if (have.has(f.name.toLowerCase()) || !fitsMask(nameFit(f.name), kind)) return;
       if (mine.some((r) => String(r.name).toLowerCase() === f.name.toLowerCase())) return;
       const p = f.text ? parse(f.text) : { st: {}, effect: false, any: false };
       const fr = f.sp && fenchReagents(f.sp);
-      have.add(short.toLowerCase());
+      have.add(f.name.toLowerCase());
       out.push({ key: 'i' + f.id + 'f', id: null, name: short, st: p.st, effect: p.effect, any: p.any, from: f.from, how: 'formula', forever: true,
         formula: { id: f.sp, name: f.name }, taughtBy: f.id, learnSkill: f.skill, raid: raid(f.id), reagents: fr || [], reagentsFrom: fr ? 'forever' : null, tools: (f.sp && fenchTools(f.sp)) || [] });
     });
