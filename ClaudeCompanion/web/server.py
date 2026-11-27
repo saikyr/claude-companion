@@ -645,7 +645,7 @@ RUN_CAP, RUN_TIMEOUT, RUN_FIXES, RUN_GATE_WAIT, RUN_TURNS = 24, 15 * 60, 2, 180,
 RUN_PROMPT = 'The game saved. Follow claude/REFRESH.md exactly.'
 RUN_FIX = 'The card check refused your cards (now companion-data/from-claude/cards.json). Read companion-data/claude-run/run.json (refusal), fix exactly what it names, and write the whole list to companion-data/from-claude/cards.draft.json again.'
 RUN_ARGS = ['--restricted', '--strict-mcp-config', '--tools', 'Read,Glob,Grep,Write,Edit',
-            '--allowedTools', 'Read', 'Glob', 'Grep', 'Edit(./companion-data/from-claude/**)',
+            '--allowedTools', 'Read(./**)', 'Edit(./companion-data/from-claude/cards.draft.json)',
             '--permission-mode', 'dontAsk', '--max-turns', str(RUN_TURNS), '--output-format', 'json']
 # a key in the environment would bill an API account instead of the player's plan (claude -p always uses one)
 RUN_ENV_DROP = ('ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN')
@@ -682,9 +682,10 @@ def signed_in(force=False):
     exe = claude_exe()
     if not exe: return None
     with _run_lock:
-        if not force and time.time() - _run['signedAt'] < 60: return _run['signed']
+        # force (the System tab, while it waits for the sign-in) only while not signed in
+        if not (force and _run['signed'] is not True) and time.time() - _run['signedAt'] < 60: return _run['signed']
     try:
-        r = subprocess.run([exe, 'auth', 'status'], capture_output=True, text=True, timeout=30, env=claude_env())
+        r = subprocess.run([exe, 'auth', 'status'], capture_output=True, text=True, timeout=10, env=claude_env())
         ok = bool(json.loads(r.stdout or '{}').get('loggedIn')) and r.returncode == 0
     except Exception: ok = False
     with _run_lock: _run['signed'], _run['signedAt'] = ok, time.time()
@@ -716,6 +717,29 @@ def run_queue(job):
         _run['queue'] = job
 
 
+def cards_now():
+    # claude-run/cards-now.json, the list the run rewrites, as written by the page at the save; then cards.json on top,
+    # card by card where it is newer (`updated`): a run that ended after the page wrote the list (one queued behind
+    # it) starts from the cards that run wrote, not from the list before them
+    path = os.path.join(RUN_DIR, 'cards-now.json')
+    now = read_json(path, None)
+    if not (isinstance(now, dict) and isinstance(now.get('cards'), list)): return None
+    mine = read_json(os.path.join(CARDS_DIR, 'cards.json'), None)
+    mine = [c for c in (mine.get('cards') if isinstance(mine, dict) else None) or [] if isinstance(c, dict) and c.get('id')]
+    if not mine: return now
+    at = {c.get('id'): i for i, c in enumerate(now['cards']) if isinstance(c, dict)}
+    changed = False
+    for c in mine:
+        i = at.get(c['id'])
+        if i is None: now['cards'].append(c); changed = True
+        elif str(c.get('updated') or '') > str(now['cards'][i].get('updated') or ''): now['cards'][i] = c; changed = True
+    if changed: write_json(path, now)
+    return now
+
+
+def card_ids(d): return {c.get('id') for c in d['cards'] if isinstance(c, dict)}
+
+
 def run_start(job):
     st = run_state()
 
@@ -732,6 +756,7 @@ def run_start(job):
     os.makedirs(RUN_DIR, exist_ok=True)
     draft = os.path.join(CARDS_DIR, 'cards.draft.json')
     if job.get('why') != 'refused' and os.path.exists(draft): os.remove(draft)
+    if job.get('why') != 'refused': cards_now()
     write_json(os.path.join(RUN_DIR, 'run.json'), {'schema': 1, 'now': utc_now(), 'why': job.get('why'), 'wake': job.get('wake'),
                                                    'refusal': job.get('refusal'), 'fix': job.get('fixes', 0)})
     args = [exe, '-p', RUN_FIX if job.get('resume') else RUN_PROMPT] + RUN_ARGS + (['--resume', job['resume']] if job.get('resume') else [])
@@ -768,6 +793,11 @@ def run_finish():
         try:
             with open(draft, encoding='utf-8') as f: d = json.load(f)
             if not (isinstance(d, dict) and isinstance(d.get('cards'), list)): raise ValueError('no cards list')
+            # a card left out would be taken off every computer: every card the run was given must still be there
+            given = read_json(os.path.join(RUN_DIR, 'cards-now.json'), None)
+            if isinstance(given, dict) and isinstance(given.get('cards'), list):
+                gone = card_ids(given) - card_ids(d)
+                if gone: raise ValueError('it left out %d card%s' % (len(gone), '' if len(gone) == 1 else 's'))
             target = os.path.join(CARDS_DIR, 'cards.json')
             with open(draft, 'rb') as f: new_bytes = f.read()
             try:
@@ -777,7 +807,7 @@ def run_finish():
             wrote, last['cards'] = not same, len(d['cards'])
             if same: last['gate'] = 'no change'
         except (OSError, ValueError) as e:
-            last['error'] = f'the cards Claude wrote could not be read ({e})'
+            last['error'] = f'the cards Claude wrote were not used ({e})'
             os.replace(draft, os.path.join(CARDS_DIR, 'cards.draft.bad.json'))
     elif proc.returncode != 0 or res.get('is_error'):
         last['error'] = 'signed out of Claude: System tab, Connect' if signed_out else ('Claude stopped: ' + (str(res.get('result') or err).strip()[:300] or f'exit {proc.returncode}'))

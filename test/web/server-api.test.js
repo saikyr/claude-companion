@@ -95,8 +95,9 @@ const post = (u, body, h) => fetch(base + u, { method: 'POST', headers: Object.a
   check(fake.job.why === 'save' && JSON.stringify(fake.job.wake) === JSON.stringify(wake) && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/.test(fake.job.now), 'run.json says why, what the save changed, and now');
   const a = fake.args, has = (...xs) => xs.every((x) => a.includes(x));
   check(a[0] === '-p' && /claude\/REFRESH\.md/.test(a[1]) && has('--restricted', '--strict-mcp-config', '--permission-mode', 'dontAsk', '--output-format', 'json') &&
-    a[a.indexOf('--tools') + 1] === 'Read,Glob,Grep,Write,Edit' && has('Edit(./companion-data/from-claude/**)') && !a.some((x) => /Bash|PowerShell|WebFetch/.test(x)),
-    `Claude Code runs with REFRESH.md, no commands, no web, writing only from-claude/ (${a.join(' ')})`);
+    a[a.indexOf('--tools') + 1] === 'Read,Glob,Grep,Write,Edit' && has('Read(./**)', 'Edit(./companion-data/from-claude/cards.draft.json)') && !a.some((x) => /Bash|PowerShell|WebFetch/.test(x)) &&
+    !a.some((x) => ['Read', 'Glob', 'Grep', 'Edit', 'Write'].includes(x)),
+    `Claude Code runs with REFRESH.md, no commands, no web, reading only the addon folder and writing only the draft (${a.join(' ')})`);
   check(path.resolve(fake.cwd) === path.resolve(dataDir, '..'), `in the addon folder (${fake.cwd})`);
   check(fake.env.ANTHROPIC_API_KEY === null && fake.env.ANTHROPIC_AUTH_TOKEN === null, 'with no API key in its environment: it runs on the player\'s own Claude plan');
   // the gate refused the new file (the page saves that in state.json upload): the same session fixes it
@@ -115,17 +116,27 @@ const post = (u, body, h) => fetch(base + u, { method: 'POST', headers: Object.a
   await cpost({ action: 'run' });
   cs = await until((st) => st.last && st.last.why === 'asked' && !st.running);
   check(cs.last.why === 'asked' && cs.runs === 3, `Update now starts a run (${cs.runs} today)`);
+  // cards-now.json was written before the last two runs: each starts from the cards the run before wrote
+  const given = JSON.parse(fs.readFileSync(path.join(run, 'cards-now.json'), 'utf8'));
+  check(given.cards[0].title === 'Plan (updated, refused)' && given.cards.length === 2, `a run starts from the newer cards.json, card by card (${given.cards[0].title})`);
   await post('api/cards-state', JSON.stringify({ schema: 1, cards: {}, upload: { at: new Date().toISOString(), ok: true, refused: false, cards: 2 } }));
   await until((st) => !st.checking);
+  // a draft that leaves a card out is not used: that card would go from every computer
+  const before = fs.readFileSync(path.join(fromClaude, 'cards.json'), 'utf8');
+  await post('api/claude-cards', JSON.stringify({ schema: 1, cards: [...now.cards, { id: 'drop', title: 'Keep me', created: '2026-11-19T10:00:00Z' }] }));
+  await cpost({ action: 'run' });
+  cs = await until((st) => st.runs === 4 && st.last && st.last.why === 'asked' && !st.running);
+  check(!cs.last.ok && /left out 1 card/.test(cs.last.error || '') && !cs.last.wrote && fs.readFileSync(path.join(fromClaude, 'cards.json'), 'utf8') === before &&
+    fs.existsSync(path.join(fromClaude, 'cards.draft.bad.json')), `a draft missing a card: refused, cards.json kept (${cs.last.error})`);
   await cpost({ action: 'off' });
   cs = await (await cpost({ action: 'save', name: 'Ana', digest: digest(3000), wake, worth: true })).json();
-  check(cs.on === false && !cs.queued && !cs.running && cs.runs === 3, 'turned off: a save starts nothing');
+  check(cs.on === false && !cs.queued && !cs.running && cs.runs === 4, 'turned off: a save starts nothing');
   // sync off: the cards can't be checked, so no run
   const syncState = fs.readFileSync(path.join(dataDir, 'sync.json'), 'utf8');
   await post('api/sync', JSON.stringify(Object.assign(JSON.parse(syncState), { off: true })));
   await cpost({ action: 'on' }); await cpost({ action: 'run' });
   cs = await until((st) => st.last && /sync is off/.test(st.last.error || ''), 15);
-  check(/sync is off/.test(cs.last.error || '') && cs.runs === 3, `sync off: no run, and the System tab says why (${cs.last.error})`);
+  check(/sync is off/.test(cs.last.error || '') && cs.runs === 4, `sync off: no run, and the System tab says why (${cs.last.error})`);
   await post('api/sync', syncState);
   await cpost({ action: 'off' });
   console.log(failed ? `\n${failed} FAILED` : '\nall passed');

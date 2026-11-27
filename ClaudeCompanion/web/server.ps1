@@ -242,7 +242,8 @@ function Test-Game {
     $script:gameOn
 }
 
-function Read-Json([string]$f) { if (Test-Path $f) { try { return (Get-Content -Raw -LiteralPath $f | ConvertFrom-Json) } catch { } }; $null }
+# UTF-8 always: PowerShell 5.1's Get-Content would read a file without a BOM in the ANSI code page (an accented name came back garbled)
+function Read-Json([string]$f) { if (Test-Path $f) { try { return ([System.IO.File]::ReadAllText($f, [System.Text.Encoding]::UTF8) | ConvertFrom-Json) } catch { } }; $null }
 function Write-Json([string]$f, $o) {
     $tmp = "$f.tmp"; [System.IO.File]::WriteAllText($tmp, ($o | ConvertTo-Json -Depth 5), (New-Object System.Text.UTF8Encoding($false)))
     Move-Item -LiteralPath $tmp -Destination $f -Force
@@ -420,7 +421,7 @@ $runCap = 24; $runTimeout = 900; $runFixes = 2; $runGateWait = 180; $runTurns = 
 $runPrompt = 'The game saved. Follow claude/REFRESH.md exactly.'
 $runFix = 'The card check refused your cards (now companion-data/from-claude/cards.json). Read companion-data/claude-run/run.json (refusal), fix exactly what it names, and write the whole list to companion-data/from-claude/cards.draft.json again.'
 $runArgs = @('--restricted', '--strict-mcp-config', '--tools', 'Read,Glob,Grep,Write,Edit',
-             '--allowedTools', 'Read', 'Glob', 'Grep', 'Edit(./companion-data/from-claude/**)',
+             '--allowedTools', 'Read(./**)', 'Edit(./companion-data/from-claude/cards.draft.json)',
              '--permission-mode', 'dontAsk', '--max-turns', "$runTurns", '--output-format', 'json')
 # a key in the environment would bill an API account instead of the player's plan (claude -p always uses one)
 foreach ($k in @('ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN')) { Remove-Item -LiteralPath "Env:$k" -ErrorAction SilentlyContinue }
@@ -441,7 +442,7 @@ function Get-RunState {
 }
 function Find-Claude {
     # CC_CLAUDE: only for tests. The installer puts it in %USERPROFILE%\.local\bin and doesn't change PATH
-    foreach ($p in @($env:CC_CLAUDE, ((Get-Command claude -ErrorAction SilentlyContinue | Select-Object -First 1).Source), (Join-Path $env:USERPROFILE '.local\bin\claude.exe'))) {
+    foreach ($p in @($env:CC_CLAUDE, ((Get-Command claude -CommandType Application -ErrorAction SilentlyContinue | Sort-Object { $_.Extension -ne '.exe' } | Select-Object -First 1).Source), (Join-Path $env:USERPROFILE '.local\bin\claude.exe'))) {
         if ($p -and (Test-Path -LiteralPath $p -PathType Leaf)) { return $p }
     }
     $null
@@ -449,9 +450,19 @@ function Find-Claude {
 function Test-SignedIn([switch]$Force) {
     $exe = Find-Claude
     if (-not $exe) { return $null }
-    if (-not $Force -and ((Get-Date) - $script:run.signedAt).TotalSeconds -lt 60) { return $script:run.signed }
+    # cached a minute; Force (the System tab, while it waits for the sign-in) only while not signed in
+    if (-not ($Force -and $script:run.signed -ne $true) -and ((Get-Date) - $script:run.signedAt).TotalSeconds -lt 60) { return $script:run.signed }
     $ok = $false
-    try { $o = (& $exe auth status 2>$null | Out-String); $ok = ($LASTEXITCODE -eq 0) -and [bool](($o | ConvertFrom-Json).loggedIn) } catch { $ok = $false }
+    # at most 10 s: this loop serves every request
+    try {
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = $env:ComSpec; $psi.Arguments = '/d /s /c "' + (Quote-Arg $exe) + ' auth status"'
+        $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true; $psi.RedirectStandardOutput = $true
+        $p = [System.Diagnostics.Process]::Start($psi)
+        $read = $p.StandardOutput.ReadToEndAsync()
+        if ($p.WaitForExit(10000)) { $ok = ($p.ExitCode -eq 0) -and [bool](($read.Result | ConvertFrom-Json).loggedIn) }
+        else { & taskkill.exe /PID $p.Id /T /F 2>$null | Out-Null }
+    } catch { $ok = $false }
     $script:run.signed = $ok; $script:run.signedAt = Get-Date
     $ok
 }
@@ -472,6 +483,26 @@ function Add-RunJob($job) {
     $script:run.queue = $job
 }
 function Quote-Arg([string]$a) { '"' + $a + '"' }
+# claude-run\cards-now.json, the list the run rewrites, as written by the page at the save; then cards.json on top,
+# card by card where it is newer (`updated`): a run that ended after the page wrote the list (one queued behind it)
+# starts from the cards that run wrote, not from the list before them
+function Update-CardsNow {
+    $path = Join-Path $runDir 'cards-now.json'
+    $now = Read-Json $path
+    if (-not $now -or $null -eq $now.cards) { return }
+    $mine = Read-Json (Join-Path $cardsDir 'cards.json')
+    if (-not $mine -or $null -eq $mine.cards) { return }
+    $list = New-Object System.Collections.ArrayList; @($now.cards) | ForEach-Object { [void]$list.Add($_) }
+    $changed = $false
+    foreach ($c in @($mine.cards)) {
+        if (-not $c -or -not $c.id) { continue }
+        $i = -1; for ($k = 0; $k -lt $list.Count; $k++) { if ($list[$k] -and $list[$k].id -eq $c.id) { $i = $k; break } }
+        if ($i -lt 0) { [void]$list.Add($c); $changed = $true }
+        elseif ([string]::CompareOrdinal([string]$c.updated, [string]$list[$i].updated) -gt 0) { $list[$i] = $c; $changed = $true }
+    }
+    if ($changed) { Write-RunJson $path @{ schema = $(if ($now.schema) { $now.schema } else { 1 }); cards = $list.ToArray() } }
+}
+function Get-CardIds($d) { @(@($d.cards) | Where-Object { $_ -and $_.id } | ForEach-Object { [string]$_.id }) }
 function Start-ClaudeRun($job) {
     $st = Get-RunState
     $last = { param($why) $st['last'] = @{ at = (Utc-Now); ok = $false; why = $job.why; error = $why }; Write-RunJson $runStateFile $st }
@@ -485,6 +516,7 @@ function Start-ClaudeRun($job) {
     if (-not (Test-Path $runDir)) { New-Item -ItemType Directory -Path $runDir -Force | Out-Null }
     $draft = Join-Path $cardsDir 'cards.draft.json'
     if ($job.why -ne 'refused' -and (Test-Path -LiteralPath $draft)) { Remove-Item -LiteralPath $draft -Force }
+    if ($job.why -ne 'refused') { Update-CardsNow }
     Write-RunJson (Join-Path $runDir 'run.json') @{ schema = 1; now = (Utc-Now); why = $job.why; wake = $job.wake; refusal = $job.refusal; fix = [int]$job.fixes }
     $all = @($exe, '-p', $(if ($job.resume) { $runFix } else { $runPrompt })) + $runArgs
     if ($job.resume) { $all += @('--resume', $job.resume) }
@@ -520,6 +552,13 @@ function Complete-ClaudeRun {
             $bytes = [System.IO.File]::ReadAllBytes($draft)
             $d = [System.Text.Encoding]::UTF8.GetString($bytes) | ConvertFrom-Json
             if (-not $d -or $null -eq $d.cards) { throw 'no cards list' }
+            # a card left out would be taken off every computer: every card the run was given must still be there
+            $given = Read-Json (Join-Path $runDir 'cards-now.json')
+            if ($given -and $null -ne $given.cards) {
+                $have = Get-CardIds $d
+                $gone = @(Get-CardIds $given | Where-Object { $have -notcontains $_ }).Count
+                if ($gone) { throw "it left out $gone card$(if ($gone -eq 1) { '' } else { 's' })" }
+            }
             $target = Join-Path $cardsDir 'cards.json'
             $same = $false
             if (Test-Path -LiteralPath $target) { $same = [Convert]::ToBase64String([System.IO.File]::ReadAllBytes($target)) -eq [Convert]::ToBase64String($bytes) }
@@ -527,7 +566,7 @@ function Complete-ClaudeRun {
             $wrote = -not $same; $last.cards = @($d.cards).Count
             if ($same) { $last.gate = 'no change' }
         } catch {
-            $last.error = "the cards Claude wrote could not be read ($($_.Exception.Message))"
+            $last.error = "the cards Claude wrote were not used ($($_.Exception.Message))"
             Move-Item -LiteralPath $draft -Destination (Join-Path $cardsDir 'cards.draft.bad.json') -Force
         }
     } elseif ($p.ExitCode -ne 0 -or $isError) {

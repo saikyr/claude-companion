@@ -116,8 +116,10 @@
       quests: ctx.questsKnown ? [...ctx.quests].sort((a, b) => a - b) : null,
       items: Object.fromEntries([...ctx.items].sort((a, b) => a[0] - b[0])),
       rep: Object.fromEntries([...ctx.rep]),
-      // cards[] as js/claude.js puts them in the snapshot: id -> {standing, done (positions)}
-      cards: Object.fromEntries(arr(cards).map((c) => [c.id, { title: c.title, standing: c.standing, done: arr(c.steps).filter((s) => s.done).map((s) => s.i) }])),
+      // cards[] as js/claude.js puts them in the snapshot: id -> {standing, done (positions), you (the player's own
+      // ticks), closedBy}
+      cards: Object.fromEntries(arr(cards).map((c) => [c.id, { title: c.title, standing: c.standing, done: arr(c.steps).filter((s) => s.done).map((s) => s.i),
+        you: arr(c.steps).filter((s) => s.done && s.by === 'you').map((s) => s.i), closedBy: c.closedBy || null }])),
     };
   }
   const CAP = 40;
@@ -150,7 +152,9 @@
       if (!p) return;
       const was = new Set(p.done), ticked = c.done.filter((i) => !was.has(i)), unticked = p.done.filter((i) => !c.done.includes(i));
       const closed = p.standing === 'open' && c.standing !== 'open' ? c.standing : null;
-      if (ticked.length || unticked.length || closed) cards.push(Object.assign({ id, title: c.title }, ticked.length ? { ticked } : {}, unticked.length ? { unticked } : {}, closed ? { closed } : {}));
+      // you: the player did it (a tick or untick of their own, or closed the card), not the game's check or Claude
+      const you = ticked.some((i) => arr(c.you).includes(i)) || unticked.length > 0 || (closed && c.closedBy === 'you');
+      if (ticked.length || unticked.length || closed) cards.push(Object.assign({ id, title: c.title }, ticked.length ? { ticked } : {}, unticked.length ? { unticked } : {}, closed ? { closed } : {}, you ? { you: true } : {}));
     });
     if (cards.length) out.cards = cards;
     return Object.keys(out).length > 3 ? out : null;
@@ -158,13 +162,15 @@
 
   // Is a save's change worth a background Claude run that updates the cards (js/runner.js)? Only when there is an
   // open card for the character, and the change is one a card can be about: a quest done, a new level, a reputation
-  // tier, a step ticked or unticked, a card closed, or an item that an open card's game check counts. A bag of
+  // tier, a step the player ticked or unticked, a card the player closed, or an item that an open card's game check counts. A bag of
   // vendor trash or a stack of potions used up is not. open: the open cards (each with doneWhen and character).
   function worthRun(wake, open) {
     if (!wake) return false;
     const mine = arr(open).filter((c) => c && (!c.character || c.character === wake.character));
     if (!mine.length) return false;
-    if (wake.level || arr(wake.questsDone).length || wake.questsDoneMore || arr(wake.rep).length || arr(wake.cards).length) return true;
+        // a card change counts only when the player made it: Claude's own ticks and the game's checks come from a
+    // run or a change counted here already, so they don't start another run
+    if (wake.level || arr(wake.questsDone).length || wake.questsDoneMore || arr(wake.rep).length || arr(wake.cards).some((c) => c && c.you)) return true;
     const counted = new Set();
     mine.forEach((c) => arr(c.doneWhen).forEach((x) => { const k = parse(x); if (k && k.kind === 'item') counted.add(k.id); }));
     return [...arr(wake.itemsGained), ...arr(wake.itemsLost)].some((x) => x && counted.has(Number(x.id)));

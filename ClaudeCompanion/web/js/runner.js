@@ -60,7 +60,7 @@
       checked = Date.now();
       status(true).then((st) => { if (st) { S = st; if (A.STATE.tab === 'system') A.render(); } });
     }
-    let h = '<h2>Claude updates your cards</h2><p class="meta">After a save that changes something on a card (a quest done, a level, a step, an item a step counts), your own Claude rewrites your From Claude cards in the background, here on this computer, with your Claude plan (Pro or above). It reads only this addon folder and writes only its cards.</p>';
+    let h = '<h2>Claude updates your cards</h2><p class="meta">After a save that changes something on a card (a quest done, a level, a step you tick, an item a step counts), your own Claude rewrites your From Claude cards in the background, here on this computer, with your Claude plan (Pro or above). It reads only this addon folder and writes only its cards.</p>';
     if (!S) h += '<p class="dim">Checking…</p>';
     else if (!S.claude || S.signedIn === false) {
       h += `<p>${S.claude ? 'Claude Code is here but not signed in.' : 'Needs Claude Code on this computer.'} Connect ${S.claude ? 'opens' : 'installs it (no admin rights needed) and opens'} the sign-in to your Claude account, once.</p>

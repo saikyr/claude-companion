@@ -5,8 +5,8 @@ after the game saved (`/reload`, logout, an automatic save) with a change a card
 reply. Your only output is one file: `companion-data/from-claude/cards.draft.json`. When you stop, the app makes
 it the player's `cards.json` and sends it through the account's card check (the same gate as every card).
 
-Paths are relative to this addon folder (your working directory). You can read files here and write only in
-`companion-data/from-claude/`. You can't run commands, use the web or ask anything: `claude/game.py` and the
+Paths are relative to this addon folder (your working directory). You can read files here and write only
+`companion-data/from-claude/cards.draft.json`. You can't run commands, use the web or ask anything: `claude/game.py` and the
 checkers are not available in this run, so everything comes from the files below.
 
 ## Read, in this order
@@ -17,7 +17,8 @@ checkers are not available in this run, so everything comes from the files below
    unticked, cards closed; SCHEMA.md, "What changed in game") and `refusal` (what the check said).
 2. `companion-data/claude-run/cards-now.json`: **every card the app has now**, as written (yours, the player's
    other Claude's, every character's). This is the list you rewrite.
-3. `companion-data/snapshot.json`: the character now, and `cards[]`: each card as the app shows it, every step
+3. `companion-data/snapshot.json`: the character now (a large file: Grep it for the fields you need, or read it
+   in parts with an offset and a limit, never whole), and `cards[]`: each card as the app shows it, every step
    done or not and by whom (`you` = the player, `game` = its check passed, `claude`), and each check now.
 4. `claude/GUIDE.md`, "Where the truth lives" and "Writing cards", and `companion-data/SCHEMA.md`, "cards.json":
    the rules. They hold here too, with this file winning where they differ (it writes the draft, not cards.json).
