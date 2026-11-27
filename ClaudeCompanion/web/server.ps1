@@ -29,7 +29,9 @@ $files = @{ '/api/cards' = (Join-Path $cardsDir 'cards.json'); '/api/cards-state
 $logsDir = Join-Path $forever 'Logs'
 $combatLogName = '^WoWCombatLog[A-Za-z0-9_.-]*\.txt\z'
 # what the page may write (POST): the snapshot for Claude, plus the files above except Claude's cards
-$writable = @{ '/api/snapshot' = (Join-Path $dataDir 'snapshot.json') }
+$writable = @{ '/api/snapshot' = (Join-Path $dataDir 'snapshot.json')
+               # every card the app has, for a background Claude run to rewrite (js/runner.js)
+               '/api/claude-cards' = (Join-Path $dataDir 'claude-run\cards-now.json') }
 foreach ($k in $files.Keys) { if ($k -ne '/api/cards') { $writable[$k] = $files[$k] } }
 $prefix = "http://localhost:$port/"
 $self = $MyInvocation.MyCommand.Path
@@ -174,7 +176,7 @@ function Get-Save {
 # once, which writes it. The page keeps its settings in companion-data\settings.json, so the hidden
 # one gives the same gear advice. Same as server.py.
 $bgProfile = Join-Path $env:TEMP 'claude-companion-background'
-$bgTried = $null; $bgProc = $null; $bgStart = $null; $bgNext = [DateTime]::MinValue
+$bgTried = $null; $bgProc = $null; $bgStart = $null; $bgNext = [DateTime]::MinValue; $bgForce = $false
 # Has an app window loaded the page since this server started? (same as server.py: a window left open
 # through an update runs the old page; until a window loads the new one, the hidden browser runs after
 # each save even when a window wrote snapshot.json)
@@ -197,11 +199,13 @@ function Check-Background {
     $s = Get-Save
     if (-not $s) { return }
     $stamp = $s.LastWriteTimeUtc.ToString('o')
+    # a Claude run wrote cards.json: a page has to send it through the gate (Check-ClaudeRun)
+    $forced = $script:bgForce; $script:bgForce = $false
     # already tried, or saved under 10 s ago (an open app window writes it within seconds)
-    if ($stamp -eq $script:bgTried -or ([DateTime]::UtcNow - $s.LastWriteTimeUtc).TotalSeconds -lt 10) { return }
+    if (-not $forced -and ($stamp -eq $script:bgTried -or ([DateTime]::UtcNow - $s.LastWriteTimeUtc).TotalSeconds -lt 10)) { return }
     $snapFile = Join-Path $dataDir 'snapshot.json'
     $have = if (Test-Path $snapFile) { [regex]::Match([System.IO.File]::ReadAllText($snapFile), '"saveModified":\s*"([^"]*)"').Groups[1].Value } else { '' }
-    if ($script:pageLoaded -and $stamp -eq $have) { return }
+    if (-not $forced -and $script:pageLoaded -and $stamp -eq $have) { return }
     $script:bgTried = $stamp
     $exe = Find-Browser
     if (-not $exe) { return }
@@ -403,6 +407,215 @@ function Install-Update {
     }
 }
 # after an update: let this listener go and start the server again, hidden, on the new code
+# ---------------------------------------------------------------- Claude updates the cards (#169, same as server.py)
+# Opt-in, per computer. After a save worth it the page posts it (POST /api/claude {action: 'save'}); this server
+# starts the player's own Claude Code (signed in with their own Claude plan) hidden in the addon folder: it reads
+# the folder, writes only companion-data\from-claude\ (--restricted: no commands, no web), and leaves the whole card
+# list in cards.draft.json. When it exits the draft becomes cards.json, which the page sends through the account's
+# card gate; a refusal goes back to the same session (--resume), at most twice. One run at a time, RUN_CAP a day.
+# Everything it keeps: companion-data\claude-run\ (SCHEMA.md, "Claude updates the cards").
+$runDir = Join-Path $dataDir 'claude-run'
+$runStateFile = Join-Path $runDir 'state.json'
+$runCap = 24; $runTimeout = 900; $runFixes = 2; $runGateWait = 180; $runTurns = 40
+$runPrompt = 'The game saved. Follow claude/REFRESH.md exactly.'
+$runFix = 'The card check refused your cards (now companion-data/from-claude/cards.json). Read companion-data/claude-run/run.json (refusal), fix exactly what it names, and write the whole list to companion-data/from-claude/cards.draft.json again.'
+$runArgs = @('--restricted', '--strict-mcp-config', '--tools', 'Read,Glob,Grep,Write,Edit',
+             '--allowedTools', 'Read', 'Glob', 'Grep', 'Edit(./companion-data/from-claude/**)',
+             '--permission-mode', 'dontAsk', '--max-turns', "$runTurns", '--output-format', 'json')
+# a key in the environment would bill an API account instead of the player's plan (claude -p always uses one)
+foreach ($k in @('ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN')) { Remove-Item -LiteralPath "Env:$k" -ErrorAction SilentlyContinue }
+$run = @{ proc = $null; job = $null; started = [DateTime]::MinValue; queue = $null; gate = $null; signed = $null; signedAt = [DateTime]::MinValue }
+$runNext = [DateTime]::MinValue
+function Utc-Now { [DateTime]::UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'") }
+function Write-RunJson([string]$f, $o) {
+    $dir = Split-Path -Parent $f
+    if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+    $tmp = "$f.tmp"; [System.IO.File]::WriteAllText($tmp, (ConvertTo-Json -InputObject $o -Depth 30), (New-Object System.Text.UTF8Encoding($false)))
+    Move-Item -LiteralPath $tmp -Destination $f -Force
+}
+# state.json as a hashtable (its values stay as read)
+function Get-RunState {
+    $h = @{}; $o = Read-Json $runStateFile
+    if ($o) { $o.PSObject.Properties | ForEach-Object { $h[$_.Name] = $_.Value } }
+    $h
+}
+function Find-Claude {
+    # CC_CLAUDE: only for tests. The installer puts it in %USERPROFILE%\.local\bin and doesn't change PATH
+    foreach ($p in @($env:CC_CLAUDE, ((Get-Command claude -ErrorAction SilentlyContinue | Select-Object -First 1).Source), (Join-Path $env:USERPROFILE '.local\bin\claude.exe'))) {
+        if ($p -and (Test-Path -LiteralPath $p -PathType Leaf)) { return $p }
+    }
+    $null
+}
+function Test-SignedIn([switch]$Force) {
+    $exe = Find-Claude
+    if (-not $exe) { return $null }
+    if (-not $Force -and ((Get-Date) - $script:run.signedAt).TotalSeconds -lt 60) { return $script:run.signed }
+    $ok = $false
+    try { $o = (& $exe auth status 2>$null | Out-String); $ok = ($LASTEXITCODE -eq 0) -and [bool](($o | ConvertFrom-Json).loggedIn) } catch { $ok = $false }
+    $script:run.signed = $ok; $script:run.signedAt = Get-Date
+    $ok
+}
+function Get-RunStatus([switch]$Check) {
+    $st = Get-RunState; $exe = Find-Claude
+    $today = $st['today']; $day = (Utc-Now).Substring(0, 10)
+    @{ on = [bool]$st['on']; claude = [bool]$exe; signedIn = $(if ($exe) { Test-SignedIn -Force:$Check } else { $null })
+       running = $null -ne $script:run.proc; started = $(if ($script:run.proc) { $st['started'] } else { $null })
+       queued = $null -ne $script:run.queue; checking = $null -ne $script:run.gate; last = $st['last']
+       runs = $(if ($today -and $today.date -eq $day) { [int]$today.n } else { 0 }); cap = $runCap
+       digests = $(if ($st['digests']) { $st['digests'] } else { @{} }) }
+}
+function Test-SyncOff { $o = Read-Json (Join-Path $dataDir 'sync.json'); [bool]($o -and $o.off) }
+function Add-RunJob($job) {
+    # one run waits at most: a newer save replaces what it carries (the run reads the newest snapshot anyway)
+    $q = $script:run.queue
+    if ($q -and $q.why -eq 'refused' -and $job.why -ne 'refused') { return }
+    $script:run.queue = $job
+}
+function Quote-Arg([string]$a) { '"' + $a + '"' }
+function Start-ClaudeRun($job) {
+    $st = Get-RunState
+    $last = { param($why) $st['last'] = @{ at = (Utc-Now); ok = $false; why = $job.why; error = $why }; Write-RunJson $runStateFile $st }
+    if (-not $st['on']) { return }
+    $exe = Find-Claude
+    if (-not $exe) { & $last 'Claude Code is not installed on this computer (System tab: Connect)'; return }
+    if (Test-SyncOff) { & $last 'sync is off on this computer: the cards are checked online, so turn sync on'; return }
+    $day = (Utc-Now).Substring(0, 10)
+    $today = if ($st['today'] -and $st['today'].date -eq $day) { @{ date = $day; n = [int]$st['today'].n } } else { @{ date = $day; n = 0 } }
+    if ($today.n -ge $runCap -and $job.why -ne 'refused') { & $last "$runCap runs today already: the next one waits for tomorrow (UTC)"; return }
+    if (-not (Test-Path $runDir)) { New-Item -ItemType Directory -Path $runDir -Force | Out-Null }
+    $draft = Join-Path $cardsDir 'cards.draft.json'
+    if ($job.why -ne 'refused' -and (Test-Path -LiteralPath $draft)) { Remove-Item -LiteralPath $draft -Force }
+    Write-RunJson (Join-Path $runDir 'run.json') @{ schema = 1; now = (Utc-Now); why = $job.why; wake = $job.wake; refusal = $job.refusal; fix = [int]$job.fixes }
+    $all = @($exe, '-p', $(if ($job.resume) { $runFix } else { $runPrompt })) + $runArgs
+    if ($job.resume) { $all += @('--resume', $job.resume) }
+    $out = Join-Path $runDir 'out.json'; $err = Join-Path $runDir 'err.txt'
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = $env:ComSpec
+    # cmd only writes the output to the two files; no window (CreateNoWindow)
+    $psi.Arguments = '/d /s /c "' + (($all | ForEach-Object { Quote-Arg $_ }) -join ' ') + ' > ' + (Quote-Arg $out) + ' 2> ' + (Quote-Arg $err) + '"'
+    $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true; $psi.WorkingDirectory = $addonDir
+    try { $p = [System.Diagnostics.Process]::Start($psi) } catch { & $last ('Claude Code did not start: ' + $_.Exception.Message); return }
+    $today.n++
+    $st['today'] = $today; $st['started'] = (Utc-Now)
+    Write-RunJson $runStateFile $st
+    $script:run.proc = $p; $script:run.job = $job; $script:run.started = Get-Date
+}
+function Complete-ClaudeRun {
+    $p = $script:run.proc; $job = $script:run.job
+    $res = Read-Json (Join-Path $runDir 'out.json')
+    $err = ''; try { $err = [System.IO.File]::ReadAllText((Join-Path $runDir 'err.txt')) } catch { }
+    if ($err.Length -gt 2000) { $err = $err.Substring($err.Length - 2000) }
+    $resText = if ($res -and $res.result) { [string]$res.result } else { '' }
+    $text = ($resText + ' ' + $err).ToLower()
+    $st = Get-RunState
+    $last = @{ at = (Utc-Now); started = $st['started']; why = $job.why; code = $p.ExitCode
+               session = $(if ($res) { $res.session_id } else { $null }); turns = $(if ($res) { $res.num_turns } else { $null })
+               denied = $(if ($res -and $res.permission_denials) { @($res.permission_denials).Count } else { 0 }) }
+    $signedOut = $false
+    foreach ($x in @('/login', 'not logged in', 'login expired', 'invalid api key', 'oauth token')) { if ($text.Contains($x)) { $signedOut = $true } }
+    $draft = Join-Path $cardsDir 'cards.draft.json'; $wrote = $false
+    $isError = $res -and $res.is_error
+    if ($p.ExitCode -eq 0 -and -not $isError -and (Test-Path -LiteralPath $draft)) {
+        try {
+            $bytes = [System.IO.File]::ReadAllBytes($draft)
+            $d = [System.Text.Encoding]::UTF8.GetString($bytes) | ConvertFrom-Json
+            if (-not $d -or $null -eq $d.cards) { throw 'no cards list' }
+            $target = Join-Path $cardsDir 'cards.json'
+            $same = $false
+            if (Test-Path -LiteralPath $target) { $same = [Convert]::ToBase64String([System.IO.File]::ReadAllBytes($target)) -eq [Convert]::ToBase64String($bytes) }
+            Move-Item -LiteralPath $draft -Destination $target -Force
+            $wrote = -not $same; $last.cards = @($d.cards).Count
+            if ($same) { $last.gate = 'no change' }
+        } catch {
+            $last.error = "the cards Claude wrote could not be read ($($_.Exception.Message))"
+            Move-Item -LiteralPath $draft -Destination (Join-Path $cardsDir 'cards.draft.bad.json') -Force
+        }
+    } elseif ($p.ExitCode -ne 0 -or $isError) {
+        $why = if ($resText) { $resText } else { $err }
+        $why = $why.Trim(); if ($why.Length -gt 300) { $why = $why.Substring(0, 300) }
+        $last.error = if ($signedOut) { 'signed out of Claude: System tab, Connect' } elseif ($why) { 'Claude stopped: ' + $why } else { "Claude stopped: exit $($p.ExitCode)" }
+    }
+    $last.ok = -not $last.ContainsKey('error'); $last.wrote = $wrote
+    $st['last'] = $last; Write-RunJson $runStateFile $st
+    $script:run.proc = $null; $script:run.job = $null
+    if ($signedOut) { $script:run.signed = $false; $script:run.signedAt = Get-Date }
+    if ($wrote) {
+        # the page sends the new file through the gate; no window open: the hidden browser does it
+        $script:run.gate = @{ since = $last.at; until = (Get-Date).AddSeconds($runGateWait); session = $last.session; fixes = [int]$job.fixes }
+        $script:bgForce = $true
+    }
+}
+function Check-RunGate {
+    # how the gate took the new cards.json: from-claude\state.json `upload`, written by the page after the send
+    $g = $script:run.gate
+    if (-not $g) { return }
+    $o = Read-Json (Join-Path $cardsDir 'state.json')
+    $up = if ($o) { $o.upload } else { $null }
+    $fresh = $up -and ([string]$up.at) -ge $g.since.TrimEnd('Z').Substring(0, 19)
+    if (-not $fresh) {
+        if ((Get-Date) -gt $g.until) {
+            $st = Get-RunState
+            if ($st['last']) { $st['last'] | Add-Member -NotePropertyName gate -NotePropertyValue 'not sent yet: it goes with the next sync' -Force; Write-RunJson $runStateFile $st }
+            $script:run.gate = $null
+        }
+        return
+    }
+    $script:run.gate = $null
+    $st = Get-RunState
+    $e = [string]$up.error
+    $gate = if ($up.ok) { 'ok' } elseif ($up.refused) { 'refused: ' + $(if ($e.Length -gt 500) { $e.Substring(0, 500) } else { $e }) } else { 'not sent: ' + $(if ($e.Length -gt 300) { $e.Substring(0, 300) } else { $e }) }
+    if ($st['last']) { $st['last'] | Add-Member -NotePropertyName gate -NotePropertyValue $gate -Force; Write-RunJson $runStateFile $st }
+    if ($up.refused -and $g.session -and $g.fixes -lt $runFixes) { Add-RunJob @{ why = 'refused'; refusal = $up.error; resume = $g.session; fixes = $g.fixes + 1 } }
+}
+function Check-ClaudeRun {
+    $p = $script:run.proc
+    if ($p) {
+        if (-not $p.HasExited) {
+            if (((Get-Date) - $script:run.started).TotalSeconds -gt $runTimeout) { & taskkill.exe /T /F /PID $p.Id 2>&1 | Out-Null }
+            return
+        }
+        Complete-ClaudeRun
+    }
+    Check-RunGate
+    if ($script:run.queue -and -not $script:run.gate) { $job = $script:run.queue; $script:run.queue = $null; Start-ClaudeRun $job }
+}
+function Save-RunDigest($b) {
+    # the page's news after a save: this character's digest (kept for the next save's change) and whether the
+    # change is worth a run (the page wrote every card it has to claude-run\cards-now.json just before)
+    $st = Get-RunState
+    $name = [string]$b.name; $digest = $b.digest
+    if (-not $name -or -not $digest) { return }
+    $digests = @{}
+    if ($st['digests']) { $st['digests'].PSObject.Properties | ForEach-Object { $digests[$_.Name] = $_.Value } }
+    $prev = $digests[$name]
+    $pt = if ($prev -and $prev.t) { [double]$prev.t } else { 0 }
+    $dt = if ($digest.t) { [double]$digest.t } else { 0 }
+    if ($dt -le $pt) { return }   # another window already told this save
+    $digests[$name] = $digest; $st['digests'] = $digests; Write-RunJson $runStateFile $st
+    if ($b.worth -and $st['on']) { Add-RunJob @{ why = 'save'; wake = $b.wake } }
+}
+function Connect-Claude {
+    # the player's own sign-in, in a window they can see: install Claude Code first if it isn't here
+    $exe = Find-Claude
+    $login = if ($exe) { "& '" + $exe.Replace("'", "''") + "' auth login" } else { 'irm https://claude.ai/install.ps1 | iex; & (Join-Path $env:USERPROFILE ''.local\bin\claude.exe'') auth login' }
+    $cmd = "Write-Host 'Claude Companion: signing in to Claude, for the cards updates.'; " + $login
+    $enc = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($cmd))
+    Start-Process -FilePath $psExe -ArgumentList @('-NoExit', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', $enc) | Out-Null
+    $script:run.signedAt = [DateTime]::MinValue
+    @{ ok = $true }
+}
+function Invoke-ClaudePost($b) {
+    switch ([string]$b.action) {
+        'on' { $st = Get-RunState; $st['on'] = $true; Write-RunJson $runStateFile $st }
+        'off' { $st = Get-RunState; $st['on'] = $false; Write-RunJson $runStateFile $st }
+        'connect' { return (Connect-Claude) }
+        'run' { Add-RunJob @{ why = 'asked' } }
+        'save' { Save-RunDigest $b }
+        default { return $null }
+    }
+    Get-RunStatus
+}
+
 function Restart-Server {
     try { $listener.Stop() } catch { }
     Start-Hidden '-Serve'
@@ -413,6 +626,7 @@ $restartAfter = $false
 $pending = $listener.GetContextAsync()
 while ($listener.IsListening) {
     if ($env:CC_BACKGROUND -ne '0' -and (Get-Date) -ge $bgNext) { try { Check-Background } catch { }; $bgNext = (Get-Date).AddSeconds(5) }   # CC_BACKGROUND=0: tests only
+    if ((Get-Date) -ge $runNext) { try { Check-ClaudeRun } catch { }; $runNext = (Get-Date).AddSeconds(2) }
     if ((Get-Date) -ge $updNext) {
         $updNext = (Get-Date).AddMinutes(30)
         try { $st = Get-UpdStatus; if ($st.available -and $st.auto) { $r = Install-Update; if ($r.ok) { Restart-Server } } } catch { }
@@ -475,6 +689,20 @@ while ($listener.IsListening) {
                     } finally { $fs.Close() }
                 }
             }
+        } elseif ($path -eq '/api/claude' -and $req.HttpMethod -eq 'GET') {
+            # Claude updating the cards in the background: where it stands
+            $type = 'application/json; charset=utf-8'
+            $body = [System.Text.Encoding]::UTF8.GetBytes((ConvertTo-Json -InputObject (Get-RunStatus -Check:($req.Url.Query -like '*check=1*')) -Depth 30))
+        } elseif ($path -eq '/api/claude' -and $req.HttpMethod -eq 'POST') {
+            $type = 'application/json; charset=utf-8'
+            $r = $null
+            if ($req.Headers['X-CC'] -eq '1' -and $req.ContentLength64 -gt 0 -and $req.ContentLength64 -le 2MB) {
+                $reader = New-Object System.IO.StreamReader($req.InputStream, [System.Text.Encoding]::UTF8)
+                $text = $reader.ReadToEnd(); $reader.Close()
+                try { $r = Invoke-ClaudePost ($text | ConvertFrom-Json) } catch { $r = $null }
+            }
+            if ($null -eq $r) { $res.StatusCode = 400; $body = [System.Text.Encoding]::UTF8.GetBytes('bad request') }
+            else { $body = [System.Text.Encoding]::UTF8.GetBytes((ConvertTo-Json -InputObject $r -Depth 30)) }
         } elseif ($path -eq '/api/update' -and $req.HttpMethod -eq 'GET') {
             $type = 'application/json; charset=utf-8'
             $body = [System.Text.Encoding]::UTF8.GetBytes((Get-UpdStatus -Force:($req.Url.Query -like '*force=1*') | ConvertTo-Json -Depth 5))

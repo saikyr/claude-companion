@@ -175,3 +175,18 @@ select t, at, computer, data from private.history where account = '<account>' an
 | `itemsGained[]`, `itemsLost[]` | `{id, name, from, to}`: counts in bags, bank and worn together (40 each at most) |
 | `rep[]` | `{faction, from, to}`: standings that changed (Friendly, Honored...) |
 | `cards[]` | `{id, title, ticked[], unticked[], closed}`: card steps newly done or undone (by anyone: the player, the game's check, Claude) and cards that closed (`closed` = the new `standing`) |
+
+
+### Claude updates the cards: `claude-run/` (#169)
+
+Opt-in on each computer (System tab). After a save worth it, the local server starts the player's own Claude Code
+in the addon folder with `claude/REFRESH.md` as its instructions; it writes `from-claude/cards.draft.json`, which
+becomes `cards.json` when it exits and then goes through the gate like any `cards.json` (above). The server keeps
+everything in `companion-data/claude-run/` (only the app writes these; the run reads the first two):
+
+| File | What |
+| --- | --- |
+| `run.json` | This run: `now` (UTC, the time for `updated`), `why` (`save`, `asked` = Update now, `refused` = fixing a refused list), `wake` (what the save changed: the fields of `claude_wake` above), `refusal` (what the gate said), `fix` (1 or 2 for a fix) |
+| `cards-now.json` | `{schema: 1, cards: [...]}`: every card the app has when the run starts (each character's, both sources), as written. The run rewrites this list |
+| `state.json` | `on`, each character's last save digest (`digests`, for the next save's change), runs `today`, and the `last` run: `at`, `why`, `ok`, `error`, `wrote`, `cards`, `session`, `turns`, `denied` (tool uses refused), `gate` (`ok`, `refused: ...`, `no change`, `not sent yet ...`) |
+| `out.json`, `err.txt` | The last run's output, for finding out why one failed |

@@ -63,6 +63,10 @@ Key bindings: Options > Key Bindings > AddOns > Claude Companion.
   computer, so your own computers can share them. The person who runs this project's sync database can
   see what is stored there. Nothing else leaves your computer. To keep it all on this computer, open
   the app's System tab and press **Turn sync off on this computer** (you can turn it back on there).
+- **Claude updates your cards** (System tab, off until you turn it on): after a save, your own Claude Code,
+  signed in to your own Claude account, reads this addon folder (your snapshot and cards) and rewrites your
+  cards. What it reads goes to Anthropic under your account, as in any Claude chat. The app never sees
+  your sign-in, and Claude can write nothing but its cards file.
 - Updates come from the same download folder as the zips, only builds that passed every test; every
   file is checked against the build's checksums before anything is installed, and a backup is kept
   (the last 5).

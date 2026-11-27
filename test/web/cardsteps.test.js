@@ -90,5 +90,15 @@ check(ST.wakeOf(a, Object.assign({}, a, { t: 2000 })) === null, 'nothing changed
 check(ST.wakeOf(b, a) === null && ST.wakeOf(a, a) === null, 'an older or the same save: no record');
 check(ST.wakeOf(a, Object.assign({}, b, { name: 'Alt' })) === null, 'another character: no record');
 
+// ---- is a change worth a background Claude run (js/runner.js)
+const plan = [{ id: 'p', character: 'Ana', doneWhen: ['item:21982x25', null] }];
+const trash = { character: 'Ana', itemsLost: [{ id: 8952, from: 1, to: 0 }], itemsGained: [{ id: 4306, from: 0, to: 7 }] };
+check(!ST.worthRun(null, plan) && !ST.worthRun(w, []), 'no change, or no open card: no run');
+check(ST.worthRun(w, plan), 'a quest done, a level, a reputation tier or a card step: a run');
+check(!ST.worthRun(trash, plan), 'vendor trash and used potions only: no run');
+check(ST.worthRun(Object.assign({}, trash, { itemsGained: [{ id: 21982, from: 16, to: 21 }] }), plan), 'an item an open card counts: a run');
+check(!ST.worthRun(w, [{ id: 'q', character: 'Alt', doneWhen: [] }]), "only another character's cards: no run");
+check(ST.worthRun({ character: 'Ana', cards: [{ id: 'p', unticked: [0] }] }, plan), 'a step the player unticked: a run');
+
 console.log(failed ? `${failed} failed` : 'all passed');
 process.exit(failed ? 1 : 0);
