@@ -109,7 +109,8 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   // Forever's own formulas (#175): the neck takes a necklace enchant, scored from the formula's tooltip, with where it's sold
   check(en.some((r) => /^Neck/.test(r) && /Healing Power/.test(r) && /Formula: Enchant Necklace - Healing Power/.test(r) && /sold by (Alynsia|Beneris)/.test(r) && /Enchanting 210 to learn/.test(r)),
     'Enchants: the neck takes Forever\'s Necklace - Healing Power, with its vendor and skill (' + (en.find((r) => /^Neck/.test(r)) || 'none') + ')');
-  check(en.some((r) => /^Off hand/.test(r) && /— Wisdom \+6 Intellect, \+5 Spirit/.test(r)), 'Enchants: a held off-hand takes Forever\'s Off-Hand - Wisdom (' + (en.find((r) => /^Off hand/.test(r)) || 'none') + ')');
+  // (Wisdom from its tooltip; with ForeverDB's text in the pack, Superior Intellect is scored too and can beat it)
+  check(en.some((r) => /^Off hand/.test(r) && /— (Wisdom \+6 Intellect, \+5 Spirit|Superior Intellect \+9 Intellect) · Enchant Off-Hand - /.test(r)), 'Enchants: a held off-hand takes a Forever Off-Hand formula (' + (en.find((r) => /^Off hand/.test(r)) || 'none') + ')');
   check(/slots? ha(s|ve) no enchant/.test(await text('main')), 'Enchants: the empty slots are counted on top');
   await page.click('[data-gearspec="2"]');
   const en2 = await page.$$eval('.ench .tr', (els) => els.map((e) => e.innerText.replace(/\s+/g, ' ')));
