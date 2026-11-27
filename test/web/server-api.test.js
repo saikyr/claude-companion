@@ -33,6 +33,14 @@ const post = (u, body, h) => fetch(base + u, { method: 'POST', headers: Object.a
   const cacheText = JSON.stringify(cache);
   check((await post('api/sync-cache', cacheText)).ok, `the page saves the other computers' history (${Math.round(cacheText.length / 1024)} KB)`);
   check((await (await get('api/sync-cache')).text()) === cacheText, 'and reads it back byte for byte');
+  // an account with weeks of AH scans: 250,000 records, 81 MB (27 Nov: the 20 MB limit refused it, "did not save api/sync-cache")
+  const big = { account: 'a', after: 1, recs: {}, names: {} };
+  const pad = 'é'.repeat(100);
+  for (let i = 0; i < 160000; i++) big.recs['id' + i] = { dev: 'x', char: 'W-A', kind: 'ah_obs', t: i, data: { item: i, name: pad, min: i } };
+  const bigText = JSON.stringify(big);
+  check(Buffer.byteLength(bigText) > 40 * 1024 * 1024, `the big cache is over 40 MB (${Math.round(Buffer.byteLength(bigText) / 1048576)} MB)`);
+  check((await post('api/sync-cache', bigText)).ok, 'the page saves a sync cache over 20 MB');
+  check((await (await get('api/sync-cache')).text()) === bigText, 'and reads it back byte for byte');
   check((await post('api/snapshot', JSON.stringify({ schema: 1, by: 'test' }))).ok && JSON.parse(fs.readFileSync(path.join(dataDir, 'snapshot.json'), 'utf8')).by === 'test', 'the page writes snapshot.json');
   check((await post('api/sync', '{}', { 'X-CC': '' })).status === 400, 'a write without the app\'s header is refused');
   // DNS rebinding: a web page that points its own domain at 127.0.0.1 sends that domain as Host
