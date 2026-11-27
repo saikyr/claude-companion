@@ -71,7 +71,7 @@ if AH then
                 qty = qty + (Clean(r.quantity) or 0)
             end
         end
-        if cheapest then Observe(itemID, nil, cheapest, qty, "search") end
+        if cheapest then Observe(itemID, nil, cheapest, qty, "search", nil, { commodity = true }) end   -- the game's own unit price
     end)
 
     -- how many of an item stack in one bag slot (nil = the game doesn't say yet)

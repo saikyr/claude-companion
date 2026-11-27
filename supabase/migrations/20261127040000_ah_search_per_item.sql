@@ -1,7 +1,8 @@
 -- fact_problem with the account (last in 20261124090000_card_gate_flag_old.sql, never edited), as before, except that an
 -- `ah:` src no longer matches an item search row saved before #170: those rows divided one auction's buyout by the number
 -- of auctions the search grouped, so an item that doesn't stack read a half or a third of its price. A search row from
--- #170 on carries `stack` (the item's stack size the price was read with); scan and browse rows are as before.
+-- #170 on carries `stack` (the item's stack size the price was read with), or `commodity` (a commodity search, the game's own
+-- unit price); older search rows of either kind can't be told apart, so none is quoted. Scan and browse rows are as before.
 create or replace function private.fact_problem(p_snap jsonb, f jsonb, p_root uuid) returns text language plpgsql stable set search_path = '' as $$
 declare src text := f->>'src'; txt text := coalesce(f->>'value', '') || ' ' || coalesce(f->>'note', ''); m text[]; seen numeric[]; rp jsonb; old int;
 begin
@@ -13,8 +14,8 @@ begin
   end if;
   if src !~ '^ah:' then return private.fact_problem(p_snap, f); end if;
   m := regexp_match(src, '^ah:(\d+)@(\d+)#(min|med)$');
-  select coalesce(array_agg((r.data->>m[3])::numeric) filter (where not (r.data->>'src' = 'search' and not r.data ? 'stack')), '{}'),
-         count(*) filter (where r.data->>'src' = 'search' and not r.data ? 'stack')
+  select coalesce(array_agg((r.data->>m[3])::numeric) filter (where r.data->>'src' is distinct from 'search' or r.data ? 'stack' or r.data ? 'commodity'), '{}'),
+         count(*) filter (where r.data->>'src' = 'search' and not (r.data ? 'stack' or r.data ? 'commodity'))
     into seen, old
     from public.records r join public.accounts a on a.id = r.account_id
    where coalesce(a.merged_into, a.id) = p_root and not a.retired and r.kind = 'ah_obs'
