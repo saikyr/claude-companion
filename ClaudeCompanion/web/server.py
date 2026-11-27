@@ -187,17 +187,30 @@ class Handler(BaseHTTPRequestHandler):
                   '/api/settings': (DATA_DIR, 'settings.json'), '/api/sync': (DATA_DIR, 'sync.json'),
                   '/api/sync-cache': (DATA_DIR, 'sync-cache.json'), '/api/combat': (DATA_DIR, 'combat.json'),
                   '/api/claude-cards': (RUN_DIR, 'cards-now.json')}.get(self.path.split('?')[0])
-        if not target or self.headers.get('X-CC') != '1' or n <= 0 or n > 20 * 1024 * 1024:
+        if not target or self.headers.get('X-CC') != '1' or n <= 0 or n > write_cap(self.path.split('?')[0]):
             return self.send(400, 'bad request')
-        body = self.rfile.read(n)
         folder, name = target
         os.makedirs(folder, exist_ok=True)
         # one temp file per request: the server is threaded, and two writes of the same file sharing one temp
         # name could rename a half-written copy into place (an empty snapshot.json)
         tmp = os.path.join(folder, '%s.%d.%s.tmp' % (name, threading.get_ident(), uuid.uuid4().hex[:8]))
-        with open(tmp, 'wb') as f: f.write(body)
+        with open(tmp, 'wb') as f:
+            left = n
+            while left > 0:
+                chunk = self.rfile.read(min(left, 1024 * 1024))
+                if not chunk: break
+                f.write(chunk); left -= len(chunk)
+        if left > 0:
+            os.remove(tmp)
+            return self.send(400, 'bad request')
         os.replace(tmp, os.path.join(folder, name))
         self.send(200, 'ok')
+
+
+def write_cap(path):
+    # what the page may save: 20 MB a file, but sync-cache.json holds every record of the account (an account
+    # with a few weeks of AH scans: 250,000 records, 81 MB on 27 Nov), so it may be up to 400 MB
+    return (400 if path == '/api/sync-cache' else 20) * 1024 * 1024
 
 
 # ---------------------------------------------------------------- updates

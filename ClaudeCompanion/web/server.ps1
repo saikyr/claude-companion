@@ -915,17 +915,24 @@ while ($listener.IsListening) {
             # the page's summary for Claude (..\companion-data\snapshot.json) and what you did with
             # Claude's cards (..\companion-data\from-claude\state.json); see SCHEMA.md there.
             # Only this app sends the X-CC header; a web page can't add it without the browser asking first.
-            if ($req.Headers['X-CC'] -ne '1' -or $req.ContentLength64 -le 0 -or $req.ContentLength64 -gt 20MB) {
+            # 20 MB a file, but sync-cache.json holds every record of the account (an account with a few weeks of
+            # AH scans: 250,000 records, 81 MB on 27 Nov), so it may be up to 400 MB (as server.py write_cap)
+            $cap = if ($path -eq '/api/sync-cache') { 400MB } else { 20MB }
+            if ($req.Headers['X-CC'] -ne '1' -or $req.ContentLength64 -le 0 -or $req.ContentLength64 -gt $cap) {
                 $res.StatusCode = 400; $body = [System.Text.Encoding]::UTF8.GetBytes('bad request')
             } else {
-                $reader = New-Object System.IO.StreamReader($req.InputStream, [System.Text.Encoding]::UTF8)
-                $text = $reader.ReadToEnd(); $reader.Close()
                 $dir = Split-Path -Parent $writable[$path]; $name = Split-Path -Leaf $writable[$path]
                 if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
                 $tmp = Join-Path $dir ($name + '.tmp')
-                [System.IO.File]::WriteAllText($tmp, $text, (New-Object System.Text.UTF8Encoding($false)))
-                Move-Item -LiteralPath $tmp -Destination (Join-Path $dir $name) -Force
-                $body = [System.Text.Encoding]::UTF8.GetBytes('ok')
+                # the bytes as sent (UTF-8 JSON), straight to the file: no 80 MB string in memory
+                $out = [System.IO.File]::Create($tmp)
+                try { $req.InputStream.CopyTo($out) } finally { $out.Close(); $req.InputStream.Close() }
+                if ((Get-Item -LiteralPath $tmp).Length -ne $req.ContentLength64) {
+                    Remove-Item -LiteralPath $tmp -Force; $res.StatusCode = 400; $body = [System.Text.Encoding]::UTF8.GetBytes('bad request')
+                } else {
+                    Move-Item -LiteralPath $tmp -Destination (Join-Path $dir $name) -Force
+                    $body = [System.Text.Encoding]::UTF8.GetBytes('ok')
+                }
             }
         } else {
             if ($path -eq '/' -or $path -eq '') { $path = '/index.html' }

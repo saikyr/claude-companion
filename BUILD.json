@@ -1,20 +1,20 @@
 {
  "version": "1.5.0",
- "built": "2026-11-27T17:30:26+00:00",
+ "built": "2026-11-27T18:28:46+00:00",
  "channel": {
   "repo": "saikyr/claude-companion",
   "branch": "stable"
  },
  "from": {
   "branch": "main",
-  "commit": "650289cb974530ec4dfc64e5b0904f0ec4338b6e"
+  "commit": "3f58d1f39ba7b1b03139ea75c76e85a7b7b12570"
  },
- "build": "650289cb9745",
- "notes": "Card updates keep their sign-in; an expired one shows Reconnect (#180)",
+ "build": "3f58d1f39ba7",
+ "notes": "Sync cache up to 400 MB; the snapshot carries the card updates' status (#181)",
  "files": {
   "Bindings.xml": "99dcc8984fdbcbea746275e7a8dbbc34e16c462021640ce70232478fb843fb48",
   "ClaudeCompanion.toc": "14d0dd98487ec0a4ce7faefcf2a5d1f75fecd6a6f8890ed9bf815a59269b7731",
-  "Core.lua": "056e264b5f71600512be70787a16fee147a7264cf846b301c46830be8475dbb2",
+  "Core.lua": "3bb76ca8ab5ae79fc1e9dcccf545cb5683f162f1e07bd903a8733f2c3035d3e8",
   "Drops.lua": "718992985903bce175f89acf148deb568c59facb73982aad7c6a52950d9c721a",
   "Journal.lua": "f39dca32b04e2310bdc7ff562f37cc59c12fd59ca7e56c8f5c92ab39014b4d30",
   "Market.lua": "710ab2ec2bd6c37de00491d1c07998eb33b6576a56370e59e02b4eecddb92bde",
@@ -32,12 +32,12 @@
   "claude/game.py": "1a639bf2fd588140d7951e221a1b5d16a1da75c788626364359fa1ecd9cb9e20",
   "claude/pack-to-rows.py": "9eaab8bf01c73afa1a7390aee4d8753182341895dbd7ea73c0271e943f277fb2",
   "claude/rules.json": "97074fe765647edf46b31ca5d37721d76b231324cf1a9d9f00caa36dbd4ab6d5",
-  "companion-data/SCHEMA.md": "c136c4cad72af5e9eb60f4d22ea045797b30b7f5948f1eb2c0e316918e51f83f",
+  "companion-data/SCHEMA.md": "6d98c96f2580d0482979987027616f22804c4a480c35da438b625f74694c072c",
   "web/Claude Companion.app/Contents/Info.plist": "cdf5f33d28ce203d9307b765ef33199602fa77a52b4c9b3fee9e7a00cd65a009",
   "web/Claude Companion.app/Contents/MacOS/launcher": "65fe025ebb1acad0f786633f5b30f6bdcfa6b49f2912eca1f87385dcec0224c4",
   "web/Claude Companion.app/Contents/Resources/AppIcon.icns": "467ef964fdaff99ca47e80e7aff3d4db96306b984293aeb98251d68d2e4a2fdd",
   "web/Claude Companion.bat": "8f5cf6c1ff6a95ad5e0ebfc10951ef451cccf5b1e9a6d1fc7574600cfd01a2fc",
-  "web/channel.json": "2bd850e6c2b3c15e81f622de6c66172aa5e03a0b6384df597d68cf9f23b219c6",
+  "web/channel.json": "5617ef83536df76cabc4f4f8a34153ce89675550807f49ae4c55840415665f4c",
   "web/css/app.css": "126e4c45041782bcd5d773f079bd564cc69d35312548a31039e973c9a401033f",
   "web/data/gamedata.js": "a9e2898fbd48d0657cfdb26f68ab92c47c71a3d2b6f3b6b1af23a33cb45a3978",
   "web/data/rules.js": "5d97d9a68d83902c9d85fe84b28b61a9e3d540a0978f8aac26fbf494787d1ebb",
@@ -50,7 +50,7 @@
   "web/js/app.js": "a662256d5667e68086fdd5c9d666fe67f4684541e783f1cbc62e37d1312eebba",
   "web/js/cards.js": "454697bbacb475c8e61528a84a0bb7efa2a2ce42623c38903df3dd03a71fe535",
   "web/js/cardsteps.js": "0d73162295319f0e31f87f50e43f7e4bd31d078682f92a2b12bf07d5c9658445",
-  "web/js/claude.js": "85f65c29aec869731e9d95f482751b1e2f382c49bb9023ad47fd65568d8c79c5",
+  "web/js/claude.js": "daeb5d5cef8c12f6d0449ad70dd3cd25f378047ebc3fe00ea8b9fb81555a647a",
   "web/js/combatlog.js": "9eb8d8bbd076b0fddaa7ae09fe5f61ba75c010506045f8541f3446748b443a21",
   "web/js/enchants.js": "f1d2c34907c9831c1dda465e2b9f99084d6228abfe2bb59473ee7c476a4bb92c",
   "web/js/gear.js": "3ff88ba747457bb0974577678704e03fbdb9aec364569a18901f83a775c867de",
@@ -60,14 +60,14 @@
   "web/js/merge.js": "71ce9dcf20fe914cc58883d6b2bc2b89f159fa5993d290ab13fd1bc2c8d48d87",
   "web/js/next.js": "61393a27f8633a6d1a8fdec49a25a02924033ecfa0ad384fab33aca5a5b76dbb",
   "web/js/quests.js": "a9997be93d87d2fc9a1c1edf4cf582a340ac2e77e6b10dfc83f350fab0b89da4",
-  "web/js/runner.js": "b4c94c027080f4ca5e515bf8b19faeb0f95f236f788ace54c5cd7f6a6541bb19",
+  "web/js/runner.js": "636d6b224ef54cefd6636e0c59068bcbafa639b56191feb5f18061c109be629c",
   "web/js/runs.js": "b97d44cd3387a5f79e359a257f3ea69757b98524bb7f0e67166110f84d9250d5",
   "web/js/spells.js": "ae2fcd6367f30de1dbdba593e48ea2c2d92374fe5c2f3fcc2f233331476dd67a",
   "web/js/sync.js": "d7f3625c14356a83d84fb7bc9469f7925d8920dc2dac8d935cbf45717bf16755",
   "web/js/update.js": "01e4b021aeccccd0bd42863db07b2dea39a838533eed4e3468ca8b92d327b07f",
   "web/js/weights.js": "ce5eae71b90c8f65a0ddef92f05cff4a72c58e2ddb1960740cc4b59c8fcb76e3",
   "web/manifest.json": "c2351657716a2425d052efcad63b0ee2f33a217caef17dd844d24c558a004613",
-  "web/server.ps1": "4d6073d4c98df1810af985112c207069eacf2153ce955c9dbc0a73cb6794225a",
-  "web/server.py": "1bb0f782c19ac437dabbaa777d778ce6c3e1235e4a45722d6cab217ec518e736"
+  "web/server.ps1": "2af44b5d782c09349dfcf51899d778266c3e2f4cb528a03fb18bb9bee079535a",
+  "web/server.py": "be5c12c94c1fe7d58e9f46d04a545319a89ff94a6d8bb06183a13b7d1eb7eee9"
  }
 }
