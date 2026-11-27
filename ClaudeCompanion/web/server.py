@@ -633,7 +633,7 @@ def background_snapshot():
 # posts it here (POST /api/claude {action: 'save'}) and this server starts the player's own Claude Code, signed in
 # with their own Claude plan, in the background: `claude -p` in the addon folder with claude/REFRESH.md as its
 # instructions. It can read the folder and write only companion-data/from-claude/ (no commands, no web, no MCP
-# servers, no user or project settings: --restricted). It writes the whole card list to cards.draft.json; when it
+# servers, no user or project settings: RUN_ARGS, plus --restricted where the installed Claude Code has it). It writes the whole card list to cards.draft.json; when it
 # exits, the draft becomes cards.json, the page sends that through the account's card gate (js/sync.js pushCards,
 # public.cc_put_cards) and saves the answer in from-claude/state.json `upload`. A refusal goes back to the same
 # Claude session (--resume) with what the gate said, at most twice. One run at a time; saves during a run give one
@@ -644,9 +644,19 @@ RUN_STATE = os.path.join(RUN_DIR, 'state.json')
 RUN_CAP, RUN_TIMEOUT, RUN_FIXES, RUN_GATE_WAIT, RUN_TURNS = 24, 15 * 60, 2, 180, 40
 RUN_PROMPT = 'The game saved. Follow claude/REFRESH.md exactly.'
 RUN_FIX = 'The card check refused your cards (now companion-data/from-claude/cards.json). Read companion-data/claude-run/run.json (refusal), fix exactly what it names, and write the whole list to companion-data/from-claude/cards.draft.json again.'
-RUN_ARGS = ['--restricted', '--strict-mcp-config', '--tools', 'Read,Glob,Grep,Write,Edit',
+# The limits come from flags every recent Claude Code has: no settings files (so no hooks, plugins or allow rules of
+# the player's own), no MCP servers, no skills, only the file tools (and never a command or the web), reads that
+# dontAsk lets through only inside the addon folder, and one file it may write. --restricted (Claude Code 2.1.248)
+# adds its own hardening on top, only where `claude --help` lists it: an older Claude Code stops at an unknown option.
+# Before a run, claude_flags() checks every flag here against `claude --help`: a Claude Code without one of them gets
+# no run and the System tab says which flag and what to do.
+RUN_ARGS = ['--setting-sources=', '--strict-mcp-config', '--disable-slash-commands', '--tools', 'Read,Glob,Grep,Write,Edit',
+            '--disallowedTools', 'Bash', 'PowerShell', 'WebFetch', 'WebSearch',
             '--allowedTools', 'Read(./**)', 'Edit(./companion-data/from-claude/cards.draft.json)',
             '--permission-mode', 'dontAsk', '--max-turns', str(RUN_TURNS), '--output-format', 'json']
+# what --help must name; --max-turns works but --help doesn't list it (2.1.332), so only a run's "unknown option" tells
+RUN_NEED = [f for f in (a.split('=')[0] for a in RUN_ARGS if a.startswith('--')) if f != '--max-turns'] + ['dontAsk']
+RUN_EXTRA = '--restricted'
 # a key in the environment would bill an API account instead of the player's plan (claude -p always uses one)
 RUN_ENV_DROP = ('ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN')
 _run = {'proc': None, 'job': None, 'started': 0.0, 'queue': None, 'gate': None, 'signed': None, 'signedAt': 0.0}
@@ -664,6 +674,40 @@ def claude_env():
     env = dict(os.environ)
     for k in RUN_ENV_DROP: env.pop(k, None)
     return env
+
+
+def help_has(text, word):
+    return re.search(r'(?<![\w-])' + re.escape(word) + r'(?![\w-])', text) is not None
+
+
+def claude_flags(exe):
+    # which of the run's flags the installed Claude Code knows, from its --help; kept until the program changes
+    # (an update replaces it). {'version', 'missing': [flags], 'restricted'}; missing None when --help didn't answer
+    try:
+        real = os.path.realpath(exe); s = os.stat(real); key = (real, s.st_mtime, s.st_size)
+    except OSError: key = (exe,)
+    with _run_lock:
+        if _run.get('flagsKey') == key: return _run['flags']
+    out = {'version': None, 'missing': None, 'restricted': False}
+    try:
+        h = subprocess.run([exe, '--help'], capture_output=True, text=True, timeout=30, env=claude_env(), cwd=os.path.dirname(WEB),
+                           stdin=subprocess.DEVNULL)
+        text = (h.stdout or '') + (h.stderr or '')
+        if h.returncode == 0 and '--print' in text:
+            out['missing'] = [f for f in RUN_NEED if not help_has(text, f)]
+            out['restricted'] = help_has(text, RUN_EXTRA)
+        v = subprocess.run([exe, '--version'], capture_output=True, text=True, timeout=30, env=claude_env(), cwd=os.path.dirname(WEB),
+                           stdin=subprocess.DEVNULL)
+        m = re.search(r'\d+\.\d+\.\d+', v.stdout or '')
+        out['version'] = m.group(0) if m else None
+    except Exception: pass
+    with _run_lock: _run['flagsKey'], _run['flags'] = key, out
+    return out
+
+
+def too_old(version, flags):
+    return (f'Claude Code {version or "(version unknown)"} on this computer is too old for the card updates: it has no '
+            + ', '.join(flags) + '. System tab, Update Claude Code')
 
 
 def utc_now(): return datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
@@ -700,8 +744,11 @@ def run_status(check=False):
         out = {'on': bool(st.get('on')), 'claude': bool(exe), 'signedIn': signed_in(check) if exe else None,
                'running': _run['proc'] is not None, 'started': st.get('started') if _run['proc'] else None,
                'queued': _run['queue'] is not None, 'checking': _run['gate'] is not None,
-               'last': st.get('last'), 'runs': today.get('n', 0) if today.get('date') == utc_now()[:10] else 0, 'cap': RUN_CAP,
+               'last': st.get('last'), 'tooOld': None, 'runs': today.get('n', 0) if today.get('date') == utc_now()[:10] else 0, 'cap': RUN_CAP,
                'digests': st.get('digests') or {}}
+    if exe and out['signedIn']:
+        f = claude_flags(exe)
+        if f['missing']: out['tooOld'] = {'version': f['version'], 'missing': f['missing']}
     return out
 
 
@@ -750,6 +797,8 @@ def run_start(job):
     exe = claude_exe()
     if not exe: return last('Claude Code is not installed on this computer (System tab: Connect)')
     if sync_off(): return last('sync is off on this computer: the cards are checked online, so turn sync on')
+    flags = claude_flags(exe)
+    if flags['missing']: return last(too_old(flags['version'], flags['missing']))
     day = utc_now()[:10]
     today = st.get('today') if (st.get('today') or {}).get('date') == day else {'date': day, 'n': 0}
     if today['n'] >= RUN_CAP and job.get('why') != 'refused': return last(f'{RUN_CAP} runs today already: the next one waits for tomorrow (UTC)')
@@ -759,7 +808,8 @@ def run_start(job):
     if job.get('why') != 'refused': cards_now()
     write_json(os.path.join(RUN_DIR, 'run.json'), {'schema': 1, 'now': utc_now(), 'why': job.get('why'), 'wake': job.get('wake'),
                                                    'refusal': job.get('refusal'), 'fix': job.get('fixes', 0)})
-    args = [exe, '-p', RUN_FIX if job.get('resume') else RUN_PROMPT] + RUN_ARGS + (['--resume', job['resume']] if job.get('resume') else [])
+    args = ([exe, '-p', RUN_FIX if job.get('resume') else RUN_PROMPT] + ([RUN_EXTRA] if flags['restricted'] else []) + RUN_ARGS
+            + (['--resume', job['resume']] if job.get('resume') else []))
     out = open(os.path.join(RUN_DIR, 'out.json'), 'w', encoding='utf-8')
     err = open(os.path.join(RUN_DIR, 'err.txt'), 'w', encoding='utf-8')
     try:
@@ -770,6 +820,7 @@ def run_start(job):
         return last(f'Claude Code did not start: {e}')
     today['n'] += 1
     st['today'], st['started'] = today, utc_now()
+    st['claude'] = {'version': flags['version'], 'restricted': flags['restricted']}
     run_save(st)
     with _run_lock: _run.update(proc=proc, job=job, started=time.time(), files=(out, err))
     print(f'claude run started ({job.get("why")})', flush=True)
@@ -810,7 +861,13 @@ def run_finish():
             last['error'] = f'the cards Claude wrote were not used ({e})'
             os.replace(draft, os.path.join(CARDS_DIR, 'cards.draft.bad.json'))
     elif proc.returncode != 0 or res.get('is_error'):
-        last['error'] = 'signed out of Claude: System tab, Connect' if signed_out else ('Claude stopped: ' + (str(res.get('result') or err).strip()[:300] or f'exit {proc.returncode}'))
+        unknown = re.findall(r"unknown option '([^']+)'", err)
+        if unknown:
+            # --help named it but the run didn't take it: ask again before the next run
+            with _run_lock: _run['flagsKey'] = None
+            last['error'] = too_old((run_state().get('claude') or {}).get('version'), unknown)
+        elif signed_out: last['error'] = 'signed out of Claude: System tab, Connect'
+        else: last['error'] = 'Claude stopped: ' + (str(res.get('result') or err).strip()[:300] or f'exit {proc.returncode}')
     last['ok'], last['wrote'] = 'error' not in last, wrote
     st = run_state(); st['last'] = last; run_save(st)
     with _run_lock:
@@ -880,13 +937,16 @@ def claude_connect():
     exe = claude_exe()
     if sys.platform == 'darwin':
         import shlex
-        login = (shlex.quote(exe) if exe else '~/.local/bin/claude') + ' auth login'
-        cmd = ('echo "Claude Companion: signing in to Claude, for the cards updates."; ' +
-               ('' if exe else 'curl -fsSL https://claude.ai/install.sh | bash && ') + login)
+        # installed: update it first (a version without a flag the run needs gets no run: claude_flags); the sign-in
+        # only when it isn't signed in
+        signed = bool(exe) and signed_in(True)
+        login = '' if signed else (shlex.quote(exe) if exe else '~/.local/bin/claude') + ' auth login'
+        cmd = ('echo "Claude Companion: ' + ('updating Claude Code' if signed else 'signing in to Claude') + ', for the cards updates."; ' +
+               (shlex.quote(exe) + ' update; ' if exe else 'curl -fsSL https://claude.ai/install.sh | bash && ') + login)
         subprocess.Popen(['osascript', '-e', f'tell application "Terminal" to do script {json.dumps(cmd)}', '-e', 'tell application "Terminal" to activate'])
-        with _run_lock: _run['signedAt'] = 0.0
+        with _run_lock: _run['signedAt'], _run['flagsKey'] = 0.0, None
         return {'ok': True}
-    return {'ok': False, 'error': 'Open a terminal and run: ' + ('claude auth login' if exe else 'curl -fsSL https://claude.ai/install.sh | bash, then claude auth login')}
+    return {'ok': False, 'error': 'Open a terminal and run: ' + ('claude update, then claude auth login' if exe else 'curl -fsSL https://claude.ai/install.sh | bash, then claude auth login')}
 
 
 def claude_post(body):

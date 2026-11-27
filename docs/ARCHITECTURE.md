@@ -195,8 +195,9 @@ saves the player's done / dismissed / ticked steps to `from-claude/state.json` a
 **Claude updates your cards after each save** (#169, opt-in per computer). The page tells the local server about
 each save (`js/runner.js`: the save's digest and, when `js/cardsteps.js` `worthRun` says the change matters, every
 card as written); the server (`server.py` / `server.ps1`, the same flags, checked by `test/contract.test.js`) starts
-the player's own `claude -p` in the addon folder, `--restricted` to reading the folder and writing
-`companion-data/from-claude/`, with `claude/REFRESH.md` as its instructions. Its `cards.draft.json` becomes
+the player's own `claude -p` in the addon folder, limited to reading the folder and writing
+`companion-data/from-claude/` (`RUN_ARGS`, each flag checked against `claude --help` first; `--restricted` on top where
+the installed Claude Code has it), with `claude/REFRESH.md` as its instructions. Its `cards.draft.json` becomes
 `cards.json`, and the page sends that through the gate (`js/sync.js` `pushCards`, `public.cc_put_cards`); the
 server reads the answer from `from-claude/state.json` `upload` and sends a refusal back to the same session
 (`--resume`). The hidden browser (above) sends it when no app window is open. State: `companion-data/claude-run/`.
