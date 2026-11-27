@@ -385,6 +385,8 @@
         CC.wakeNames = (k, id) => (k === 'quest' ? ((GD.quests || {})[id] || {}).t || null : A.anyItemName(id, null));
       } catch (e) { console.warn('wake digest', e); CC.lastDigest = null; }
       if (CC.syncNow) CC.syncNow();
+      // and to this computer's background Claude, if it is on (js/runner.js)
+      if (CC.claudeRun && CC.lastDigest) CC.claudeRun(CC.lastDigest).catch((e) => console.warn('claude run', e));
     }, 500);
   };
   document.addEventListener('cc:loaded', write);
