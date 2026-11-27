@@ -12,9 +12,11 @@ if [ -d questiedb/.git ]; then git -C questiedb pull -q --ff-only
 else GIT_LFS_SKIP_SMUDGE=1 git clone -q --depth 1 https://github.com/Questie/questiedb questiedb; fi
 python3 -I "$HERE/export_questie.py" questiedb out
 
-echo "2/9 ForeverDB (icons, drop chances, reward split)"
+echo "2/9 ForeverDB (icons, drop chances, reward split, Forever's enchanting recipes)"
 B=https://foreverdb.net/data
 { for f in items vendors zones; do echo "url = $B/$f.json"; echo "output = raw/fdb/$f.json"; done
+  # Forever's own enchanting recipes: the formulas it added (Enchant Necklace - Healing Power) and the reagents it changed (#175)
+  mkdir -p raw/fdb/professions; echo "url = $B/professions/enchanting.json"; echo "output = raw/fdb/professions/enchanting.json"
   for d in sources questguides; do mkdir -p raw/fdb/$d
     for i in $(seq 0 63); do echo "url = $B/$d/$i.json"; echo "output = raw/fdb/$d/$i.json"; done; done
 } > raw/fdb/list.txt

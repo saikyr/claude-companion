@@ -106,6 +106,17 @@ test("the game's short enchant names, number before or after, several stats at o
   assert.strictEqual(p('Enchanted: Mana Regen 4 per 5 sec.'), '{"43":4}');
   assert.strictEqual(p('Enchanted: +2% Block'), '{"120":2}');
 });
+test("Forever's own formula words (#175): healing and spell damage apart, spell power by, defense skill, ForeverDB's short text", () => {
+  const p = (t) => JSON.stringify(E.parse(t).st);
+  assert.strictEqual(p('increase Healing Power by up to 100 and Spell Damage by up to 34.'), '{"41":100,"42":34}');
+  assert.strictEqual(p('increase Spell Power by 65.'), '{"45":65}');
+  assert.strictEqual(p('increase Spell Damage and Healing by up to 6.'), '{"45":6}');
+  assert.strictEqual(p('give +6 Intellect and +5 Spirit.'), '{"5":6,"6":5}');
+  assert.strictEqual(p('Healing Spells +11, Damage Spells +4'), '{"41":11,"42":4}');
+  assert.strictEqual(E.parse('give +5 Defense Skill.').effect, false, 'defense skill is the stat, not a skill effect');
+  assert.strictEqual(JSON.stringify(E.nameFit('Formula: Enchant Necklace - Healing Power')), '[4,0,4]');
+  assert.strictEqual(JSON.stringify(E.nameFit('Enchant Off-hand - Wisdom')), '[-1,0,8388608]');
+});
 test('a name-only line the Classic data names otherwise is renamed on Forever, not given Classic numbers', () => {
   const saved = CH.professions; CH.professions = {};
   const r = E.info(913, 'Superior Intellect');

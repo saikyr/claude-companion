@@ -134,6 +134,16 @@ bad = [k for k, v in EN.items() if not (len(v) == 4 and v[0] and (v[2] or v[3]) 
 check(not bad and len(EN) > 140 and not [v for v in EN.values() if re.match(r'(QA|Test |zz)', v[0])],
       f">140 enchants, each applied by a pack recipe or item, no test enchants ({len(EN)}; {len(bad)} bad, e.g. {bad[:3]})")
 
+# Forever's own enchanting recipes (#175): Enchant Necklace - Healing Power (spell 1249058), taught by its formula 249503, with
+# ForeverDB's reagents. A pack built before #175 has no fench: the next weekly rebuild adds it.
+if 'fench' in G:
+    FE = G['fench']
+    nh = FE.get('1249058') or []
+    check(len(nh) == 6 and nh[0] == 'Enchant Necklace - Healing Power' and 249503 in nh[2] and len(nh[3]) >= 3 and 'Healing' in nh[1],
+          f"fench: Enchant Necklace - Healing Power, its formula, Forever's reagents and text ({nh})")
+    check(len(FE) > 50 and not [k for k, v in FE.items() if not (len(v) == 6 and v[0].startswith('Enchant ') and all(len(x) == 2 for x in v[3]))],
+          f"fench: >50 enchanting recipes, each with its reagents as [item, count] ({len(FE)})")
+
 # what a vendor asks besides gold (#151): Forever's Formula: Enchant 2H Weapon - Mighty Healing Power (249526) sells for 240 Merchant's
 # Favor, at Honored with each side's trade faction (Alynsia, Alliance; Beneris, Horde); a row with a cost shows no gold price
 VD = {v[0]: v for v in (G.get('vend') or {}).get('249526') or []}
