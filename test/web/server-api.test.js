@@ -69,6 +69,8 @@ const post = (u, body, h) => fetch(base + u, { method: 'POST', headers: Object.a
 
   // Claude updates the cards after a save (#169), with test/fixtures/fake-claude.js as Claude Code (CC_CLAUDE)
   const run = path.join(dataDir, 'claude-run'), fromClaude = path.join(dataDir, 'from-claude');
+  const fakeCfg = path.join(require('os').tmpdir(), 'cc-fake-claude-cfg'), calls = () => { try { return fs.readFileSync(path.join(fakeCfg, 'calls.txt'), 'utf8').split('\n').filter(Boolean); } catch (e) { return []; } };
+  fs.rmSync(fakeCfg, { recursive: true, force: true });   // the CI job starts the server before this test: its first auth status is counted below
   const cstat = async (q) => (await get('api/claude' + (q || ''))).json();
   const cpost = async (o) => post('api/claude', JSON.stringify(o));
   const until = async (ok, secs) => { for (let i = 0; i < (secs || 40); i++) { const st = await cstat(); if (ok(st)) return st; await new Promise((r) => setTimeout(r, 1000)); } return cstat(); };
@@ -149,8 +151,10 @@ const post = (u, body, h) => fetch(base + u, { method: 'POST', headers: Object.a
   };
   await asVersion('old');
   let n = cs.runs;
+  const updates = calls().filter((c) => c === 'update').length;
   await cpost({ action: 'run' });
   cs = await until((st) => st.runs === n + 1 && st.last && st.last.why === 'asked' && !st.running);
+  check(calls().filter((c) => c === 'update').length === updates + 1, 'an older Claude Code than 2.1.317 is updated first (claude update, once), then the run goes');
   const oldArgs = JSON.parse(fs.readFileSync(path.join(run, 'fake-args.json'), 'utf8')).args;
   check(cs.last.code === 0 && !oldArgs.includes('--restricted') && oldArgs.includes('--setting-sources=') && oldArgs.includes('dontAsk') && !cs.tooOld,
     `a Claude Code without --restricted still runs, with the same limits from the flags it has (${oldArgs.join(' ')})`);
@@ -167,6 +171,21 @@ const post = (u, body, h) => fetch(base + u, { method: 'POST', headers: Object.a
   cs = await until((st) => st.runs === n + 1 && st.last && !st.running && /too old/.test(st.last.error || ''));
   check(/has no --restricted/.test(cs.last.error) && !cs.tooOld, `a run that stops at an unknown option says so plainly (${cs.last.error})`);
   await asVersion('');
+  // the sign-in expired (Claude Code: "401 OAuth access token has expired"): Reconnect, and no runs until it changes
+  fs.writeFileSync(path.join(run, 'fake-auth'), '1');
+  n = cs.runs;
+  await cpost({ action: 'run' });
+  cs = await until((st) => st.signin && !st.running);
+  check(cs.signedIn === false && cs.signin && cs.signin.needed && /access token has expired/.test(cs.signin.why) && /Reconnect/.test(cs.last.error || ''),
+    `a run that can't sign in: the System tab says Reconnect, not the raw error (${cs.last.error})`);
+  await cpost({ action: 'run' });
+  cs = await until((st) => st.last && st.runs === n + 1 && !st.running && st.last.code === undefined, 10);
+  check(cs.runs === n + 1 && /Reconnect/.test(cs.last.error || ''), 'and no run starts until the sign-in changes');
+  fs.rmSync(path.join(run, 'fake-auth'));
+  fs.mkdirSync(fakeCfg, { recursive: true }); fs.writeFileSync(path.join(fakeCfg, '.credentials.json'), '{}');
+  cs = await cstat();
+  check(cs.signedIn === true && !cs.signin, 'signed in again (the stored sign-in changed): back on');
+  check(calls().filter((c) => c === 'auth status').length <= 2, `claude auth status ran ${calls().filter((c) => c === 'auth status').length} time(s) in the whole test: never on every status`);
   await cpost({ action: 'off' });
   console.log(failed ? `\n${failed} FAILED` : '\nall passed');
   process.exit(failed ? 1 : 0);
