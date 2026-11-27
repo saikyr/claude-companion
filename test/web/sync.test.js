@@ -253,6 +253,29 @@ async function main() {
     let forged = false;
     try { await B.fetch(S.CONFIG.url + '/rest/v1/rpc/cc_push', { body: JSON.stringify({ p_key: pc.files.state && JSON.parse(pc.files.state).key, p_records: [{ id: 'snapshot|someone-else', char: '*', kind: 'snapshot', t: 1, data: { big: huge }, mutable: true }] }) }).then(async (r) => { if (!r.ok) throw new Error(await r.text()); }); } catch (e) { forged = /bad record/.test(e.message); }
     check(forged, 'a big record must be this computer\'s own snapshot');
+    // a long session or run carries every item looted (27 Nov: one save held a tracker over 64 KB, refused, and every
+    // newer record waited behind it): trackers up to 1 MB; a record the backend still refuses is named and set aside
+    {
+      const big = computer(B.fetch, 'Long', 'pc');
+      const db = clone(base), c = db.chars[key], t0 = 1796000000;
+      c.runs = [{ start: t0, name: 'Blackrock Depths', groupLoot: Array.from({ length: 3000 }, (_, i) => ({ t: t0 + i, item: 'Item ' + i, who: 'Someone-Server' })) }];
+      c.notes = [{ t: t0 + 5, text: 'n'.repeat(70000) }];
+      c.journal = [...arrOf(c.journal), { t: t0 + 10, e: 'login' }];
+      await sync(big, db, null);
+      const dev = big.client.state.device, st = big.client.status;
+      check(Number(B.query(`select octet_length(data::text) from public.records where device_id = '${dev}' and kind = 'run'`)) > 65536,
+        'a dungeon run over 64 KB is taken (trackers up to 1 MB)');
+      check(B.query(`select count(*) from public.records where device_id = '${dev}' and kind = 'journal' and t = ${t0 + 10}`) === '1' &&
+        B.query(`select count(*) from public.records where device_id = '${dev}' and kind = 'note'`) === '0',
+        'a record the backend refuses is set aside, and everything newer still goes');
+      check(st.ok !== false && st.refused.length === 1 && st.refused[0].kind === 'note' && /data is \d+ bytes, at most 65536 for note/.test(st.refused[0].why),
+        `the System tab is told which record and why (${JSON.stringify(st.refused.map((r) => r.why))})`);
+      const sentAgain = [];
+      const counting = computer(async (u, o) => { if (/cc_push/.test(u)) sentAgain.push(...JSON.parse(o.body).p_records.map((r) => r.kind)); return B.fetch(u, o); }, 'x', 'pc');
+      counting.files.state = big.files.state;
+      await counting.client.push(db, null);
+      check(!sentAgain.includes('note'), 'and it is not sent again while it is unchanged');
+    }
     let closed = 0;
     for (const sql of ['select count(*) from public.records', 'select count(*) from public.accounts', 'select count(*) from private.link_codes', "insert into public.records(account_id,id,char_key,kind,data) values (gen_random_uuid(),'x','x','x','{}')"]) {
       try { B.query('set role anon; ' + sql); } catch (e) { closed++; }

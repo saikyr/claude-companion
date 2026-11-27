@@ -111,7 +111,8 @@ sent" and goes when it's turned back on. What was already online stays online.
 `search_path`), which check the device key. The app ships only the publishable key. The Supabase
 advisor lists those functions as "callable without signing in" (by design: the device key is the
 credential) and "RLS enabled, no policy" (by design: no direct table access). Limits per call: 1000
-records, 64 KB per record; 2 million records per account (a counter on the account); new computers:
+records, 64 KB per record (a session, grind or run 1 MB, a snapshot or `now` 2 MB; a refused record is named,
+`bad record <id>: <why>`, and the app sets it aside and sends the rest, `js/sync.js`); 2 million records per account (a counter on the account); new computers:
 20 an hour per IP, 5000 an hour in all. The IP is Cloudflare's `cf-connecting-ip`, which Cloudflare sets
 itself (seen in the project's edge logs), not the caller. The API roles have no table grants at all.
 An account marked `retired` is closed: its computers' calls are refused and Claude's view leaves it out.
