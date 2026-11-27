@@ -116,7 +116,9 @@ Wowhead) appears. Fix what it names; never reword around it.
 line) must print `ok` before an answer with numbers, rates, gold or plans is sent.
 
 - Online (owner): `select private.claude_put_setting('<account>', 'cc.claude.cards', '<the cards.json text>');`
-  Every computer of the account shows them at its next sync. Only that key can be written.
+  Every computer of the account shows them at its next sync. Only that key can be written. It replaces the whole
+  list, and the app's own background Claude (System tab, "Claude updates your cards", #169) also writes cards after
+  each save: read the stored list right before you write, and keep every card you don't change.
 - On one computer (a friend): write `companion-data/from-claude/cards.json` (temp file, then rename).
 - What the player did with them: `select data->>'v' from private.history where account = '<account>' and id = 'setting|cc.claude.cardsState';`
   (or `from-claude/state.json`). Claude reads it, never writes it. Easier: the snapshot's `cards[]` (every step done or not, by whom, and its

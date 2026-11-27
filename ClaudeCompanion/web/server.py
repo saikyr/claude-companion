@@ -8,6 +8,7 @@
 #                            /api/sync  /api/sync-cache  (+ POST): js/sync.js's device key and its copy of the
 #                            other computers' history, in companion-data/ (sync.json, sync-cache.json)
 #                            /api/combatlog (the game's combat log, read only)  /api/combat (+ POST): js/combatlog.js's counts
+#                            /api/claude (+ POST): Claude updating the cards after a save, in the background (#169)
 # It serves the app and reads the game's saved file (ClaudeCompanion.lua) directly.
 # The server itself only answers this computer. The page syncs history with the backend (js/sync.js).
 import glob, json, os, re, shutil, subprocess, sys, tempfile, threading, time, uuid, urllib.error, urllib.parse, urllib.request, webbrowser
@@ -116,6 +117,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, json.dumps(update_status(force='force=1' in self.path)), TYPES['.json'])
         if path == '/api/combatlog':
             return self.combatlog()
+        if path == '/api/claude':
+            return self.send(200, json.dumps(run_status(check='check=1' in self.path)), TYPES['.json'])
         if path in ('/api/cards', '/api/cards-state', '/api/settings', '/api/sync', '/api/sync-cache', '/api/combat'):
             f = {'/api/cards': os.path.join(CARDS_DIR, 'cards.json'), '/api/cards-state': os.path.join(CARDS_DIR, 'state.json'),
                  '/api/settings': os.path.join(DATA_DIR, 'settings.json'), '/api/sync': os.path.join(DATA_DIR, 'sync.json'),
@@ -174,9 +177,16 @@ class Handler(BaseHTTPRequestHandler):
             self.send(200, json.dumps(r), TYPES['.json'])
             if r.get('ok'): restart_soon()
             return
+        if self.path.split('?')[0] == '/api/claude':
+            if self.headers.get('X-CC') != '1' or n <= 0 or n > 2 * 1024 * 1024: return self.send(400, 'bad request')
+            try: body = json.loads(self.rfile.read(n).decode('utf-8'))
+            except ValueError: return self.send(400, 'bad request')
+            r = claude_post(body if isinstance(body, dict) else {})
+            return self.send(200, json.dumps(r), TYPES['.json']) if r is not None else self.send(400, 'bad request')
         target = {'/api/snapshot': (DATA_DIR, 'snapshot.json'), '/api/cards-state': (CARDS_DIR, 'state.json'),
                   '/api/settings': (DATA_DIR, 'settings.json'), '/api/sync': (DATA_DIR, 'sync.json'),
-                  '/api/sync-cache': (DATA_DIR, 'sync-cache.json'), '/api/combat': (DATA_DIR, 'combat.json')}.get(self.path.split('?')[0])
+                  '/api/sync-cache': (DATA_DIR, 'sync-cache.json'), '/api/combat': (DATA_DIR, 'combat.json'),
+                  '/api/claude-cards': (RUN_DIR, 'cards-now.json')}.get(self.path.split('?')[0])
         if not target or self.headers.get('X-CC') != '1' or n <= 0 or n > 20 * 1024 * 1024:
             return self.send(400, 'bad request')
         body = self.rfile.read(n)
@@ -604,7 +614,8 @@ def background_snapshot():
             if not save: continue
             stamp = stamp_of(save)
             # up to date, already tried, or saved under 10 s ago (an open app window writes it within seconds)
-            if not background_due(stamp, tried, snapshot_stamp(), PAGE['loaded'], time.time() - os.path.getmtime(save)): continue
+            forced = PAGE.pop('force', False)   # a Claude run wrote cards.json: a page has to send it (claude_runner)
+            if not forced and not background_due(stamp, tried, snapshot_stamp(), PAGE['loaded'], time.time() - os.path.getmtime(save)): continue
             tried = stamp
             exe = headless_browser()
             if not exe: continue
@@ -615,6 +626,278 @@ def background_snapshot():
             print(f'background snapshot for the save of {stamp}: ' + ('written' if snapshot_stamp() == stamp else 'not written'), flush=True)
         except Exception as e:
             print('background snapshot:', e, flush=True)
+
+
+# ---------------------------------------------------------------- Claude updates the cards (#169)
+# Opt-in, per computer (System tab). After a save whose change is worth it (js/cardsteps.js worthRun), the page
+# posts it here (POST /api/claude {action: 'save'}) and this server starts the player's own Claude Code, signed in
+# with their own Claude plan, in the background: `claude -p` in the addon folder with claude/REFRESH.md as its
+# instructions. It can read the folder and write only companion-data/from-claude/ (no commands, no web, no MCP
+# servers, no user or project settings: --restricted). It writes the whole card list to cards.draft.json; when it
+# exits, the draft becomes cards.json, the page sends that through the account's card gate (js/sync.js pushCards,
+# public.cc_put_cards) and saves the answer in from-claude/state.json `upload`. A refusal goes back to the same
+# Claude session (--resume) with what the gate said, at most twice. One run at a time; saves during a run give one
+# more run after it; at most RUN_CAP runs a day. The same in server.ps1 (test/web/server-api.test.js runs both).
+# Everything it keeps is in companion-data/claude-run/ (SCHEMA.md, "Claude updates the cards").
+RUN_DIR = os.path.join(DATA_DIR, 'claude-run')
+RUN_STATE = os.path.join(RUN_DIR, 'state.json')
+RUN_CAP, RUN_TIMEOUT, RUN_FIXES, RUN_GATE_WAIT, RUN_TURNS = 24, 15 * 60, 2, 180, 40
+RUN_PROMPT = 'The game saved. Follow claude/REFRESH.md exactly.'
+RUN_FIX = 'The card check refused your cards (now companion-data/from-claude/cards.json). Read companion-data/claude-run/run.json (refusal), fix exactly what it names, and write the whole list to companion-data/from-claude/cards.draft.json again.'
+RUN_ARGS = ['--restricted', '--strict-mcp-config', '--tools', 'Read,Glob,Grep,Write,Edit',
+            '--allowedTools', 'Read(./**)', 'Edit(./companion-data/from-claude/cards.draft.json)',
+            '--permission-mode', 'dontAsk', '--max-turns', str(RUN_TURNS), '--output-format', 'json']
+# a key in the environment would bill an API account instead of the player's plan (claude -p always uses one)
+RUN_ENV_DROP = ('ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN')
+_run = {'proc': None, 'job': None, 'started': 0.0, 'queue': None, 'gate': None, 'signed': None, 'signedAt': 0.0}
+_run_lock = threading.RLock()
+
+
+def claude_exe():
+    # CC_CLAUDE: only for tests. The installer puts it in ~/.local/bin and doesn't change PATH (nor does launchd's)
+    for p in (os.environ.get('CC_CLAUDE'), shutil.which('claude'), os.path.expanduser('~/.local/bin/claude')):
+        if p and os.path.isfile(p) and os.access(p, os.X_OK): return p
+    return None
+
+
+def claude_env():
+    env = dict(os.environ)
+    for k in RUN_ENV_DROP: env.pop(k, None)
+    return env
+
+
+def utc_now(): return datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+
+
+def run_state():
+    st = read_json(RUN_STATE, {})
+    return st if isinstance(st, dict) else {}
+
+
+def run_save(st): write_json(RUN_STATE, st)
+
+
+def signed_in(force=False):
+    # `claude auth status` says whether the player is signed in (cached a minute)
+    exe = claude_exe()
+    if not exe: return None
+    with _run_lock:
+        # force (the System tab, while it waits for the sign-in) only while not signed in
+        if not (force and _run['signed'] is not True) and time.time() - _run['signedAt'] < 60: return _run['signed']
+    try:
+        r = subprocess.run([exe, 'auth', 'status'], capture_output=True, text=True, timeout=10, env=claude_env())
+        ok = bool(json.loads(r.stdout or '{}').get('loggedIn')) and r.returncode == 0
+    except Exception: ok = False
+    with _run_lock: _run['signed'], _run['signedAt'] = ok, time.time()
+    return ok
+
+
+def run_status(check=False):
+    st = run_state()
+    exe = claude_exe()
+    today = st.get('today') or {}
+    with _run_lock:
+        out = {'on': bool(st.get('on')), 'claude': bool(exe), 'signedIn': signed_in(check) if exe else None,
+               'running': _run['proc'] is not None, 'started': st.get('started') if _run['proc'] else None,
+               'queued': _run['queue'] is not None, 'checking': _run['gate'] is not None,
+               'last': st.get('last'), 'runs': today.get('n', 0) if today.get('date') == utc_now()[:10] else 0, 'cap': RUN_CAP,
+               'digests': st.get('digests') or {}}
+    return out
+
+
+def sync_off():
+    return bool((read_json(os.path.join(DATA_DIR, 'sync.json'), {}) or {}).get('off'))
+
+
+def run_queue(job):
+    # one run waits at most: a newer save replaces what it carries (the run reads the newest snapshot anyway)
+    with _run_lock:
+        q = _run['queue']
+        if q and q.get('why') == 'refused' and job.get('why') != 'refused': return
+        _run['queue'] = job
+
+
+def cards_now():
+    # claude-run/cards-now.json, the list the run rewrites, as written by the page at the save; then cards.json on top,
+    # card by card where it is newer (`updated`): a run that ended after the page wrote the list (one queued behind
+    # it) starts from the cards that run wrote, not from the list before them
+    path = os.path.join(RUN_DIR, 'cards-now.json')
+    now = read_json(path, None)
+    if not (isinstance(now, dict) and isinstance(now.get('cards'), list)): return None
+    mine = read_json(os.path.join(CARDS_DIR, 'cards.json'), None)
+    mine = [c for c in (mine.get('cards') if isinstance(mine, dict) else None) or [] if isinstance(c, dict) and c.get('id')]
+    if not mine: return now
+    at = {c.get('id'): i for i, c in enumerate(now['cards']) if isinstance(c, dict)}
+    changed = False
+    for c in mine:
+        i = at.get(c['id'])
+        if i is None: now['cards'].append(c); changed = True
+        elif str(c.get('updated') or '') > str(now['cards'][i].get('updated') or ''): now['cards'][i] = c; changed = True
+    if changed: write_json(path, now)
+    return now
+
+
+def card_ids(d): return {c.get('id') for c in d['cards'] if isinstance(c, dict)}
+
+
+def run_start(job):
+    st = run_state()
+
+    def last(why):   # not started, and why
+        st['last'] = {'at': utc_now(), 'ok': False, 'why': job.get('why'), 'error': why}
+        run_save(st)
+    if not st.get('on'): return
+    exe = claude_exe()
+    if not exe: return last('Claude Code is not installed on this computer (System tab: Connect)')
+    if sync_off(): return last('sync is off on this computer: the cards are checked online, so turn sync on')
+    day = utc_now()[:10]
+    today = st.get('today') if (st.get('today') or {}).get('date') == day else {'date': day, 'n': 0}
+    if today['n'] >= RUN_CAP and job.get('why') != 'refused': return last(f'{RUN_CAP} runs today already: the next one waits for tomorrow (UTC)')
+    os.makedirs(RUN_DIR, exist_ok=True)
+    draft = os.path.join(CARDS_DIR, 'cards.draft.json')
+    if job.get('why') != 'refused' and os.path.exists(draft): os.remove(draft)
+    if job.get('why') != 'refused': cards_now()
+    write_json(os.path.join(RUN_DIR, 'run.json'), {'schema': 1, 'now': utc_now(), 'why': job.get('why'), 'wake': job.get('wake'),
+                                                   'refusal': job.get('refusal'), 'fix': job.get('fixes', 0)})
+    args = [exe, '-p', RUN_FIX if job.get('resume') else RUN_PROMPT] + RUN_ARGS + (['--resume', job['resume']] if job.get('resume') else [])
+    out = open(os.path.join(RUN_DIR, 'out.json'), 'w', encoding='utf-8')
+    err = open(os.path.join(RUN_DIR, 'err.txt'), 'w', encoding='utf-8')
+    try:
+        proc = subprocess.Popen(args, cwd=os.path.dirname(WEB), env=claude_env(), stdin=subprocess.DEVNULL, stdout=out, stderr=err,
+                                start_new_session=(os.name != 'nt'))
+    except OSError as e:
+        out.close(); err.close()
+        return last(f'Claude Code did not start: {e}')
+    today['n'] += 1
+    st['today'], st['started'] = today, utc_now()
+    run_save(st)
+    with _run_lock: _run.update(proc=proc, job=job, started=time.time(), files=(out, err))
+    print(f'claude run started ({job.get("why")})', flush=True)
+
+
+def run_finish():
+    with _run_lock:
+        proc, job, files = _run['proc'], _run['job'], _run.get('files')
+    for f in files or (): f.close()
+    res = read_json(os.path.join(RUN_DIR, 'out.json'), None)
+    res = res if isinstance(res, dict) else {}
+    try:
+        with open(os.path.join(RUN_DIR, 'err.txt'), encoding='utf-8', errors='replace') as f: err = f.read()[-2000:]
+    except OSError: err = ''
+    text = (str(res.get('result') or '') + ' ' + err).lower()
+    last = {'at': utc_now(), 'started': run_state().get('started'), 'why': job.get('why'), 'code': proc.returncode,
+            'session': res.get('session_id'), 'turns': res.get('num_turns'), 'denied': len(res.get('permission_denials') or [])}
+    signed_out = any(x in text for x in ('/login', 'not logged in', 'login expired', 'invalid api key', 'oauth token'))
+    draft, wrote = os.path.join(CARDS_DIR, 'cards.draft.json'), False
+    if proc.returncode == 0 and not res.get('is_error') and os.path.exists(draft):
+        try:
+            with open(draft, encoding='utf-8') as f: d = json.load(f)
+            if not (isinstance(d, dict) and isinstance(d.get('cards'), list)): raise ValueError('no cards list')
+            # a card left out would be taken off every computer: every card the run was given must still be there
+            given = read_json(os.path.join(RUN_DIR, 'cards-now.json'), None)
+            if isinstance(given, dict) and isinstance(given.get('cards'), list):
+                gone = card_ids(given) - card_ids(d)
+                if gone: raise ValueError('it left out %d card%s' % (len(gone), '' if len(gone) == 1 else 's'))
+            target = os.path.join(CARDS_DIR, 'cards.json')
+            with open(draft, 'rb') as f: new_bytes = f.read()
+            try:
+                with open(target, 'rb') as f: same = f.read() == new_bytes
+            except OSError: same = False
+            os.replace(draft, target)
+            wrote, last['cards'] = not same, len(d['cards'])
+            if same: last['gate'] = 'no change'
+        except (OSError, ValueError) as e:
+            last['error'] = f'the cards Claude wrote were not used ({e})'
+            os.replace(draft, os.path.join(CARDS_DIR, 'cards.draft.bad.json'))
+    elif proc.returncode != 0 or res.get('is_error'):
+        last['error'] = 'signed out of Claude: System tab, Connect' if signed_out else ('Claude stopped: ' + (str(res.get('result') or err).strip()[:300] or f'exit {proc.returncode}'))
+    last['ok'], last['wrote'] = 'error' not in last, wrote
+    st = run_state(); st['last'] = last; run_save(st)
+    with _run_lock:
+        _run.update(proc=None, job=None, files=None)
+        if signed_out: _run['signed'], _run['signedAt'] = False, time.time()
+        if wrote:
+            # the page sends the new file through the gate; no window open: the hidden browser does it
+            _run['gate'] = {'since': last['at'], 'until': time.time() + RUN_GATE_WAIT, 'session': last['session'], 'fixes': job.get('fixes', 0)}
+            PAGE['force'] = True
+    print(f'claude run ended: {last}', flush=True)
+
+
+def run_gate():
+    # how the gate took the new cards.json: from-claude/state.json `upload`, written by the page after the send
+    with _run_lock: g = _run['gate']
+    if not g: return
+    up = (read_json(os.path.join(CARDS_DIR, 'state.json'), {}) or {}).get('upload') or {}
+    fresh = isinstance(up, dict) and str(up.get('at') or '') >= g['since'].replace('Z', '')[:19]
+    if not fresh:
+        if time.time() > g['until']:
+            st = run_state(); (st.get('last') or {})['gate'] = 'not sent yet: it goes with the next sync'; run_save(st)
+            with _run_lock: _run['gate'] = None
+        return
+    with _run_lock: _run['gate'] = None
+    st = run_state(); last = st.get('last') or {}
+    last['gate'] = 'ok' if up.get('ok') else ('refused: ' + str(up.get('error') or '')[:500]) if up.get('refused') else 'not sent: ' + str(up.get('error') or '')[:300]
+    run_save(st)
+    if up.get('refused') and g['session'] and g['fixes'] < RUN_FIXES:
+        run_queue({'why': 'refused', 'refusal': up.get('error'), 'resume': g['session'], 'fixes': g['fixes'] + 1})
+
+
+def claude_runner():
+    while True:
+        time.sleep(2)
+        try:
+            with _run_lock: proc, started = _run['proc'], _run['started']
+            if proc is not None:
+                if proc.poll() is None:
+                    if time.time() - started > RUN_TIMEOUT: proc.kill()
+                    continue
+                run_finish()
+            run_gate()
+            with _run_lock:
+                job = _run['queue'] if _run['gate'] is None else None
+                if job: _run['queue'] = None
+            if job: run_start(job)
+        except Exception as e:
+            print('claude run:', e, flush=True)
+
+
+def run_save_digest(body):
+    # the page's news after a save: this character's digest (kept for the next save's change) and whether the change
+    # is worth a run. Before it, the page wrote every card it has to claude-run/cards-now.json (POST /api/claude-cards,
+    # as it is: Claude rewrites that list)
+    st = run_state()
+    name, digest = body.get('name'), body.get('digest')
+    if not name or not isinstance(digest, dict): return
+    digests = st.get('digests') if isinstance(st.get('digests'), dict) else {}
+    prev = digests.get(name) or {}
+    if (digest.get('t') or 0) <= (prev.get('t') or 0): return   # another window already told this save
+    digests[name] = digest; st['digests'] = digests; run_save(st)
+    if body.get('worth') and st.get('on'): run_queue({'why': 'save', 'wake': body.get('wake')})
+
+
+def claude_connect():
+    # the player's own sign-in, in a window they can see: install Claude Code first if it isn't here
+    exe = claude_exe()
+    if sys.platform == 'darwin':
+        import shlex
+        login = (shlex.quote(exe) if exe else '~/.local/bin/claude') + ' auth login'
+        cmd = ('echo "Claude Companion: signing in to Claude, for the cards updates."; ' +
+               ('' if exe else 'curl -fsSL https://claude.ai/install.sh | bash && ') + login)
+        subprocess.Popen(['osascript', '-e', f'tell application "Terminal" to do script {json.dumps(cmd)}', '-e', 'tell application "Terminal" to activate'])
+        with _run_lock: _run['signedAt'] = 0.0
+        return {'ok': True}
+    return {'ok': False, 'error': 'Open a terminal and run: ' + ('claude auth login' if exe else 'curl -fsSL https://claude.ai/install.sh | bash, then claude auth login')}
+
+
+def claude_post(body):
+    a = body.get('action')
+    if a in ('on', 'off'):
+        st = run_state(); st['on'] = a == 'on'; run_save(st)
+    elif a == 'connect': return claude_connect()
+    elif a == 'run': run_queue({'why': 'asked'})
+    elif a == 'save': run_save_digest(body)
+    else: return None
+    return run_status()
 
 
 def serve(open_after):
@@ -631,6 +914,7 @@ def serve(open_after):
     if os.environ.get('CC_BACKGROUND') != '0':          # CC_BACKGROUND=0: only for tests (no hidden browser)
         threading.Thread(target=background_snapshot, daemon=True).start()
     threading.Thread(target=auto_update, daemon=True).start()
+    threading.Thread(target=claude_runner, daemon=True).start()
     if open_after: open_app()
     try: srv.serve_forever()
     except KeyboardInterrupt: pass

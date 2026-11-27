@@ -91,7 +91,9 @@ cards within 5 seconds.
    labels it (the % and the corpses, or Classic, or unknown). Never make up a src.
 3. Check it: `python3 claude/check-cards.py <your file>` must print `ok`: it also looks every `game.drop:` fact up in
    the game data. Fix what it names; never reword around it.
-4. Write it to a temporary file in `companion-data/from-claude/`, then rename it to `cards.json`.
+4. Write it to a temporary file in `companion-data/from-claude/`, then rename it to `cards.json`. Read `cards.json`
+   again right before: when "Claude updates your cards" is on (System tab), the player's own Claude also rewrites
+   it in the background after each save, following `claude/REFRESH.md`.
 
 Keep them easy to follow: a plan of several cards gets one `group` and each card an `order` (lowest first: the
 tab shows Start here, Next, After that). Give each step a `doneWhen` check where the save can prove it

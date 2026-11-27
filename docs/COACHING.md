@@ -73,8 +73,9 @@ numbers, rates, gold or plans go through `python3 tools/check-answer.py` first.
   or you, and each check now) and the `claude_wake` records since your last cards (quests done, items, level,
   rep, steps ticked, cards closed: SCHEMA.md, "What changed in game"). Never re-tick a step he unticked.
 
-**Hourly card refresh** (his pick, 26 Nov: cards rewrite themselves after he plays). Nothing in the app or
-the database wakes Claude when a save syncs, so the coaching project runs a scheduled task every hour
+**Hourly card refresh** (his pick, 26 Nov: cards rewrite themselves after he plays). Right after a save, the app's
+own background Claude rewrites the cards on a computer where "Claude updates your cards" is on (System tab, #169,
+FEATURES.md). As a backup for when no such computer is on, the coaching project runs a scheduled task every hour
 ("Hourly card refresh", in one dedicated coaching thread) that does this:
 1. The watermark is the larger of the `t` of his stored cards (`select t from private.history where account =
    '<account>' and id = 'setting|cc.claude.cards'`) and the `last_wake_t` line in project memory file
@@ -82,7 +83,8 @@ the database wakes Claude when a save syncs, so the coaching project runs a sche
 2. Read the saves since: `select t, at, data from private.history where account = '<account>' and kind =
    'claude_wake' and t > <watermark> order by t`. None: stop there, silently (no message, no checklist).
 3. Otherwise read the brief, the snapshot's `cards[]` and those records, and rewrite only the cards they
-   affect, as above (order, withdraw what no longer applies, keep ids, never re-tick a step he unticked).
+   affect, as above (order, withdraw what no longer applies, keep ids, never re-tick a step he unticked). Read the
+   stored list right before writing and keep every card you don't change: the app's background Claude writes too.
    The whole list passes `tools/check-cards.py` and goes through `claude_put_setting`; a refusal is fixed,
    never reworded around.
 4. Save `last_wake_t` = the newest record handled to `card-refresh.md`, also when no card needed a change.
