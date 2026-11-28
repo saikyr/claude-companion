@@ -73,20 +73,30 @@ numbers, rates, gold or plans go through `python3 tools/check-answer.py` first.
   or you, and each check now) and the `claude_wake` records since your last cards (quests done, items, level,
   rep, steps ticked, cards closed: SCHEMA.md, "What changed in game"). Never re-tick a step he unticked.
 
-**Hourly card refresh** (his pick, 26 Nov: cards rewrite themselves after he plays). Right after a save, the app's
-own background Claude rewrites the cards on a computer where "Claude updates your cards" is on (System tab, #169,
-FEATURES.md). As a backup for when no such computer is on, the coaching project runs a scheduled task every hour
-("Hourly card refresh", in one dedicated coaching thread) that does this:
+**Only this project writes his cards** (his pick, 28 Nov). The app no longer starts a Claude on his computers to
+rewrite them (removed in 1.5.0: that run had no game data, no card checker and none of these rules, and on 28 Nov
+it closed the finished Three Kings card and left no card for the next step). Between your writes the app does the
+mechanical part by itself: it ticks a step whose `doneWhen` check passes, closes a card when every step is done,
+and moves Start here to the lowest open `order`. Everything that needs judgment is yours. So:
+- **Write a plan whole.** When you start or change a plan, write the roadmap (Start here) with every step, and the
+  Now, Next and After that cards (Plan rule 6), each step with a `doneWhen` check wherever the save can prove it.
+  Then a closed card always has a successor waiting, even before the refresh below runs.
+- **Refill the plan when a card closes.** A `claude_wake` that shows a plan card closed (`closed`), or the roadmap
+  step it covered ticked, means the next step from the roadmap needs its card: write it with what makes it
+  playable (where, who drops it with the game data's labelled rate, the bring list), and withdraw what it replaces.
+
+**Hourly card refresh** (his pick, 26 Nov: cards rewrite themselves after he plays). The coaching project runs a
+scheduled task every hour ("Hourly card refresh", in one dedicated coaching thread) that does this:
 1. The watermark is the larger of the `t` of his stored cards (`select t from private.history where account =
    '<account>' and id = 'setting|cc.claude.cards'`) and the `last_wake_t` line in project memory file
    `card-refresh.md`.
 2. Read the saves since: `select t, at, data from private.history where account = '<account>' and kind =
    'claude_wake' and t > <watermark> order by t`. None: stop there, silently (no message, no checklist).
 3. Otherwise read the brief, the snapshot's `cards[]` and those records, and rewrite only the cards they
-   affect, as above (order, withdraw what no longer applies, keep ids, never re-tick a step he unticked). Read the
-   stored list right before writing and keep every card you don't change: the app's background Claude writes too.
-   The whole list passes `tools/check-cards.py` and goes through `claude_put_setting`; a refusal is fixed,
-   never reworded around.
+   affect, as above (refill the plan, order, withdraw what no longer applies, keep ids, never re-tick a step he
+   unticked). Read the stored list right before writing and keep every card you don't change: a coaching chat
+   may have written since. The whole list passes `tools/check-cards.py` and goes through `claude_put_setting`; a
+   refusal is fixed, never reworded around.
 4. Save `last_wake_t` = the newest record handled to `card-refresh.md`, also when no card needed a change.
 5. Only when a card changed, tell the coordinator in one line per card. Never ask him anything.
 
