@@ -1436,40 +1436,59 @@
       }
     });
     const med = (xs) => { if (!xs.length) return null; const v = xs.slice().sort((a, b) => a - b), m = v.length >> 1; return +(v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2).toFixed(1); };
+    // auctions that ended unsold, per item: the game's chat message ("Your auction of X has expired") and the mail the
+    // auction house returns it in (journal receive with mail.from expired / cancelled, #184). One auction can give
+    // both and either can be missing (the chat message isn't always sent), so per item the larger count stands
+    const since = lots.length ? lots[0].t : null, chat = {}, mail = {};
+    const add = (m, name, k, n) => { const r = m[name] || (m[name] = { expired: 0, cancelled: 0 }); r[k] += n; };
+    const linkName = (e) => (e.item && ITEMS[e.item] && ITEMS[e.item].name) || ((/\[(.+?)\]/.exec(e.link || '') || [])[1]) || e.name || null;
+    arr(journal).forEach((e) => {
+      if (!e || !since || e.t < since) return;
+      if (e.e === 'ahExpired' || e.e === 'ahRemoved') { if (e.name) add(chat, e.name, e.e === 'ahExpired' ? 'expired' : 'cancelled', 1); return; }
+      const from = e.e === 'receive' && e.mail && e.mail.from;
+      if (from === 'expired' || from === 'cancelled') { const n = linkName(e); if (n) add(mail, n, from, e.count || 1); }
+    });
+    const ended = {}, endedTot = { expired: 0, cancelled: 0 };
+    new Set(Object.keys(chat).concat(Object.keys(mail))).forEach((name) => {
+      ended[name] = {};
+      ['expired', 'cancelled'].forEach((k) => { const n = Math.max((chat[name] || {})[k] || 0, (mail[name] || {})[k] || 0); ended[name][k] = n; endedTot[k] += n; });
+    });
+    // each settled post's units left unsold are put against that item's unsold returns, oldest post first; what is left
+    // has no recorded outcome (no sale, no return: a gap in the record) and is unknown, never counted as not sold (#184)
+    const pool = {};
+    Object.entries(ended).forEach(([n, r]) => { pool[n] = r.expired + r.cancelled; });
     const by = {};
-    const tot = { posts: 0, units: 0, sold: 0, pending: 0, hours: [], worth10g: { units: 0, sold: 0 } };
+    const tot = { posts: 0, units: 0, sold: 0, pending: 0, unknown: 0, hours: [], worth10g: { units: 0, sold: 0, unknown: 0 } };
     lots.forEach((l) => {
       const settled = l.left === 0 || now - l.t > SELL_WINDOW;
-      const r = by[l.name] || (by[l.name] = { item: l.name, posts: 0, units: 0, sold: 0, pending: 0, hours: [], lastPost: 0, unit: 0 });
+      const r = by[l.name] || (by[l.name] = { item: l.name, posts: 0, units: 0, sold: 0, pending: 0, unknown: 0, hours: [], lastPost: 0, unit: 0 });
       r.lastPost = Math.max(r.lastPost, l.t); if (l.t === r.lastPost) r.unit = l.unit;
       if (!settled) { r.pending += l.left; tot.pending += l.left; r.sold += l.sold; r.hours.push(...l.hours); tot.sold += l.sold; tot.units += l.sold; r.units += l.sold; tot.hours.push(...l.hours); return; }
-      r.posts++; r.units += l.qty; r.sold += l.sold; r.hours.push(...l.hours);
-      tot.posts++; tot.units += l.qty; tot.sold += l.sold; tot.hours.push(...l.hours);
-      if (l.unit >= 100000) { tot.worth10g.units += l.qty; tot.worth10g.sold += l.sold; }
+      const back = Math.min(l.left, pool[l.name] || 0), unknown = l.left - back;
+      if (pool[l.name]) pool[l.name] -= back;
+      r.posts++; r.units += l.qty; r.sold += l.sold; r.unknown += unknown; r.hours.push(...l.hours);
+      tot.posts++; tot.units += l.qty; tot.sold += l.sold; tot.unknown += unknown; tot.hours.push(...l.hours);
+      if (l.unit >= 100000) { tot.worth10g.units += l.qty; tot.worth10g.sold += l.sold; tot.worth10g.unknown += unknown; }
     });
-    const since = lots.length ? lots[0].t : null, ended = { expired: 0, cancelled: 0 };
-    arr(journal).forEach((e) => {
-      if (!e || !since || e.t < since || (e.e !== 'ahExpired' && e.e !== 'ahRemoved')) return;
-      const k = e.e === 'ahExpired' ? 'expired' : 'cancelled';
-      ended[k]++;
-      if (by[e.name]) by[e.name][k] = (by[e.name][k] || 0) + 1;
-    });
+    // share: sold of the units whose outcome is known (sold, or returned expired or cancelled); unknown ones are left out
     const share = (a, b) => (b ? +(a / b).toFixed(2) : null);
-    const items = Object.values(by).map((r) => ({ item: r.item, posted: r.units, sold: r.sold, pending: r.pending, share: share(r.sold, r.units), medianHours: med(r.hours),
-      expired: r.expired || 0, cancelled: r.cancelled || 0, lastPost: r.lastPost, unit: r.unit }))
+    const items = Object.values(by).map((r) => ({ item: r.item, posted: r.units, sold: r.sold, pending: r.pending, unknown: r.unknown, known: r.units - r.unknown,
+      share: share(r.sold, r.units - r.unknown), medianHours: med(r.hours),
+      expired: (ended[r.item] || {}).expired || 0, cancelled: (ended[r.item] || {}).cancelled || 0, lastPost: r.lastPost, unit: r.unit }))
       .sort((a, b) => b.posted - a.posted || b.lastPost - a.lastPost);
     return { since, windowHours: SELL_WINDOW / 3600,
-      totals: { posted: tot.units, sold: tot.sold, pending: tot.pending, share: share(tot.sold, tot.units), medianHours: med(tot.hours), expired: ended.expired, cancelled: ended.cancelled,
-        worth10g: { posted: tot.worth10g.units, sold: tot.worth10g.sold, share: share(tot.worth10g.sold, tot.worth10g.units) } }, items };
+      totals: { posted: tot.units, sold: tot.sold, pending: tot.pending, unknown: tot.unknown, known: tot.units - tot.unknown, share: share(tot.sold, tot.units - tot.unknown), medianHours: med(tot.hours),
+        expired: endedTot.expired, cancelled: endedTot.cancelled,
+        worth10g: { posted: tot.worth10g.units, sold: tot.worth10g.sold, unknown: tot.worth10g.unknown, share: share(tot.worth10g.sold, tot.worth10g.units - tot.worth10g.unknown) } }, items };
   }
   function sellThroughView(ah) {
     const S = sellThrough(ah), T = S.totals;
     if (!S.items.length) return '';
     const pct = (x) => (x == null ? '–' : Math.round(x * 100) + '%');
-    let h = `<h2>Sell-through</h2><p class="meta">Of ${T.posted} units you posted (since ${fmtTime(S.since)}), ${T.sold} sold within ${S.windowHours} h: ${pct(T.share)}${T.medianHours != null ? `, typically ${T.medianHours} h after posting` : ''}${T.worth10g.posted ? ` · posted at 10g or more each: ${T.worth10g.sold} of ${T.worth10g.posted} sold (${pct(T.worth10g.share)})` : ''}${T.pending ? ` · ${T.pending} still listed, not counted yet` : ''}${T.expired || T.cancelled ? ` · auctions ended unsold: ${T.expired} expired, ${T.cancelled} cancelled` : ''}</p>`;
+    let h = `<h2>Sell-through</h2><p class="meta">Of ${T.posted} units you posted (since ${fmtTime(S.since)}), ${T.sold} sold within ${S.windowHours} h: ${pct(T.share)}${T.medianHours != null ? `, typically ${T.medianHours} h after posting` : ''}${T.worth10g.posted ? ` · posted at 10g or more each: ${T.worth10g.sold} of ${T.worth10g.posted} sold (${pct(T.worth10g.share)})` : ''}${T.pending ? ` · ${T.pending} still listed, not counted yet` : ''}${T.expired || T.cancelled ? ` · auctions ended unsold: ${T.expired} expired, ${T.cancelled} cancelled` : ''}${T.unknown ? ` · ${T.unknown} with no recorded outcome (no sale, no return mail): left out of the share` : ''}</p>`;
     h += `<div class="table sellthru"><div class="thead"><div>Item</div><div class="c-num">Posted</div><div class="c-num">Sold</div><div class="c-num">Share</div><div class="c-num">Hours to sell</div></div>`;
-    S.items.slice(0, 40).forEach((r) => (h += `<div class="tr"><div class="c-main"><div class="nm">${esc(r.item)}</div><div class="sub">last posted ${fmtTime(r.lastPost)} at ${money(r.unit)} each${r.pending ? ` · ${r.pending} still listed` : ''}${r.expired ? ` · ${r.expired} expired` : ''}${r.cancelled ? ` · ${r.cancelled} cancelled` : ''}</div></div><div class="c-num">${r.posted}</div><div class="c-num">${r.sold}</div><div class="c-num">${pct(r.share)}</div><div class="c-num dim">${r.medianHours == null ? '–' : r.medianHours}</div></div>`));
-    h += '</div><p class="meta">A post counts once it sold or 48 hours (the longest auction) have passed. Expired and cancelled are the game\'s own messages, counted per auction.</p>';
+    S.items.slice(0, 40).forEach((r) => (h += `<div class="tr"><div class="c-main"><div class="nm">${esc(r.item)}</div><div class="sub">last posted ${fmtTime(r.lastPost)} at ${money(r.unit)} each${r.pending ? ` · ${r.pending} still listed` : ''}${r.expired ? ` · ${r.expired} expired` : ''}${r.cancelled ? ` · ${r.cancelled} cancelled` : ''}${r.unknown ? ` · ${r.unknown} outcome unknown` : ''}</div></div><div class="c-num">${r.posted}</div><div class="c-num">${r.sold}</div><div class="c-num">${pct(r.share)}</div><div class="c-num dim">${r.medianHours == null ? '–' : r.medianHours}</div></div>`));
+    h += '</div><p class="meta">A post counts once it sold or 48 hours (the longest auction) have passed. Expired and cancelled come from the game\'s own messages and the mail the auction house returns. Share is sold out of the units whose outcome is known: one with no sale and no return in the record is unknown and left out.</p>';
     return h;
   }
 
@@ -1483,7 +1502,7 @@
     const key = [(ah.lastScan || {}).t, ench, arr(ah.posts).length, arr(ah.sales).length].join('|');
     if (BUY_CACHE && BUY_CACHE.ch === CH && BUY_CACHE.prices === ah.prices && BUY_CACHE.key === key) return BUY_CACHE.out;
     const share = {};
-    arr(sellThrough(ah, now).items).forEach((r) => { if (r.posted >= 3) share[r.item] = r.share; });
+    arr(sellThrough(ah, now).items).forEach((r) => { if (r.known >= 3) share[r.item] = r.share; });
     const out = window.CCMarket.buyList({
       prices: ah.prices || {}, lastScan: ah.lastScan, cut: 0.05, now,
       vendorBuy: vendorPrice,
