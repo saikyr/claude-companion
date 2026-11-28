@@ -189,7 +189,7 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   // #184: the auction house's return mail counts as expired (once with the chat message for the same auction), and
   // units with no sale and no return are unknown, left out of the share
   const fh = await page.evaluate(() => {
-    const T = 1795000000, H = 3600, L = '|cff1eff00|Hitem:10025::::::::|h[Felcloth Hood]|h|r';
+    const T = 1795000000, H = 3600, L = '|cff1eff00|Hitem:14111::::::::|h[Felcloth Hood]|h|r';
     return window.CC.api.sellThrough({
       posts: [{ t: T, name: 'Felcloth Hood', qty: 10, unit: 24300 }, { t: T + 8 * H, name: 'Felcloth Hood', qty: 3, unit: 20000 }],
       sales: [{ t: T + H, item: 'Felcloth Hood', price: 24300, count: 1 }, { t: T + 2 * H, item: 'Felcloth Hood', price: 24300, count: 1 }, { t: T + 9 * H, item: 'Felcloth Hood', price: 20000, count: 1 }] }, T + 100 * H,
@@ -198,6 +198,15 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   const fhr = fh.items.find((x) => x.item === 'Felcloth Hood');
   check(fhr && fhr.posted === 13 && fhr.sold === 3 && fhr.expired === 3 && fhr.unknown === 7 && fhr.known === 6 && fhr.share === 0.5 && fh.totals.expired === 3 && fh.totals.unknown === 7 && fh.totals.share === 0.5,
     'sell-through: return mail counts as expired, once with the chat message; no outcome is unknown, out of the share (' + JSON.stringify(fhr) + ')');
+  // a return goes to a post made before it (never a later one), and settles a post still inside its 48 h
+  const rt = await page.evaluate(() => {
+    const T = 1795000000, H = 3600, L = '|cff1eff00|Hitem:14111::::::::|h[Felcloth Hood]|h|r';
+    return window.CC.api.sellThrough({
+      posts: [{ t: T, name: 'Felcloth Hood', qty: 2, unit: 24300 }, { t: T + 50 * H, name: 'Felcloth Hood', qty: 5, unit: 20000 }], sales: [] }, T + 52 * H,
+      [{ t: T + 51 * H, e: 'receive', link: L, count: 5, mail: { from: 'cancelled' } }]);
+  }).then((x) => x.items[0]);
+  check(rt && rt.cancelled === 5 && rt.pending === 0 && rt.unknown === 2 && rt.posted === 7 && rt.share === 0,
+    'sell-through: a return settles the post it came from, not an older one with no outcome (' + JSON.stringify(rt) + ')');
   check(await page.evaluate(() => 'sellThrough' in window.CC.snapshot().ah), 'snapshot ah.sellThrough');
   // the Flips view draws the sell-through table under the flips
   const flipsHtml = await page.evaluate(() => { const ch = window.CC.api.CH; ch.ah.posts = [{ t: 1795000000, id: 14047, qty: 2, unit: 2000 }];

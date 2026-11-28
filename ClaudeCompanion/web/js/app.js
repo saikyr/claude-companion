@@ -1436,36 +1436,54 @@
       }
     });
     const med = (xs) => { if (!xs.length) return null; const v = xs.slice().sort((a, b) => a - b), m = v.length >> 1; return +(v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2).toFixed(1); };
-    // auctions that ended unsold, per item: the game's chat message ("Your auction of X has expired") and the mail the
-    // auction house returns it in (journal receive with mail.from expired / cancelled, #184). One auction can give
-    // both and either can be missing (the chat message isn't always sent), so per item the larger count stands
+    // auctions that ended unsold, per item: the game's chat message ("Your auction of X has expired": one auction, its
+    // stack not said, so 1 unit) and the mail the auction house returns it in (journal receive with mail.from expired /
+    // cancelled, its units, #184). One auction can give both and either can be missing (the chat message isn't always
+    // sent), so per item and kind the source with more units stands; each of its returns goes to a post of that item
+    // made before it with units left, oldest first among those made in the 48 h before it, then older ones (a post
+    // still inside its 48 h too: a return settles it). A return no
+    // recorded post explains (posted before the oldest kept post) isn't counted.
     const since = lots.length ? lots[0].t : null, chat = {}, mail = {};
-    const add = (m, name, k, n) => { const r = m[name] || (m[name] = { expired: 0, cancelled: 0 }); r[k] += n; };
-    const linkName = (e) => (e.item && ITEMS[e.item] && ITEMS[e.item].name) || ((/\[(.+?)\]/.exec(e.link || '') || [])[1]) || e.name || null;
+    const add = (m, name, k, t, n) => { const r = m[name] || (m[name] = { expired: [], cancelled: [] }); r[k].push({ t, n }); };
+    const units = (xs) => xs.reduce((a, x) => a + x.n, 0);
+    // named as a post is (nameOfPost: the saved item's name, else the pack's by id), so the two match
+    const linkName = (e) => { const id = Number((/^item:(\d+)/.exec(e.item || '') || /item:(\d+)/.exec(e.link || '') || [])[1]) || null;
+      return (e.item && ITEMS[e.item] && ITEMS[e.item].name) || (id ? anyItemName(id, null) : null) || ((/\[(.+?)\]/.exec(e.link || '') || [])[1]) || null; };
     arr(journal).forEach((e) => {
       if (!e || !since || e.t < since) return;
-      if (e.e === 'ahExpired' || e.e === 'ahRemoved') { if (e.name) add(chat, e.name, e.e === 'ahExpired' ? 'expired' : 'cancelled', 1); return; }
+      if (e.e === 'ahExpired' || e.e === 'ahRemoved') { if (e.name) add(chat, e.name, e.e === 'ahExpired' ? 'expired' : 'cancelled', e.t, 1); return; }
       const from = e.e === 'receive' && e.mail && e.mail.from;
-      if (from === 'expired' || from === 'cancelled') { const n = linkName(e); if (n) add(mail, n, from, e.count || 1); }
+      if (from === 'expired' || from === 'cancelled') { const n = linkName(e); if (n) add(mail, n, from, e.t, e.count || 1); }
     });
     const ended = {}, endedTot = { expired: 0, cancelled: 0 };
     new Set(Object.keys(chat).concat(Object.keys(mail))).forEach((name) => {
-      ended[name] = {};
-      ['expired', 'cancelled'].forEach((k) => { const n = Math.max((chat[name] || {})[k] || 0, (mail[name] || {})[k] || 0); ended[name][k] = n; endedTot[k] += n; });
+      ended[name] = { expired: 0, cancelled: 0 };
+      ['expired', 'cancelled'].forEach((k) => {
+        const c = (chat[name] || {})[k] || [], m = (mail[name] || {})[k] || [];
+        (units(m) >= units(c) ? m : c).slice().sort((a, b) => a.t - b.t).forEach((x) => {
+          let n = x.n;
+          // posts that could still have been listed then (within 48 h) first, then older ones: mail can be taken days late
+          const mine = lots.filter((l) => l.name === name && l.t <= x.t);
+          for (const l of mine.filter((l) => x.t - l.t <= SELL_WINDOW).concat(mine.filter((l) => x.t - l.t > SELL_WINDOW))) {
+            if (!n) break;
+            if (!l.left) continue;
+            const k2 = Math.min(n, l.left);
+            l.left -= k2; l.back = (l.back || 0) + k2; n -= k2;
+            ended[name][k] += k2; endedTot[k] += k2;
+          }
+        });
+      });
     });
-    // each settled post's units left unsold are put against that item's unsold returns, oldest post first; what is left
-    // has no recorded outcome (no sale, no return: a gap in the record) and is unknown, never counted as not sold (#184)
-    const pool = {};
-    Object.entries(ended).forEach(([n, r]) => { pool[n] = r.expired + r.cancelled; });
+    // units of a settled post with no sale and no return have no recorded outcome (a gap in the record): unknown,
+    // never counted as not sold (#184)
     const by = {};
     const tot = { posts: 0, units: 0, sold: 0, pending: 0, unknown: 0, hours: [], worth10g: { units: 0, sold: 0, unknown: 0 } };
     lots.forEach((l) => {
       const settled = l.left === 0 || now - l.t > SELL_WINDOW;
       const r = by[l.name] || (by[l.name] = { item: l.name, posts: 0, units: 0, sold: 0, pending: 0, unknown: 0, hours: [], lastPost: 0, unit: 0 });
       r.lastPost = Math.max(r.lastPost, l.t); if (l.t === r.lastPost) r.unit = l.unit;
-      if (!settled) { r.pending += l.left; tot.pending += l.left; r.sold += l.sold; r.hours.push(...l.hours); tot.sold += l.sold; tot.units += l.sold; r.units += l.sold; tot.hours.push(...l.hours); return; }
-      const back = Math.min(l.left, pool[l.name] || 0), unknown = l.left - back;
-      if (pool[l.name]) pool[l.name] -= back;
+      if (!settled) { r.pending += l.left; tot.pending += l.left; const done = l.sold + (l.back || 0); r.sold += l.sold; r.hours.push(...l.hours); tot.sold += l.sold; tot.units += done; r.units += done; tot.hours.push(...l.hours); return; }
+      const unknown = l.left;
       r.posts++; r.units += l.qty; r.sold += l.sold; r.unknown += unknown; r.hours.push(...l.hours);
       tot.posts++; tot.units += l.qty; tot.sold += l.sold; tot.unknown += unknown; tot.hours.push(...l.hours);
       if (l.unit >= 100000) { tot.worth10g.units += l.qty; tot.worth10g.sold += l.sold; tot.worth10g.unknown += unknown; }
@@ -1499,7 +1517,7 @@
   function buyListOf(ah, now) {
     if (!window.CCMarket) return null;
     const adv = window.CC && CC.advice, ench = adv && adv.skill ? adv.skill('Enchanting') : 0;
-    const key = [(ah.lastScan || {}).t, ench, arr(ah.posts).length, arr(ah.sales).length].join('|');
+    const key = [(ah.lastScan || {}).t, ench, arr(ah.posts).length, arr(ah.sales).length, arr(CH && CH.journal).length].join('|');
     if (BUY_CACHE && BUY_CACHE.ch === CH && BUY_CACHE.prices === ah.prices && BUY_CACHE.key === key) return BUY_CACHE.out;
     const share = {};
     arr(sellThrough(ah, now).items).forEach((r) => { if (r.known >= 3) share[r.item] = r.share; });
