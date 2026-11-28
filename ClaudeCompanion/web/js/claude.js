@@ -183,16 +183,6 @@
         ok: CC.sync.status.ok, error: CC.sync.status.error, pushed: CC.sync.status.pushed, pulled: CC.sync.status.pulled,
         computers: (CC.sync.status.devices || []).map((d) => ({ name: d.name, os: d.os, seen: d.seen })),
         syncedFrom: (A.DB && A.DB.syncedFrom) || [] } : null,
-      // Claude updates your cards (System tab, js/runner.js): on, signed in, the last run, and a sign-in to renew
-      claudeRun: (() => {
-        const r = CC.runState && CC.runState();
-        if (!r) return null;
-        const si = r.signin;
-        return { on: !!r.on, installed: !!r.claude, signedIn: r.signedIn == null ? null : !!r.signedIn, runs: r.runs || 0, cap: r.cap || null,
-          last: r.last ? { at: r.last.at || null, ok: !!r.last.ok, error: r.last.error || null, gate: r.last.gate || null } : null,
-          signin: si ? { needed: !!si.needed, at: si.at || null, connect: si.connect || null, why: si.why || null } : null,
-          tooOld: r.tooOld || null };
-      })(),
       // the grind running now (if any) and the last few finished ones; ended: logout / away / idle when the addon ended it
       grind: (() => {
         const g = CH.grind;
@@ -395,8 +385,6 @@
         CC.wakeNames = (k, id) => (k === 'quest' ? ((GD.quests || {})[id] || {}).t || null : A.anyItemName(id, null));
       } catch (e) { console.warn('wake digest', e); CC.lastDigest = null; }
       if (CC.syncNow) CC.syncNow();
-      // and to this computer's background Claude, if it is on (js/runner.js)
-      if (CC.claudeRun && CC.lastDigest) CC.claudeRun(CC.lastDigest).catch((e) => console.warn('claude run', e));
     }, 500);
   };
   document.addEventListener('cc:loaded', write);

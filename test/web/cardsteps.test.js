@@ -90,22 +90,13 @@ check(ST.wakeOf(a, Object.assign({}, a, { t: 2000 })) === null, 'nothing changed
 check(ST.wakeOf(b, a) === null && ST.wakeOf(a, a) === null, 'an older or the same save: no record');
 check(ST.wakeOf(a, Object.assign({}, b, { name: 'Alt' })) === null, 'another character: no record');
 
-// ---- is a change worth a background Claude run (js/runner.js)
-const plan = [{ id: 'p', character: 'Ana', doneWhen: ['item:21982x25', null] }];
-const trash = { character: 'Ana', itemsLost: [{ id: 8952, from: 1, to: 0 }], itemsGained: [{ id: 4306, from: 0, to: 7 }] };
-check(!ST.worthRun(null, plan) && !ST.worthRun(w, []), 'no change, or no open card: no run');
-check(ST.worthRun(w, plan), 'a quest done, a level, a reputation tier or a card step: a run');
-check(!ST.worthRun(trash, plan), 'vendor trash and used potions only: no run');
-check(ST.worthRun(Object.assign({}, trash, { itemsGained: [{ id: 21982, from: 16, to: 21 }] }), plan), 'an item an open card counts: a run');
-check(!ST.worthRun(w, [{ id: 'q', character: 'Alt', doneWhen: [] }]), "only another character's cards: no run");
-check(ST.worthRun({ character: 'Ana', cards: [{ id: 'p', unticked: [0], you: true }] }, plan), 'a step the player unticked: a run');
-// who made a card change: the player's own tick starts a run; Claude's ticks (stepsDone, from the last run) don't
+// ---- who made a card change (the wake's `you`): the player's own tick or close, not the game's check or Claude's stepsDone
 const by = (who) => [{ id: 'p', title: 'Plan', standing: 'open', steps: [{ i: 0, done: true, by: 'game' }, { i: 1, done: true, by: who }] }];
 const wy = ST.wakeOf(a, Object.assign(ST.digestOf(cx, by('you')), { t: 2000 })), wc = ST.wakeOf(a, Object.assign(ST.digestOf(cx, by('claude')), { t: 2000 }));
-check(wy && wy.cards[0].you === true && ST.worthRun(wy, plan), `the player ticked a step: marked yours, a run (${JSON.stringify(wy && wy.cards)})`);
-check(wc && !wc.cards[0].you && !ST.worthRun(wc, plan), `Claude ticked it in the last run: no new run (${JSON.stringify(wc && wc.cards)})`);
+check(wy && wy.cards[0].you === true, `the player ticked a step: marked yours (${JSON.stringify(wy && wy.cards)})`);
+check(wc && !wc.cards[0].you, `Claude ticked it: not yours (${JSON.stringify(wc && wc.cards)})`);
 const wd = ST.wakeOf(a, Object.assign(ST.digestOf(cx, [{ id: 'p', title: 'Plan', standing: 'dismissed', closedBy: 'you', steps: [{ i: 0, done: true }] }]), { t: 2000 }));
-check(wd && wd.cards[0].you === true && ST.worthRun(wd, plan), 'the player closed a card: a run');
+check(wd && wd.cards[0].you === true, 'the player closed a card: marked yours');
 
 console.log(failed ? `${failed} failed` : 'all passed');
 process.exit(failed ? 1 : 0);
