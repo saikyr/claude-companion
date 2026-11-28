@@ -281,7 +281,10 @@ local function ReadMail()
     c.mail = { taken = ns.Now(), list = list }
 end
 -- "won" / "expired" / "cancelled" / "sale" / a player's name
+-- only while the mailbox is open (and a few seconds after): an item received later with the same link (a trade, a
+-- vendor push) didn't come from that letter (#184)
 function ns.MailOrigin(link)
+    if not (ns.mailOpenUntil and GetTime() <= ns.mailOpenUntil) then return nil end
     local hit = ns.mailByLink and ns.mailByLink[link]
     if not hit then return nil end
     local m = hit.letter
@@ -292,7 +295,9 @@ function ns.MailOrigin(link)
     return { from = kind, sender = m.sender, subject = m.subject, paid = inv == "buyer" and m.invoice.bid or nil, returned = m.returned }
 end
 ns.On("MAIL_INBOX_UPDATE", function() if ns.char then ns.Soon("mail", 1, ReadMail) end end)
-ns.On("MAIL_SHOW", function() if ns.char then ns.Soon("mail", 1, ReadMail) end end)
+ns.On("MAIL_SHOW", function() ns.mailOpenUntil = math.huge; ns.mailByLink = {}; if ns.char then ns.Soon("mail", 1, ReadMail) end end)
+-- the letters are gone from view: after a short grace for a last "You receive", nothing is from them any more
+ns.On("MAIL_CLOSED", function() ns.mailOpenUntil = GetTime() + 3 end)
 
 ---------------------------------------------------------------- full AH scan
 -- One button reads every auction on your realm at once (the game allows

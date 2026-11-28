@@ -27,7 +27,7 @@ ns.VERSION = "1.5.0"
 ns.SCHEMA = 1
 -- the source commit of this build: tools/publish-stable.py writes it here; "dev" in a checkout.
 -- The app compares it with the build it runs itself, to say when the game still needs a /reload.
-ns.BUILD = "ab7b6866bbd8"
+ns.BUILD = "3d57988d83e6"
 
 BINDING_HEADER_CLAUDECOMPANION = "Claude Companion"
 BINDING_NAME_CLAUDECOMPANION_TOGGLE = "Open or close Claude window"
