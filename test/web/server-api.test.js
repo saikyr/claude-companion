@@ -76,8 +76,9 @@ const post = (u, body, h) => fetch(base + u, { method: 'POST', headers: Object.a
   check(up && 'installed' in up && 'available' in up, 'update status answers');
 
   // no Claude runs on this computer any more (the coach writes the cards online): the old addresses are gone
-  check((await get('api/claude')).status === 404 && (await post('api/claude', '{"action":"on"}')).status === 400 &&
-    (await post('api/claude-cards', '{"schema":1,"cards":[]}')).status === 400, 'api/claude and api/claude-cards are gone');
+  // (an unknown POST: server.py says 400, server.ps1 404; neither takes it)
+  const gone = [(await get('api/claude')).status, (await post('api/claude', '{"action":"on"}')).status, (await post('api/claude-cards', '{"schema":1,"cards":[]}')).status];
+  check(gone[0] === 404 && gone.slice(1).every((x) => x === 400 || x === 404), `api/claude and api/claude-cards are gone (${gone.join(', ')})`);
   console.log(failed ? `\n${failed} FAILED` : '\nall passed');
   process.exit(failed ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });
