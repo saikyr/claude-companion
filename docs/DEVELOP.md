@@ -87,9 +87,6 @@ that must hold go in CI or in the database (for example `private.claude_put_sett
     node test/web/claude.test.js
     # From Claude cards (#163): the step engine in node, then the From Claude tab in Chromium
     node test/web/cardsteps.test.js && node test/web/cards-browser.js
-    # Claude updates the cards after a save (#169): the page's side; the servers' side is in server-api.test.js
-    # (start the server with CC_CLAUDE=test/fixtures/fake-claude.js, a stand-in for Claude Code)
-    node test/web/runner-browser.js
     python3 test/update_test.py
 
     # the first-install zips (CI runs the installers on Windows and macOS: installers.yml)

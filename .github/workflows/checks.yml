@@ -97,8 +97,7 @@ jobs:
           cp -r ClaudeCompanion $F/Interface/AddOns/
           cp /tmp/h/out.lua $F/WTF/Account/T/SavedVariables/ClaudeCompanion.lua
           echo '{"auto": false}' > $F/Interface/AddOns/ClaudeCompanion/companion-data/update.json
-          # CC_CLAUDE: a stand-in for Claude Code (server-api.test.js, "Claude updates the cards"); the key must not reach it
-          (cd $F/Interface/AddOns/ClaudeCompanion/web && ANTHROPIC_API_KEY=not-for-claude CC_CLAUDE=$GITHUB_WORKSPACE/test/fixtures/fake-claude.js CC_PORT=47999 CC_BACKGROUND=0 nohup python3 server.py --serve > /tmp/server.log 2>&1 &)
+          (cd $F/Interface/AddOns/ClaudeCompanion/web && CC_PORT=47999 CC_BACKGROUND=0 nohup python3 server.py --serve > /tmp/server.log 2>&1 &)
           npm install --no-save --no-package-lock playwright@1.49.1
           npx playwright install --with-deps chromium
           node test/web/sync-browser.js 47999 $F/Interface/AddOns/ClaudeCompanion/companion-data
@@ -110,8 +109,6 @@ jobs:
         run: node test/web/chars-browser.js
       - name: From Claude tab in a browser (order, ticks by Claude and the game, cards that close themselves)
         run: node test/web/cards-browser.js
-      - name: Claude updates the cards, the page's side (System tab, after a save)
-        run: node test/web/runner-browser.js
       - name: Local server API (server.py)
         run: node test/web/server-api.test.js 47999 /tmp/f/_forever_/Interface/AddOns/ClaudeCompanion/companion-data
       - name: Server rules (hidden browser)
@@ -145,8 +142,6 @@ jobs:
           Set-Content -Path "$F\WTF\Account\T\SavedVariables\ClaudeCompanion.lua" -Value 'ClaudeCompanionDB = { ["schema"] = 1, ["chars"] = {} }'
           Set-Content -Path "$F\Interface\AddOns\ClaudeCompanion\companion-data\update.json" -Value '{"auto": false}'
           $env:CC_PORT = '47999'; $env:CC_BACKGROUND = '0'
-          # a stand-in for Claude Code (server-api.test.js, "Claude updates the cards"); the key must not reach it
-          $env:CC_CLAUDE = "$env:GITHUB_WORKSPACE\test\fixtures\fake-claude.cmd"; $env:ANTHROPIC_API_KEY = 'not-for-claude'
           $srv = Start-Process -PassThru -NoNewWindow -FilePath powershell.exe -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "$F\Interface\AddOns\ClaudeCompanion\web\server.ps1", '-Serve' -RedirectStandardOutput "$env:RUNNER_TEMP\server.log" -RedirectStandardError "$env:RUNNER_TEMP\server.err"
           node test/web/server-api.test.js 47999 "$F\Interface\AddOns\ClaudeCompanion\companion-data"
           $code = $LASTEXITCODE

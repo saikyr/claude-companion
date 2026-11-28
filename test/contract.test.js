@@ -58,26 +58,6 @@ const psText = read(A, 'web', 'server.ps1');
 const psPost = new Set([...(/\$writable = @\{([^}]*)\}/.exec(psText) || [, ''])[1].match(/'\/api\/[a-z-]+'/g) || [],
   ...[...(/\$files = @\{([\s\S]*?)\}\s*\n/.exec(psText) || [, ''])[1].matchAll(/'\/api\/[a-z-]+'/g)].map((m) => m[0]).filter((r) => r !== "'/api/cards'")]);
 check(pyPost.size > 0 && pyPost.size === psPost.size && [...pyPost].every((r) => psPost.has(r)), `both servers let the page write the same files (${[...pyPost].join(' ')})`);
-// Claude updates the cards (#169): both servers start Claude Code the same way, with the same limits and words
-const pyText = read(A, 'web', 'server.py');
-const strs = (t) => (t.match(/'[^']*'/g) || []).map((x) => x.slice(1, -1));
-const pyArgs = strs((/RUN_ARGS = \[([\s\S]*?)\]\n/.exec(pyText) || [, ''])[1]).concat([one(/RUN_TURNS = .*?(\d+)\n/, pyText, 'RUN_TURNS')]);
-const psArgs = strs((/\$runArgs = @\(([\s\S]*?)\)\n/.exec(psText) || [, ''])[1]).concat([one(/\$runTurns = (\d+)/, psText, '$runTurns')]);
-check(pyArgs.length > 10 && JSON.stringify(pyArgs) === JSON.stringify(psArgs),
-  `server.py and server.ps1 start Claude Code with the same flags (${pyArgs.join(' ')})`);
-check(one(/RUN_EXTRA = '([^']+)'/, pyText, 'RUN_EXTRA') === one(/\$runExtra = '([^']+)'/, psText, '$runExtra') && /--max-turns/.test(one(/(RUN_NEED = [^\n]+)/, pyText, 'RUN_NEED')) &&
-  /--max-turns/.test(one(/(\$runNeed = [^\n]+)/, psText, '$runNeed')), 'and the same extra flag where Claude Code has it, and the same flags checked against its --help');
-check(one(/RUN_MIN = \((\d+, \d+, \d+)\)/, pyText, 'RUN_MIN').replace(/, /g, '.') === one(/\$runMin = \[version\]'([\d.]+)'/, psText, '$runMin') &&
-  JSON.stringify(strs(one(/AUTH_FAILED = \(([\s\S]*?)\)\n/, pyText, 'AUTH_FAILED'))) === JSON.stringify(strs(one(/\$authFailed = @\(([\s\S]*?)\)\n/, psText, '$authFailed'))),
-  'and the same oldest Claude Code they run without updating it, and the same words for a run that could not sign in');
-const pyNums = (/RUN_CAP, RUN_TIMEOUT, RUN_FIXES, RUN_GATE_WAIT, RUN_TURNS = ([^\n]+)/.exec(pyText) || [, ''])[1].replace(/\s/g, '');
-const psNums = ['runCap', 'runTimeout', 'runFixes', 'runGateWait', 'runTurns'].map((k) => one(new RegExp('\\$' + k + ' = (\\d+)'), psText, k)).join(',');
-check(pyNums.split(',').map((x) => String(eval(x))).join(',') === psNums, `and the same limits: runs a day, timeout, fixes, check wait, turns (${psNums})`);
-for (const k of ['PROMPT', 'FIX']) {
-  const a = one(new RegExp(`RUN_${k} = '([^']+)'`), pyText, 'RUN_' + k), b = one(new RegExp(`\\$run${k[0] + k.slice(1).toLowerCase()} = '([^']+)'`), psText, '$run' + k);
-  check(a === b && /REFRESH\.md|run\.json/.test(a), `and the same words to Claude (${k.toLowerCase()})`);
-}
-check(fs.existsSync(path.join(A, 'claude', 'REFRESH.md')), 'claude/REFRESH.md, the run\'s instructions, ships with the app');
 
 // 6. Sync backend: every function the page calls is created by a migration, and a migration that is
 // on main is never edited (the live database already ran it): changes go in a new file.
@@ -126,7 +106,7 @@ const kit = [...((/KIT = \{([\s\S]*?)\}/.exec(pub) || [, ''])[1]).matchAll(/'(cl
 check(kit.length >= 5 && kit.every(([, src]) => fs.existsSync(path.join(ROOT, src))), `every file of the Claude kit has its source (${kit.map(([d]) => d).join(' ')})`);
 check(kit.every(([dest]) => !fs.existsSync(path.join(A, dest))), 'no kit file is also kept in ClaudeCompanion/claude/ (one owner)');
 const kitGuide = read(A, 'claude', 'GUIDE.md');
-const shipped = new Set([...kit.map(([d]) => d), 'claude/GUIDE.md', 'claude/SETUP.md', 'claude/REFRESH.md', 'companion-data/SCHEMA.md']);
+const shipped = new Set([...kit.map(([d]) => d), 'claude/GUIDE.md', 'claude/SETUP.md', 'companion-data/SCHEMA.md']);
 const named = [...new Set([...kitGuide.matchAll(/`((?:claude|companion-data)\/[A-Za-z_.-]+\.(?:md|py))`/g)].map((m) => m[1]))];
 const notShipped = named.filter((f) => !shipped.has(f));
 check(named.length >= 5 && !notShipped.length, 'every file claude/GUIDE.md names is in the build' + (notShipped.length ? `: missing ${notShipped.join(' ')}` : ''));

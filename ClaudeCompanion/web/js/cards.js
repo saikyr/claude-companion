@@ -293,7 +293,6 @@
     let h = '';
     if (S.error) h += `<div class="empty bad">${esc(S.error)}</div>`;
     h += sentLine();
-    if (CC.runLine) h += CC.runLine();   // Claude updating these cards in the background (js/runner.js)
     if (!all.length) return h + '<div class="empty">Nothing from Claude yet. When Claude suggests a farm, a flip, a quest route or a gear change, it lands here as a card you can tick off, finish or dismiss.</div>';
     const openList = all.filter((c) => standing(c) === 'open'), closed = all.filter((c) => standing(c) !== 'open');
     const kinds = {};
@@ -378,9 +377,7 @@
         { version: version(c), steps: stepsNow(c).map((x, i) => Object.assign({ i, done: x.done, by: x.by }, x.check ? { check: x.check, met: x.met } : {})) });
     });
   }
-  // all(): every card the app has (each character's, open or closed, from both sources), as Claude wrote them: what
-  // a background Claude run rewrites (js/runner.js)
-  CC.cards = { overview, snapshot, open: () => open().map((c) => Object.assign({}, c)), all: () => S.cards.map((c) => Object.assign({}, c)) };
+  CC.cards = { overview, snapshot, open: () => open().map((c) => Object.assign({}, c)) };
   poll();
   setInterval(poll, 5000);
 })();
